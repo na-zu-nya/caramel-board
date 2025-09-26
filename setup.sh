@@ -83,6 +83,9 @@ CB_ENABLE_JOYTAG=${CB_ENABLE_JOYTAG:-false}
 JOYTAG_INFO_URL=${JOYTAG_INFO_URL:-}
 [ -f .env ] && JOYTAG_INFO_URL=$(awk -F= '$1=="JOYTAG_INFO_URL"{print substr($0,index($0,$2))}' .env | tail -n1 | tr -d '"' || true)
 JOYTAG_INFO_URL=${JOYTAG_INFO_URL:-https://github.com/fpgaminer/joytag}
+CB_CHANNEL_SELECTED=${CB_CHANNEL_SELECTED:-}
+[ -f .env ] && CB_CHANNEL_SELECTED=$(awk -F= '$1=="CB_CHANNEL_SELECTED"{print substr($0,index($0,$2))}' .env | tail -n1 | tr -d '"' || true)
+CB_CHANNEL_SELECTED=${CB_CHANNEL_SELECTED:-}
 
 if ! $CHANNEL_MODE; then
   # Banner
@@ -148,6 +151,13 @@ t(){ local k="$1"; case "$CB_LANG" in ja)
     channel_pull_failed) echo "最新の変更を取り込めませんでした。手動で解決してから再実行してください。";; \
     channel_submodule) echo "サブモジュールを同期しています…";; \
     channel_done) echo "チャンネル切り替えが完了しました。";; \
+    channel_select_title) echo "使用したいチャンネルを選択してください";; \
+    channel_select_info) echo "推奨: 安定版(stable)。開発版(dev)は新機能が早く試せますが不安定な場合があります。";; \
+    channel_select_stable) echo "安定版 (stable)";; \
+    channel_select_dev) echo "開発版 (dev)";; \
+    channel_select_skip) echo "スキップ（後で設定）";; \
+    channel_select_done) echo "チャンネルを設定しました。";; \
+    channel_select_skip_msg) echo "チャンネル設定をスキップしました。";; \
   esac \
   ;; * ) 
   case "$k" in \
@@ -188,6 +198,13 @@ t(){ local k="$1"; case "$CB_LANG" in ja)
     channel_pull_failed) echo "Failed to pull latest changes. Resolve conflicts and retry.";; \
     channel_submodule) echo "Synchronizing submodules…";; \
     channel_done) echo "Channel switch completed.";; \
+    channel_select_title) echo "Select the release channel you want to use";; \
+    channel_select_info) echo "Recommended: stable. dev gives faster features but may be unstable.";; \
+    channel_select_stable) echo "Stable (stable)";; \
+    channel_select_dev) echo "Development (dev)";; \
+    channel_select_skip) echo "Skip (configure later)";; \
+    channel_select_done) echo "Channel has been set.";; \
+    channel_select_skip_msg) echo "Skipped channel selection.";; \
   esac \
   ;; esac; }
 
@@ -209,11 +226,11 @@ run_channel_command() {
 
   if ! have git; then
     say "[setup] $(t channel_git_missing)"
-    return 1
+    return 0
   fi
   if [ ! -d .git ]; then
     say "[setup] $(t channel_not_repo)"
-    return 1
+    return 0
   fi
 
   local branch="$channel"
@@ -254,6 +271,34 @@ if [ "${1:-}" = "channel" ]; then
   shift || true
   run_channel_command "${1:-}"
   exit $?
+fi
+
+if ! $CHANNEL_MODE && $INTERACTIVE && [ -z "$CB_CHANNEL_SELECTED" ]; then
+  begin_question "$(t channel_select_title)"
+  say "$(t channel_select_info)"; hr
+  channel_sel=$(menu_ask "" 1 "$(t channel_select_stable)" "$(t channel_select_dev)" "$(t channel_select_skip)")
+  case "$channel_sel" in
+    1)
+      if run_channel_command stable; then
+        write_env CB_CHANNEL_SELECTED stable
+        CB_CHANNEL_SELECTED=stable
+        say "[setup] $(t channel_select_done)"
+      fi
+      ;;
+    2)
+      if run_channel_command dev; then
+        write_env CB_CHANNEL_SELECTED dev
+        CB_CHANNEL_SELECTED=dev
+        say "[setup] $(t channel_select_done)"
+      fi
+      ;;
+    3)
+      write_env CB_CHANNEL_SELECTED skip
+      CB_CHANNEL_SELECTED=skip
+      say "[setup] $(t channel_select_skip_msg)"
+      ;;
+  esac
+  echo ""
 fi
 
 # 1.5) Dependency notes (Python hint for JoyTag)

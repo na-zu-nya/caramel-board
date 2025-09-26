@@ -30,6 +30,16 @@ t() {
         joytag_not_found) echo "[start] JoyTag は見つかりませんでした（externals/joytag）。スキップします。" ;;
         joytag_models_missing) echo "[start] JoyTag のモデルが見つかりません。スキップします。" ;;
         joytag_started) echo "[start] JoyTag を起動しました。" ;;
+        git_check_start) echo "[git] リモートの更新を確認しています…" ;;
+        git_check_missing) echo "[git] git コマンドが見つからないため、更新チェックをスキップします。" ;;
+        git_check_not_repo) echo "[git] .git ディレクトリがないため、更新チェックをスキップします。" ;;
+        git_check_no_upstream) echo "[git] 追跡ブランチが設定されていないため、更新チェックをスキップします。" ;;
+        git_check_updates) printf "[git] %s に %s 件の新しいコミットがあります。./serve.sh update を実行してください。\n" "$2" "$3" ;;
+        git_check_ahead) printf "[git] ローカルブランチは %s に対して %s コミット進んでいます。push の際はご注意ください。\n" "$2" "$3" ;;
+        git_check_current) echo "[git] リモートと同期済みです。" ;;
+        git_check_failed) echo "[git] git fetch に失敗したため、更新チェックをスキップしました。" ;;
+        update_git_missing) echo "git が利用できないため更新処理をスキップします。" ;;
+        update_git_not_repo) echo ".git ディレクトリがないため更新処理をスキップします。" ;;
         *) echo "$key" ;;
       esac
       ;;
@@ -46,6 +56,16 @@ t() {
         joytag_not_found) echo "[start] JoyTag not found at externals/joytag. Skipping." ;;
         joytag_models_missing) echo "[start] JoyTag models not found. Skipping." ;;
         joytag_started) echo "[start] JoyTag started." ;;
+        git_check_start) echo "[git] Checking for remote updates…" ;;
+        git_check_missing) echo "[git] git command not found; skipping update check." ;;
+        git_check_not_repo) echo "[git] .git directory not found; skipping update check." ;;
+        git_check_no_upstream) echo "[git] No upstream tracking branch; skipping update check." ;;
+        git_check_updates) printf "[git] Remote %s has %s new commits. Run ./serve.sh update to apply.\n" "$2" "$3" ;;
+        git_check_ahead) printf "[git] Local branch is %s commits ahead of %s. Consider pushing or resetting carefully.\n" "$3" "$2" ;;
+        git_check_current) echo "[git] Local and remote are in sync." ;;
+        git_check_failed) echo "[git] Failed to check for updates (git fetch error)." ;;
+        update_git_missing) echo "Skipping update because git is not available." ;;
+        update_git_not_repo) echo "Skipping update because this directory is not a git repository." ;;
         *) echo "$key" ;;
       esac
       ;;
@@ -55,6 +75,8 @@ t() {
 MODE="${1:-prod}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT_DIR"
+
+have() { command -v "$1" >/dev/null 2>&1; }
 
 # Resolve docker compose command
 if command -v docker compose >/dev/null 2>&1; then
@@ -131,6 +153,42 @@ start_joytag() {
   fi
 }
 
+git_check_updates() {
+  if ! have git; then
+    echo "$(t git_check_missing)"
+    return 0
+  fi
+  if [ ! -d .git ]; then
+    echo "$(t git_check_not_repo)"
+    return 0
+  fi
+
+  local upstream
+  upstream=$(git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null || true)
+  if [ -z "$upstream" ]; then
+    echo "$(t git_check_no_upstream)"
+    return 0
+  fi
+
+  echo "$(t git_check_start)"
+  if ! git fetch --quiet --prune >/dev/null 2>&1; then
+    echo "$(t git_check_failed)"
+    return 0
+  fi
+
+  local behind ahead
+  behind=$(git rev-list --count HEAD.."$upstream" 2>/dev/null || echo "0")
+  ahead=$(git rev-list --count "$upstream"..HEAD 2>/dev/null || echo "0")
+
+  if [ "${behind:-0}" -gt 0 ]; then
+    t git_check_updates "$upstream" "$behind"
+  elif [ "${ahead:-0}" -gt 0 ]; then
+    t git_check_ahead "$upstream" "$ahead"
+  else
+    echo "$(t git_check_current)"
+  fi
+}
+
 case "$MODE" in
   dev)
     echo "$(t starting_dev)"
@@ -167,6 +225,7 @@ case "$MODE" in
     ;;
   prod)
     echo "$(t starting_prod)"
+    git_check_updates
     dc up -d
     echo "$(t tail_logs)"
     dc logs -f app
@@ -192,12 +251,16 @@ case "$MODE" in
     ;;
   update)
     echo "$(t updating)"
-    if [ -d .git ] && command -v git >/dev/null 2>&1; then
-      git fetch --all --prune || true
-      git pull --rebase || true
-    else
-      echo "[update] NOTE: Git リポジトリではありません。ソース更新はスキップします。"
+    if ! have git; then
+      echo "[update] $(t update_git_missing)"
+      exit 0
     fi
+    if [ ! -d .git ]; then
+      echo "[update] $(t update_git_not_repo)"
+      exit 0
+    fi
+    git fetch --all --prune || true
+    git pull --rebase || true
     # Build new image and apply
     dc up -d postgres
     dc build --pull app
