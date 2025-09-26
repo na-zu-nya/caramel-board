@@ -240,11 +240,14 @@ export function DropZone({
 
     const handleDrop = (e: DragEvent) => {
       const types = Array.from(e.dataTransfer?.types ?? []);
-      const hasFilePayload = types.includes('Files');
+      const dataTransferItems = Array.from(e.dataTransfer?.items ?? []);
+      const hasFilePayload =
+        types.includes('Files') || dataTransferItems.some((item) => item.kind === 'file');
       const urls = extractUrlsFromDataTransfer(e.dataTransfer ?? null);
       const fileHandler = onDrop ?? onFilesDrop;
       const shouldHandleFiles = hasFilePayload && typeof fileHandler === 'function';
-      const shouldHandleUrls = urls.length > 0 && typeof onUrlDrop === 'function';
+      const shouldHandleUrls =
+        urls.length > 0 && typeof onUrlDrop === 'function' && (!hasFilePayload || !shouldHandleFiles);
 
       if (!shouldHandleFiles && !shouldHandleUrls) {
         return; // Let stack drops bubble to items
@@ -284,6 +287,7 @@ export function DropZone({
       }
 
       if (shouldHandleUrls) {
+        // Safari ではファイルとURLが同時に渡されるため、ファイルを処理した場合はURLを実行しない
         onUrlDrop(urls, e);
       }
     };
