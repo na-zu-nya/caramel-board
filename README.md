@@ -133,6 +133,18 @@ start.sh をターミナル(macOS) または WSL(Windows) で実行すること�
 ./serve.sh update
 ```
 
+#### チャンネル切り替え（ブランチ）
+
+Git で取得している場合は、`dev` / `stable` / `main` の各チャンネルを次のコマンドで切り替えられます。
+
+```bash
+./setup.sh channel dev
+./setup.sh channel stable
+./setup.sh channel main
+```
+
+実行すると、`origin` の最新を取得して対象ブランチへチェックアウトし、最新の変更を取り込みます。ブランチ切り替え後にコンテナを更新したい場合は、続けて `./serve.sh update` を実行してください。
+
 ### バックアップ
 
 #### ストレージ（画像/動画・DBの置き場所）

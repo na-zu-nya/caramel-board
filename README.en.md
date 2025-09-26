@@ -129,6 +129,18 @@ If you plan to use phones or tablets, assigning a static IP to the host machine 
 ./serve.sh update
 ```
 
+#### Switching release channels (Git branches)
+
+When you cloned the repository via Git, you can jump between the `dev`, `stable`, and `main` channels with:
+
+```bash
+./setup.sh channel dev
+./setup.sh channel stable
+./setup.sh channel main
+```
+
+The command fetches the latest state from `origin`, checks out the target branch, and pulls the newest commits. After switching channels, run `./serve.sh update` if you want to rebuild containers with the updated code.
+
 ### Backups
 
 #### Storage locations (assets and database)

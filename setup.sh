@@ -10,6 +10,11 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT_DIR"
 
+CHANNEL_MODE=false
+if [ "${1:-}" = "channel" ]; then
+  CHANNEL_MODE=true
+fi
+
 ESC="\033"; RESET="${ESC}[0m"; BOLD="${ESC}[1m"; DIM="${ESC}[2m"; CYAN="${ESC}[36m"; MAGENTA="${ESC}[35m"
 
 say() { printf "%b\n" "$1"; }
@@ -79,22 +84,29 @@ JOYTAG_INFO_URL=${JOYTAG_INFO_URL:-}
 [ -f .env ] && JOYTAG_INFO_URL=$(awk -F= '$1=="JOYTAG_INFO_URL"{print substr($0,index($0,$2))}' .env | tail -n1 | tr -d '"' || true)
 JOYTAG_INFO_URL=${JOYTAG_INFO_URL:-https://github.com/fpgaminer/joytag}
 
-# Banner
-say "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-say "${BOLD}CaramelBoard Setup${RESET} ${MAGENTA}🍬🤎${RESET}"
-say "${DIM}Docker-only setup. Node.js is not required on host.${RESET}"
-say "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+if ! $CHANNEL_MODE; then
+  # Banner
+  say "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+  say "${BOLD}CaramelBoard Setup${RESET} ${MAGENTA}🍬🤎${RESET}"
+  say "${DIM}Docker-only setup. Node.js is not required on host.${RESET}"
+  say "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+fi
 
-INTERACTIVE=false; [ -t 0 ] && [ -t 1 ] && INTERACTIVE=true
+INTERACTIVE=false
+if ! $CHANNEL_MODE && [ -t 0 ] && [ -t 1 ]; then
+  INTERACTIVE=true
+fi
 
 # 1) Language
-if $INTERACTIVE; then
+if ! $CHANNEL_MODE && $INTERACTIVE; then
   sel=$(menu_ask "Select language:" 1 "English" "日本語")
   if [ "$sel" = "2" ]; then CB_LANG=ja; else CB_LANG=en; fi
   if [ "$CB_LANG" = "ja" ]; then say "言語: 日本語"; else say "Language: English"; fi
   echo ""
 fi
-write_env CB_LANG "$CB_LANG"
+if ! $CHANNEL_MODE; then
+  write_env CB_LANG "$CB_LANG"
+fi
 
 # t() helper
 t(){ local k="$1"; case "$CB_LANG" in ja)
@@ -124,6 +136,18 @@ t(){ local k="$1"; case "$CB_LANG" in ja)
     done) echo "セットアップ完了。 次は ./serve.sh で起動/運用できます。";; \
     py_hint) echo "※自動タグ付けを有効化するには Python3 が必要です。";; \
     py_required) echo "自動タグ付けを有効化するには Python3 が必要です。インストール後にもう一度実行してください。";; \
+    channel_usage) echo "./setup.sh channel <dev|stable|main> を実行してください";; \
+    channel_invalid) echo "指定されたチャンネル '%s' はサポートされていません";; \
+    channel_git_missing) echo "git コマンドが見つかりません。インストールしてから再実行してください。";; \
+    channel_not_repo) echo "このディレクトリは git リポジトリではありません (.git が見つかりません)。";; \
+    channel_fetch) echo "origin から最新の情報を取得します…";; \
+    channel_remote_missing) echo "origin/%s ブランチが見つかりませんでした。リモートに存在するか確認してください。";; \
+    channel_checkout_existing) echo "既存のブランチ %s に切り替えます。";; \
+    channel_checkout_new) echo "ローカルブランチ %s を origin/%s から作成します。";; \
+    channel_pull) echo "origin/%s から最新の変更を取り込みます…";; \
+    channel_pull_failed) echo "最新の変更を取り込めませんでした。手動で解決してから再実行してください。";; \
+    channel_submodule) echo "サブモジュールを同期しています…";; \
+    channel_done) echo "チャンネル切り替えが完了しました。";; \
   esac \
   ;; * ) 
   case "$k" in \
@@ -152,8 +176,85 @@ t(){ local k="$1"; case "$CB_LANG" in ja)
     done) echo "Setup complete. You can now start/operate with ./serve.sh";; \
     py_hint) echo "※Python3 is required to enable auto-tagging.";; \
     py_required) echo "Python3 is required to enable auto-tagging. Please install it and run again.";; \
+    channel_usage) echo "Usage: ./setup.sh channel <dev|stable|main>";; \
+    channel_invalid) echo "Channel '%s' is not supported.";; \
+    channel_git_missing) echo "git command not found. Please install git and retry.";; \
+    channel_not_repo) echo "This directory is not a git repository (.git folder not found).";; \
+    channel_fetch) echo "Fetching latest changes from origin…";; \
+    channel_remote_missing) echo "origin/%s does not exist. Please check the remote branch.";; \
+    channel_checkout_existing) echo "Switching to existing branch %s.";; \
+    channel_checkout_new) echo "Creating local branch %s from origin/%s.";; \
+    channel_pull) echo "Pulling latest changes from origin/%s…";; \
+    channel_pull_failed) echo "Failed to pull latest changes. Resolve conflicts and retry.";; \
+    channel_submodule) echo "Synchronizing submodules…";; \
+    channel_done) echo "Channel switch completed.";; \
   esac \
   ;; esac; }
+
+run_channel_command() {
+  local channel="${1:-}"
+  if [ -z "$channel" ]; then
+    say "[setup] $(t channel_usage)"
+    return 1
+  fi
+
+  case "$channel" in
+    dev|stable|main) ;;
+    *)
+      say "[setup] $(printf "$(t channel_invalid)" "$channel")"
+      say "[setup] $(t channel_usage)"
+      return 1
+      ;;
+  esac
+
+  if ! have git; then
+    say "[setup] $(t channel_git_missing)"
+    return 1
+  fi
+  if [ ! -d .git ]; then
+    say "[setup] $(t channel_not_repo)"
+    return 1
+  fi
+
+  local branch="$channel"
+  local remote="origin"
+
+  say "[setup] $(t channel_fetch)"
+  git fetch --prune "$remote"
+
+  if ! git show-ref --verify --quiet "refs/remotes/${remote}/${branch}"; then
+    say "[setup] $(printf "$(t channel_remote_missing)" "$branch")"
+    return 1
+  fi
+
+  if git rev-parse --verify --quiet "$branch" >/dev/null 2>&1; then
+    say "[setup] $(printf "$(t channel_checkout_existing)" "$branch")"
+    git checkout "$branch"
+  else
+    say "[setup] $(printf "$(t channel_checkout_new)" "$branch" "$branch")"
+    git checkout -b "$branch" "${remote}/${branch}"
+  fi
+
+  say "[setup] $(printf "$(t channel_pull)" "$branch")"
+  if ! git pull --ff-only "$remote" "$branch"; then
+    say "[setup] $(t channel_pull_failed)"
+    return 1
+  fi
+
+  if [ -f .gitmodules ]; then
+    say "[setup] $(t channel_submodule)"
+    git submodule update --init --recursive
+  fi
+
+  say "[setup] $(t channel_done)"
+  return 0
+}
+
+if [ "${1:-}" = "channel" ]; then
+  shift || true
+  run_channel_command "${1:-}"
+  exit $?
+fi
 
 # 1.5) Dependency notes (Python hint for JoyTag)
 python_ok=false; if have python3; then python_ok=true; fi
