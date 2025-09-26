@@ -1,0 +1,55 @@
+# 本番環境用の設定
+services:
+  app:
+    build:
+      args:
+        - NODE_ENV=production
+    ports:
+      - "9000:9000"
+    environment:
+      - NODE_ENV=production
+      - PORT=9000
+      - DATABASE_URL=postgresql://caramel_user:caramel_pass@postgres:5432/caramel_board_db?connection_limit=20&pool_timeout=0
+      - FILES_STORAGE=/app/data
+      - JOYTAG_SERVER_URL=http://host.docker.internal:5001
+      - NODE_OPTIONS=--max-old-space-size=4096
+    volumes:
+      # データディレクトリ（汎用。必要に応じて docker-compose.local.yml で上書き）
+      - ./data:/app/data
+    command: npm run start:prod
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - caramelboard-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    deploy:
+      resources:
+        limits:
+          memory: 10G
+        reservations:
+          memory: 4G
+
+  postgres:
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: caramel_user
+      POSTGRES_PASSWORD: caramel_pass
+      POSTGRES_DB: caramel_board_db
+    # Do not publish DB port in production; internal network only
+    expose:
+      - "5432:5432"
+    restart: always
+    networks:
+      - caramelboard-network
+
+networks:
+  caramelboard-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local

@@ -1,0 +1,31 @@
+node_modules
+npm-debug.log
+.git
+.gitignore
+.env
+.env.local
+.env.*.local
+*.log
+.DS_Store
+.turbo
+dist
+build
+.next
+.nuxt
+.cache
+coverage
+.nyc_output
+.vscode
+.idea
+*.swp
+*.swo
+*~
+# 古いstaticディレクトリを除外
+apps/server/static
+# データディレクトリ
+data
+# 開発用の設定
+docker-compose.dev.yml
+docker-compose.override.yml
+deploy.config.sh
+*.md

@@ -1,0 +1,367 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model DataSet {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  icon        String?  @default("📁")
+  themeColor  String?  @default("oklch(0.646 0.222 41.116)")
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  settings    Json     @default("{}")
+
+  // Password protection
+  isProtected  Boolean @default(false)
+  passwordHash String?
+  passwordSalt String?
+
+  // Default dataset flag (at most one should be true)
+  isDefault Boolean @default(false)
+
+  // Relations
+  stacks            Stack[]
+  tags              Tag[]
+  authors           Author[]
+  autoTagMappings   AutoTagMapping[]
+  collections       Collection[]
+  collectionFolders CollectionFolder[]
+  navigationPins    NavigationPin[]
+}
+
+model Stack {
+  id               Int                    @id @default(autoincrement())
+  name             String
+  thumbnail        String
+  createdAt        DateTime               @default(now())
+  updateAt         DateTime               @updatedAt
+  meta             Json?
+  mediaType        String                 @default("image") // 'image', 'comic', 'video'
+  liked            Int                    @default(0)
+  authorId         Int?
+  dataSetId        Int
+  dominantColors   Json? // [{r: 255, g: 255, b: 255, hex: "#FFFFFF", percentage: 0.4}, ...]
+  author           Author?                @relation(fields: [authorId], references: [id])
+  dataSet          DataSet                @relation(fields: [dataSetId], references: [id])
+  assets           Asset[]
+  likedActivities  LikeActivity[]
+  favorites        StackFavorite[]
+  autoTagAggregate StackAutoTagAggregate?
+  tags             TagsOnStack[]
+  collectionStacks CollectionStack[]
+  colors           StackColor[]
+  // embeddings removed (pgvector deprecated)
+
+  @@index([authorId])
+  @@index([mediaType])
+  @@index([createdAt])
+  @@index([dataSetId])
+}
+
+model Asset {
+  id                Int                @id @default(autoincrement())
+  file              String             @unique
+  thumbnail         String
+  preview           String?
+  createdAt         DateTime           @default(now())
+  fileType          String
+  meta              Json?
+  originalName      String
+  stackId           Int
+  updateAt          DateTime           @updatedAt
+  hash              String
+  orderInStack      Int                @default(0)
+  dominantColors    Json? // [{r: 255, g: 255, b: 255, hex: "#FFFFFF", percentage: 0.4}, ...]
+  stack             Stack              @relation(fields: [stackId], references: [id], onDelete: Cascade)
+  autoTagPrediction AutoTagPrediction?
+  colors            AssetColor[]
+
+  @@index([stackId])
+  @@index([hash])
+}
+
+model Author {
+  id        Int     @id @default(autoincrement())
+  name      String
+  dataSetId Int
+  dataSet   DataSet @relation(fields: [dataSetId], references: [id])
+  stacks    Stack[]
+
+  @@unique([name, dataSetId])
+  @@index([dataSetId])
+}
+
+model Tag {
+  id              Int              @id @default(autoincrement())
+  title           String
+  dataSetId       Int
+  dataSet         DataSet          @relation(fields: [dataSetId], references: [id])
+  stack           TagsOnStack[]
+  autoTagMappings AutoTagMapping[]
+
+  @@unique([title, dataSetId])
+  @@index([dataSetId])
+}
+
+model TagsOnStack {
+  stackId Int
+  tagId   Int
+  stack   Stack @relation(fields: [stackId], references: [id], onDelete: Cascade)
+  tag     Tag   @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([stackId, tagId])
+  @@index([tagId])
+}
+
+model LikeActivity {
+  id        Int      @id @default(autoincrement())
+  stackId   Int
+  userId    Int?
+  createdAt DateTime @default(now())
+  stack     Stack    @relation(fields: [stackId], references: [id], onDelete: Cascade)
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([stackId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model AutoTagPrediction {
+  id        Int      @id @default(autoincrement())
+  assetId   Int      @unique
+  tags      Json
+  scores    Json
+  threshold Float    @default(0.4)
+  tagCount  Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  asset     Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@index([assetId])
+  @@index([createdAt])
+}
+
+model StackAutoTagAggregate {
+  id             Int      @id @default(autoincrement())
+  stackId        Int      @unique
+  aggregatedTags Json
+  topTags        Json
+  assetCount     Int
+  threshold      Float    @default(0.4)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  stack          Stack    @relation(fields: [stackId], references: [id], onDelete: Cascade)
+
+  @@index([stackId])
+  @@index([createdAt])
+}
+
+model AutoTagMapping {
+  id          Int      @id @default(autoincrement())
+  autoTagKey  String // AutoTag prediction key (e.g., "1girl", "blonde hair")
+  tagId       Int? // Optional link to existing Tag
+  displayName String // Japanese or custom display name
+  description String? // Optional description
+  isActive    Boolean  @default(true)
+  isStop      Boolean  @default(false)
+  dataSetId   Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  dataSet DataSet @relation(fields: [dataSetId], references: [id], onDelete: Cascade)
+  tag     Tag?    @relation(fields: [tagId], references: [id], onDelete: SetNull)
+
+  @@unique([autoTagKey, dataSetId])
+  @@index([dataSetId])
+  @@index([tagId])
+  @@index([isActive])
+}
+
+enum CollectionType {
+  SMART // スマートコレクション（フィルタ条件ベース）
+  MANUAL // 手動コレクション（スタックリスト管理）
+  SCRATCH // スクラッチコレクション（一時的なスタックリスト）
+}
+
+model Collection {
+  id          Int            @id @default(autoincrement())
+  name        String
+  icon        String         @default("📂")
+  description String?
+  type        CollectionType @default(MANUAL)
+  dataSetId   Int
+  folderId    Int? // 所属するフォルダID（ルートの場合はnull）
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  // スマートコレクション用フィルタ条件（JSON形式）
+  filterConfig Json?
+
+  // Relations
+  dataSet          DataSet           @relation(fields: [dataSetId], references: [id], onDelete: Cascade)
+  folder           CollectionFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  collectionStacks CollectionStack[]
+  navigationPins   NavigationPin[]
+
+  @@unique([name, dataSetId])
+  @@index([dataSetId])
+  @@index([folderId])
+  @@index([type])
+  @@index([createdAt])
+}
+
+model CollectionFolder {
+  id          Int      @id @default(autoincrement())
+  name        String
+  icon        String   @default("📁")
+  description String?
+  dataSetId   Int
+  parentId    Int? // 親フォルダID（ルートの場合はnull）
+  order       Int      @default(0) // 同じ階層での並び順
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  dataSet     DataSet            @relation(fields: [dataSetId], references: [id], onDelete: Cascade)
+  parent      CollectionFolder?  @relation("FolderHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children    CollectionFolder[] @relation("FolderHierarchy")
+  collections Collection[]
+
+  @@unique([name, dataSetId, parentId])
+  @@index([dataSetId])
+  @@index([parentId])
+  @@index([order])
+  @@index([createdAt])
+}
+
+model CollectionStack {
+  collectionId Int
+  stackId      Int
+  addedAt      DateTime @default(now())
+  orderIndex   Int      @default(0)
+
+  collection Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  stack      Stack      @relation(fields: [stackId], references: [id], onDelete: Cascade)
+
+  @@id([collectionId, stackId])
+  @@index([collectionId])
+  @@index([stackId])
+  @@index([orderIndex])
+}
+
+model StackFavorite {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  stackId   Int
+  createdAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stack Stack @relation(fields: [stackId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, stackId])
+  @@index([userId])
+  @@index([stackId])
+}
+
+model User {
+  id           Int             @id @default(autoincrement())
+  name         String          @unique
+  email        String?         @unique
+  role         String          @default("super")
+  passwordHash String?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  likeActivities LikeActivity[]
+  favorites      StackFavorite[]
+  navigationPins NavigationPin[]
+}
+
+enum NavigationPinType {
+  COLLECTION
+  MEDIA_TYPE
+  OVERVIEW
+  FAVORITES
+  LIKES
+}
+
+model NavigationPin {
+  id        Int               @id @default(autoincrement())
+  type      NavigationPinType
+  name      String
+  icon      String
+  order     Int               @default(0)
+  dataSetId Int
+  userId    Int
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  // Optional references
+  collectionId Int?
+  mediaType    String? // 'image', 'comic', 'video'
+
+  // Relations
+  dataSet    DataSet     @relation(fields: [dataSetId], references: [id], onDelete: Cascade)
+  collection Collection? @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, type, dataSetId, collectionId, mediaType])
+  @@index([dataSetId])
+  @@index([userId])
+  @@index([order])
+}
+
+model StackColor {
+  id          Int    @id @default(autoincrement())
+  stackId     Int
+  r           Int
+  g           Int
+  b           Int
+  hex         String
+  percentage  Float
+  hue         Int
+  saturation  Int
+  lightness   Int
+  hueCategory String
+  orderIndex  Int    @default(0)
+
+  stack Stack @relation(fields: [stackId], references: [id], onDelete: Cascade)
+
+  @@index([stackId])
+  @@index([hueCategory])
+  @@index([hue])
+  @@index([saturation, lightness])
+  @@index([hex])
+}
+
+model AssetColor {
+  id          Int    @id @default(autoincrement())
+  assetId     Int
+  r           Int
+  g           Int
+  b           Int
+  hex         String
+  percentage  Float
+  hue         Int
+  saturation  Int
+  lightness   Int
+  hueCategory String
+  orderIndex  Int    @default(0)
+
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@index([assetId])
+  @@index([hueCategory])
+  @@index([hue])
+  @@index([saturation, lightness])
+  @@index([hex])
+}
+
+// StackEmbedding / TagEmbeddingCache removed (pgvector deprecated)

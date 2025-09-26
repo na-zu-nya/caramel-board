@@ -1,0 +1,25 @@
+services:
+  postgres:
+    build:
+      context: ./docker/postgres
+      dockerfile: Dockerfile
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: caramel_user
+      POSTGRES_PASSWORD: caramel_pass
+      POSTGRES_DB: caramel_board_db
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U caramel_user -d caramel_board_db" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 80s
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local

@@ -1,0 +1,70 @@
+# 本番環境用設定
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - NODE_ENV=production
+    ports:
+      - "9000:9000"
+    volumes:
+      # データディレクトリ
+      - ./data:/app/data
+    environment:
+      - NODE_ENV=production
+      - PORT=9000
+      - FILES_STORAGE=/app/data
+      - DATABASE_URL=postgresql://caramel_user:caramel_pass@postgres:5432/caramel_board_db?connection_limit=20&pool_timeout=0
+      - JOYTAG_SERVER_URL=http://host.docker.internal:5001
+    depends_on:
+      postgres:
+        condition: service_healthy
+      # redis removed (no embedding queue)
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - caramelboard-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  postgres:
+    build:
+      context: ./docker/postgres
+      dockerfile: Dockerfile
+    expose:
+      - "5432"
+    environment:
+      POSTGRES_USER: caramel_user
+      POSTGRES_PASSWORD: caramel_pass
+      POSTGRES_DB: caramel_board_db
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U caramel_user -d caramel_board_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 80s
+    restart: unless-stopped
+    networks:
+      - caramelboard-network
+
+networks:
+  caramelboard-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local

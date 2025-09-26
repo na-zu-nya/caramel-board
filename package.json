@@ -1,0 +1,39 @@
+{
+  "name": "caramel-board",
+  "version": "0.3.0",
+  "private": true,
+  "packageManager": "npm@10.9.2",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev --parallel",
+    "dev:db": "docker-compose -f docker-compose.dev.yml up -d postgres",
+    "dev:db:down": "docker-compose -f docker-compose.dev.yml down",
+    "lint": "turbo run lint",
+    "format": "biome check .",
+    "format:fix": "biome check --write .",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "test:watch": "turbo run test:watch",
+    "clean": "turbo run clean --parallel && rm -rf node_modules/.cache node_modules/.vite .turbo",
+    "clean:all": "npm run clean && rm -rf node_modules apps/*/node_modules packages/*/node_modules",
+    "docker:build": "docker-compose build --no-cache",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f",
+    "db:backup": "docker-compose -f docker-compose.dev.yml exec -T postgres pg_dump -U caramel_user -d caramel_board_db > backup-$(date +%Y%m%d-%H%M%S).sql",
+    "db:restore": "docker-compose -f docker-compose.dev.yml exec -T postgres psql -U caramel_user -d caramel_board_db < backup.sql",
+    "db:push": "npm run -w @caramelboard/server db:push",
+    "prisma:push": "npm run db:push",
+    "prisma:generate": "npm run -w @caramelboard/server db:generate",
+    "prisma:studio": "npm run -w @caramelboard/server db:studio",
+    "prisma:migrate:dev": "npm run -w @caramelboard/server db:migrate:dev",
+    "prisma:migrate:deploy": "npm run -w @caramelboard/server db:migrate:prod"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.2.4",
+    "turbo": "^2.4.2"
+  }
+}
