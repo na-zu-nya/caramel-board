@@ -17,8 +17,8 @@ The **main** branch hosts the stable releases, while **dev** carries newer featu
 
 #### Setup difficulty (rough guide)
 
-- **Web developers:** ★★⭐︎⭐︎⭐︎ (relatively easy)
-- **Power users comfortable with PCs:** ★★★⭐︎⭐︎ (somewhat challenging)
+- **Web developers:** ★★・・・ (relatively easy)
+- **Power users comfortable with PCs:** ★★★・・ (somewhat challenging)
 
 *Setup and operation require the command line—expect a bit of a learning curve!*
 
