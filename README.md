@@ -1,5 +1,7 @@
 # CaramelBoard 🍬🤎
 
+<img src="./assets/intro.jpg" alt="caramel-board-intro"/>
+
 [English version is here → README.en.md](./README.en.md)
 
 CaramelBoardは、画像・動画などのアセットをローカルで収集・整理するためのプライベートなWebアプリです。お使いのPCで動いて、ブラウザやLAN内の他のPC、スマホ・タブレットからアセットを快適に見ることができます。

@@ -98,6 +98,7 @@ git clone https://github.com/na-zu-nya/caramel-board.git caramel-board
 - セットアップが完了したら自動的に終了します
 
 ### 起動・運用
+
 #### アプリの起動
 
 - serve.bat をダブルクリックで実行することで、サービスが立ち上がります
@@ -106,6 +107,14 @@ git clone https://github.com/na-zu-nya/caramel-board.git caramel-board
   - http://localhost:9000
   - http://<ローカルIP>:9000
 - でアクセスできます。
+
+#### アプリの停止
+
+- stop.bat をダブルクリックで実行することで、サービスが停止します
+
+#### アプリの更新(gitでダウンロードした場合のみ)
+
+- update.bat をダブルクリックで実行することで、アプリを最新に更新します
 
 #### 他の端末からアクセスする
 

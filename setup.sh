@@ -143,7 +143,7 @@ if ! $CHANNEL_MODE; then
 fi
 
 INTERACTIVE=false
-if ! $CHANNEL_MODE && [ -t 0 ] && [ -t 1 ]; then
+if [ -t 0 ] && [ -t 1 ]; then
   INTERACTIVE=true
 fi
 
@@ -344,37 +344,58 @@ run_channel_command() {
   return 0
 }
 
+channel_prompt_flow() {
+  if ! $INTERACTIVE; then
+    say "[setup] $(t channel_usage)"
+    return 1
+  fi
+
+  begin_question "$(t channel_select_title)"
+  say "$(t channel_select_info)"; hr
+  local channel_sel
+  channel_sel=$(menu_ask "" 1 "$(t channel_select_stable)" "$(t channel_select_dev)" "$(t channel_select_skip)")
+  local chosen=""
+  case "$channel_sel" in
+    1) chosen=stable ;;
+    2) chosen=dev ;;
+    3) chosen=skip ;;
+  esac
+
+  if [ "$chosen" = "skip" ]; then
+    write_env CB_CHANNEL_SELECTED skip
+    CB_CHANNEL_SELECTED=skip
+    say "[setup] $(t channel_select_skip_msg)"
+    return 0
+  fi
+
+  if run_channel_command "$chosen"; then
+    write_env CB_CHANNEL_SELECTED "$chosen"
+    CB_CHANNEL_SELECTED="$chosen"
+    say "[setup] $(t channel_select_done)"
+    return 0
+  fi
+
+  return 1
+}
+
 if [ "${1:-}" = "channel" ]; then
   shift || true
-  run_channel_command "${1:-}"
-  exit $?
+  if [ -z "${1:-}" ]; then
+    channel_prompt_flow
+    exit $?
+  fi
+  channel="$1"
+  if run_channel_command "$channel"; then
+    write_env CB_CHANNEL_SELECTED "$channel"
+    CB_CHANNEL_SELECTED="$channel"
+    say "[setup] $(t channel_select_done)"
+    exit 0
+  fi
+  exit 1
 fi
 
 if ! $CHANNEL_MODE && $INTERACTIVE && [ -z "$CB_CHANNEL_SELECTED" ]; then
-  begin_question "$(t channel_select_title)"
-  say "$(t channel_select_info)"; hr
-  channel_sel=$(menu_ask "" 1 "$(t channel_select_stable)" "$(t channel_select_dev)" "$(t channel_select_skip)")
-  case "$channel_sel" in
-    1)
-      if run_channel_command stable; then
-        write_env CB_CHANNEL_SELECTED stable
-        CB_CHANNEL_SELECTED=stable
-        say "[setup] $(t channel_select_done)"
-      fi
-      ;;
-    2)
-      if run_channel_command dev; then
-        write_env CB_CHANNEL_SELECTED dev
-        CB_CHANNEL_SELECTED=dev
-        say "[setup] $(t channel_select_done)"
-      fi
-      ;;
-    3)
-      write_env CB_CHANNEL_SELECTED skip
-      CB_CHANNEL_SELECTED=skip
-      say "[setup] $(t channel_select_skip_msg)"
-      ;;
-  esac
+  channel_prompt_flow
   echo ""
 fi
 
