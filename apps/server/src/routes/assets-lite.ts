@@ -7,7 +7,10 @@ export const assetsLiteRoute = new Hono();
 
 // Helper to resolve datasetId from assetId
 async function resolveDatasetIdByAsset(prisma: any, assetId: number): Promise<number> {
-  const row = await prisma.asset.findUnique({ where: { id: assetId }, select: { stack: { select: { dataSetId: true } } } });
+  const row = await prisma.asset.findUnique({
+    where: { id: assetId },
+    select: { stack: { select: { dataSetId: true } } },
+  });
   if (!row) throw new Error('Asset not found');
   return row.stack.dataSetId as number;
 }
@@ -34,4 +37,3 @@ assetsLiteRoute.put('/:assetId/order', async (c) => {
   await assetService.updateOrder(assetId, parse.data.order);
   return c.json({ success: true });
 });
-

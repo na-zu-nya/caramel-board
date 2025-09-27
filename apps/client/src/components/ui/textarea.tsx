@@ -22,7 +22,8 @@ const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       if (e.key === 'Escape') {
-        const isComposing = (e as any).isComposing || (e.nativeEvent as any)?.isComposing || composingRef.current;
+        const isComposing =
+          (e as any).isComposing || (e.nativeEvent as any)?.isComposing || composingRef.current;
         if (!isComposing) {
           (e.currentTarget as HTMLTextAreaElement).blur();
           e.preventDefault();

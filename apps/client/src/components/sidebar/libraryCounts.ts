@@ -20,7 +20,9 @@ export function adjustLibraryCounts(
   deltas: Partial<Record<keyof LibraryCounts, number>>
 ) {
   try {
-    const entries = queryClient.getQueriesData<LibraryCounts>({ queryKey: ['library-counts', datasetId] });
+    const entries = queryClient.getQueriesData<LibraryCounts>({
+      queryKey: ['library-counts', datasetId],
+    });
     for (const [qk, data] of entries) {
       if (!data) continue;
       const next: LibraryCounts = { ...data } as LibraryCounts;
@@ -36,4 +38,3 @@ export function adjustLibraryCounts(
     console.warn('adjustLibraryCounts failed:', e);
   }
 }
-

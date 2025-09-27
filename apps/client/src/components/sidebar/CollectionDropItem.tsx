@@ -43,7 +43,9 @@ export function CollectionDropItem({
     if (!dragData) return [];
 
     if (Array.isArray(dragData.stackIds)) {
-      return dragData.stackIds.map((id: any) => Number(id)).filter((id) => Number.isInteger(id) && id > 0);
+      return dragData.stackIds
+        .map((id: any) => Number(id))
+        .filter((id) => Number.isInteger(id) && id > 0);
     }
 
     if (Array.isArray(dragData.items)) {
@@ -76,7 +78,9 @@ export function CollectionDropItem({
         return;
       }
 
-      const uniqueIds = Array.from(new Set(stackIds.filter((id) => Number.isInteger(id) && id > 0)));
+      const uniqueIds = Array.from(
+        new Set(stackIds.filter((id) => Number.isInteger(id) && id > 0))
+      );
       if (uniqueIds.length === 0) {
         console.log('🟨 Drop ignored: no valid stackIds');
         return;
@@ -177,12 +181,9 @@ export function CollectionDropItem({
     });
   }, [collection.id, getDatasetIdFromPath, navigate]);
 
-  const combinedRef = useCallback(
-    (node: HTMLDivElement | null) => {
-      dropElementRef.current = node;
-    },
-    []
-  );
+  const combinedRef = useCallback((node: HTMLDivElement | null) => {
+    dropElementRef.current = node;
+  }, []);
 
   return (
     <CollectionContextMenu
@@ -207,7 +208,9 @@ export function CollectionDropItem({
       >
         {collection.type === 'SMART' ? <Settings size={15} /> : <BookText size={15} />}
         <span className="truncate flex-1">{collection.name}</span>
-        <CountBadge count={collection.type === 'MANUAL' ? collection._count?.collectionStacks : undefined} />
+        <CountBadge
+          count={collection.type === 'MANUAL' ? collection._count?.collectionStacks : undefined}
+        />
       </div>
     </CollectionContextMenu>
   );

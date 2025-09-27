@@ -1,7 +1,7 @@
-import {zValidator} from '@hono/zod-validator';
-import {Hono} from 'hono';
-import {PaginationSchema} from '../schemas/index.js';
-import {AuthorService} from '../shared/services/AuthorService';
+import { zValidator } from '@hono/zod-validator';
+import { Hono } from 'hono';
+import { PaginationSchema } from '../schemas/index.js';
+import { AuthorService } from '../shared/services/AuthorService';
 
 export const authorsRoute = new Hono();
 const authorService = new AuthorService();
@@ -17,7 +17,10 @@ authorsRoute.get('/', zValidator('query', PaginationSchema), async (c) => {
   try {
     const { limit, offset } = c.req.valid('query');
     const dataSetId = getDataSetId(c);
-    const auth = await (await import('../utils/dataset-protection')).ensureDatasetAuthorized(c as any, dataSetId);
+    const auth = await (await import('../utils/dataset-protection')).ensureDatasetAuthorized(
+      c as any,
+      dataSetId
+    );
     if (auth) return auth;
     const result = await authorService.getAll({ limit, offset, dataSetId });
     return c.json(result);
@@ -32,7 +35,10 @@ authorsRoute.get('/search', async (c) => {
   try {
     const key = c.req.query('key') || '';
     const dataSetId = getDataSetId(c);
-    const auth = await (await import('../utils/dataset-protection')).ensureDatasetAuthorized(c as any, dataSetId);
+    const auth = await (await import('../utils/dataset-protection')).ensureDatasetAuthorized(
+      c as any,
+      dataSetId
+    );
     if (auth) return auth;
     const authors = await authorService.search(key, dataSetId);
     return c.json(authors);

@@ -27,7 +27,13 @@ export interface MarkerProps extends React.SVGAttributes<SVGElement> {
 const clamp = (n: number, min = 0, max = 255) => Math.max(min, Math.min(max, n));
 const hexToRgb = (hex: string): { r: number; g: number; b: number } | null => {
   const m = hex.trim().replace(/^#/, '');
-  const s = m.length === 3 ? m.split('').map((c) => c + c).join('') : m;
+  const s =
+    m.length === 3
+      ? m
+          .split('')
+          .map((c) => c + c)
+          .join('')
+      : m;
   if (!/^([0-9a-fA-F]{6})$/.test(s)) return null;
   const num = parseInt(s, 16);
   return { r: (num >> 16) & 0xff, g: (num >> 8) & 0xff, b: num & 0xff };
@@ -40,7 +46,11 @@ const darkenHex = (hex: string, percent: number) => {
   const rgb = hexToRgb(hex);
   if (!rgb) return hex;
   const factor = Math.max(0, 1 - percent);
-  return rgbToHex(Math.round(rgb.r * factor), Math.round(rgb.g * factor), Math.round(rgb.b * factor));
+  return rgbToHex(
+    Math.round(rgb.r * factor),
+    Math.round(rgb.g * factor),
+    Math.round(rgb.b * factor)
+  );
 };
 
 const mapColor = (key?: string): string => {
@@ -80,7 +90,12 @@ const mapColor = (key?: string): string => {
  * Pure presentational marker icon used in seekbars and timelines.
  * No external spacing; animations are controlled by parent via className.
  */
-export const Marker = React.memo(function Marker({ color = 'hard-pink', size = 12, className, ...rest }: MarkerProps) {
+export const Marker = React.memo(function Marker({
+  color = 'hard-pink',
+  size = 12,
+  className,
+  ...rest
+}: MarkerProps) {
   const fill = mapColor(color);
   const stroke = darkenHex(fill, 0.4);
   // Keep original aspect ratio (width:height = 10:12 for the 12x14 viewBox drawing)
@@ -109,4 +124,3 @@ export const Marker = React.memo(function Marker({ color = 'hard-pink', size = 1
 });
 
 export default Marker;
-

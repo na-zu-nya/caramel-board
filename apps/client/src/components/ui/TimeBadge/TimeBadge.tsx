@@ -28,4 +28,3 @@ export default function TimeBadge({ seconds, text, className }: TimeBadgeProps) 
     </span>
   );
 }
-

@@ -1,5 +1,5 @@
-import {prisma} from '../../app';
-import {AutoTagClient} from '../../lib/AutoTagClient';
+import { prisma } from '../../app';
+import { AutoTagClient } from '../../lib/AutoTagClient';
 
 export class PictureService {
   private autoTagClient: AutoTagClient;

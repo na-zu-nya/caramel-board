@@ -1,13 +1,13 @@
-import type {Meta, StoryObj} from '@storybook/react';
-import {Book, Camera, Folder, Heart, Layers, XCircle} from 'lucide-react';
-import {useState} from 'react';
-import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '../select';
-import {SideMenu, SideMenuGroup, SideMenuListItem} from './index';
+import type { Meta, StoryObj } from '@storybook/react';
+import { Book, Camera, Folder, Heart, Layers, XCircle } from 'lucide-react';
+import { useState } from 'react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../select';
+import { SideMenu, SideMenuGroup, SideMenuListItem } from './index';
 
 const meta: Meta<typeof SideMenu> = {
   title: 'SideMenu/SideMenu',
   component: SideMenu,
-  parameters: {layout: 'fullscreen'},
+  parameters: { layout: 'fullscreen' },
 };
 
 export default meta;
@@ -18,7 +18,7 @@ export const Default: Story = {
     const [open, setOpen] = useState(true);
     const [library, setLibrary] = useState('1');
     return (
-      <div style={{height: '100vh'}}>
+      <div style={{ height: '100vh' }}>
         <SideMenu open={open} onClose={() => setOpen(false)} title="Caramel Board">
           <SideMenuGroup label="Current Library">
             <Select value={library} onValueChange={setLibrary}>
@@ -39,16 +39,16 @@ export const Default: Story = {
           </SideMenuGroup>
 
           <SideMenuGroup label="Library">
-            <SideMenuListItem icon={Layers} label="Overview" active count={120}/>
-            <SideMenuListItem icon={Camera} label="Photos" count={87}/>
-            <SideMenuListItem icon={Book} label="Books"/>
-            <SideMenuListItem icon={Heart} label="Likes"/>
+            <SideMenuListItem icon={Layers} label="Overview" active count={120} />
+            <SideMenuListItem icon={Camera} label="Photos" count={87} />
+            <SideMenuListItem icon={Book} label="Books" />
+            <SideMenuListItem icon={Heart} label="Likes" />
           </SideMenuGroup>
 
           <SideMenuGroup label="Collections">
-            <SideMenuListItem icon={Folder} label="Project Alpha" count={12}/>
-            <SideMenuListItem icon={Folder} label="Project Beta" count={4}/>
-            <SideMenuListItem icon={<XCircle size={15}/>} label="Scratch"/>
+            <SideMenuListItem icon={Folder} label="Project Alpha" count={12} />
+            <SideMenuListItem icon={Folder} label="Project Beta" count={4} />
+            <SideMenuListItem icon={<XCircle size={15} />} label="Scratch" />
           </SideMenuGroup>
         </SideMenu>
       </div>
@@ -60,7 +60,7 @@ export const WithLinkTitle: Story = {
   render: () => {
     const [open, setOpen] = useState(true);
     return (
-      <div style={{height: '100vh'}}>
+      <div style={{ height: '100vh' }}>
         <SideMenu
           open={open}
           onClose={() => setOpen(false)}
@@ -75,7 +75,7 @@ export const WithLinkTitle: Story = {
           }
         >
           <SideMenuGroup label="Example">
-            <SideMenuListItem label="Item"/>
+            <SideMenuListItem label="Item" />
           </SideMenuGroup>
         </SideMenu>
       </div>

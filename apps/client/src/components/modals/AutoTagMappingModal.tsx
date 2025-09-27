@@ -94,9 +94,7 @@ export default function AutoTagMappingModal({
     queryFn: async () => {
       const tags = await apiClient.searchTags('', datasetId);
       // Normalize to objects { id, title }
-      return (
-        tags as any[]
-      ).map((t) => (typeof t === 'string' ? { id: -1, title: t } : t));
+      return (tags as any[]).map((t) => (typeof t === 'string' ? { id: -1, title: t } : t));
     },
   });
 

@@ -1,5 +1,5 @@
-import {prisma} from '../di';
-import {withPublicAssetArray, toPublicAssetPath} from '../../utils/assetPath';
+import { prisma } from '../di';
+import { withPublicAssetArray, toPublicAssetPath } from '../../utils/assetPath';
 
 export interface PaginationOptions {
   limit: number;
@@ -170,12 +170,23 @@ export class ActivityService {
     if (search && search.trim() && datasetId) {
       // Build a minimal unified search using the same dataset (no embeddings)
       const dataSetIdNum = Number(datasetId);
-      const { createColorSearchService } = await import('../../features/datasets/services/color-search-service');
-      const { createTagStatsService } = await import('../../features/datasets/services/tag-stats-service');
-      const { createSearchService, SearchMode } = await import('../../features/datasets/services/search-service');
+      const { createColorSearchService } = await import(
+        '../../features/datasets/services/color-search-service'
+      );
+      const { createTagStatsService } = await import(
+        '../../features/datasets/services/tag-stats-service'
+      );
+      const { createSearchService, SearchMode } = await import(
+        '../../features/datasets/services/search-service'
+      );
       const colorSearch = createColorSearchService({ prisma, dataSetId: dataSetIdNum });
       const tagStats = createTagStatsService({ prisma, dataSetId: dataSetIdNum });
-      const searchService = createSearchService({ prisma, colorSearch, tagStats, dataSetId: dataSetIdNum });
+      const searchService = createSearchService({
+        prisma,
+        colorSearch,
+        tagStats,
+        dataSetId: dataSetIdNum,
+      });
       const result = await searchService.search({
         mode: SearchMode.UNIFIED,
         datasetId: dataSetIdNum,

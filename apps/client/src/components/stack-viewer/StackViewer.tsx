@@ -1,5 +1,5 @@
-import {FullPageDropZone} from '@/components/ui/DropZone';
-import {HeaderIconButton} from '@/components/ui/Header/HeaderIconButton';
+import { FullPageDropZone } from '@/components/ui/DropZone';
+import { HeaderIconButton } from '@/components/ui/Header/HeaderIconButton';
 import MarkerEditorDialog from '@/components/ui/SeekBar/MarkerEditorDialog';
 import {
   ContextMenu,
@@ -8,15 +8,15 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
-import {useStackNavigation} from '@/hooks/features/useStackNavigation';
-import {useStackViewer} from '@/hooks/features/useStackViewer';
-import {useStackViewerInteractions} from '@/hooks/features/useStackViewerInteractions';
-import {useHeaderActions} from '@/hooks/useHeaderActions';
-import {useScratch} from '@/hooks/useScratch';
-import {useViewContext} from '@/hooks/useViewContext';
-import {apiClient} from '@/lib/api-client';
-import {isVideoAsset} from '@/lib/media';
-import {cn} from '@/lib/utils';
+import { useStackNavigation } from '@/hooks/features/useStackNavigation';
+import { useStackViewer } from '@/hooks/features/useStackViewer';
+import { useStackViewerInteractions } from '@/hooks/features/useStackViewerInteractions';
+import { useHeaderActions } from '@/hooks/useHeaderActions';
+import { useScratch } from '@/hooks/useScratch';
+import { useViewContext } from '@/hooks/useViewContext';
+import { apiClient } from '@/lib/api-client';
+import { isVideoAsset } from '@/lib/media';
+import { cn } from '@/lib/utils';
 import {
   infoSidebarOpenAtom,
   selectedItemIdAtom,
@@ -28,14 +28,14 @@ import {
   addUploadNotificationAtom,
   uploadNotificationsAtom,
 } from '@/stores/upload';
-import type {Asset, VideoMarker as TVideoMarker, VideoMarker} from '@/types';
-import {useQueryClient} from '@tanstack/react-query';
-import {useNavigate} from '@tanstack/react-router';
-import {useAtom, useAtomValue, useSetAtom} from 'jotai';
-import {GalleryVerticalEnd, Info, NotebookText, PenTool, Pipette, Trash2} from 'lucide-react';
+import type { Asset, VideoMarker as TVideoMarker, VideoMarker } from '@/types';
+import { useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from '@tanstack/react-router';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
+import { GalleryVerticalEnd, Info, NotebookText, PenTool, Pipette, Trash2 } from 'lucide-react';
 import MersenneTwister from 'mersenne-twister';
-import {useCallback, useEffect, useRef, useState} from 'react';
-import {createPortal} from 'react-dom';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import AssetGrid from './AssetGrid';
 import ColorPickerOverlay from './ColorPickerOverlay';
 import ImageCarousel from './ImageCarousel';
@@ -64,7 +64,7 @@ export default function StackViewer({
   const addFilesToQueue = useSetAtom(addFilesToQueueAtom);
   const uploadNotifications = useAtomValue(uploadNotificationsAtom);
   const addNotification = useSetAtom(addUploadNotificationAtom);
-  const {ensureScratch} = useScratch(datasetId);
+  const { ensureScratch } = useScratch(datasetId);
   const queryClient = useQueryClient();
 
   // Reorder mode state
@@ -82,7 +82,7 @@ export default function StackViewer({
     handleFavoriteToggle,
     handleLikeToggle,
     refetch,
-  } = useStackViewer({datasetId, mediaType, stackId});
+  } = useStackViewer({ datasetId, mediaType, stackId });
 
   // Interactions + neighbors + animations
   const {
@@ -119,8 +119,8 @@ export default function StackViewer({
   );
 
   // Navigation
-  const {navigateBack} = useStackNavigation({currentStackId: stackId, currentPage});
-  const {ctx, update} = useViewContext();
+  const { navigateBack } = useStackNavigation({ currentStackId: stackId, currentPage });
+  const { ctx, update } = useViewContext();
   const navigate = useNavigate();
   // vertical drag state (local to component)
   const currentVerticalOffsetRef = useRef(0);
@@ -143,12 +143,12 @@ export default function StackViewer({
     const vv: any = (window as any).visualViewport;
     const x = vv?.offsetLeft ?? window.scrollX ?? 0;
     const y = vv?.offsetTop ?? window.scrollY ?? 0;
-    savedVVRef.current = {x, y, ts: Date.now()};
+    savedVVRef.current = { x, y, ts: Date.now() };
   }, []);
   const restoreVisualViewport = useCallback((tries = 10) => {
     const saved = savedVVRef.current;
     if (!saved) return;
-    const {x, y} = saved;
+    const { x, y } = saved;
     let attempt = 0;
     const step = () => {
       window.scrollTo(x, y);
@@ -213,17 +213,17 @@ export default function StackViewer({
             prev && prev.token === token
               ? prev
               : ({
-                token,
-                datasetId: String(baseDatasetId),
-                mediaType: baseMediaType,
-                filters: baseFilter,
-                sort: baseSort,
-                ids: [],
-                currentIndex: 0,
-                createdAt: Date.now(),
-              } as any);
+                  token,
+                  datasetId: String(baseDatasetId),
+                  mediaType: baseMediaType,
+                  filters: baseFilter,
+                  sort: baseSort,
+                  ids: [],
+                  currentIndex: 0,
+                  createdAt: Date.now(),
+                } as any);
 
-          const next = {...base} as any;
+          const next = { ...base } as any;
           next.ids = pageIds;
           next.currentIndex = Math.max(
             0,
@@ -236,8 +236,8 @@ export default function StackViewer({
 
       void navigate({
         to: '/library/$datasetId/stacks/$stackId',
-        params: {datasetId: String(baseDatasetId), stackId: String(item.id)},
-        search: {page: 0, mediaType: String(baseMediaType), listToken: token || undefined},
+        params: { datasetId: String(baseDatasetId), stackId: String(item.id) },
+        search: { page: 0, mediaType: String(baseMediaType), listToken: token || undefined },
         replace: true,
       });
       // Ensure single-image mode for gestures
@@ -261,15 +261,15 @@ export default function StackViewer({
       await apiClient.removeStack(stackIdValue);
       setIsInfoSidebarOpen(false);
       setSelectedItemId(null);
-      await queryClient.invalidateQueries({queryKey: ['stacks']});
-      await queryClient.invalidateQueries({queryKey: ['library-counts', datasetId]});
+      await queryClient.invalidateQueries({ queryKey: ['stacks'] });
+      await queryClient.invalidateQueries({ queryKey: ['library-counts', datasetId] });
 
       const currentPath = window.location.pathname;
       if (currentPath.includes('/stacks/')) {
         const targetMediaType = (stack.mediaType as string) || mediaType || 'image';
         await navigate({
           to: '/library/$datasetId/media-type/$mediaType',
-          params: {datasetId, mediaType: String(targetMediaType)},
+          params: { datasetId, mediaType: String(targetMediaType) },
         });
       } else {
         navigateBack();
@@ -309,10 +309,10 @@ export default function StackViewer({
     } else {
       markerDialogPlaybackRef.current = null;
     }
-    setMarkerEditor({open: true, index, time: marker.time, color: marker.color || 'bright-blue'});
+    setMarkerEditor({ open: true, index, time: marker.time, color: marker.color || 'bright-blue' });
   }, []);
   const closeMarkerEditor = useCallback(
-    () => setMarkerEditor((p) => (p ? {...p, open: false} : p)),
+    () => setMarkerEditor((p) => (p ? { ...p, open: false } : p)),
     []
   );
 
@@ -502,7 +502,7 @@ export default function StackViewer({
           const asset = currentAsset;
           if (!asset) return;
           // Preserve current playback state across updates
-          const pb = {time: t, wasPlaying: !!refAny?.getIsPlaying?.()};
+          const pb = { time: t, wasPlaying: !!refAny?.getIsPlaying?.() };
           const arr = getMarkersFor(asset);
           // 近接判定: ±0.15s 以内を「同一点」とみなして編集モードへ
           const threshold = 0.15;
@@ -515,9 +515,9 @@ export default function StackViewer({
           }
           // 近接無し → 追加して即保存（従来どおり）
           const existing = arr.slice();
-          const newMarker: VideoMarker = {time: t, color: 'hard-pink', label: ''};
+          const newMarker: VideoMarker = { time: t, color: 'hard-pink', label: '' };
           const nextMarkers = [...existing, newMarker].sort((a, b) => a.time - b.time);
-          setOptimisticMarkers((prev) => ({...prev, [asset.id]: nextMarkers}));
+          setOptimisticMarkers((prev) => ({ ...prev, [asset.id]: nextMarkers }));
           // Immediate restore (guard against any incidental re-render)
           (imageCarouselRef.current as any)?.requestRestorePlayback?.(pb);
           apiClient
@@ -525,7 +525,7 @@ export default function StackViewer({
               datasetId,
               stackId,
               assetId: asset.id,
-              meta: {...(asset.meta || {}), markers: nextMarkers},
+              meta: { ...(asset.meta || {}), markers: nextMarkers },
             })
             .then(async () => {
               await refetch();
@@ -625,7 +625,7 @@ export default function StackViewer({
   // Drop to add assets
   const handleFileDrop = (files: File[]) => {
     if (!stack) return;
-    addFilesToQueue({files, type: 'add-to-stack', stackId: Number(stack.id)});
+    addFilesToQueue({ files, type: 'add-to-stack', stackId: Number(stack.id) });
   };
 
   const handleUrlDrop = useCallback(
@@ -684,7 +684,7 @@ export default function StackViewer({
   if (isLoading) {
     return (
       <div className="fixed inset-0 bg-black flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin"/>
+        <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -705,10 +705,10 @@ export default function StackViewer({
     );
   }
 
-  const gestureState = {translateX: 0, translateY: 0, scale: 1, opacity: 1};
+  const gestureState = { translateX: 0, translateY: 0, scale: 1, opacity: 1 };
   const isGesturing = false;
 
-  const ViewerShell = ({children}: { children: React.ReactNode }) => {
+  const ViewerShell = ({ children }: { children: React.ReactNode }) => {
     // Disable drop zone while reordering to avoid accidental uploads
     if (isReorderMode) return <>{children}</>;
     return (
@@ -735,7 +735,7 @@ export default function StackViewer({
           WebkitOverflowScrolling: 'auto',
         }}
       >
-        <div className="fixed top-0 left-0 right-0 h-14 bg-white"/>
+        <div className="fixed top-0 left-0 right-0 h-14 bg-white" />
 
         <div
           className={cn(
@@ -892,7 +892,7 @@ export default function StackViewer({
                   }}
                   disabled={!stack}
                 >
-                  <Info className="w-4 h-4 mr-2"/>
+                  <Info className="w-4 h-4 mr-2" />
                   Info
                 </ContextMenuItem>
                 <ContextMenuItem
@@ -904,12 +904,12 @@ export default function StackViewer({
                         : (stack.id as number);
                     await navigate({
                       to: '/library/$datasetId/stacks/$stackId/similar',
-                      params: {datasetId, stackId: String(id)},
+                      params: { datasetId, stackId: String(id) },
                     });
                   }}
                   disabled={!stack}
                 >
-                  <GalleryVerticalEnd className="w-4 h-4 mr-2"/>
+                  <GalleryVerticalEnd className="w-4 h-4 mr-2" />
                   Find similar
                 </ContextMenuItem>
                 <ContextMenuItem
@@ -922,27 +922,27 @@ export default function StackViewer({
                           ? Number.parseInt(stack.id, 10)
                           : (stack.id as number);
                       await apiClient.addStackToCollection(sc.id, id);
-                      await queryClient.invalidateQueries({queryKey: ['stacks']});
+                      await queryClient.invalidateQueries({ queryKey: ['stacks'] });
                       await queryClient.invalidateQueries({
                         queryKey: ['library-counts', datasetId],
                       });
-                      await queryClient.refetchQueries({queryKey: ['library-counts', datasetId]});
+                      await queryClient.refetchQueries({ queryKey: ['library-counts', datasetId] });
                     } catch (e) {
                       console.error('Failed to add to Scratch', e);
                     }
                   }}
                   disabled={!stack}
                 >
-                  <NotebookText className="w-4 h-4 mr-2"/>
+                  <NotebookText className="w-4 h-4 mr-2" />
                   Add to Scratch
                 </ContextMenuItem>
-                <ContextMenuSeparator/>
+                <ContextMenuSeparator />
                 <ContextMenuItem
                   className="text-red-600 focus:text-red-600 hover:text-red-600"
                   onClick={handleDeleteCurrentStack}
                   disabled={!stack}
                 >
-                  <Trash2 className="w-4 h-4 mr-2"/>
+                  <Trash2 className="w-4 h-4 mr-2" />
                   Delete
                 </ContextMenuItem>
               </ContextMenuContent>
@@ -961,53 +961,53 @@ export default function StackViewer({
               onRemoveAsset={
                 isInfoSidebarOpen && !isReorderMode
                   ? async (assetId) => {
-                    try {
-                      await apiClient.removeAsset(assetId);
-                      await refetch();
-                    } catch (error) {
-                      console.error('Failed to remove asset:', error);
+                      try {
+                        await apiClient.removeAsset(assetId);
+                        await refetch();
+                      } catch (error) {
+                        console.error('Failed to remove asset:', error);
+                      }
                     }
-                  }
                   : undefined
               }
               // Collect pending order locally; persist on confirmation
               onReorderAssets={
                 isReorderMode
                   ? (reorderedAssets) => {
-                    setPendingOrder(reorderedAssets);
-                  }
+                      setPendingOrder(reorderedAssets);
+                    }
                   : undefined
               }
               reorderBanner={
                 isReorderMode
                   ? {
-                    show: true,
-                    canSave:
-                      !!pendingOrder &&
-                      pendingOrder.length === stack.assets.length &&
-                      pendingOrder.some((a, i) => a.id !== stack.assets[i].id),
-                    saving: isSavingOrder,
-                    onSave: async () => {
-                      if (!pendingOrder) return;
-                      try {
-                        setIsSavingOrder(true);
-                        for (const asset of pendingOrder) {
-                          await apiClient.updateAssetOrder(asset.id, asset.orderInStack || 0);
+                      show: true,
+                      canSave:
+                        !!pendingOrder &&
+                        pendingOrder.length === stack.assets.length &&
+                        pendingOrder.some((a, i) => a.id !== stack.assets[i].id),
+                      saving: isSavingOrder,
+                      onSave: async () => {
+                        if (!pendingOrder) return;
+                        try {
+                          setIsSavingOrder(true);
+                          for (const asset of pendingOrder) {
+                            await apiClient.updateAssetOrder(asset.id, asset.orderInStack || 0);
+                          }
+                          await refetch();
+                          setIsReorderMode(false);
+                          setPendingOrder(null);
+                        } catch (e) {
+                          console.error('Failed to save asset order:', e);
+                        } finally {
+                          setIsSavingOrder(false);
                         }
-                        await refetch();
+                      },
+                      onCancel: () => {
                         setIsReorderMode(false);
                         setPendingOrder(null);
-                      } catch (e) {
-                        console.error('Failed to save asset order:', e);
-                      } finally {
-                        setIsSavingOrder(false);
-                      }
-                    },
-                    onCancel: () => {
-                      setIsReorderMode(false);
-                      setPendingOrder(null);
-                    },
-                  }
+                      },
+                    }
                   : undefined
               }
               className="pt-14"
@@ -1031,16 +1031,16 @@ export default function StackViewer({
             onReorderToggle={
               isListMode
                 ? () => {
-                  setIsReorderMode((prev) => {
-                    const next = !prev;
-                    if (next) {
-                      setPendingOrder(stack.assets.map((a) => ({...a})) as any);
-                    } else {
-                      setPendingOrder(null);
-                    }
-                    return next;
-                  });
-                }
+                    setIsReorderMode((prev) => {
+                      const next = !prev;
+                      if (next) {
+                        setPendingOrder(stack.assets.map((a) => ({ ...a })) as any);
+                      } else {
+                        setPendingOrder(null);
+                      }
+                      return next;
+                    });
+                  }
                 : undefined
             }
             isReorderMode={isReorderMode}
@@ -1078,7 +1078,7 @@ export default function StackViewer({
           isActive={isPenMode}
           aria-label={isPenMode ? 'Exit pen mode' : 'Enter pen mode'}
         >
-          <PenTool size={18}/>
+          <PenTool size={18} />
         </HeaderIconButton>,
         document.getElementById('header-actions') || document.body
       )}
@@ -1093,7 +1093,7 @@ export default function StackViewer({
           isActive={isColorPicker}
           aria-label={isColorPicker ? 'Exit color picker' : 'Enter color picker'}
         >
-          <Pipette size={18}/>
+          <Pipette size={18} />
         </HeaderIconButton>,
         document.getElementById('header-actions') || document.body
       )}
@@ -1107,7 +1107,7 @@ export default function StackViewer({
           isActive={isInfoSidebarOpen}
           aria-label={isInfoSidebarOpen ? 'Close info panel' : 'Open info panel'}
         >
-          <Info size={18}/>
+          <Info size={18} />
         </HeaderIconButton>,
         document.getElementById('header-actions') || document.body
       )}
@@ -1121,7 +1121,7 @@ export default function StackViewer({
           }}
           altMode={isColorPickerAlt && !isColorPickerManual}
           onCopied={(hex) => {
-            addNotification({type: 'success', message: `Copied ${hex} to clipboard`});
+            addNotification({ type: 'success', message: `Copied ${hex} to clipboard` });
           }}
         />
       )}
@@ -1147,13 +1147,13 @@ export default function StackViewer({
             const arr = getMarkersFor(asset).slice();
             if (markerEditor.index < 0 || markerEditor.index >= arr.length) return;
             arr.splice(markerEditor.index, 1);
-            setOptimisticMarkers((prev) => ({...prev, [asset.id]: arr}));
+            setOptimisticMarkers((prev) => ({ ...prev, [asset.id]: arr }));
             try {
               await apiClient.updateAssetMeta({
                 datasetId,
                 stackId,
                 assetId: asset.id,
-                meta: {...(asset.meta || {}), markers: arr},
+                meta: { ...(asset.meta || {}), markers: arr },
               });
               await refetch();
             } catch (err) {
@@ -1167,23 +1167,23 @@ export default function StackViewer({
               }
             }
           }}
-          onSave={async ({time, color}) => {
+          onSave={async ({ time, color }) => {
             const asset = currentAsset;
             if (!asset) return;
             const arr = getMarkersFor(asset).slice();
             const i = markerEditor.index;
             if (i < 0 || i >= arr.length) return;
-            const updated: TVideoMarker = {...(arr[i] as any), time, color};
+            const updated: TVideoMarker = { ...(arr[i] as any), time, color };
             const next = arr
               .map((m, idx) => (idx === i ? updated : m))
               .sort((a, b) => a.time - b.time);
-            setOptimisticMarkers((prev) => ({...prev, [asset.id]: next}));
+            setOptimisticMarkers((prev) => ({ ...prev, [asset.id]: next }));
             try {
               await apiClient.updateAssetMeta({
                 datasetId,
                 stackId,
                 assetId: asset.id,
-                meta: {...(asset.meta || {}), markers: next},
+                meta: { ...(asset.meta || {}), markers: next },
               });
               await refetch();
             } catch (err) {

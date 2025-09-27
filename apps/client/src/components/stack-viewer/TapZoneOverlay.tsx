@@ -66,7 +66,9 @@ export default function TapZoneOverlay({
       if (activePointersRef.current.size >= 2) {
         multiTouchRef.current = true;
         // release any capture to not block pinch
-        try { overlay.releasePointerCapture(e.pointerId); } catch {}
+        try {
+          overlay.releasePointerCapture(e.pointerId);
+        } catch {}
         activePointerRef.current = null;
         isDraggingRef.current = false;
         dragDirectionRef.current = null;
@@ -94,14 +96,19 @@ export default function TapZoneOverlay({
       const absDeltaX = Math.abs(deltaX);
       const absDeltaY = Math.abs(deltaY);
 
-      if (!isDraggingRef.current && (absDeltaX > DIRECTION_LOCK_THRESHOLD || absDeltaY > DIRECTION_LOCK_THRESHOLD)) {
+      if (
+        !isDraggingRef.current &&
+        (absDeltaX > DIRECTION_LOCK_THRESHOLD || absDeltaY > DIRECTION_LOCK_THRESHOLD)
+      ) {
         isDraggingRef.current = true;
         dragDirectionRef.current = absDeltaX > absDeltaY ? 'horizontal' : 'vertical';
       }
 
       if (isDraggingRef.current) {
         // prevent native scroll while dragging
-        try { e.preventDefault(); } catch {}
+        try {
+          e.preventDefault();
+        } catch {}
         if (dragDirectionRef.current === 'horizontal' && onDrag) {
           const dragDelta = e.clientX - lastDragXRef.current;
           lastDragXRef.current = e.clientX;
@@ -110,7 +117,10 @@ export default function TapZoneOverlay({
           const dragDelta = e.clientY - lastDragYRef.current;
           lastDragYRef.current = e.clientY;
           const rect = overlay.getBoundingClientRect();
-          const progress = Math.min(1, Math.max(0, (e.clientY - startPosRef.current.y) / (rect.bottom - startPosRef.current.y)));
+          const progress = Math.min(
+            1,
+            Math.max(0, (e.clientY - startPosRef.current.y) / (rect.bottom - startPosRef.current.y))
+          );
           onVerticalDrag(dragDelta, progress);
         }
       }
@@ -133,10 +143,17 @@ export default function TapZoneOverlay({
         } else if (dragDirectionRef.current === 'vertical' && onVerticalDragEnd) {
           const velocity = deltaY / (deltaTime / 1000);
           const rect = overlay.getBoundingClientRect();
-          const progress = Math.min(1, Math.max(0, (e.clientY - startPosRef.current.y) / (rect.bottom - startPosRef.current.y)));
+          const progress = Math.min(
+            1,
+            Math.max(0, (e.clientY - startPosRef.current.y) / (rect.bottom - startPosRef.current.y))
+          );
           onVerticalDragEnd(deltaY, velocity, progress);
         }
-      } else if (Math.abs(deltaX) < TAP_THRESHOLD && Math.abs(deltaY) < TAP_THRESHOLD && deltaTime < TAP_TIME_THRESHOLD) {
+      } else if (
+        Math.abs(deltaX) < TAP_THRESHOLD &&
+        Math.abs(deltaY) < TAP_THRESHOLD &&
+        deltaTime < TAP_TIME_THRESHOLD
+      ) {
         // Tap within overlay: left/right 20% zones
         const rect = overlay.getBoundingClientRect();
         const x = e.clientX - rect.left;
@@ -148,7 +165,9 @@ export default function TapZoneOverlay({
       }
 
       // Release capture if we captured on down
-      try { if (!disableDrag) overlay.releasePointerCapture(e.pointerId); } catch {}
+      try {
+        if (!disableDrag) overlay.releasePointerCapture(e.pointerId);
+      } catch {}
       activePointerRef.current = null;
       startPosRef.current = null;
       isDraggingRef.current = false;
@@ -166,7 +185,21 @@ export default function TapZoneOverlay({
       overlay.removeEventListener('pointerup', handlePointerUp as any);
       overlay.removeEventListener('pointercancel', handlePointerUp as any);
     };
-  }, [enabled, disableDrag, onLeftTap, onRightTap, onCenterTap, onDrag, onDragEnd, onVerticalDrag, onVerticalDragEnd, contentArea.top, contentArea.left, contentArea.right, contentArea.bottom]);
+  }, [
+    enabled,
+    disableDrag,
+    onLeftTap,
+    onRightTap,
+    onCenterTap,
+    onDrag,
+    onDragEnd,
+    onVerticalDrag,
+    onVerticalDragEnd,
+    contentArea.top,
+    contentArea.left,
+    contentArea.right,
+    contentArea.bottom,
+  ]);
 
   // Window-scoped fallbacksは無効化（overlayで十分）
   useEffect(() => {
@@ -320,18 +353,18 @@ export default function TapZoneOverlay({
           if (target && isInteractiveElement(target)) {
             // Do nothing; UI consumes it
           } else {
-          // Calculate thirds within the content area
-          const contentWidth = window.innerWidth - contentArea.left - contentArea.right;
-          const leftEnd = contentArea.left + contentWidth / 3; // 33%
-          const rightStart = contentArea.left + (contentWidth * 2) / 3; // 66%
+            // Calculate thirds within the content area
+            const contentWidth = window.innerWidth - contentArea.left - contentArea.right;
+            const leftEnd = contentArea.left + contentWidth / 3; // 33%
+            const rightStart = contentArea.left + (contentWidth * 2) / 3; // 66%
 
-          if (e.clientX < leftEnd) {
-            if (canGoLeft) onLeftTap();
-          } else if (e.clientX >= rightStart) {
-            if (canGoRight) onRightTap();
-          } else {
-            // Center third: no-op
-          }
+            if (e.clientX < leftEnd) {
+              if (canGoLeft) onLeftTap();
+            } else if (e.clientX >= rightStart) {
+              if (canGoRight) onRightTap();
+            } else {
+              // Center third: no-op
+            }
           }
         }
 

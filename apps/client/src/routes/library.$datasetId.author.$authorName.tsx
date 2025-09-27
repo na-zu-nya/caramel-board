@@ -55,7 +55,9 @@ function AuthorDetailPage() {
       setTimeout(() => requestAnimationFrame(() => step(n - 1)), delay);
     };
     step(retries);
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Fix filter to author only (prevent leaking extra conditions)
@@ -108,14 +110,22 @@ function AuthorDetailPage() {
         void loadRange(0, Math.min(49, total - 1));
       }
     }
-  }, [total, loadedPages.size, loadRange, navigationState, setNavigationState, restoreScrollSafely]);
+  }, [
+    total,
+    loadedPages.size,
+    loadRange,
+    navigationState,
+    setNavigationState,
+    restoreScrollSafely,
+  ]);
 
   const stableLoadedItems = useMemo(() => {
-    return (allItems.filter(Boolean) as MediaGridItem[]);
+    return allItems.filter(Boolean) as MediaGridItem[];
   }, [allItems]);
 
   const handleFilterChange = useCallback(
-    (newFilter: StackFilter) => setCurrentFilter({ ...newFilter, datasetId, authors: [decodedAuthorName] }),
+    (newFilter: StackFilter) =>
+      setCurrentFilter({ ...newFilter, datasetId, authors: [decodedAuthorName] }),
     [datasetId, decodedAuthorName, setCurrentFilter]
   );
 
@@ -144,14 +154,28 @@ function AuthorDetailPage() {
     // Cross-asset navigation: build ids from loaded items (right-to-left)
     const loadedIdsLtr = (allItems || [])
       .filter((it): it is MediaGridItem => !!it)
-      .map((it) => (typeof it.id === 'string' ? Number.parseInt(it.id as string, 10) : (it.id as number)));
+      .map((it) =>
+        typeof it.id === 'string' ? Number.parseInt(it.id as string, 10) : (it.id as number)
+      );
     const ids = loadedIdsLtr.slice().reverse();
-    const clickedId = typeof item.id === 'string' ? Number.parseInt(item.id as string, 10) : (item.id as number);
-    const currentIndex = Math.max(0, ids.findIndex((id) => id === clickedId));
+    const clickedId =
+      typeof item.id === 'string' ? Number.parseInt(item.id as string, 10) : (item.id as number);
+    const currentIndex = Math.max(
+      0,
+      ids.findIndex((id) => id === clickedId)
+    );
 
     const mediaType = (item as any).mediaType as string | undefined;
     const token = genListToken({ datasetId, mediaType, filters: authorFilter });
-    saveViewContext({ token, datasetId, mediaType: mediaType as any, filters: authorFilter, ids, currentIndex, createdAt: Date.now() });
+    saveViewContext({
+      token,
+      datasetId,
+      mediaType: mediaType as any,
+      filters: authorFilter,
+      ids,
+      currentIndex,
+      createdAt: Date.now(),
+    });
 
     navigate({
       to: '/library/$datasetId/stacks/$stackId',

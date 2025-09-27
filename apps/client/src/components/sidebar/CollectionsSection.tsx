@@ -90,7 +90,12 @@ export function CollectionsSection({
 
   return (
     <>
-      <SideMenuGroup label="Collections" collapsed={isCollapsed} onToggle={onToggle} action={actions}>
+      <SideMenuGroup
+        label="Collections"
+        collapsed={isCollapsed}
+        onToggle={onToggle}
+        action={actions}
+      >
         <nav className="space-y-0.5">
           {loadingCollections ? (
             <SideMenuMessage>Loading...</SideMenuMessage>

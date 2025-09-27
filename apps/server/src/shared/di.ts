@@ -5,12 +5,12 @@
 //  - ランタイムごとに差し替えたいもの（Prisma 接続先など）はここで if分岐
 // ----------------------------------------------------------------------------
 
-import {PrismaClient} from '@prisma/client';
-import type {Context} from 'hono';
-import {createFactory} from 'hono/factory';
+import { PrismaClient } from '@prisma/client';
+import type { Context } from 'hono';
+import { createFactory } from 'hono/factory';
 // ColorSearchService is now dataset-scoped - removed global import
-import {getAutoTagClient, type AutoTagClient} from '../lib/AutoTagClient';
-import {createDataStorageService, type DataStorageService} from './services/DataStorageService';
+import { getAutoTagClient, type AutoTagClient } from '../lib/AutoTagClient';
+import { createDataStorageService, type DataStorageService } from './services/DataStorageService';
 
 /**
  * Context に載せる “依存” の型を宣言
@@ -37,8 +37,7 @@ export const prisma = new PrismaClient();
 const stacksAI = getAutoTagClient();
 const dataStorage = createDataStorageService({
   // Prefer generic FILES_STORAGE; keep backward-compat for older envs
-  storageDir:
-    process.env.FILES_STORAGE || './data',
+  storageDir: process.env.FILES_STORAGE || './data',
 });
 
 /**

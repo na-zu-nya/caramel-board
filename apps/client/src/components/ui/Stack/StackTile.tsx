@@ -5,10 +5,10 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
-import {cn} from '@/lib/utils';
-import {getThumbnailPath} from '@/utils/thumbnailPath';
-import {Book, GalleryVerticalEnd, Heart, NotebookText, Star, Info} from 'lucide-react';
-import {cloneElement, isValidElement} from 'react';
+import { cn } from '@/lib/utils';
+import { getThumbnailPath } from '@/utils/thumbnailPath';
+import { Book, GalleryVerticalEnd, Heart, NotebookText, Star, Info } from 'lucide-react';
+import { cloneElement, isValidElement } from 'react';
 
 export interface StackTileProps extends React.HTMLAttributes<HTMLDivElement> {
   asChild?: boolean;
@@ -80,7 +80,7 @@ export function StackTile({
       {pageCount && pageCount > 1 && (
         <div className="absolute top-2 right-2 z-10">
           <div className="flex items-center gap-1 bg-black/60 text-white px-2 py-1 rounded-full text-xs font-medium">
-            <Book size={12}/>
+            <Book size={12} />
             <span>{pageCount}</span>
           </div>
         </div>
@@ -100,7 +100,7 @@ export function StackTile({
         )}
         aria-label={favorited ? 'Remove favorite' : 'Add favorite'}
       >
-        <Star size={16} className={favorited ? 'fill-current' : ''}/>
+        <Star size={16} className={favorited ? 'fill-current' : ''} />
       </button>
 
       {/* Like (right-bottom) - hide badge completely when count is 0 or undefined */}
@@ -115,7 +115,7 @@ export function StackTile({
           className="absolute bottom-2 right-2 flex items-center gap-1 bg-like text-white px-2 py-1 rounded-full text-xs font-medium z-10 hover:opacity-90"
           aria-label="Like"
         >
-          <Heart size={12} className="fill-current"/>
+          <Heart size={12} className="fill-current" />
           <span>{likeCount}</span>
         </button>
       )}
@@ -126,22 +126,22 @@ export function StackTile({
     <ContextMenu>
       <ContextMenuTrigger asChild>
         {asChild && isValidElement(children)
-          ? cloneElement(children as any, {children: body})
+          ? cloneElement(children as any, { children: body })
           : body}
       </ContextMenuTrigger>
       <ContextMenuContent className="w-48">
         <ContextMenuItem onClick={() => onOpen?.()}>Open</ContextMenuItem>
-        <ContextMenuSeparator/>
+        <ContextMenuSeparator />
         <ContextMenuItem onClick={() => onInfo?.()}>
           <Info className="w-4 h-4 mr-2" />
           Info
         </ContextMenuItem>
         <ContextMenuItem onClick={() => onFindSimilar?.()}>
-          <GalleryVerticalEnd className="w-4 h-4 mr-2"/>
+          <GalleryVerticalEnd className="w-4 h-4 mr-2" />
           Find similar
         </ContextMenuItem>
         <ContextMenuItem onClick={() => onAddToScratch?.()}>
-          <NotebookText className="w-4 h-4 mr-2"/>
+          <NotebookText className="w-4 h-4 mr-2" />
           Add to Scratch
         </ContextMenuItem>
       </ContextMenuContent>

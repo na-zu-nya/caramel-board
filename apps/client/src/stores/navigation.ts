@@ -1,5 +1,5 @@
-import type {MediaGridItem, StackFilter} from '@/types';
-import {atom} from 'jotai';
+import type { MediaGridItem, StackFilter } from '@/types';
+import { atom } from 'jotai';
 
 interface NavigationState {
   scrollPosition: number;

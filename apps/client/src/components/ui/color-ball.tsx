@@ -38,7 +38,10 @@ export function ColorBall({
     if (wantCopy) {
       const copied = hexForCopy(color.hex);
       copyText(copied).then((ok) =>
-        addNotification({ type: ok ? 'success' : 'error', message: ok ? `Copied ${copied} to clipboard` : 'Failed to copy to clipboard' })
+        addNotification({
+          type: ok ? 'success' : 'error',
+          message: ok ? `Copied ${copied} to clipboard` : 'Failed to copy to clipboard',
+        })
       );
       return;
     }
@@ -96,7 +99,9 @@ export function ColorBall({
                   <Copy size={10} />
                   <span>{color.hex}</span>
                 </div>
-                <div className="text-gray-300">RGB({color.r}, {color.g}, {color.b})</div>
+                <div className="text-gray-300">
+                  RGB({color.r}, {color.g}, {color.b})
+                </div>
                 <div className="text-gray-300">{Math.round(color.percentage * 100)}%</div>
               </div>
               <div

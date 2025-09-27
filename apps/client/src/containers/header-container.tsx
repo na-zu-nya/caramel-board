@@ -65,7 +65,8 @@ export default function HeaderContainer() {
   const isNavigationPinActive = (pin: any) => {
     const path = location.pathname;
     if (pin.type === 'COLLECTION' && pin.collectionId) {
-      const scratch = (pin.collection && isScratchCollection(pin.collection)) || pin.name === 'Scratch';
+      const scratch =
+        (pin.collection && isScratchCollection(pin.collection)) || pin.name === 'Scratch';
       return scratch
         ? path.includes(`/scratch/${pin.collectionId}`)
         : path.includes(`/collections/${pin.collectionId}`);
@@ -83,11 +84,18 @@ export default function HeaderContainer() {
 
   const handleNavigationPinClick = (pin: any) => {
     if (pin.type === 'COLLECTION' && pin.collectionId) {
-      const isScratch = (pin.collection && isScratchCollection(pin.collection)) || pin.name === 'Scratch';
+      const isScratch =
+        (pin.collection && isScratchCollection(pin.collection)) || pin.name === 'Scratch';
       if (isScratch) {
-        navigate({ to: '/library/$datasetId/scratch/$scratchId', params: { datasetId, scratchId: String(pin.collectionId) } });
+        navigate({
+          to: '/library/$datasetId/scratch/$scratchId',
+          params: { datasetId, scratchId: String(pin.collectionId) },
+        });
       } else {
-        navigate({ to: '/library/$datasetId/collections/$collectionId', params: () => ({ datasetId, collectionId: String(pin.collectionId) }) });
+        navigate({
+          to: '/library/$datasetId/collections/$collectionId',
+          params: () => ({ datasetId, collectionId: String(pin.collectionId) }),
+        });
       }
     } else if (pin.type === 'MEDIA_TYPE' && pin.mediaType) {
       navigate({ to: `/library/${datasetId}/media-type/${pin.mediaType}` });
@@ -116,7 +124,11 @@ export default function HeaderContainer() {
 
   const left = (
     <>
-      <HeaderIconButton onClick={() => setSidebarOpen(!withSidebar)} isActive={withSidebar} aria-label={withSidebar ? 'Close menu' : 'Open menu'}>
+      <HeaderIconButton
+        onClick={() => setSidebarOpen(!withSidebar)}
+        isActive={withSidebar}
+        aria-label={withSidebar ? 'Close menu' : 'Open menu'}
+      >
         <Menu size={18} />
       </HeaderIconButton>
       {headerActions.showShuffle && (
@@ -142,7 +154,10 @@ export default function HeaderContainer() {
               <DropdownMenuItem
                 key={pin.id}
                 onClick={() => handleNavigationPinClick(pin)}
-                className={cn('flex items-center gap-2', isNavigationPinActive(pin) && 'bg-gray-100')}
+                className={cn(
+                  'flex items-center gap-2',
+                  isNavigationPinActive(pin) && 'bg-gray-100'
+                )}
               >
                 {renderIcon(pin.icon)}
                 <span>{pin.name}</span>
@@ -155,13 +170,20 @@ export default function HeaderContainer() {
           {navigationPins.length > 0 && (
             <div className="flex items-center gap-2">
               {navigationPins.map((pin) => (
-                <HeaderIconButton key={pin.id} onClick={() => handleNavigationPinClick(pin)} title={pin.name} isActive={isNavigationPinActive(pin)}>
+                <HeaderIconButton
+                  key={pin.id}
+                  onClick={() => handleNavigationPinClick(pin)}
+                  title={pin.name}
+                  isActive={isNavigationPinActive(pin)}
+                >
                   {renderIcon(pin.icon)}
                 </HeaderIconButton>
               ))}
             </div>
           )}
-          {navigationPins.length === 0 && <span className="text-sm text-white/50">No pinned items</span>}
+          {navigationPins.length === 0 && (
+            <span className="text-sm text-white/50">No pinned items</span>
+          )}
         </>
       )}
     </div>
@@ -177,7 +199,13 @@ export default function HeaderContainer() {
           badge={hasActiveFilters && !selectionMode}
           badgeColor="primary"
           className={selectionMode ? 'opacity-50 cursor-not-allowed' : ''}
-          aria-label={selectionMode ? 'Filter disabled during selection' : filterOpen ? 'Close filter' : 'Open filter'}
+          aria-label={
+            selectionMode
+              ? 'Filter disabled during selection'
+              : filterOpen
+                ? 'Close filter'
+                : 'Open filter'
+          }
         >
           <Filter size={18} />
         </HeaderIconButton>
@@ -192,7 +220,13 @@ export default function HeaderContainer() {
           disabled={selectionMode}
           isActive={reorderMode}
           className={selectionMode ? 'opacity-50 cursor-not-allowed' : ''}
-          aria-label={selectionMode ? 'Reorder disabled during selection' : reorderMode ? 'Exit reorder mode' : 'Enter reorder mode'}
+          aria-label={
+            selectionMode
+              ? 'Reorder disabled during selection'
+              : reorderMode
+                ? 'Exit reorder mode'
+                : 'Enter reorder mode'
+          }
         >
           <ArrowUpDown size={18} />
         </HeaderIconButton>
@@ -208,7 +242,13 @@ export default function HeaderContainer() {
           disabled={reorderMode}
           isActive={selectionMode}
           className={reorderMode ? 'opacity-50 cursor-not-allowed' : ''}
-          aria-label={reorderMode ? 'Selection disabled during reorder' : selectionMode ? 'Exit selection mode' : 'Enter selection mode'}
+          aria-label={
+            reorderMode
+              ? 'Selection disabled during reorder'
+              : selectionMode
+                ? 'Exit selection mode'
+                : 'Enter selection mode'
+          }
         >
           <Check size={18} />
         </HeaderIconButton>
@@ -222,5 +262,13 @@ export default function HeaderContainer() {
     ? `color-mix(in oklch, ${selectedDataset.themeColor} 80%, transparent)`
     : 'rgba(255, 255, 255, 0.8)';
 
-  return <AppHeader withSidebar={withSidebar} backgroundColor={backgroundColor} left={left} center={center} right={right} />;
+  return (
+    <AppHeader
+      withSidebar={withSidebar}
+      backgroundColor={backgroundColor}
+      left={left}
+      center={center}
+      right={right}
+    />
+  );
 }

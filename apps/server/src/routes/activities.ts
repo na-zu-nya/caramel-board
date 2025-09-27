@@ -1,8 +1,8 @@
-import {zValidator} from '@hono/zod-validator';
-import {Hono} from 'hono';
-import {z} from 'zod';
-import {PaginationSchema} from '../schemas/index.js';
-import {ActivityService} from '../shared/services/ActivityService';
+import { zValidator } from '@hono/zod-validator';
+import { Hono } from 'hono';
+import { z } from 'zod';
+import { PaginationSchema } from '../schemas/index.js';
+import { ActivityService } from '../shared/services/ActivityService';
 
 export const activitiesRoute = new Hono();
 const activityService = new ActivityService();

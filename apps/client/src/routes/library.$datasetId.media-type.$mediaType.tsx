@@ -1,16 +1,16 @@
 import FilterPanel from '@/components/FilterPanel';
 import StackGrid from '@/components/StackGrid';
-import {useDataset} from '@/hooks/useDatasets';
-import {useHeaderActions} from '@/hooks/useHeaderActions';
+import { useDataset } from '@/hooks/useDatasets';
+import { useHeaderActions } from '@/hooks/useHeaderActions';
 import MersenneTwister from 'mersenne-twister';
-import {useRangeBasedQuery} from '@/hooks/useRangeBasedQuery';
-import {navigationStateAtom} from '@/stores/navigation';
+import { useRangeBasedQuery } from '@/hooks/useRangeBasedQuery';
+import { navigationStateAtom } from '@/stores/navigation';
 import { genListToken, saveViewContext } from '@/stores/view-context';
-import {currentFilterAtom} from '@/stores/ui';
-import type {MediaGridItem, MediaType, StackFilter} from '@/types';
-import {createFileRoute, useNavigate} from '@tanstack/react-router';
-import {useAtom} from 'jotai';
-import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import { currentFilterAtom } from '@/stores/ui';
+import type { MediaGridItem, MediaType, StackFilter } from '@/types';
+import { createFileRoute, useNavigate } from '@tanstack/react-router';
+import { useAtom } from 'jotai';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 export const Route = createFileRoute('/library/$datasetId/media-type/$mediaType')({
   component: MediaTypeList,
@@ -18,9 +18,9 @@ export const Route = createFileRoute('/library/$datasetId/media-type/$mediaType'
 
 function MediaTypeList() {
   const { datasetId, mediaType } = Route.useParams();
-  const search = Route.useSearch() as { 
-    tags?: string[]; 
-    sparse?: boolean; 
+  const search = Route.useSearch() as {
+    tags?: string[];
+    sparse?: boolean;
     search?: string;
     isFavorite?: boolean;
     isLiked?: boolean;
@@ -38,7 +38,7 @@ function MediaTypeList() {
   });
   const [navigationState, setNavigationState] = useAtom(navigationStateAtom);
   const containerRef = useRef<HTMLDivElement>(null);
-  
+
   // Robust scroll restoration helper
   const restoreScrollSafely = useCallback((targetY: number, retries = 40, delay = 50) => {
     let cancelled = false;
@@ -53,7 +53,9 @@ function MediaTypeList() {
       setTimeout(() => requestAnimationFrame(() => step(n - 1)), delay);
     };
     step(retries);
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // MT RNG instance (stable per mount)
@@ -67,7 +69,7 @@ function MediaTypeList() {
       console.log('📌 Preserving filter state from navigation');
       return;
     }
-    
+
     // Otherwise, initialize from URL params
     const newFilter: StackFilter = {
       datasetId,
@@ -83,16 +85,30 @@ function MediaTypeList() {
       colorFilter: search.colorFilter ? JSON.parse(search.colorFilter) : undefined,
     };
     setCurrentFilter(newFilter);
-  }, [datasetId, mediaType, search.tags, search.search, search.isFavorite, search.isLiked, search.authors, search.hasNoTags, search.hasNoAuthor, search.colorFilter, setCurrentFilter, navigationState]);
-
-  // Range-based query for virtual scrolling
-  const { total, allItems, loadPage, loadRange, isLoading, loadedPages, refreshAll } = useRangeBasedQuery({
+  }, [
     datasetId,
     mediaType,
-    filter: currentFilter,
-    sort: currentSort,
-    pageSize: 50,
-  });
+    search.tags,
+    search.search,
+    search.isFavorite,
+    search.isLiked,
+    search.authors,
+    search.hasNoTags,
+    search.hasNoAuthor,
+    search.colorFilter,
+    setCurrentFilter,
+    navigationState,
+  ]);
+
+  // Range-based query for virtual scrolling
+  const { total, allItems, loadPage, loadRange, isLoading, loadedPages, refreshAll } =
+    useRangeBasedQuery({
+      datasetId,
+      mediaType,
+      filter: currentFilter,
+      sort: currentSort,
+      pageSize: 50,
+    });
 
   // Shuffle navigate across the full list (ignoring pagination)
   const handleShuffle = useCallback(async () => {
@@ -115,11 +131,31 @@ function MediaTypeList() {
       if (!item) return;
 
       // Build a local ids window from the fetched page (right→left order)
-      const ids = (page?.stacks || []).map((s) => (typeof s.id === 'string' ? Number.parseInt(s.id, 10) : (s.id as number))).reverse();
-      const token = genListToken({ datasetId, mediaType, filters: currentFilter, sort: currentSort });
-      const clickedId = typeof item.id === 'string' ? Number.parseInt(item.id, 10) : (item.id as number);
-      const currentIndex = Math.max(0, ids.findIndex((id) => id === clickedId));
-      saveViewContext({ token, datasetId, mediaType: mediaType as any, filters: currentFilter, sort: currentSort, ids, currentIndex, createdAt: Date.now() });
+      const ids = (page?.stacks || [])
+        .map((s) => (typeof s.id === 'string' ? Number.parseInt(s.id, 10) : (s.id as number)))
+        .reverse();
+      const token = genListToken({
+        datasetId,
+        mediaType,
+        filters: currentFilter,
+        sort: currentSort,
+      });
+      const clickedId =
+        typeof item.id === 'string' ? Number.parseInt(item.id, 10) : (item.id as number);
+      const currentIndex = Math.max(
+        0,
+        ids.findIndex((id) => id === clickedId)
+      );
+      saveViewContext({
+        token,
+        datasetId,
+        mediaType: mediaType as any,
+        filters: currentFilter,
+        sort: currentSort,
+        ids,
+        currentIndex,
+        createdAt: Date.now(),
+      });
 
       // Preserve search params + listToken
       const searchParams: Record<string, string | string[] | number | boolean> = {
@@ -146,7 +182,17 @@ function MediaTypeList() {
     } catch (e) {
       console.error('Shuffle navigation failed:', e);
     }
-  }, [total, datasetId, mediaType, navigate, currentFilter, currentSort, search, allItems, loadPage]);
+  }, [
+    total,
+    datasetId,
+    mediaType,
+    navigate,
+    currentFilter,
+    currentSort,
+    search,
+    allItems,
+    loadPage,
+  ]);
 
   useHeaderActions({
     showShuffle: true,
@@ -178,7 +224,10 @@ function MediaTypeList() {
       const endRow = Math.ceil((scrollTop + viewportHeight) / itemSize);
       const bufferRows = 3;
       const startIndex = Math.max(0, (startRow - bufferRows) * itemsPerRow);
-      const endIndex = Math.max(startIndex, Math.min((endRow + bufferRows) * itemsPerRow - 1, Math.max(0, (total || 1) - 1)));
+      const endIndex = Math.max(
+        startIndex,
+        Math.min((endRow + bufferRows) * itemsPerRow - 1, Math.max(0, (total || 1) - 1))
+      );
 
       setTimeout(() => {
         void (async () => {
@@ -189,7 +238,15 @@ function MediaTypeList() {
         })();
       }, 0);
     }
-  }, [navigationState, setCurrentFilter, setNavigationState, restoreScrollSafely, setCurrentSort, loadRange, total]);
+  }, [
+    navigationState,
+    setCurrentFilter,
+    setNavigationState,
+    restoreScrollSafely,
+    setCurrentSort,
+    loadRange,
+    total,
+  ]);
 
   // Load initial items when total is available and no pages are loaded
   useEffect(() => {
@@ -232,7 +289,7 @@ function MediaTypeList() {
       setCurrentFilter(newFilter);
       // Clear navigation state on filter change
       setNavigationState(null);
-      
+
       // Update URL with new filter params
       const searchParams: Record<string, any> = {};
       if (newFilter.tags && newFilter.tags.length > 0) {
@@ -259,7 +316,7 @@ function MediaTypeList() {
       if (newFilter.colorFilter) {
         searchParams.colorFilter = JSON.stringify(newFilter.colorFilter);
       }
-      
+
       void navigate({
         to: '/library/$datasetId/media-type/$mediaType',
         params: { datasetId, mediaType },
@@ -312,8 +369,12 @@ function MediaTypeList() {
         .filter((it): it is MediaGridItem => !!it)
         .map((it) => (typeof it.id === 'string' ? Number.parseInt(it.id, 10) : (it.id as number)));
       const loadedIds = loadedIdsLtr.slice().reverse();
-      const clickedId = typeof item.id === 'string' ? Number.parseInt(item.id, 10) : (item.id as number);
-      const currentIndex = Math.max(0, loadedIds.findIndex((id) => id === clickedId));
+      const clickedId =
+        typeof item.id === 'string' ? Number.parseInt(item.id, 10) : (item.id as number);
+      const currentIndex = Math.max(
+        0,
+        loadedIds.findIndex((id) => id === clickedId)
+      );
 
       // Create a listToken and persist ViewContext
       const token = genListToken({
@@ -339,7 +400,7 @@ function MediaTypeList() {
         mediaType,
         listToken: token,
       };
-      
+
       // Copy over search params, handling booleans
       if (search.tags) searchParams.tags = search.tags;
       if (search.sparse !== undefined) searchParams.sparse = search.sparse;
@@ -350,7 +411,7 @@ function MediaTypeList() {
       if (search.hasNoTags !== undefined) searchParams.hasNoTags = search.hasNoTags;
       if (search.hasNoAuthor !== undefined) searchParams.hasNoAuthor = search.hasNoAuthor;
       if (search.colorFilter) searchParams.colorFilter = search.colorFilter;
-      
+
       // Preserve current filter in search params (override search params if different)
       if (currentFilter.tags && currentFilter.tags.length > 0) {
         searchParams.tags = currentFilter.tags;
@@ -376,14 +437,24 @@ function MediaTypeList() {
       if (currentFilter.colorFilter) {
         searchParams.colorFilter = JSON.stringify(currentFilter.colorFilter);
       }
-      
+
       void navigate({
         to: '/library/$datasetId/stacks/$stackId',
         params: { datasetId, stackId: String(item.id) },
         search: searchParams,
       });
     },
-    [navigate, datasetId, mediaType, search, setNavigationState, total, allItems, currentFilter, currentSort]
+    [
+      navigate,
+      datasetId,
+      mediaType,
+      search,
+      setNavigationState,
+      total,
+      allItems,
+      currentFilter,
+      currentSort,
+    ]
   );
 
   return (

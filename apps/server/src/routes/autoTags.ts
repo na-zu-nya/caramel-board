@@ -1,7 +1,7 @@
-import {zValidator} from '@hono/zod-validator';
-import {Hono} from 'hono';
-import {z} from 'zod';
-import {prisma} from '../shared/di';
+import { zValidator } from '@hono/zod-validator';
+import { Hono } from 'hono';
+import { z } from 'zod';
+import { prisma } from '../shared/di';
 
 export const autoTagsRoute = new Hono();
 
@@ -14,7 +14,14 @@ interface CacheEntry {
 const statisticsCache = new Map<string, CacheEntry>();
 const CACHE_TTL = 5 * 60 * 1000; // 5分間のキャッシュ
 
-function getCacheKey(datasetId: number, threshold: number, limit: number, q?: string, source?: string, includeTotal?: boolean): string {
+function getCacheKey(
+  datasetId: number,
+  threshold: number,
+  limit: number,
+  q?: string,
+  source?: string,
+  includeTotal?: boolean
+): string {
   return `${datasetId}-${threshold}-${limit}-${q || ''}-${source || 'raw'}-${includeTotal ? 't' : 'f'}`;
 }
 
@@ -129,7 +136,7 @@ async function getAutoTagStatisticsFromAggregate(
       CROSS JOIN LATERAL jsonb_array_elements(agg."topTags"::jsonb) AS elem
       WHERE s."dataSetId" = $1
         AND (elem->>'score')::float >= $2
-        ${searchQuery ? 'AND LOWER(elem->>\'tag\') LIKE LOWER($4)' : ''}
+        ${searchQuery ? "AND LOWER(elem->>'tag') LIKE LOWER($4)" : ''}
     )
     SELECT 
       tag as "autoTagKey",
@@ -144,11 +151,13 @@ async function getAutoTagStatisticsFromAggregate(
   const params: any[] = [datasetId, threshold, limit];
   if (searchQuery) params.push(`%${searchQuery}%`);
 
-  const rows = await prisma.$queryRawUnsafe<Array<{
-    autoTagKey: string;
-    predictionCount: number;
-    assetCount: number;
-  }>>(query, ...params);
+  const rows = await prisma.$queryRawUnsafe<
+    Array<{
+      autoTagKey: string;
+      predictionCount: number;
+      assetCount: number;
+    }>
+  >(query, ...params);
 
   return rows;
 }
@@ -162,12 +171,9 @@ async function ensureAuth(c: any, datasetId: number) {
 }
 
 // Optimized strict counts for a specific set of keys (exact match) from AutoTagPrediction
-async function getStrictCountsForKeys(
-  datasetId: number,
-  threshold: number,
-  keys: string[],
-) {
-  if (keys.length === 0) return [] as Array<{ autoTagKey: string; predictionCount: number; assetCount: number }>;
+async function getStrictCountsForKeys(datasetId: number, threshold: number, keys: string[]) {
+  if (keys.length === 0)
+    return [] as Array<{ autoTagKey: string; predictionCount: number; assetCount: number }>;
 
   // Lowercase once for matching
   const lowered = keys.map((k) => k.toLowerCase());
@@ -197,13 +203,9 @@ async function getStrictCountsForKeys(
     LEFT JOIN agg a ON a.tag = k.key
   `;
 
-  const rows = await prisma.$queryRawUnsafe<Array<{ autoTagKey: string; predictionCount: number; assetCount: number }>>(
-    query,
-    datasetId,
-    threshold,
-    keys,
-    lowered,
-  );
+  const rows = await prisma.$queryRawUnsafe<
+    Array<{ autoTagKey: string; predictionCount: number; assetCount: number }>
+  >(query, datasetId, threshold, keys, lowered);
 
   // Return with original key casing if possible
   const mapOrig = new Map(lowered.map((l, i) => [l, keys[i]]));
@@ -337,7 +339,14 @@ autoTagsRoute.get(
         .pipe(z.number().min(0.4).max(1)),
       keys: z
         .union([z.array(z.string()), z.string()])
-        .transform((v) => (Array.isArray(v) ? v : v.split(',').map((s) => s.trim()).filter(Boolean)))
+        .transform((v) =>
+          Array.isArray(v)
+            ? v
+            : v
+                .split(',')
+                .map((s) => s.trim())
+                .filter(Boolean)
+        )
         .pipe(z.array(z.string()).min(1).max(100)),
     })
   ),
@@ -346,10 +355,20 @@ autoTagsRoute.get(
     const { threshold, keys } = c.req.valid('query');
 
     try {
-      const cacheKey = `strict-${datasetId}-${threshold}-${keys.map((k) => k.toLowerCase()).sort().join('|')}`;
+      const cacheKey = `strict-${datasetId}-${threshold}-${keys
+        .map((k) => k.toLowerCase())
+        .sort()
+        .join('|')}`;
       const cached = getCachedData(cacheKey);
       if (cached) {
-        return c.json({ datasetId, threshold, keys, tags: cached, method: 'sql-keys', cached: true });
+        return c.json({
+          datasetId,
+          threshold,
+          keys,
+          tags: cached,
+          method: 'sql-keys',
+          cached: true,
+        });
       }
 
       const rows = await getStrictCountsForKeys(datasetId, threshold, keys);

@@ -10,7 +10,14 @@ export interface SideMenuSelectItemProps extends HTMLAttributes<HTMLDivElement> 
   placeholder?: string;
 }
 
-export function SideMenuSelectItem({ label, value, onValueChange, options, placeholder, ...divProps }: SideMenuSelectItemProps) {
+export function SideMenuSelectItem({
+  label,
+  value,
+  onValueChange,
+  options,
+  placeholder,
+  ...divProps
+}: SideMenuSelectItemProps) {
   return (
     <div className="flex items-center gap-2" {...divProps}>
       <span className="text-sm text-gray-700 flex-1">{label}</span>
@@ -29,4 +36,3 @@ export function SideMenuSelectItem({ label, value, onValueChange, options, place
     </div>
   );
 }
-

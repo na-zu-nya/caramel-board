@@ -13,7 +13,12 @@ type Story = StoryObj<typeof HeaderIconButton>;
 
 export const Default: Story = {};
 export const WithBadge: Story = {
-  args: { badge: true, badgeColor: 'primary', children: <Filter size={18} />, 'aria-label': 'Filter' },
+  args: {
+    badge: true,
+    badgeColor: 'primary',
+    children: <Filter size={18} />,
+    'aria-label': 'Filter',
+  },
 };
 export const Active: Story = {
   args: { isActive: true, children: <Filter size={18} />, 'aria-label': 'Filter' },

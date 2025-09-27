@@ -23,27 +23,27 @@ export function useScrollPreservation() {
 
       // 現在表示されているDOM要素を全て取得
       const gridElements = container.querySelectorAll('[data-item-id]');
-      
+
       // ビューポートの中央付近にあるアイテムを探す
       const viewportHeight = window.innerHeight;
       const viewportCenter = viewportHeight / 2;
-      
+
       let closestItem: AnchorItem | null = null;
       let closestDistance = Infinity;
 
       for (const element of gridElements) {
         const id = Number(element.getAttribute('data-item-id') || 0);
         const rect = element.getBoundingClientRect();
-        
+
         // 左端の最初のアイテムのみを対象にする（グリッドの場合）
         if (rect.x !== 0 && id > 0) {
           continue;
         }
-        
+
         // ビューポート内に表示されているアイテムのみを考慮
         if (rect.top >= 0 && rect.top <= viewportHeight) {
           const distanceFromCenter = Math.abs(rect.top - viewportCenter);
-          
+
           if (distanceFromCenter < closestDistance) {
             closestDistance = distanceFromCenter;
             closestItem = {
@@ -59,7 +59,7 @@ export function useScrollPreservation() {
         for (const element of gridElements) {
           const id = Number(element.getAttribute('data-item-id') || 0);
           const rect = element.getBoundingClientRect();
-          
+
           if (rect.x === 0 && rect.top >= 0) {
             closestItem = {
               itemId: id,
@@ -100,9 +100,10 @@ export function useScrollPreservation() {
 
         const currentRect = el.getBoundingClientRect();
         const scrollAdjustment = currentRect.top - anchorItem.offsetFromViewportTop;
-        
+
         // スクロール位置を調整（container がスクロール不可なら window を調整）
-        if (Math.abs(scrollAdjustment) > 1) { // 1px以上のズレがある場合のみ調整
+        if (Math.abs(scrollAdjustment) > 1) {
+          // 1px以上のズレがある場合のみ調整
           if (container && container.scrollHeight > container.clientHeight + 1) {
             container.scrollTop = container.scrollTop + scrollAdjustment;
           } else {
@@ -122,7 +123,7 @@ export function useScrollPreservation() {
       } else {
         // アニメーション終了時 - 最終調整を複数回実行して確実に位置を合わせる
         const finalAdjustments = [50, 100, 350]; // トランジション中と完了後に調整
-        finalAdjustments.forEach(delay => {
+        finalAdjustments.forEach((delay) => {
           setTimeout(() => {
             updateScrollPosition();
           }, delay);

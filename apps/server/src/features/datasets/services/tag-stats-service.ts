@@ -52,7 +52,10 @@ export const createTagStatsService = (deps: {
     return count;
   }
 
-  async function getAutoTagDocumentFrequency(tags: string[], minScore: number): Promise<Map<string, number>> {
+  async function getAutoTagDocumentFrequency(
+    tags: string[],
+    minScore: number
+  ): Promise<Map<string, number>> {
     const { unique, missing } = primeCacheForMissing('auto', tags);
 
     if (missing.length) {

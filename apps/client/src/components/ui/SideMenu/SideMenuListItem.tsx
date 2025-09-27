@@ -58,7 +58,8 @@ export function SideMenuListItem({
     className
   );
 
-  const safeNode = (node: ReactNode) => (isValidElement(node) || typeof node === 'string' || typeof node === 'number' ? node : null);
+  const safeNode = (node: ReactNode) =>
+    isValidElement(node) || typeof node === 'string' || typeof node === 'number' ? node : null;
 
   const renderIconNode = () => {
     if (!IconComp) return null;
@@ -99,7 +100,7 @@ export function SideMenuListItem({
         (rootRef as any).current = node;
       },
       className: cn((child as any).props?.className, baseClass),
-      style: { ...(((child as any).props?.style) || {}), ...style },
+      style: { ...((child as any).props?.style || {}), ...style },
       children: content,
     });
     if (!shouldWrapWithContext) return element;

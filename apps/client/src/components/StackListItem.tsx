@@ -5,18 +5,28 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
-import {useDrag} from '@/contexts/DragContext';
-import {useScratch} from '@/hooks/useScratch';
-import {apiClient} from '@/lib/api-client';
-import {cn} from '@/lib/utils';
-import {navigationStateAtom} from '@/stores/navigation';
-import {infoSidebarOpenAtom, selectedItemIdAtom} from '@/stores/ui';
-import type {Stack} from '@/types';
-import {getThumbnailPath} from '@/utils/thumbnailPath';
-import {useQueryClient} from '@tanstack/react-query';
-import {Link, useNavigate} from '@tanstack/react-router';
-import {useAtom, useSetAtom} from 'jotai';
-import {Book, Check, GalleryVerticalEnd, Heart, Image, NotebookText, Star, Trash2, Info} from 'lucide-react';
+import { useDrag } from '@/contexts/DragContext';
+import { useScratch } from '@/hooks/useScratch';
+import { apiClient } from '@/lib/api-client';
+import { cn } from '@/lib/utils';
+import { navigationStateAtom } from '@/stores/navigation';
+import { infoSidebarOpenAtom, selectedItemIdAtom } from '@/stores/ui';
+import type { Stack } from '@/types';
+import { getThumbnailPath } from '@/utils/thumbnailPath';
+import { useQueryClient } from '@tanstack/react-query';
+import { Link, useNavigate } from '@tanstack/react-router';
+import { useAtom, useSetAtom } from 'jotai';
+import {
+  Book,
+  Check,
+  GalleryVerticalEnd,
+  Heart,
+  Image,
+  NotebookText,
+  Star,
+  Trash2,
+  Info,
+} from 'lucide-react';
 
 export type StackItemVariant = 'thumbnail' | 'with-title' | 'with-description';
 
@@ -54,7 +64,7 @@ export function StackListItem({
       : undefined) ??
     (typeof stack.assetsCount === 'number' ? stack.assetsCount : undefined) ??
     (Array.isArray(stack.assets) ? stack.assets.length : 0);
-  const {setIsDragging} = useDrag();
+  const { setIsDragging } = useDrag();
   const [, setNavigationState] = useAtom(navigationStateAtom);
 
   const handleClick = (e: React.MouseEvent) => {
@@ -72,8 +82,7 @@ export function StackListItem({
         items: [],
         lastPath: window.location.pathname,
       });
-    } catch {
-    }
+    } catch {}
 
     if (onClick) {
       e.preventDefault();
@@ -93,54 +102,52 @@ export function StackListItem({
   const WrapperComponent = onClick ? 'div' : Link;
   const wrapperProps = onClick
     ? {
-      className: cn('group cursor-pointer block', className),
-      onClick: handleClick,
-      draggable: true,
-      onDragStart: (e: React.DragEvent) => {
-        try {
-          setIsDragging(true);
-          const id = typeof stack.id === 'string' ? stack.id : String(stack.id);
-          // If multiple items are selected and this item is among them, drag all
-          const selectedIds =
-            selectedItemsSet && selectedItemsSet.size > 0 && selectedItemsSet.has(stack.id)
-              ? Array.from(selectedItemsSet)
-              : [];
-          if (selectedIds.length > 1) {
-            e.dataTransfer.setData('text/plain', `stack-items:${selectedIds.join(',')}`);
-          } else {
-            e.dataTransfer.setData('text/plain', `stack-item:${id}`);
-          }
-          e.dataTransfer.effectAllowed = 'copyMove';
-        } catch {
-        }
-      },
-      onDragEnd: () => setIsDragging(false),
-    }
+        className: cn('group cursor-pointer block', className),
+        onClick: handleClick,
+        draggable: true,
+        onDragStart: (e: React.DragEvent) => {
+          try {
+            setIsDragging(true);
+            const id = typeof stack.id === 'string' ? stack.id : String(stack.id);
+            // If multiple items are selected and this item is among them, drag all
+            const selectedIds =
+              selectedItemsSet && selectedItemsSet.size > 0 && selectedItemsSet.has(stack.id)
+                ? Array.from(selectedItemsSet)
+                : [];
+            if (selectedIds.length > 1) {
+              e.dataTransfer.setData('text/plain', `stack-items:${selectedIds.join(',')}`);
+            } else {
+              e.dataTransfer.setData('text/plain', `stack-item:${id}`);
+            }
+            e.dataTransfer.effectAllowed = 'copyMove';
+          } catch {}
+        },
+        onDragEnd: () => setIsDragging(false),
+      }
     : {
-      to: '/library/$datasetId/stacks/$stackId',
-      params: {datasetId, stackId: String(stack.id)},
-      className: cn('group cursor-pointer block', className),
-      onClick: handleClick,
-      draggable: true,
-      onDragStart: (e: React.DragEvent) => {
-        try {
-          setIsDragging(true);
-          const id = typeof stack.id === 'string' ? stack.id : String(stack.id);
-          const selectedIds =
-            selectedItemsSet && selectedItemsSet.size > 0 && selectedItemsSet.has(stack.id)
-              ? Array.from(selectedItemsSet)
-              : [];
-          if (selectedIds.length > 1) {
-            e.dataTransfer.setData('text/plain', `stack-items:${selectedIds.join(',')}`);
-          } else {
-            e.dataTransfer.setData('text/plain', `stack-item:${id}`);
-          }
-          e.dataTransfer.effectAllowed = 'copyMove';
-        } catch {
-        }
-      },
-      onDragEnd: () => setIsDragging(false),
-    };
+        to: '/library/$datasetId/stacks/$stackId',
+        params: { datasetId, stackId: String(stack.id) },
+        className: cn('group cursor-pointer block', className),
+        onClick: handleClick,
+        draggable: true,
+        onDragStart: (e: React.DragEvent) => {
+          try {
+            setIsDragging(true);
+            const id = typeof stack.id === 'string' ? stack.id : String(stack.id);
+            const selectedIds =
+              selectedItemsSet && selectedItemsSet.size > 0 && selectedItemsSet.has(stack.id)
+                ? Array.from(selectedItemsSet)
+                : [];
+            if (selectedIds.length > 1) {
+              e.dataTransfer.setData('text/plain', `stack-items:${selectedIds.join(',')}`);
+            } else {
+              e.dataTransfer.setData('text/plain', `stack-item:${id}`);
+            }
+            e.dataTransfer.effectAllowed = 'copyMove';
+          } catch {}
+        },
+        onDragEnd: () => setIsDragging(false),
+      };
 
   const queryClient = useQueryClient();
   const inCollectionPath =
@@ -152,7 +159,7 @@ export function StackListItem({
   const navigate = useNavigate();
   const setInfoOpen = useSetAtom(infoSidebarOpenAtom);
   const setSelectedItemId = useSetAtom(selectedItemIdAtom);
-  const {ensureScratch} = useScratch(datasetId);
+  const { ensureScratch } = useScratch(datasetId);
 
   return (
     <ContextMenu>
@@ -179,13 +186,13 @@ export function StackListItem({
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center text-gray-400 bg-gray-50">
-                <Image size={40} className="opacity-20"/>
+                <Image size={40} className="opacity-20" />
               </div>
             )}
 
             {/* Selection overlay */}
             {selectable && selected && (
-              <div className="absolute inset-0 bg-black opacity-30 transition-opacity duration-200"/>
+              <div className="absolute inset-0 bg-black opacity-30 transition-opacity duration-200" />
             )}
 
             {/* Selection checkbox */}
@@ -201,9 +208,9 @@ export function StackListItem({
                 )}
               >
                 {selected ? (
-                  <Check size={16}/>
+                  <Check size={16} />
                 ) : (
-                  <div className="w-4 h-4 border border-current rounded-full"/>
+                  <div className="w-4 h-4 border border-current rounded-full" />
                 )}
               </button>
             )}
@@ -211,9 +218,8 @@ export function StackListItem({
             {/* Pages (asset count) badge — style consistent with Like/Fav */}
             {totalAssets > 1 && (
               <div className={cn('absolute', selectable ? 'top-2 left-2' : 'top-2 right-2')}>
-                <div
-                  className="flex items-center gap-1 bg-black/60 text-white px-2 py-1 rounded-full text-xs font-medium shadow-md">
-                  <Book size={12}/>
+                <div className="flex items-center gap-1 bg-black/60 text-white px-2 py-1 rounded-full text-xs font-medium shadow-md">
+                  <Book size={12} />
                   <span>{totalAssets}</span>
                 </div>
               </div>
@@ -222,15 +228,14 @@ export function StackListItem({
             {/* Favorite star */}
             {showFavorited && isFavorited && (
               <div className="absolute bottom-2 left-2 p-1 rounded-full bg-yellow-500 text-white">
-                <Star size={16} className="fill-current"/>
+                <Star size={16} className="fill-current" />
               </div>
             )}
 
             {/* Like count badge */}
             {showLikeCount && likeCount > 0 && (
-              <div
-                className="absolute bottom-2 right-2 flex items-center gap-1 bg-like text-white px-2 py-1 rounded-full text-xs font-medium shadow-md">
-                <Heart size={12} className="fill-current"/>
+              <div className="absolute bottom-2 right-2 flex items-center gap-1 bg-like text-white px-2 py-1 rounded-full text-xs font-medium shadow-md">
+                <Heart size={12} className="fill-current" />
                 <span>{likeCount}</span>
               </div>
             )}
@@ -259,13 +264,13 @@ export function StackListItem({
             const id = typeof stack.id === 'string' ? Number.parseInt(stack.id, 10) : stack.id;
             await navigate({
               to: '/library/$datasetId/stacks/$stackId',
-              params: {datasetId, stackId: String(id)},
+              params: { datasetId, stackId: String(id) },
             });
           }}
         >
           Open
         </ContextMenuItem>
-        <ContextMenuSeparator/>
+        <ContextMenuSeparator />
 
         {/* Info + non-destructive actions */}
         <ContextMenuItem
@@ -274,7 +279,7 @@ export function StackListItem({
             setInfoOpen(true);
           }}
         >
-          <Info className="w-4 h-4 mr-2"/>
+          <Info className="w-4 h-4 mr-2" />
           Info
         </ContextMenuItem>
         <ContextMenuItem
@@ -282,11 +287,11 @@ export function StackListItem({
             const id = typeof stack.id === 'string' ? Number.parseInt(stack.id, 10) : stack.id;
             await navigate({
               to: '/library/$datasetId/stacks/$stackId/similar',
-              params: {datasetId, stackId: String(id)},
+              params: { datasetId, stackId: String(id) },
             });
           }}
         >
-          <GalleryVerticalEnd className="w-4 h-4 mr-2"/>
+          <GalleryVerticalEnd className="w-4 h-4 mr-2" />
           Find similar
         </ContextMenuItem>
         <ContextMenuItem
@@ -295,19 +300,19 @@ export function StackListItem({
               const sc = await ensureScratch();
               const id = typeof stack.id === 'string' ? Number.parseInt(stack.id, 10) : stack.id;
               await apiClient.addStackToCollection(sc.id, id);
-              await queryClient.invalidateQueries({queryKey: ['stacks']});
-              await queryClient.invalidateQueries({queryKey: ['library-counts', datasetId]});
-              await queryClient.refetchQueries({queryKey: ['library-counts', datasetId]});
+              await queryClient.invalidateQueries({ queryKey: ['stacks'] });
+              await queryClient.invalidateQueries({ queryKey: ['library-counts', datasetId] });
+              await queryClient.refetchQueries({ queryKey: ['library-counts', datasetId] });
             } catch (e) {
               console.error('Failed to add to Scratch', e);
             }
           }}
         >
-          <NotebookText className="w-4 h-4 mr-2"/>
+          <NotebookText className="w-4 h-4 mr-2" />
           Add to Scratch
         </ContextMenuItem>
         {(inCollectionPath && isManualCollection) || inScratchPath ? (
-          <ContextMenuSeparator/>
+          <ContextMenuSeparator />
         ) : null}
         {inCollectionPath && isManualCollection && (
           <ContextMenuItem
@@ -320,14 +325,14 @@ export function StackListItem({
                 if (!collectionId) return;
                 const id = typeof stack.id === 'string' ? Number.parseInt(stack.id, 10) : stack.id;
                 await apiClient.removeStackFromCollection(collectionId, id);
-                await queryClient.invalidateQueries({queryKey: ['stacks']});
-                await queryClient.invalidateQueries({queryKey: ['collection-folders']});
+                await queryClient.invalidateQueries({ queryKey: ['stacks'] });
+                await queryClient.invalidateQueries({ queryKey: ['collection-folders'] });
               } catch (e) {
                 console.error('Failed to remove from collection', e);
               }
             }}
           >
-            <Trash2 className="w-4 h-4 mr-2"/>
+            <Trash2 className="w-4 h-4 mr-2" />
             Remove from Collection
           </ContextMenuItem>
         )}
@@ -342,13 +347,13 @@ export function StackListItem({
                 if (!scratchId) return;
                 const id = typeof stack.id === 'string' ? Number.parseInt(stack.id, 10) : stack.id;
                 await apiClient.removeStackFromCollection(scratchId, id);
-                await queryClient.invalidateQueries({queryKey: ['stacks']});
+                await queryClient.invalidateQueries({ queryKey: ['stacks'] });
               } catch (e) {
                 console.error('Failed to remove from scratch', e);
               }
             }}
           >
-            <Trash2 className="w-4 h-4 mr-2"/>
+            <Trash2 className="w-4 h-4 mr-2" />
             Remove from Scratch
           </ContextMenuItem>
         )}

@@ -264,15 +264,15 @@ export function buildUnifiedWhereClause(
 
   // ID制約の統合（色、AutoTag、検索、類似）
   const idConstraints: number[][] = [];
-  
+
   if (options.colorStackIds && options.colorStackIds.length > 0) {
     idConstraints.push(options.colorStackIds);
   }
-  
+
   if (options.autoTagIds && options.autoTagIds.length > 0) {
     idConstraints.push(options.autoTagIds);
   }
-  
+
   if (options.searchStackIds && options.searchStackIds.length > 0) {
     idConstraints.push(options.searchStackIds);
   }
@@ -280,9 +280,9 @@ export function buildUnifiedWhereClause(
   // すべてのID制約の交差を取る
   if (idConstraints.length > 0) {
     const intersectedIds = idConstraints.reduce((acc, ids) => {
-      return acc.filter(id => ids.includes(id));
+      return acc.filter((id) => ids.includes(id));
     });
-    
+
     if (intersectedIds.length > 0) {
       where.id = { in: intersectedIds };
     } else {
@@ -301,19 +301,19 @@ export function buildUnifiedWhereClause(
  */
 export function combineStackIdConstraints(constraints: StackIdConstraints): number[] {
   const allConstraints: number[][] = [];
-  
+
   if (constraints.color && constraints.color.length > 0) {
     allConstraints.push(constraints.color);
   }
-  
+
   if (constraints.autoTag && constraints.autoTag.length > 0) {
     allConstraints.push(constraints.autoTag);
   }
-  
+
   if (constraints.search && constraints.search.length > 0) {
     allConstraints.push(constraints.search);
   }
-  
+
   if (constraints.similar && constraints.similar.length > 0) {
     allConstraints.push(constraints.similar);
   }
@@ -325,6 +325,6 @@ export function combineStackIdConstraints(constraints: StackIdConstraints): numb
 
   // すべての制約の交差を取る
   return allConstraints.reduce((acc, ids) => {
-    return acc.filter(id => ids.includes(id));
+    return acc.filter((id) => ids.includes(id));
   });
 }

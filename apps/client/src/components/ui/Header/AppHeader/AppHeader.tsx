@@ -51,4 +51,3 @@ export function AppHeader({
 export function AppHeaderDivider() {
   return <div className="w-px h-6 bg-white/20" />;
 }
-

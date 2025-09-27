@@ -17,4 +17,3 @@ export const Basic: Story = {
     likeCount: 3,
   },
 };
-

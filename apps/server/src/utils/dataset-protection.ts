@@ -31,7 +31,10 @@ function signToken(datasetId: number, passwordHash: string): string {
 }
 
 export async function isDatasetAuthorized(c: Context, datasetId: number): Promise<boolean> {
-  const ds = await prisma.dataSet.findUnique({ where: { id: datasetId }, select: { isProtected: true, passwordHash: true } });
+  const ds = await prisma.dataSet.findUnique({
+    where: { id: datasetId },
+    select: { isProtected: true, passwordHash: true },
+  });
   if (!ds) return false;
   if (!ds.isProtected) return true;
   const token = getCookie(c, getCookieName(datasetId));
@@ -58,4 +61,3 @@ export function setDatasetAuthCookie(c: Context, datasetId: number, passwordHash
     maxAge: 60 * 60 * 12, // 12 hours
   });
 }
-

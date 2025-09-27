@@ -1,8 +1,8 @@
-import {useEffect, useMemo, useRef, useState} from 'react';
-import {Popover, PopoverContent, PopoverTrigger} from '@/components/ui/popover';
-import EmojiPicker, {type EmojiClickData} from 'emoji-picker-react';
-import {Check, Edit2, Lock, Palette, RefreshCw, Trash2} from 'lucide-react';
-import type {Dataset} from '@/types';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import EmojiPicker, { type EmojiClickData } from 'emoji-picker-react';
+import { Check, Edit2, Lock, Palette, RefreshCw, Trash2 } from 'lucide-react';
+import type { Dataset } from '@/types';
 
 export interface ColorStats {
   totalStacks: number;
@@ -21,7 +21,7 @@ interface LibraryCardProps {
   };
   colorStats?: ColorStats | null;
   isRefreshing: boolean;
-  onUpdate: (updates: {name?: string; icon?: string; themeColor?: string}) => void;
+  onUpdate: (updates: { name?: string; icon?: string; themeColor?: string }) => void;
   onDelete: () => void;
   onSetDefault: () => void;
   onStartRefresh: () => void;
@@ -126,10 +126,7 @@ export function LibraryCard({
   const colorGroups = useMemo(() => {
     const flat = new Set<string>(PRESET_COLOR_GROUPS.flatMap((group) => group.colors));
     if (dataset.themeColor && !flat.has(dataset.themeColor)) {
-      return [
-        { label: 'Current', colors: [dataset.themeColor] },
-        ...PRESET_COLOR_GROUPS,
-      ];
+      return [{ label: 'Current', colors: [dataset.themeColor] }, ...PRESET_COLOR_GROUPS];
     }
     return PRESET_COLOR_GROUPS;
   }, [dataset.themeColor]);
@@ -158,7 +155,12 @@ export function LibraryCard({
               </button>
             </PopoverTrigger>
             <PopoverContent align="start" className="p-0 border bg-white shadow-lg z-50">
-              <EmojiPicker autoFocusSearch={false} lazyLoadEmojis onEmojiClick={handleEmojiSelect} theme="auto" />
+              <EmojiPicker
+                autoFocusSearch={false}
+                lazyLoadEmojis
+                onEmojiClick={handleEmojiSelect}
+                theme="auto"
+              />
             </PopoverContent>
           </Popover>
 
@@ -192,9 +194,7 @@ export function LibraryCard({
                 </span>
               )}
             </div>
-            {!isLocked && (
-              <p className="text-xs/5 opacity-90">{`${formattedItemCount} items`}</p>
-            )}
+            {!isLocked && <p className="text-xs/5 opacity-90">{`${formattedItemCount} items`}</p>}
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -286,7 +286,9 @@ export function LibraryCard({
             <span className="text-sm font-medium">Password Protection</span>
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-sm text-gray-600">{(dataset as any).isProtected ? 'Enabled' : 'Disabled'}</span>
+            <span className="text-sm text-gray-600">
+              {(dataset as any).isProtected ? 'Enabled' : 'Disabled'}
+            </span>
             <button
               type="button"
               className="px-3 py-1.5 text-xs rounded-md border hover:bg-gray-100"
@@ -371,4 +373,4 @@ export function LibraryCard({
   );
 }
 
-export type {LibraryCardProps};
+export type { LibraryCardProps };

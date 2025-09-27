@@ -1,8 +1,8 @@
-import {isVideoAsset} from '@/lib/media';
-import {cn} from '@/lib/utils';
-import type {Asset} from '@/types';
-import {X} from 'lucide-react';
-import React, {useCallback, useState} from 'react';
+import { isVideoAsset } from '@/lib/media';
+import { cn } from '@/lib/utils';
+import type { Asset } from '@/types';
+import { X } from 'lucide-react';
+import React, { useCallback, useState } from 'react';
 
 interface AssetGridProps {
   assets: Asset[];
@@ -43,8 +43,7 @@ export default function AssetGrid({
       try {
         // Safari requires data to be set to initiate drag
         e.dataTransfer.setData('text/plain', 'drag');
-      } catch {
-      }
+      } catch {}
     },
     [isEditMode, onReorderAssets]
   );
@@ -73,7 +72,7 @@ export default function AssetGrid({
       newAssets.splice(insertIndex, 0, draggedAsset);
 
       // Reindex order
-      newAssets = newAssets.map((a, i) => ({...a, orderInStack: i}));
+      newAssets = newAssets.map((a, i) => ({ ...a, orderInStack: i }));
 
       onReorderAssets(newAssets);
 
@@ -120,8 +119,7 @@ export default function AssetGrid({
     <div ref={containerRef} className={cn('p-4 overflow-auto h-full bg-gray-900', className)}>
       {reorderBanner?.show && (
         <div className="absolute top-0 left-0 z-20 w-full">
-          <div
-            className="w-full bg-black/60 text-white p-4 flex items-center justify-between backdrop-blur-sm border-b border-white/10">
+          <div className="w-full bg-black/60 text-white p-4 flex items-center justify-between backdrop-blur-sm border-b border-white/10">
             <span className="text-sm">
               並び替えモード {reorderBanner.canSave ? '(変更あり)' : ''}
             </span>
@@ -178,7 +176,7 @@ export default function AssetGrid({
                 isDragging && 'opacity-50 scale-[0.98]',
                 isEditMode && 'cursor-move'
               )}
-              style={{transform: `translateX(${translateX}px)`}}
+              style={{ transform: `translateX(${translateX}px)` }}
               onClick={() => {
                 if (isEditMode) return;
                 onSelectPage(index);
@@ -231,22 +229,21 @@ export default function AssetGrid({
               </div>
               {/* No page index badge in list grid */}
 
-                {/* Remove button (shown when removal is enabled by parent) */}
-                {onRemoveAsset && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onRemoveAsset(asset.id);
-                    }}
-                    className="absolute bottom-1 right-1 bg-red-500/80 hover:bg-red-500 text-white p-1 rounded opacity-0 group-hover:opacity-100 transition-all"
-                  >
-                    <X size={16}/>
-                  </button>
-                )}
+              {/* Remove button (shown when removal is enabled by parent) */}
+              {onRemoveAsset && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRemoveAsset(asset.id);
+                  }}
+                  className="absolute bottom-1 right-1 bg-red-500/80 hover:bg-red-500 text-white p-1 rounded opacity-0 group-hover:opacity-100 transition-all"
+                >
+                  <X size={16} />
+                </button>
+              )}
 
               {/* Hover overlay */}
-              <div
-                className="absolute inset-0 bg-white opacity-0 group-hover:opacity-10 transition-opacity pointer-events-none"/>
+              <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-10 transition-opacity pointer-events-none" />
             </div>
           );
         })}

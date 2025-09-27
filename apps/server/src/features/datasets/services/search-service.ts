@@ -1,5 +1,5 @@
 import type { PrismaClient, Stack } from '@prisma/client';
-import {ensureSuperUser} from '../../../shared/services/UserService';
+import { ensureSuperUser } from '../../../shared/services/UserService';
 import type { createColorSearchService } from './color-search-service';
 import type { createTagStatsService } from './tag-stats-service';
 
@@ -66,7 +66,7 @@ const extractAutoTagVector = (
   for (const item of raw as Array<any>) {
     if (!item || typeof item !== 'object') continue;
     const tagValue = 'tag' in item ? item.tag : item.autoTagKey;
-    const scoreValue = 'score' in item ? item.score : item.value ?? item.weight;
+    const scoreValue = 'score' in item ? item.score : (item.value ?? item.weight);
     if (typeof tagValue !== 'string') continue;
     const score = typeof scoreValue === 'number' ? scoreValue : Number(scoreValue);
     if (!Number.isFinite(score) || score < minScore) continue;
@@ -106,21 +106,21 @@ const filterManualTags = (
 
 // 検索モード
 export enum SearchMode {
-  ALL = 'all',           // 全体検索
-  SIMILAR = 'similar',   // 類似検索（ReferenceStackId）
-  UNIFIED = 'unified'    // フリーワード検索
+  ALL = 'all', // 全体検索
+  SIMILAR = 'similar', // 類似検索（ReferenceStackId）
+  UNIFIED = 'unified', // フリーワード検索
 }
 
 // 検索リクエスト
 export interface SearchRequest {
   mode: SearchMode;
   datasetId: number;
-  
+
   // モード別パラメータ
-  referenceStackId?: number;  // SIMILAR mode
-  query?: string;             // UNIFIED mode
+  referenceStackId?: number; // SIMILAR mode
+  query?: string; // UNIFIED mode
   similar?: SimilarSearchOptions;
-  
+
   // 共通フィルタ
   filters: SearchFilters;
   sort: SortOptions;
@@ -145,17 +145,17 @@ export interface SearchFilters {
 
 // 作者フィルタ
 export interface AuthorFilter {
-  include?: string[];      // AND条件
-  includeAny?: string[];   // OR条件（+ワード）
-  exclude?: string[];      // NOT条件（-ワード）
+  include?: string[]; // AND条件
+  includeAny?: string[]; // OR条件（+ワード）
+  exclude?: string[]; // NOT条件（-ワード）
   includeNotSet?: boolean;
 }
 
 // タグフィルタ
 export interface TagFilter {
-  include?: string[];      // AND条件
-  includeAny?: string[];   // OR条件（+ワード）
-  exclude?: string[];      // NOT条件（-ワード）
+  include?: string[]; // AND条件
+  includeAny?: string[]; // OR条件（+ワード）
+  exclude?: string[]; // NOT条件（-ワード）
   includeNotSet?: boolean;
 }
 
@@ -256,7 +256,8 @@ export const createSearchService = (deps: {
   ): Promise<Array<{ stackId: number; shared: number }>> => {
     if (!tags.length) return [];
 
-    const overlap = tags.length >= SIMILAR_CONFIG.minAutoOverlap ? SIMILAR_CONFIG.minAutoOverlap : 1;
+    const overlap =
+      tags.length >= SIMILAR_CONFIG.minAutoOverlap ? SIMILAR_CONFIG.minAutoOverlap : 1;
 
     const query = `
       SELECT agg."stackId" AS "stackId",
@@ -291,7 +292,8 @@ export const createSearchService = (deps: {
   ): Promise<Array<{ stackId: number; shared: number }>> => {
     if (!tags.length) return [];
 
-    const overlap = tags.length >= SIMILAR_CONFIG.minManualOverlap ? SIMILAR_CONFIG.minManualOverlap : 1;
+    const overlap =
+      tags.length >= SIMILAR_CONFIG.minManualOverlap ? SIMILAR_CONFIG.minManualOverlap : 1;
 
     const query = `
       SELECT tos."stackId" AS "stackId",
@@ -334,7 +336,9 @@ export const createSearchService = (deps: {
     const numerator = Math.max(datasetSize, 1) + 1;
     const denominator = df + 1;
     const base = Math.log(numerator / denominator);
-    const weight = Number.isFinite(base) ? Math.max(base, SIMILAR_CONFIG.minIdf) : SIMILAR_CONFIG.minIdf;
+    const weight = Number.isFinite(base)
+      ? Math.max(base, SIMILAR_CONFIG.minIdf)
+      : SIMILAR_CONFIG.minIdf;
     return hasManual ? weight * SIMILAR_CONFIG.manualWeightMultiplierOnIdf : weight;
   };
 
@@ -417,7 +421,10 @@ export const createSearchService = (deps: {
     const [datasetSize, autoDfMap, manualDfMap] = await Promise.all([
       tagStats.getDatasetStackCount(),
       autoUniverse.size
-        ? tagStats.getAutoTagDocumentFrequency(Array.from(autoUniverse), SIMILAR_CONFIG.autoMinScore)
+        ? tagStats.getAutoTagDocumentFrequency(
+            Array.from(autoUniverse),
+            SIMILAR_CONFIG.autoMinScore
+          )
         : Promise.resolve(new Map<string, number>()),
       manualUniverse.size
         ? tagStats.getManualTagDocumentFrequency(Array.from(manualUniverse))
@@ -445,11 +452,19 @@ export const createSearchService = (deps: {
 
         if (!refAutoVal && !candAutoVal && !refManualVal && !candManualVal) continue;
 
-        const refValue = SIMILAR_CONFIG.autoWeight * refAutoVal + SIMILAR_CONFIG.manualWeight * refManualVal;
-        const candValue = SIMILAR_CONFIG.autoWeight * candAutoVal + SIMILAR_CONFIG.manualWeight * candManualVal;
+        const refValue =
+          SIMILAR_CONFIG.autoWeight * refAutoVal + SIMILAR_CONFIG.manualWeight * refManualVal;
+        const candValue =
+          SIMILAR_CONFIG.autoWeight * candAutoVal + SIMILAR_CONFIG.manualWeight * candManualVal;
         if (!refValue && !candValue) continue;
 
-        const weight = computeIdfWeight(tag, !!(refManualVal || candManualVal), autoDfMap, manualDfMap, datasetSize);
+        const weight = computeIdfWeight(
+          tag,
+          !!(refManualVal || candManualVal),
+          autoDfMap,
+          manualDfMap,
+          datasetSize
+        );
 
         numerator += weight * Math.min(refValue, candValue);
         denominator += weight * Math.max(refValue, candValue);
@@ -504,8 +519,8 @@ export const createSearchService = (deps: {
             throw new Error('query is required for unified search');
           }
           const unified = await this.performUnifiedSearch(request.query);
-          stackIds = unified.map(r => r.stackId);
-          scores = new Map(unified.map(r => [r.stackId, r.score]));
+          stackIds = unified.map((r) => r.stackId);
+          scores = new Map(unified.map((r) => [r.stackId, r.score]));
           break;
       }
 
@@ -531,16 +546,16 @@ export const createSearchService = (deps: {
         stacks,
         total,
         limit: request.pagination.limit,
-        offset: request.pagination.offset
+        offset: request.pagination.offset,
       };
     },
 
     async getAllStackIds(): Promise<number[]> {
       const stacks = await prisma.stack.findMany({
         where: { dataSetId },
-        select: { id: true }
+        select: { id: true },
       });
-      return stacks.map(s => s.id);
+      return stacks.map((s) => s.id);
     },
 
     async performUnifiedSearch(query: string): Promise<Array<{ stackId: number; score: number }>> {
@@ -550,17 +565,17 @@ export const createSearchService = (deps: {
       if (!q) return [];
 
       const rawTokens = q.split(/\s+/).filter(Boolean);
-      const posTokens = rawTokens.filter(t => !t.startsWith('-'));
+      const posTokens = rawTokens.filter((t) => !t.startsWith('-'));
       const negTokens = rawTokens
-        .filter(t => t.startsWith('-'))
-        .map(t => t.slice(1))
-        .map(t => t.trim())
+        .filter((t) => t.startsWith('-'))
+        .map((t) => t.slice(1))
+        .map((t) => t.trim())
         .filter(Boolean);
 
       // ソース重み（recommendedのスコア用）
       const WEIGHTS = {
         author: 0.95,
-        autotag: 0.90,
+        autotag: 0.9,
         tag: 0.85,
       } as const;
 
@@ -734,7 +749,10 @@ export const createSearchService = (deps: {
 
       // コレクションフィルタ
       if (filters.collectionId) {
-        const collectionFiltered = await this.filterByCollection(Array.from(filtered), filters.collectionId);
+        const collectionFiltered = await this.filterByCollection(
+          Array.from(filtered),
+          filters.collectionId
+        );
         filtered = new Set(collectionFiltered);
       }
 
@@ -748,7 +766,7 @@ export const createSearchService = (deps: {
       if (filter.include?.length) {
         for (const authorName of filter.include) {
           conditions.push({
-            author: { name: authorName }
+            author: { name: authorName },
           });
         }
       }
@@ -757,8 +775,8 @@ export const createSearchService = (deps: {
       if (filter.includeAny?.length) {
         conditions.push({
           author: {
-            name: { in: filter.includeAny }
-          }
+            name: { in: filter.includeAny },
+          },
         });
       }
 
@@ -767,16 +785,16 @@ export const createSearchService = (deps: {
         conditions.push({
           NOT: {
             author: {
-              name: { in: filter.exclude }
-            }
-          }
+              name: { in: filter.exclude },
+            },
+          },
         });
       }
 
       // Not Set条件
       if (filter.includeNotSet) {
         conditions.push({
-          authorId: null
+          authorId: null,
         });
       }
 
@@ -788,12 +806,12 @@ export const createSearchService = (deps: {
         where: {
           id: { in: stackIds },
           dataSetId,
-          AND: conditions
+          AND: conditions,
         },
-        select: { id: true }
+        select: { id: true },
       });
 
-      return stacks.map(s => s.id);
+      return stacks.map((s) => s.id);
     },
 
     async filterByTags(stackIds: number[], filter: TagFilter): Promise<number[]> {
@@ -810,14 +828,14 @@ export const createSearchService = (deps: {
                 some: {
                   tag: {
                     title: tagName,
-                    dataSetId
-                  }
-                }
-              }
+                    dataSetId,
+                  },
+                },
+              },
             },
-            select: { id: true }
+            select: { id: true },
           });
-          result = new Set(tagged.map(s => s.id));
+          result = new Set(tagged.map((s) => s.id));
         }
       }
 
@@ -831,14 +849,14 @@ export const createSearchService = (deps: {
               some: {
                 tag: {
                   title: { in: filter.includeAny },
-                  dataSetId
-                }
-              }
-            }
+                  dataSetId,
+                },
+              },
+            },
           },
-          select: { id: true }
+          select: { id: true },
         });
-        result = new Set(tagged.map(s => s.id));
+        result = new Set(tagged.map((s) => s.id));
       }
 
       // NOT条件（指定タグを持たない）
@@ -851,15 +869,15 @@ export const createSearchService = (deps: {
               some: {
                 tag: {
                   title: { in: filter.exclude },
-                  dataSetId
-                }
-              }
-            }
+                  dataSetId,
+                },
+              },
+            },
           },
-          select: { id: true }
+          select: { id: true },
         });
-        const excludedSet = new Set(excluded.map(s => s.id));
-        result = new Set(Array.from(result).filter(id => !excludedSet.has(id)));
+        const excludedSet = new Set(excluded.map((s) => s.id));
+        result = new Set(Array.from(result).filter((id) => !excludedSet.has(id)));
       }
 
       // Not Set条件（タグなし）
@@ -868,11 +886,11 @@ export const createSearchService = (deps: {
           where: {
             id: { in: stackIds },
             dataSetId,
-            tags: { none: {} }
+            tags: { none: {} },
           },
-          select: { id: true }
+          select: { id: true },
         });
-        result = new Set([...result, ...noTags.map(s => s.id)]);
+        result = new Set([...result, ...noTags.map((s) => s.id)]);
       }
 
       return Array.from(result);
@@ -899,19 +917,17 @@ export const createSearchService = (deps: {
         where: {
           id: { in: stackIds },
           dataSetId,
-          liked: filter === 'is-liked' ? { gt: 0 } : 0
+          liked: filter === 'is-liked' ? { gt: 0 } : 0,
         },
-        select: { id: true }
+        select: { id: true },
       });
-      return stacks.map(s => s.id);
+      return stacks.map((s) => s.id);
     },
 
     async filterByColor(stackIds: number[], filter: ColorFilter): Promise<number[]> {
       // 新方式（color-search-serviceオプション）のサポート
       const hasNewOptions =
-        (filter as any).hueCategories ||
-        (filter as any).tonePoint ||
-        (filter as any).customColor;
+        (filter as any).hueCategories || (filter as any).tonePoint || (filter as any).customColor;
 
       if (hasNewOptions) {
         try {
@@ -945,14 +961,14 @@ export const createSearchService = (deps: {
                 some: {
                   hue: {
                     gte: hue - 30,
-                    lte: hue + 30
-                  }
-                }
-              }
+                    lte: hue + 30,
+                  },
+                },
+              },
             },
-            select: { id: true }
+            select: { id: true },
           });
-          return colorFiltered.map(s => s.id);
+          return colorFiltered.map((s) => s.id);
         }
       }
 
@@ -963,13 +979,13 @@ export const createSearchService = (deps: {
           // brightness は StackColor の lightness に相当
           conditions.lightness = {
             gte: filter.tones.brightness.min,
-            lte: filter.tones.brightness.max
+            lte: filter.tones.brightness.max,
           };
         }
         if (filter.tones.saturation) {
           conditions.saturation = {
             gte: filter.tones.saturation.min,
-            lte: filter.tones.saturation.max
+            lte: filter.tones.saturation.max,
           };
         }
 
@@ -978,44 +994,47 @@ export const createSearchService = (deps: {
             id: { in: stackIds },
             dataSetId,
             colors: {
-              some: conditions
-            }
+              some: conditions,
+            },
           },
-          select: { id: true }
+          select: { id: true },
         });
-        return toneFiltered.map(s => s.id);
+        return toneFiltered.map((s) => s.id);
       }
 
       return stackIds;
     },
 
-    async filterByMediaType(stackIds: number[], mediaType: 'image' | 'comic' | 'video'): Promise<number[]> {
+    async filterByMediaType(
+      stackIds: number[],
+      mediaType: 'image' | 'comic' | 'video'
+    ): Promise<number[]> {
       // Use the canonical mediaType field, not legacy category
       const stacks = await prisma.stack.findMany({
         where: {
           id: { in: stackIds },
           dataSetId,
-          mediaType: mediaType
+          mediaType: mediaType,
         },
-        select: { id: true }
+        select: { id: true },
       });
-      return stacks.map(s => s.id);
+      return stacks.map((s) => s.id);
     },
 
     async filterByCollection(stackIds: number[], collectionId: number): Promise<number[]> {
       const stacks = await prisma.collectionStack.findMany({
         where: {
           stackId: { in: stackIds },
-          collectionId
+          collectionId,
         },
-        select: { stackId: true }
+        select: { stackId: true },
       });
-      return stacks.map(s => s.stackId);
+      return stacks.map((s) => s.stackId);
     },
 
     async sortStacks(
-      stackIds: number[], 
-      sort: SortOptions, 
+      stackIds: number[],
+      sort: SortOptions,
       scores?: Map<number, number>
     ): Promise<number[]> {
       // 推奨ソート（スコアベース）
@@ -1049,13 +1068,13 @@ export const createSearchService = (deps: {
       const sorted = await prisma.stack.findMany({
         where: {
           id: { in: stackIds },
-          dataSetId
+          dataSetId,
         },
         select: { id: true },
-        orderBy
+        orderBy,
       });
 
-      return sorted.map(s => s.id);
+      return sorted.map((s) => s.id);
     },
 
     async getStacksByIds(stackIds: number[]): Promise<Stack[]> {
@@ -1067,12 +1086,12 @@ export const createSearchService = (deps: {
       const stacks = await prisma.stack.findMany({
         where: {
           id: { in: stackIds },
-          dataSetId
-        }
+          dataSetId,
+        },
       });
 
-      const stackMap = new Map(stacks.map(s => [s.id, s]));
-      return stackIds.map(id => stackMap.get(id)).filter(Boolean) as Stack[];
+      const stackMap = new Map(stacks.map((s) => [s.id, s]));
+      return stackIds.map((id) => stackMap.get(id)).filter(Boolean) as Stack[];
     },
 
     hexToHue(hex: string): number {
@@ -1097,6 +1116,6 @@ export const createSearchService = (deps: {
       }
 
       return Math.round(hue * 360);
-    }
+    },
   };
 };

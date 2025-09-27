@@ -10,7 +10,15 @@ export interface HeaderIconButtonProps extends ButtonHTMLAttributes<HTMLButtonEl
 
 const HeaderIconButton = forwardRef<HTMLButtonElement, HeaderIconButtonProps>(
   (
-    { className, children, isActive = false, variant = 'default', badge = false, badgeColor = 'white', ...props },
+    {
+      className,
+      children,
+      isActive = false,
+      variant = 'default',
+      badge = false,
+      badgeColor = 'white',
+      ...props
+    },
     ref
   ) => {
     const effectiveVariant = isActive ? 'active' : variant;
@@ -47,7 +55,10 @@ const HeaderIconButton = forwardRef<HTMLButtonElement, HeaderIconButtonProps>(
         {children}
         {badge && (
           <div
-            className={cn('absolute -top-1 -right-1 w-3 h-3 rounded-full border border-white', badgeColor === 'primary' ? 'bg-primary' : '')}
+            className={cn(
+              'absolute -top-1 -right-1 w-3 h-3 rounded-full border border-white',
+              badgeColor === 'primary' ? 'bg-primary' : ''
+            )}
             style={badgeColor !== 'primary' ? { backgroundColor: badgeColor } : {}}
           />
         )}
@@ -59,4 +70,3 @@ const HeaderIconButton = forwardRef<HTMLButtonElement, HeaderIconButtonProps>(
 HeaderIconButton.displayName = 'HeaderIconButton';
 
 export { HeaderIconButton };
-

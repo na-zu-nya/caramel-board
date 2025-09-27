@@ -5,17 +5,26 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
-import {useDrag} from '@/contexts/DragContext';
-import {useScratch} from '@/hooks/useScratch';
-import {apiClient} from '@/lib/api-client';
-import {cn} from '@/lib/utils';
-import {currentFilterAtom, infoSidebarOpenAtom, selectedItemIdAtom} from '@/stores/ui';
-import type {MediaGridItem} from '@/types';
-import {useQueryClient} from '@tanstack/react-query';
-import {useNavigate} from '@tanstack/react-router';
-import {useAtom, useSetAtom} from 'jotai';
-import {Book, Check, GalleryVerticalEnd, Heart, NotebookText, Star, Trash2, Info,} from 'lucide-react';
-import {useEffect, useRef, useState} from 'react';
+import { useDrag } from '@/contexts/DragContext';
+import { useScratch } from '@/hooks/useScratch';
+import { apiClient } from '@/lib/api-client';
+import { cn } from '@/lib/utils';
+import { currentFilterAtom, infoSidebarOpenAtom, selectedItemIdAtom } from '@/stores/ui';
+import type { MediaGridItem } from '@/types';
+import { useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from '@tanstack/react-router';
+import { useAtom, useSetAtom } from 'jotai';
+import {
+  Book,
+  Check,
+  GalleryVerticalEnd,
+  Heart,
+  NotebookText,
+  Star,
+  Trash2,
+  Info,
+} from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 
 interface StackGridItemProps {
   item: MediaGridItem;
@@ -56,10 +65,10 @@ export function StackGridItem({
   const pageCount = (item as any).assetCount ?? (item as any)._count?.assets ?? 0;
   const [isDragging, setIsDragging] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
-  const {setIsDragging: setGlobalDragging} = useDrag();
+  const { setIsDragging: setGlobalDragging } = useDrag();
   const [filter] = useAtom(currentFilterAtom);
   const datasetId = (filter?.datasetId as string) || '1';
-  const {ensureScratch} = useScratch(datasetId);
+  const { ensureScratch } = useScratch(datasetId);
   const navigate = useNavigate();
   const setInfoOpen = useSetAtom(infoSidebarOpenAtom);
   const setSelectedItemId = useSetAtom(selectedItemIdAtom);
@@ -163,8 +172,7 @@ export function StackGridItem({
             e.preventDefault();
             try {
               e.dataTransfer.dropEffect = 'move';
-            } catch {
-            }
+            } catch {}
           }}
           onDragLeave={() => {
             setIsDragOver(false);
@@ -206,7 +214,7 @@ export function StackGridItem({
               void apiClient
                 .mergeStacks(targetId, sourceIds)
                 .then((resp) => {
-                  console.log('✅ Merge completed', {targetId, sourceIds});
+                  console.log('✅ Merge completed', { targetId, sourceIds });
                   // Optimistically update any loaded pages to remove sources and update target
                   const pages = queryClient.getQueriesData<any>(['stacks', 'page']);
                   for (const [key, data] of pages) {
@@ -223,9 +231,9 @@ export function StackGridItem({
                         (typeof s.id === 'string' ? Number.parseInt(s.id, 10) : s.id) === targetId
                     );
                     if (targetIdx >= 0 && resp?.stack) {
-                      filtered[targetIdx] = {...filtered[targetIdx], ...resp.stack};
+                      filtered[targetIdx] = { ...filtered[targetIdx], ...resp.stack };
                     }
-                    queryClient.setQueryData(key as any, {...data, stacks: filtered});
+                    queryClient.setQueryData(key as any, { ...data, stacks: filtered });
                   }
                   // Also update count cache down by number of removed sources
                   const counts = queryClient.getQueriesData<any>(['stacks', 'count']);
@@ -238,10 +246,10 @@ export function StackGridItem({
                   }
 
                   // Trigger background refetch to reconcile with server
-                  void queryClient.invalidateQueries({queryKey: ['stacks']});
+                  void queryClient.invalidateQueries({ queryKey: ['stacks'] });
                   // Broadcast for containers that manage virtualized ranges
                   window.dispatchEvent(
-                    new CustomEvent('stacks-merged', {detail: {targetId, sourceIds}})
+                    new CustomEvent('stacks-merged', { detail: { targetId, sourceIds } })
                   );
                 })
                 .catch((err) => {
@@ -265,11 +273,11 @@ export function StackGridItem({
           />
 
           {/* Black overlay on hover */}
-          <div className="absolute inset-0 bg-black opacity-0 group-hover:opacity-10 transition-opacity duration-200"/>
+          <div className="absolute inset-0 bg-black opacity-0 group-hover:opacity-10 transition-opacity duration-200" />
 
           {/* Selection mode overlay and button */}
           {isSelectionMode && isSelected && (
-            <div className="absolute inset-0 bg-black opacity-30 transition-opacity duration-200"/>
+            <div className="absolute inset-0 bg-black opacity-30 transition-opacity duration-200" />
           )}
 
           {isSelectionMode && (
@@ -286,9 +294,9 @@ export function StackGridItem({
               }`}
             >
               {isSelected ? (
-                <Check size={16}/>
+                <Check size={16} />
               ) : (
-                <div className="w-4 h-4 border border-current rounded-full"/>
+                <div className="w-4 h-4 border border-current rounded-full" />
               )}
             </button>
           )}
@@ -305,7 +313,7 @@ export function StackGridItem({
               }`}
               disabled={isFavoritePending}
             >
-              <Star size={16} className={currentFavorited ? 'fill-current' : ''}/>
+              <Star size={16} className={currentFavorited ? 'fill-current' : ''} />
             </button>
           )}
 
@@ -314,9 +322,8 @@ export function StackGridItem({
             <div
               className={cn('absolute z-20', isSelectionMode ? 'top-2 left-2' : 'top-2 right-2')}
             >
-              <div
-                className="flex items-center gap-1 bg-black/60 text-white px-2 py-1 rounded-full text-xs font-medium shadow-md">
-                <Book size={12}/>
+              <div className="flex items-center gap-1 bg-black/60 text-white px-2 py-1 rounded-full text-xs font-medium shadow-md">
+                <Book size={12} />
                 <span>{pageCount}</span>
               </div>
             </div>
@@ -324,9 +331,8 @@ export function StackGridItem({
 
           {/* Like count (hidden in selection mode) */}
           {!isSelectionMode && likeCount > 0 && (
-            <div
-              className="absolute bottom-2 right-2 flex items-center gap-1 bg-like text-white px-2 py-1 rounded-full text-xs font-medium z-10">
-              <Heart size={12} className="fill-current"/>
+            <div className="absolute bottom-2 right-2 flex items-center gap-1 bg-like text-white px-2 py-1 rounded-full text-xs font-medium z-10">
+              <Heart size={12} className="fill-current" />
               <span>{likeCount}</span>
             </div>
           )}
@@ -341,13 +347,13 @@ export function StackGridItem({
               typeof item.id === 'string' ? Number.parseInt(item.id, 10) : (item.id as number);
             await navigate({
               to: '/library/$datasetId/stacks/$stackId',
-              params: {datasetId: ds, stackId: String(id)},
+              params: { datasetId: ds, stackId: String(id) },
             });
           }}
         >
           Open
         </ContextMenuItem>
-        <ContextMenuSeparator/>
+        <ContextMenuSeparator />
 
         {/* Info + non-destructive actions */}
         <ContextMenuItem
@@ -356,7 +362,7 @@ export function StackGridItem({
             setInfoOpen(true);
           }}
         >
-          <Info className="w-4 h-4 mr-2"/>
+          <Info className="w-4 h-4 mr-2" />
           Info
         </ContextMenuItem>
         <ContextMenuItem
@@ -366,11 +372,11 @@ export function StackGridItem({
               typeof item.id === 'string' ? Number.parseInt(item.id, 10) : (item.id as number);
             await navigate({
               to: '/library/$datasetId/stacks/$stackId/similar',
-              params: {datasetId: ds, stackId: String(id)},
+              params: { datasetId: ds, stackId: String(id) },
             });
           }}
         >
-          <GalleryVerticalEnd className="w-4 h-4 mr-2"/>
+          <GalleryVerticalEnd className="w-4 h-4 mr-2" />
           Find similar
         </ContextMenuItem>
         <ContextMenuItem
@@ -380,18 +386,18 @@ export function StackGridItem({
               const stackId =
                 typeof item.id === 'string' ? Number.parseInt(item.id, 10) : (item.id as number);
               await apiClient.addStackToCollection(sc.id, stackId);
-              await queryClient.invalidateQueries({queryKey: ['stacks']});
-              await queryClient.invalidateQueries({queryKey: ['library-counts', datasetId]});
-              await queryClient.refetchQueries({queryKey: ['library-counts', datasetId]});
+              await queryClient.invalidateQueries({ queryKey: ['stacks'] });
+              await queryClient.invalidateQueries({ queryKey: ['library-counts', datasetId] });
+              await queryClient.refetchQueries({ queryKey: ['library-counts', datasetId] });
             } catch (e) {
               console.error('Failed to add to Scratch', e);
             }
           }}
         >
-          <NotebookText className="w-4 h-4 mr-2"/>
+          <NotebookText className="w-4 h-4 mr-2" />
           Add to Scratch
         </ContextMenuItem>
-        {(allowRemoveFromCollection || allowRemoveFromScratch) && <ContextMenuSeparator/>}
+        {(allowRemoveFromCollection || allowRemoveFromScratch) && <ContextMenuSeparator />}
         {allowRemoveFromCollection && (
           <ContextMenuItem
             onClick={async () => {
@@ -403,7 +409,7 @@ export function StackGridItem({
             }}
             className="text-red-600 focus:text-red-700"
           >
-            <Trash2 className="w-4 h-4 mr-2"/>
+            <Trash2 className="w-4 h-4 mr-2" />
             Remove from Collection
           </ContextMenuItem>
         )}
@@ -418,7 +424,7 @@ export function StackGridItem({
             }}
             className="text-red-600 focus:text-red-700"
           >
-            <Trash2 className="w-4 h-4 mr-2"/>
+            <Trash2 className="w-4 h-4 mr-2" />
             Remove from Scratch
           </ContextMenuItem>
         )}

@@ -1,4 +1,4 @@
-import {toPublicAssetPath} from './assetPath';
+import { toPublicAssetPath } from './assetPath';
 
 /**
  * Utility functions for handling thumbnail paths

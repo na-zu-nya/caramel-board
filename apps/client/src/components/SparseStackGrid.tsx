@@ -159,7 +159,15 @@ export default function SparseStackGrid({
       lastClickedIndexRef.current = idx >= 0 ? idx : lastClickedIndexRef.current;
       handleItemClick(item, onItemClick);
     },
-    [sparseItems, selectedItems, setSelectedItems, setSelectionMode, handleToggleSelection, handleItemClick, onItemClick]
+    [
+      sparseItems,
+      selectedItems,
+      setSelectedItems,
+      setSelectionMode,
+      handleToggleSelection,
+      handleItemClick,
+      onItemClick,
+    ]
   );
 
   // Handle scroll-based loading
@@ -190,7 +198,7 @@ export default function SparseStackGrid({
     // 読み込みは表示範囲よりさらに1段先まで要求
     const endIndex = Math.min(
       total - 1,
-      ((expandedEndRow + prefetchRowsBelow) + 1) * itemsPerRow - 1
+      (expandedEndRow + prefetchRowsBelow + 1) * itemsPerRow - 1
     );
 
     // Only request if we don't already have this range
@@ -238,7 +246,7 @@ export default function SparseStackGrid({
       const collectionId = collectionMatch ? Number.parseInt(collectionMatch[1], 10) : undefined;
       setUploadDefaults({
         datasetId: Number(dataset.id),
-        mediaType: collectionId ? 'image' : (mediaType || undefined),
+        mediaType: collectionId ? 'image' : mediaType || undefined,
         collectionId,
       });
 
@@ -339,7 +347,11 @@ export default function SparseStackGrid({
   const gridHeight = totalRows * itemSize;
 
   return (
-    <DropZone onFilesDrop={handleFilesDrop} onUrlDrop={handleUrlDrop} className={cn('relative', className)}>
+    <DropZone
+      onFilesDrop={handleFilesDrop}
+      onUrlDrop={handleUrlDrop}
+      className={cn('relative', className)}
+    >
       <div
         ref={containerRef}
         className={cn(

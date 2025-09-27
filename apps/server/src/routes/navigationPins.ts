@@ -1,8 +1,8 @@
-import {Hono} from 'hono';
-import {z} from 'zod';
-import {NavigationPinService} from '../shared/services/NavigationPinService';
-import {usePrisma} from '../shared/di';
-import {ensureSuperUser} from '../shared/services/UserService';
+import { Hono } from 'hono';
+import { z } from 'zod';
+import { NavigationPinService } from '../shared/services/NavigationPinService';
+import { usePrisma } from '../shared/di';
+import { ensureSuperUser } from '../shared/services/UserService';
 
 // リクエストボディのスキーマ定義
 const createNavigationPinSchema = z.object({

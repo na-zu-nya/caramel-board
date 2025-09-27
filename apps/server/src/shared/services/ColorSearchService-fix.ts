@@ -1,5 +1,5 @@
-import {Prisma, type PrismaClient} from '@prisma/client';
-import {ColorExtractor} from '../../utils/colorExtractor';
+import { Prisma, type PrismaClient } from '@prisma/client';
+import { ColorExtractor } from '../../utils/colorExtractor';
 
 export interface ColorSearchOptions {
   color: { r: number; g: number; b: number };
@@ -56,7 +56,10 @@ export class ColorSearchService {
     const aggregated = ColorExtractor.aggregateStackColors(colorSets);
 
     // 3) スタックへ保存
-    await this.prisma.stack.update({ where: { id: stackId }, data: { dominantColors: aggregated } });
+    await this.prisma.stack.update({
+      where: { id: stackId },
+      data: { dominantColors: aggregated },
+    });
 
     return aggregated;
   }

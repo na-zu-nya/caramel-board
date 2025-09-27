@@ -13,7 +13,7 @@ export function getScrollbarWidth(): number {
   }
 
   // オーバーレイスクロールバー（macOS等）の検出
-  const hasOverlayScrollbars = 
+  const hasOverlayScrollbars =
     // macOSやiOSの検出
     /Mac|iPad|iPhone/.test(navigator.userAgent) ||
     // CSS supports チェック
@@ -64,7 +64,7 @@ export function removeScrollbarCompensation(): void {
 
 /**
  * 使用例:
- * 
+ *
  * useEffect(() => {
  *   applyScrollbarCompensation();
  *   return () => {

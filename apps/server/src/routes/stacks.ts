@@ -1,24 +1,24 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import {Hono} from 'hono';
-import {z} from 'zod';
-import {DuplicateAssetError} from '../errors/DuplicateAssetError';
-import {createAssetService} from '../features/datasets/services/asset-service';
-import {createColorSearchService} from '../features/datasets/services/color-search-service';
+import { Hono } from 'hono';
+import { z } from 'zod';
+import { DuplicateAssetError } from '../errors/DuplicateAssetError';
+import { createAssetService } from '../features/datasets/services/asset-service';
+import { createColorSearchService } from '../features/datasets/services/color-search-service';
 import {
   createSearchService,
   type SearchFilters,
   SearchMode,
   type SortOptions,
 } from '../features/datasets/services/search-service';
-import {createStackService} from '../features/datasets/services/stack-service';
-import {createStacksService} from '../features/datasets/services/stacks-service';
-import {createTagStatsService} from '../features/datasets/services/tag-stats-service';
-import {prisma, useDataStorage, usePrisma} from '../shared/di';
-import {ensureSuperUser} from '../shared/services/UserService';
-import {CollectionService} from '../shared/services/CollectionService';
-import {AutoTagService} from '../shared/services/AutoTagService';
-import {toPublicAssetPath, withPublicAssetArray} from '../utils/assetPath';
+import { createStackService } from '../features/datasets/services/stack-service';
+import { createStacksService } from '../features/datasets/services/stacks-service';
+import { createTagStatsService } from '../features/datasets/services/tag-stats-service';
+import { prisma, useDataStorage, usePrisma } from '../shared/di';
+import { ensureSuperUser } from '../shared/services/UserService';
+import { CollectionService } from '../shared/services/CollectionService';
+import { AutoTagService } from '../shared/services/AutoTagService';
+import { toPublicAssetPath, withPublicAssetArray } from '../utils/assetPath';
 
 const PaginatedQuerySchema = z.object({
   dataSetId: z.coerce.number().int().positive(),
@@ -80,7 +80,7 @@ function getQueryObject(c: any): Record<string, string | string[]> {
 stacksRoute.get('/paginated', async (c) => {
   const queryObj = getQueryObject(c);
   const parse = PaginatedQuerySchema.safeParse(queryObj);
-  if (!parse.success) return c.json({error: 'Invalid query', details: parse.error}, 400);
+  if (!parse.success) return c.json({ error: 'Invalid query', details: parse.error }, 400);
 
   const {
     dataSetId,
@@ -120,12 +120,12 @@ stacksRoute.get('/paginated', async (c) => {
 
   if (author) {
     const authors = Array.isArray(author) ? author : [author];
-    filters.author = {includeAny: authors};
+    filters.author = { includeAny: authors };
   }
 
   if (tag) {
     const tags = Array.isArray(tag) ? tag : [tag];
-    filters.tags = {includeAny: tags};
+    filters.tags = { includeAny: tags };
   }
 
   if (fav === '1') filters.favorites = 'is-fav';
@@ -133,10 +133,10 @@ stacksRoute.get('/paginated', async (c) => {
   if (liked === '1') filters.likes = 'is-liked';
   if (liked === '0') filters.likes = 'not-liked';
   if (hasNoTags) {
-    filters.tags = {...(filters.tags || {}), includeNotSet: true};
+    filters.tags = { ...(filters.tags || {}), includeNotSet: true };
   }
   if (hasNoAuthor) {
-    filters.author = {...(filters.author || {}), includeNotSet: true};
+    filters.author = { ...(filters.author || {}), includeNotSet: true };
   }
 
   // Map color filter (new style) to SearchFilters.color
@@ -144,7 +144,7 @@ stacksRoute.get('/paginated', async (c) => {
   if (typeof hueCategories === 'string') color.hueCategories = [hueCategories];
   else if (Array.isArray(hueCategories)) color.hueCategories = hueCategories;
   if (typeof toneSaturation === 'number' && typeof toneLightness === 'number') {
-    color.tonePoint = {saturation: toneSaturation, lightness: toneLightness};
+    color.tonePoint = { saturation: toneSaturation, lightness: toneLightness };
   }
   if (typeof toneTolerance === 'number') color.toneTolerance = toneTolerance;
   if (typeof similarityThreshold === 'number') color.similarityThreshold = similarityThreshold;
@@ -166,9 +166,9 @@ stacksRoute.get('/paginated', async (c) => {
 
   // Compose services per dataset
   const prisma = usePrisma(c);
-  const colorSearch = createColorSearchService({prisma, dataSetId});
-  const tagStats = createTagStatsService({prisma, dataSetId});
-  const searchService = createSearchService({prisma, colorSearch, tagStats, dataSetId});
+  const colorSearch = createColorSearchService({ prisma, dataSetId });
+  const tagStats = createTagStatsService({ prisma, dataSetId });
+  const searchService = createSearchService({ prisma, colorSearch, tagStats, dataSetId });
 
   const result = await searchService.search({
     mode: search && search.trim().length > 0 ? SearchMode.UNIFIED : SearchMode.ALL,
@@ -176,7 +176,7 @@ stacksRoute.get('/paginated', async (c) => {
     query: search && search.trim().length > 0 ? search.trim() : undefined,
     filters,
     sort: sortOptions,
-    pagination: {limit, offset},
+    pagination: { limit, offset },
   });
 
   // Enrich with asset counts in a single query
@@ -187,8 +187,8 @@ stacksRoute.get('/paginated', async (c) => {
   if (ids.length > 0) {
     const counts = await prisma.asset.groupBy({
       by: ['stackId'],
-      where: {stackId: {in: ids}},
-      _count: {stackId: true},
+      where: { stackId: { in: ids } },
+      _count: { stackId: true },
     });
     assetCountMap = new Map(counts.map((c: any) => [c.stackId, c._count.stackId]));
 
@@ -197,9 +197,9 @@ stacksRoute.get('/paginated', async (c) => {
       const favorites = await prisma.stackFavorite.findMany({
         where: {
           userId,
-          stackId: {in: ids},
+          stackId: { in: ids },
         },
-        select: {stackId: true},
+        select: { stackId: true },
       });
       favoriteSet = new Set(favorites.map((row) => row.stackId));
     } catch (error) {
@@ -227,7 +227,7 @@ stacksRoute.get('/paginated', async (c) => {
     };
   });
 
-  return c.json({stacks, total: result.total, limit: result.limit, offset: result.offset});
+  return c.json({ stacks, total: result.total, limit: result.limit, offset: result.offset });
 });
 
 // GET /stacks/search/autotag?autoTag=xxx&dataSetId=1&limit=50&offset=0
@@ -252,7 +252,7 @@ stacksRoute.get('/search/autotag', async (c) => {
   const queryObj = getQueryObject(c);
   const parsed = AutoTagSearchQuerySchema.safeParse(queryObj);
   if (!parsed.success) {
-    return c.json({error: 'Invalid query', details: parsed.error}, 400);
+    return c.json({ error: 'Invalid query', details: parsed.error }, 400);
   }
 
   const {
@@ -299,26 +299,26 @@ stacksRoute.get('/search/autotag', async (c) => {
     let total = Number(countRows[0]?.count ?? 0);
 
     if (total === 0) {
-      return c.json({stacks: [], total: 0, limit, offset});
+      return c.json({ stacks: [], total: 0, limit, offset });
     }
 
     // Optional: intersect with unified search results for 'search'
     let allowedIds: number[] | null = null;
     if (search && search.trim()) {
-      const colorSearch = createColorSearchService({prisma, dataSetId});
-      const tagStats = createTagStatsService({prisma, dataSetId});
-      const searchService = createSearchService({prisma, colorSearch, tagStats, dataSetId});
+      const colorSearch = createColorSearchService({ prisma, dataSetId });
+      const tagStats = createTagStatsService({ prisma, dataSetId });
+      const searchService = createSearchService({ prisma, colorSearch, tagStats, dataSetId });
       const unified = await searchService.search({
         mode: SearchMode.UNIFIED,
         datasetId: dataSetId,
         query: search.trim(),
         filters: {},
-        sort: {by: 'recommended', order: 'desc'},
-        pagination: {limit: 1000, offset: 0},
+        sort: { by: 'recommended', order: 'desc' },
+        pagination: { limit: 1000, offset: 0 },
       });
       allowedIds = unified.stacks.map((s: any) => s.id);
       if (allowedIds.length === 0) {
-        return c.json({stacks: [], total: 0, limit, offset});
+        return c.json({ stacks: [], total: 0, limit, offset });
       }
     }
 
@@ -343,32 +343,32 @@ stacksRoute.get('/search/autotag', async (c) => {
     const baseIds = baseIdRows.map((r) => r.id);
 
     // Apply additional filters via Prisma where, intersecting with baseIds
-    const where: any = {id: {in: baseIds}, dataSetId};
+    const where: any = { id: { in: baseIds }, dataSetId };
     if (mediaType) where.mediaType = mediaType;
-    if (fav === '1') where.favorites = {some: {userId}};
-    if (fav === '0') where.favorites = {none: {userId}};
-    if (liked === '1') where.liked = {gt: 0};
+    if (fav === '1') where.favorites = { some: { userId } };
+    if (fav === '0') where.favorites = { none: { userId } };
+    if (liked === '1') where.liked = { gt: 0 };
     if (liked === '0') where.liked = 0;
     if (hasNoAuthor) where.authorId = null;
-    if (hasNoTags) where.tags = {none: {}};
+    if (hasNoTags) where.tags = { none: {} };
     if (author) {
       const authors = Array.isArray(author) ? author : [author];
-      where.author = {name: {in: authors}};
+      where.author = { name: { in: authors } };
     }
     if (tag) {
       const tags = Array.isArray(tag) ? tag : [tag];
       where.tags = where.tags || {};
-      where.tags.some = {tag: {title: {in: tags}}};
+      where.tags.some = { tag: { title: { in: tags } } };
     }
 
     // Count with all filters
-    total = await prisma.stack.count({where});
+    total = await prisma.stack.count({ where });
 
     // Page IDs with all filters applied
     const paged = await prisma.stack.findMany({
       where,
-      select: {id: true},
-      orderBy: {id: 'desc'},
+      select: { id: true },
+      orderBy: { id: 'desc' },
       take: limit,
       skip: offset,
     });
@@ -376,15 +376,15 @@ stacksRoute.get('/search/autotag', async (c) => {
 
     // Fetch stacks by IDs preserving order
     const allStacks = await usePrisma(c).stack.findMany({
-      where: {id: {in: ids}, dataSetId},
+      where: { id: { in: ids }, dataSetId },
     });
     const map = new Map(allStacks.map((s: any) => [s.id, s]));
     const favoriteRows = await prisma.stackFavorite.findMany({
       where: {
         userId,
-        stackId: {in: ids},
+        stackId: { in: ids },
       },
-      select: {stackId: true},
+      select: { stackId: true },
     });
     const favoriteSet = new Set(favoriteRows.map((row) => row.stackId));
 
@@ -399,10 +399,10 @@ stacksRoute.get('/search/autotag', async (c) => {
         isFavorite: favoriteSet.has(s.id),
       }));
 
-    return c.json({stacks, total, limit, offset});
+    return c.json({ stacks, total, limit, offset });
   } catch (error) {
     console.error('Error searching stacks by AutoTag:', error);
-    return c.json({error: 'Failed to search stacks by AutoTag'}, 500);
+    return c.json({ error: 'Failed to search stacks by AutoTag' }, 500);
   }
 });
 
@@ -411,11 +411,11 @@ stacksRoute.post('/:id{[0-9]+}/like', async (c) => {
   const id = Number.parseInt(c.req.param('id'));
   const prisma = usePrisma(c);
   const ds = await resolveDatasetId(prisma, id);
-  const colorSearch = createColorSearchService({prisma, dataSetId: ds});
-  const stackService = createStackService({prisma, colorSearch, dataSetId: ds});
+  const colorSearch = createColorSearchService({ prisma, dataSetId: ds });
+  const stackService = createStackService({ prisma, colorSearch, dataSetId: ds });
   await stackService.like(id);
-  const updated = await prisma.stack.findUnique({where: {id}, select: {liked: true}});
-  return c.json({success: true, liked: updated?.liked ?? 0});
+  const updated = await prisma.stack.findUnique({ where: { id }, select: { liked: true } });
+  return c.json({ success: true, liked: updated?.liked ?? 0 });
 });
 
 // PUT /stacks/:id/favorite
@@ -425,10 +425,10 @@ stacksRoute.put('/:id{[0-9]+}/favorite', async (c) => {
   const favorited = Boolean(body?.favorited);
   const prisma = usePrisma(c);
   const ds = await resolveDatasetId(prisma, id);
-  const colorSearch = createColorSearchService({prisma, dataSetId: ds});
-  const stackService = createStackService({prisma, colorSearch, dataSetId: ds});
+  const colorSearch = createColorSearchService({ prisma, dataSetId: ds });
+  const stackService = createStackService({ prisma, colorSearch, dataSetId: ds });
   await stackService.setFavorite(id, favorited);
-  return c.json({success: true});
+  return c.json({ success: true });
 });
 
 // POST /stacks/:id/refresh-thumbnail
@@ -436,8 +436,8 @@ stacksRoute.post('/:id{[0-9]+}/refresh-thumbnail', async (c) => {
   const id = Number.parseInt(c.req.param('id'));
   const prisma = usePrisma(c);
   const ds = await resolveDatasetId(prisma, id);
-  const colorSearch = createColorSearchService({prisma, dataSetId: ds});
-  const stackService = createStackService({prisma, colorSearch, dataSetId: ds});
+  const colorSearch = createColorSearchService({ prisma, dataSetId: ds });
+  const stackService = createStackService({ prisma, colorSearch, dataSetId: ds });
   const result = await stackService.refreshThumbnail(id);
   return c.json(result);
 });
@@ -454,7 +454,7 @@ stacksRoute.post('/:id{[0-9]+}/aggregate-tags', async (c) => {
     return c.json(result);
   } catch (error) {
     console.error('Error aggregating stack tags:', error);
-    return c.json({error: 'Failed to aggregate tags'}, 500);
+    return c.json({ error: 'Failed to aggregate tags' }, 500);
   }
 });
 
@@ -465,14 +465,14 @@ stacksRoute.post('/:id{[0-9]+}/tags', async (c) => {
   try {
     const body = await c.req.json();
     const tag = String(body?.tag || '').trim();
-    if (!tag) return c.json({error: 'Tag is required'}, 400);
+    if (!tag) return c.json({ error: 'Tag is required' }, 400);
     const ds = await resolveDatasetId(prisma, id);
-    const stacksService = createStacksService({prisma});
+    const stacksService = createStacksService({ prisma });
     const res = await stacksService.addTag(id, ds, tag);
     return c.json(res);
   } catch (error) {
     console.error('Error adding tag:', error);
-    return c.json({error: 'Failed to add tag'}, 500);
+    return c.json({ error: 'Failed to add tag' }, 500);
   }
 });
 
@@ -483,12 +483,12 @@ stacksRoute.delete('/:id{[0-9]+}/tags/:tag', async (c) => {
   const prisma = usePrisma(c);
   try {
     const ds = await resolveDatasetId(prisma, id);
-    const stacksService = createStacksService({prisma});
+    const stacksService = createStacksService({ prisma });
     const res = await stacksService.removeTag(id, ds, decodeURIComponent(tag));
     return c.json(res);
   } catch (error) {
     console.error('Error removing tag:', error);
-    return c.json({error: 'Failed to remove tag'}, 500);
+    return c.json({ error: 'Failed to remove tag' }, 500);
   }
 });
 
@@ -498,7 +498,7 @@ stacksRoute.post('/:id{[0-9]+}/assets', async (c) => {
     const id = Number.parseInt(c.req.param('id'));
     const formData = await c.req.formData();
     const file = formData.get('file') as File | null;
-    if (!file) return c.json({error: 'File is required'}, 400);
+    if (!file) return c.json({ error: 'File is required' }, 400);
 
     const prisma = usePrisma(c);
     const ds = await resolveDatasetId(prisma, id);
@@ -511,7 +511,7 @@ stacksRoute.post('/:id{[0-9]+}/assets', async (c) => {
     const buf = new Uint8Array(await file.arrayBuffer());
     const storageRoot2 = process.env.FILES_STORAGE || path.resolve('./data');
     const tmpDir = path.join(storageRoot2, 'tmp');
-    if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, {recursive: true});
+    if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
     const tmpPath = path.join(tmpDir, `${Date.now()}-${(file as any).name || 'upload'}`);
     fs.writeFileSync(tmpPath, buf);
 
@@ -539,7 +539,7 @@ stacksRoute.post('/:id{[0-9]+}/assets', async (c) => {
       );
     }
     console.error('Error adding asset to stack:', error);
-    return c.json({error: 'Failed to add asset'}, 500);
+    return c.json({ error: 'Failed to add asset' }, 500);
   }
 });
 
@@ -548,8 +548,8 @@ stacksRoute.get('/:id{[0-9]+}/collections', async (c) => {
   const id = Number.parseInt(c.req.param('id'));
   const prisma = usePrisma(c);
   const ds = await resolveDatasetId(prisma, id);
-  const colorSearch = createColorSearchService({prisma, dataSetId: ds});
-  const stackService = createStackService({prisma, colorSearch, dataSetId: ds});
+  const colorSearch = createColorSearchService({ prisma, dataSetId: ds });
+  const stackService = createStackService({ prisma, colorSearch, dataSetId: ds });
   const result = await stackService.getCollectionsByStackId(id);
   return c.json(result);
 });
@@ -590,7 +590,10 @@ function resolveFileNameFromHeaders(urlString: string, contentDisposition: strin
   }
 }
 
-function inferMediaTypeFromMime(mime: string | null | undefined, originalName: string): 'image' | 'comic' | 'video' {
+function inferMediaTypeFromMime(
+  mime: string | null | undefined,
+  originalName: string
+): 'image' | 'comic' | 'video' {
   if (mime && mime.startsWith('video/')) {
     return 'video';
   }
@@ -642,7 +645,7 @@ async function downloadRemoteAsset(url: string, tmpDir: string) {
     headers.Referer = 'https://www.pixiv.net/';
   }
 
-  const response = await fetch(url, {headers});
+  const response = await fetch(url, { headers });
   if (!response.ok) {
     throw new Error(`HTTP ${response.status}で取得に失敗しました`);
   }
@@ -666,7 +669,7 @@ async function downloadRemoteAsset(url: string, tmpDir: string) {
   const mimetype =
     headerMime && headerMime !== 'application/octet-stream'
       ? headerMime
-      : lookedUp ?? 'application/octet-stream';
+      : (lookedUp ?? 'application/octet-stream');
 
   return {
     path: tmpPath,
@@ -675,7 +678,6 @@ async function downloadRemoteAsset(url: string, tmpDir: string) {
     size: buffer.length,
   };
 }
-
 
 // Helper: resolve datasetId for a stack or for a list of stackIds
 function sanitizeStackIds(stackIds: number[] | number) {
@@ -705,8 +707,8 @@ function sanitizeStackIds(stackIds: number[] | number) {
 async function resolveDatasetId(prisma: any, stackIds: number[] | number): Promise<number> {
   const ids = sanitizeStackIds(stackIds);
   const rows = await prisma.stack.findMany({
-    where: {id: {in: ids}},
-    select: {id: true, dataSetId: true},
+    where: { id: { in: ids } },
+    select: { id: true, dataSetId: true },
   });
   if (rows.length === 0) throw new Error('Stack not found');
   const ds = rows[0].dataSetId;
@@ -721,7 +723,7 @@ function mapStackServiceError(error: unknown, fallbackMessage: string) {
     'name' in error &&
     (error as any).name === 'PrismaClientValidationError'
   ) {
-    return {status: 400, body: {error: 'Invalid stack id'}} as const;
+    return { status: 400, body: { error: 'Invalid stack id' } } as const;
   }
 
   if (error instanceof Error) {
@@ -729,7 +731,7 @@ function mapStackServiceError(error: unknown, fallbackMessage: string) {
     const normalized = message.toLowerCase();
 
     if (normalized.includes('not found')) {
-      return {status: 404, body: {error: message}} as const;
+      return { status: 404, body: { error: message } } as const;
     }
 
     if (
@@ -737,15 +739,15 @@ function mapStackServiceError(error: unknown, fallbackMessage: string) {
       normalized.includes('invalid stack id') ||
       normalized.includes('stack ids required')
     ) {
-      return {status: 400, body: {error: message}} as const;
+      return { status: 400, body: { error: message } } as const;
     }
 
     console.error(`Unexpected stack service error (${fallbackMessage}):`, error);
-    return {status: 500, body: {error: fallbackMessage, details: message}} as const;
+    return { status: 500, body: { error: fallbackMessage, details: message } } as const;
   }
 
   console.error(`Unknown stack service error (${fallbackMessage}):`, error);
-  return {status: 500, body: {error: fallbackMessage}} as const;
+  return { status: 500, body: { error: fallbackMessage } } as const;
 }
 
 // Bulk schemas
@@ -765,8 +767,8 @@ const BulkFavoriteSchema = z.object({
   stackIds: z.array(z.number().int().positive()),
   favorited: z.boolean(),
 });
-const BulkRefreshThumbsSchema = z.object({stackIds: z.array(z.number().int().positive())});
-const BulkRemoveSchema = z.object({stackIds: z.array(z.number().int().positive())});
+const BulkRefreshThumbsSchema = z.object({ stackIds: z.array(z.number().int().positive()) });
+const BulkRemoveSchema = z.object({ stackIds: z.array(z.number().int().positive()) });
 const MergeStacksSchema = z.object({
   targetId: z.number().int().positive(),
   sourceIds: z.array(z.number().int().positive()).min(1),
@@ -776,17 +778,17 @@ async function withStackServiceForIds(c: any, ids: number[] | number) {
   const sanitizedIds = sanitizeStackIds(ids);
   const prisma = usePrisma(c);
   const ds = await resolveDatasetId(prisma, sanitizedIds);
-  const colorSearch = createColorSearchService({prisma, dataSetId: ds});
-  const stackService = createStackService({prisma, colorSearch, dataSetId: ds});
-  return {prisma, stackService, sanitizedIds, dataSetId: ds};
+  const colorSearch = createColorSearchService({ prisma, dataSetId: ds });
+  const stackService = createStackService({ prisma, colorSearch, dataSetId: ds });
+  return { prisma, stackService, sanitizedIds, dataSetId: ds };
 }
 
 // POST /stacks/bulk/tags
 stacksRoute.post('/bulk/tags', async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const parse = BulkTagsSchema.safeParse(body);
-  if (!parse.success) return c.json({error: 'Invalid body', details: parse.error}, 400);
-  const {stackService, sanitizedIds} = await withStackServiceForIds(c, parse.data.stackIds);
+  if (!parse.success) return c.json({ error: 'Invalid body', details: parse.error }, 400);
+  const { stackService, sanitizedIds } = await withStackServiceForIds(c, parse.data.stackIds);
   const res = await stackService.bulkAddTags(sanitizedIds, parse.data.tags);
   return c.json(res);
 });
@@ -795,8 +797,8 @@ stacksRoute.post('/bulk/tags', async (c) => {
 stacksRoute.put('/bulk/author', async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const parse = BulkAuthorSchema.safeParse(body);
-  if (!parse.success) return c.json({error: 'Invalid body', details: parse.error}, 400);
-  const {stackService, sanitizedIds} = await withStackServiceForIds(c, parse.data.stackIds);
+  if (!parse.success) return c.json({ error: 'Invalid body', details: parse.error }, 400);
+  const { stackService, sanitizedIds } = await withStackServiceForIds(c, parse.data.stackIds);
   const res = await stackService.bulkSetAuthor(sanitizedIds, parse.data.author);
   return c.json(res);
 });
@@ -805,8 +807,8 @@ stacksRoute.put('/bulk/author', async (c) => {
 stacksRoute.put('/bulk/media-type', async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const parse = BulkMediaTypeSchema.safeParse(body);
-  if (!parse.success) return c.json({error: 'Invalid body', details: parse.error}, 400);
-  const {stackService, sanitizedIds} = await withStackServiceForIds(c, parse.data.stackIds);
+  if (!parse.success) return c.json({ error: 'Invalid body', details: parse.error }, 400);
+  const { stackService, sanitizedIds } = await withStackServiceForIds(c, parse.data.stackIds);
   const res = await stackService.bulkSetMediaType(sanitizedIds, parse.data.mediaType);
   return c.json(res);
 });
@@ -815,8 +817,8 @@ stacksRoute.put('/bulk/media-type', async (c) => {
 stacksRoute.put('/bulk/favorite', async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const parse = BulkFavoriteSchema.safeParse(body);
-  if (!parse.success) return c.json({error: 'Invalid body', details: parse.error}, 400);
-  const {stackService, sanitizedIds} = await withStackServiceForIds(c, parse.data.stackIds);
+  if (!parse.success) return c.json({ error: 'Invalid body', details: parse.error }, 400);
+  const { stackService, sanitizedIds } = await withStackServiceForIds(c, parse.data.stackIds);
   const res = await stackService.bulkSetFavorite(sanitizedIds, parse.data.favorited);
   return c.json(res);
 });
@@ -825,8 +827,8 @@ stacksRoute.put('/bulk/favorite', async (c) => {
 stacksRoute.post('/bulk/refresh-thumbnails', async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const parse = BulkRefreshThumbsSchema.safeParse(body);
-  if (!parse.success) return c.json({error: 'Invalid body', details: parse.error}, 400);
-  const {stackService, sanitizedIds} = await withStackServiceForIds(c, parse.data.stackIds);
+  if (!parse.success) return c.json({ error: 'Invalid body', details: parse.error }, 400);
+  const { stackService, sanitizedIds } = await withStackServiceForIds(c, parse.data.stackIds);
   const res = await stackService.bulkRefreshThumbnails(sanitizedIds);
   return c.json(res);
 });
@@ -835,18 +837,18 @@ stacksRoute.post('/bulk/refresh-thumbnails', async (c) => {
 stacksRoute.post('/merge', async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const parse = MergeStacksSchema.safeParse(body);
-  if (!parse.success) return c.json({error: 'Invalid body', details: parse.error}, 400);
-  const {targetId, sourceIds} = parse.data;
+  if (!parse.success) return c.json({ error: 'Invalid body', details: parse.error }, 400);
+  const { targetId, sourceIds } = parse.data;
   const sanitized = sanitizeStackIds([targetId, ...sourceIds]);
   const [sanitizedTarget, ...sanitizedSources] = sanitized;
-  const {stackService, prisma} = await withStackServiceForIds(c, sanitized);
+  const { stackService, prisma } = await withStackServiceForIds(c, sanitized);
   const updated = await stackService.mergeStacks(sanitizedTarget, sanitizedSources);
-  const assetCount = await prisma.asset.count({where: {stackId: sanitizedTarget}});
+  const assetCount = await prisma.asset.count({ where: { stackId: sanitizedTarget } });
   return c.json({
     success: true,
     targetId: sanitizedTarget,
     merged: sanitizedSources.length,
-    stack: {...updated, assetCount},
+    stack: { ...updated, assetCount },
   });
 });
 
@@ -854,8 +856,8 @@ stacksRoute.post('/merge', async (c) => {
 stacksRoute.delete('/bulk/remove', async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const parse = BulkRemoveSchema.safeParse(body);
-  if (!parse.success) return c.json({error: 'Invalid body', details: parse.error}, 400);
-  const {stackService, sanitizedIds} = await withStackServiceForIds(c, parse.data.stackIds);
+  if (!parse.success) return c.json({ error: 'Invalid body', details: parse.error }, 400);
+  const { stackService, sanitizedIds } = await withStackServiceForIds(c, parse.data.stackIds);
   const res = await stackService.bulkRemoveStacks(sanitizedIds);
   return c.json(res);
 });
@@ -865,10 +867,10 @@ stacksRoute.delete('/:id{[0-9]+}', async (c) => {
   const id = Number.parseInt(c.req.param('id'));
   const prisma = usePrisma(c);
   const ds = await resolveDatasetId(prisma, id);
-  const colorSearch = createColorSearchService({prisma, dataSetId: ds});
-  const stackService = createStackService({prisma, colorSearch, dataSetId: ds});
+  const colorSearch = createColorSearchService({ prisma, dataSetId: ds });
+  const stackService = createStackService({ prisma, colorSearch, dataSetId: ds });
   await stackService.delete(id);
-  return c.json({message: 'Stack deleted successfully'});
+  return c.json({ message: 'Stack deleted successfully' });
 });
 
 // PUT /stacks/:id/author - update author name
@@ -878,14 +880,14 @@ stacksRoute.put('/:id{[0-9]+}/author', async (c) => {
   try {
     const body = await c.req.json().catch(() => ({}) as any);
     const name = String(body?.author || body?.name || '').trim();
-    if (!name) return c.json({error: 'Author name is required'}, 400);
+    if (!name) return c.json({ error: 'Author name is required' }, 400);
     const ds = await resolveDatasetId(prisma, id);
-    const stacksService = createStacksService({prisma});
+    const stacksService = createStacksService({ prisma });
     const res = await stacksService.updateAuthor(id, ds, name);
     return c.json(res);
   } catch (error) {
     console.error('Error updating author:', error);
-    return c.json({error: 'Failed to update author'}, 500);
+    return c.json({ error: 'Failed to update author' }, 500);
   }
 });
 
@@ -900,10 +902,10 @@ stacksRoute.get('/:id{[0-9]+}', async (c) => {
     effectiveDs
   );
   if (auth) return auth;
-  const colorSearch = createColorSearchService({prisma, dataSetId: effectiveDs});
-  const stackService = createStackService({prisma, colorSearch, dataSetId: effectiveDs});
-  const stack = await stackService.getById(id, {assets: true, tags: true, author: true});
-  if (!stack) return c.json({error: 'Stack not found'}, 404);
+  const colorSearch = createColorSearchService({ prisma, dataSetId: effectiveDs });
+  const stackService = createStackService({ prisma, colorSearch, dataSetId: effectiveDs });
+  const stack = await stackService.getById(id, { assets: true, tags: true, author: true });
+  if (!stack) return c.json({ error: 'Stack not found' }, 404);
   const sanitized: any = {
     ...stack,
     assets: withPublicAssetArray(stack.assets as any[], effectiveDs),
@@ -917,7 +919,7 @@ stacksRoute.post('/', async (c) => {
   try {
     const formData = await c.req.formData();
     const file = formData.get('file') as File | null;
-    if (!file) return c.json({error: 'File is required'}, 400);
+    if (!file) return c.json({ error: 'File is required' }, 400);
 
     // dataset id (accept multiple keys for robustness)
     const dsRaw = (formData.get('dataSetId') ||
@@ -925,7 +927,7 @@ stacksRoute.post('/', async (c) => {
       formData.get('dataSetID')) as string | null;
     const dataSetId = dsRaw ? Number.parseInt(dsRaw) : Number.NaN;
     if (Number.isNaN(dataSetId) || dataSetId <= 0)
-      return c.json({error: 'dataSetId is required'}, 400);
+      return c.json({ error: 'dataSetId is required' }, 400);
 
     const name = (formData.get('name') as string | null) || (file as any).name || 'untitled';
     const explicitMediaType = (formData.get('mediaType') as string | null) || undefined;
@@ -946,14 +948,14 @@ stacksRoute.post('/', async (c) => {
     const buf = new Uint8Array(await file.arrayBuffer());
     const storageRoot = process.env.FILES_STORAGE || path.resolve('./data');
     const tmpDir = path.join(storageRoot, 'tmp');
-    if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, {recursive: true});
+    if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
     const tmpPath = path.join(tmpDir, `${Date.now()}-${(file as any).name || 'upload'}`);
     fs.writeFileSync(tmpPath, buf);
 
     // Compose services
     const prisma = usePrisma(c);
-    const colorSearch = createColorSearchService({prisma, dataSetId});
-    const stackService = createStackService({prisma, colorSearch, dataSetId});
+    const colorSearch = createColorSearchService({ prisma, dataSetId });
+    const stackService = createStackService({ prisma, colorSearch, dataSetId });
 
     // Create stack with file
     const stack = await stackService.createWithFile({
@@ -982,7 +984,7 @@ stacksRoute.post('/', async (c) => {
       );
     }
     console.error('Error creating stack with file:', error);
-    return c.json({error: 'Failed to create stack'}, 500);
+    return c.json({ error: 'Failed to create stack' }, 500);
   }
 });
 
@@ -990,13 +992,13 @@ stacksRoute.post('/import-from-urls', async (c) => {
   const body = await c.req.json().catch(() => null);
   const parse = ImportFromUrlsSchema.safeParse(body);
   if (!parse.success) {
-    return c.json({error: 'Invalid body', details: parse.error}, 400);
+    return c.json({ error: 'Invalid body', details: parse.error }, 400);
   }
 
-  const {urls, dataSetId, stackId, mediaType, collectionId, author, tags} = parse.data;
+  const { urls, dataSetId, stackId, mediaType, collectionId, author, tags } = parse.data;
 
   if (!stackId && !dataSetId) {
-    return c.json({error: 'stackId or dataSetId is required'}, 400);
+    return c.json({ error: 'stackId or dataSetId is required' }, 400);
   }
 
   try {
@@ -1006,22 +1008,22 @@ stacksRoute.post('/import-from-urls', async (c) => {
     if (stackId) {
       effectiveDatasetId = await resolveDatasetId(prisma, stackId);
       if (dataSetId && effectiveDatasetId !== dataSetId) {
-        return c.json({error: 'Stack does not belong to provided dataset'}, 400);
+        return c.json({ error: 'Stack does not belong to provided dataset' }, 400);
       }
     }
 
     if (!effectiveDatasetId) {
-      return c.json({error: 'dataSetId is required'}, 400);
+      return c.json({ error: 'dataSetId is required' }, 400);
     }
 
-    const {ensureDatasetAuthorized} = await import('../utils/dataset-protection');
+    const { ensureDatasetAuthorized } = await import('../utils/dataset-protection');
     const auth = await ensureDatasetAuthorized(c as any, effectiveDatasetId);
     if (auth) {
       return auth;
     }
 
-    const colorSearch = createColorSearchService({prisma, dataSetId: effectiveDatasetId});
-    const stackService = createStackService({prisma, colorSearch, dataSetId: effectiveDatasetId});
+    const colorSearch = createColorSearchService({ prisma, dataSetId: effectiveDatasetId });
+    const stackService = createStackService({ prisma, colorSearch, dataSetId: effectiveDatasetId });
     const assetService = createAssetService({
       prisma,
       dataStorage: useDataStorage(c),
@@ -1031,7 +1033,7 @@ stacksRoute.post('/import-from-urls', async (c) => {
 
     const storageRoot = process.env.FILES_STORAGE || path.resolve('./data');
     const tmpDir = path.join(storageRoot, 'tmp');
-    if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, {recursive: true});
+    if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
 
     const results: Array<{
       url: string;
@@ -1042,7 +1044,12 @@ stacksRoute.post('/import-from-urls', async (c) => {
     }> = [];
 
     for (const url of urls) {
-      let downloaded: {path: string; originalname: string; mimetype: string; size: number} | null = null;
+      let downloaded: {
+        path: string;
+        originalname: string;
+        mimetype: string;
+        size: number;
+      } | null = null;
       try {
         downloaded = await downloadRemoteAsset(url, tmpDir);
 
@@ -1059,7 +1066,8 @@ stacksRoute.post('/import-from-urls', async (c) => {
 
         const createdStack = await stackService.createWithFile({
           name: downloaded.originalname,
-          mediaType: mediaType ?? inferMediaTypeFromMime(downloaded.mimetype, downloaded.originalname),
+          mediaType:
+            mediaType ?? inferMediaTypeFromMime(downloaded.mimetype, downloaded.originalname),
           tags,
           author,
           file: downloaded,
@@ -1085,7 +1093,7 @@ stacksRoute.post('/import-from-urls', async (c) => {
       } catch (error) {
         if (downloaded) {
           try {
-            fs.rmSync(downloaded.path, {force: true});
+            fs.rmSync(downloaded.path, { force: true });
           } catch (cleanupError) {
             console.warn('Failed to clean up temp file after URL import error', cleanupError);
           }
@@ -1098,13 +1106,13 @@ stacksRoute.post('/import-from-urls', async (c) => {
           message = error.message;
         }
 
-        results.push({url, status: 'error', message});
+        results.push({ url, status: 'error', message });
       }
     }
 
-    return c.json({results});
+    return c.json({ results });
   } catch (error) {
     console.error('Error importing assets from URLs:', error);
-    return c.json({error: 'Failed to import from URLs'}, 500);
+    return c.json({ error: 'Failed to import from URLs' }, 500);
   }
 });

@@ -75,7 +75,7 @@ export default function StackGrid({
 }: StackGridProps) {
   const queryClient = useQueryClient();
   const currentFilter = useAtomValue(currentFilterAtom);
-  const dsId = (dataset?.id ? String(dataset.id) : String((currentFilter as any)?.datasetId || '1'));
+  const dsId = dataset?.id ? String(dataset.id) : String((currentFilter as any)?.datasetId || '1');
   const { scratch } = useScratch(dsId);
   const setSelectionMode = useSetAtom(selectionModeAtom);
   const reorderMode = useAtomValue(reorderModeAtom);
@@ -194,7 +194,15 @@ export default function StackGrid({
       lastClickedIndexRef.current = idx >= 0 ? idx : lastClickedIndexRef.current;
       handleItemClick(item, onItemClick);
     },
-    [actualItems, selectedItems, setSelectedItems, setSelectionMode, handleToggleSelection, handleItemClick, onItemClick]
+    [
+      actualItems,
+      selectedItems,
+      setSelectedItems,
+      setSelectionMode,
+      handleToggleSelection,
+      handleItemClick,
+      onItemClick,
+    ]
   );
 
   // Track processed notification IDs to avoid duplicate refreshes
@@ -358,11 +366,13 @@ export default function StackGrid({
   // Handle remove from scratch (single)
   const handleRemoveFromScratchSingle = async (id: string | number) => {
     try {
-      const collectionId = scratchCollectionId ?? (window.location.pathname.match(/scratch\/(\d+)/)?.[1]);
+      const collectionId =
+        scratchCollectionId ?? window.location.pathname.match(/scratch\/(\d+)/)?.[1];
       if (!collectionId) return;
       const stackId = typeof id === 'string' ? Number.parseInt(id, 10) : id;
       await apiClient.removeStackFromCollection(collectionId, stackId);
-      if (onRefreshAll) await onRefreshAll(); else void queryClient.invalidateQueries({ queryKey: ['stacks'] });
+      if (onRefreshAll) await onRefreshAll();
+      else void queryClient.invalidateQueries({ queryKey: ['stacks'] });
       await queryClient.invalidateQueries({ queryKey: ['library-counts', dsId] });
     } catch (error) {
       console.error('❌ Failed to remove from scratch:', error);
@@ -690,9 +700,13 @@ export default function StackGrid({
                   itemIndex={reorderMode ? actualIndex : undefined}
                   onReorderDrop={reorderMode ? onReorderStacks : undefined}
                   allowRemoveFromCollection={allowRemoveFromCollection}
-                  onRemoveFromCollection={allowRemoveFromCollection ? (id) => handleRemoveFromCollection([id]) : undefined}
+                  onRemoveFromCollection={
+                    allowRemoveFromCollection ? (id) => handleRemoveFromCollection([id]) : undefined
+                  }
                   allowRemoveFromScratch={allowRemoveFromScratch}
-                  onRemoveFromScratch={allowRemoveFromScratch ? handleRemoveFromScratchSingle : undefined}
+                  onRemoveFromScratch={
+                    allowRemoveFromScratch ? handleRemoveFromScratchSingle : undefined
+                  }
                 />
               );
             })}
@@ -723,9 +737,7 @@ export default function StackGrid({
 
         {/* Empty state - show when we have no items */}
         {actualTotal === 0 && !actualIsLoading && emptyState && (
-          <div
-            className="absolute inset-0 flex items-center justify-center pointer-events-none"
-          >
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div className="text-center">
               <span className="text-6xl mb-4 block">{emptyState.icon}</span>
               <p className="text-gray-300 mb-2">{emptyState.title}</p>
@@ -756,7 +768,9 @@ export default function StackGrid({
         onClearSelection={clearSelection}
         onExitSelectionMode={exitSelectionMode}
         onRemoveFromCollection={
-          allowRemoveFromCollection ? () => handleRemoveFromCollection(Array.from(selectedItems)) : undefined
+          allowRemoveFromCollection
+            ? () => handleRemoveFromCollection(Array.from(selectedItems))
+            : undefined
         }
         showRemoveFromCollection={allowRemoveFromCollection}
         actions={

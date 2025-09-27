@@ -6,7 +6,12 @@ import { StackGridItem } from '@/components/grid/StackGridItem';
 import type { MediaGridItem } from '@/types';
 import { cn } from '@/lib/utils';
 import { useAtom } from 'jotai';
-import { currentFilterAtom, infoSidebarOpenAtom, selectedItemIdAtom, selectionModeAtom } from '@/stores/ui';
+import {
+  currentFilterAtom,
+  infoSidebarOpenAtom,
+  selectedItemIdAtom,
+  selectionModeAtom,
+} from '@/stores/ui';
 import { SelectionActionBar } from '@/components/ui/selection-action-bar';
 import BulkEditPanel, { type EditUpdates } from '@/components/BulkEditPanel';
 import { createPortal } from 'react-dom';
@@ -131,11 +136,26 @@ function SimilarStacksRoute() {
       const ids = loadedIdsLtr.slice().reverse();
       const clickedId =
         typeof item.id === 'string' ? Number.parseInt(item.id as string, 10) : (item.id as number);
-      const currentIndex = Math.max(0, ids.findIndex((id) => id === clickedId));
+      const currentIndex = Math.max(
+        0,
+        ids.findIndex((id) => id === clickedId)
+      );
 
       const mediaType = (item as any).mediaType as string | undefined;
-      const token = genListToken({ datasetId, mediaType, filters: { similarTo: Number(stackId) } as any });
-      saveViewContext({ token, datasetId, mediaType: mediaType as any, filters: { similarTo: Number(stackId) } as any, ids, currentIndex, createdAt: Date.now() });
+      const token = genListToken({
+        datasetId,
+        mediaType,
+        filters: { similarTo: Number(stackId) } as any,
+      });
+      saveViewContext({
+        token,
+        datasetId,
+        mediaType: mediaType as any,
+        filters: { similarTo: Number(stackId) } as any,
+        ids,
+        currentIndex,
+        createdAt: Date.now(),
+      });
 
       navigate({
         to: '/library/$datasetId/stacks/$stackId',
@@ -143,7 +163,18 @@ function SimilarStacksRoute() {
         search: { page: 0, mediaType, listToken: token },
       });
     },
-    [items, selectionMode, selectedItems, datasetId, stackId, setSelectionMode, handleToggleSelection, navigate, infoSidebarOpen, setSelectedItemId]
+    [
+      items,
+      selectionMode,
+      selectedItems,
+      datasetId,
+      stackId,
+      setSelectionMode,
+      handleToggleSelection,
+      navigate,
+      infoSidebarOpen,
+      setSelectedItemId,
+    ]
   );
 
   // Favorite toggle
@@ -207,13 +238,10 @@ function SimilarStacksRoute() {
     }
   }, [selectedItems, refreshThumbnails, exitSelectionMode, refetch]);
 
-  const removeStacks = useCallback(
-    async (stackIds: (string | number)[]) => {
-      if (stackIds.length === 0) return;
-      await apiClient.bulkRemoveStacks(stackIds);
-    },
-    []
-  );
+  const removeStacks = useCallback(async (stackIds: (string | number)[]) => {
+    if (stackIds.length === 0) return;
+    await apiClient.bulkRemoveStacks(stackIds);
+  }, []);
 
   const handleRemoveStacks = useCallback(async () => {
     if (selectedItems.size === 0) return;

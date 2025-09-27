@@ -13,9 +13,7 @@ export const HeaderOnly: Story = {
 };
 
 export const WithAction: Story = {
-  render: () => (
-    <SectionHeader title="Recent Items" action={<a href="#more">See all ›</a>} />
-  ),
+  render: () => <SectionHeader title="Recent Items" action={<a href="#more">See all ›</a>} />,
 };
 
 export const Block: Story = {
@@ -29,4 +27,3 @@ export const Block: Story = {
     </SectionBlock>
   ),
 };
-

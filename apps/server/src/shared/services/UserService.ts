@@ -1,4 +1,4 @@
-import type {PrismaClient} from '@prisma/client';
+import type { PrismaClient } from '@prisma/client';
 
 const SUPER_USER_NAME = 'super';
 let cachedSuperUserId: number | null = null;
@@ -13,7 +13,7 @@ export async function ensureSuperUser(prisma: PrismaClient): Promise<number> {
   }
 
   const user = await prisma.user.upsert({
-    where: {name: SUPER_USER_NAME},
+    where: { name: SUPER_USER_NAME },
     update: {},
     create: {
       name: SUPER_USER_NAME,

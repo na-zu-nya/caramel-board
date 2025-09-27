@@ -38,7 +38,9 @@ function AutoTagStacksPage() {
   const [total, setTotal] = useState(0);
   const [items, setItems] = useState<(MediaGridItem | undefined)[]>([]);
   const itemsRef = useRef<(MediaGridItem | undefined)[]>([]);
-  useEffect(() => { itemsRef.current = items; }, [items]);
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
   const [isLoading, setIsLoading] = useState(false);
   const loadingRangesRef = useRef<Set<string>>(new Set());
   const isEmptyRef = useRef(false);
@@ -58,7 +60,9 @@ function AutoTagStacksPage() {
       setTimeout(() => requestAnimationFrame(() => step(n - 1)), delay);
     };
     step(retries);
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Initialize/reset when key changes
@@ -150,7 +154,10 @@ function AutoTagStacksPage() {
         }
         setItems((prev) => {
           const totalLen = totalFromServer;
-          const base = prev.length === totalLen && totalLen > 0 ? [...prev] : new Array(totalLen).fill(undefined);
+          const base =
+            prev.length === totalLen && totalLen > 0
+              ? [...prev]
+              : new Array(totalLen).fill(undefined);
           res.stacks.forEach((s, idx) => {
             const i = offset + idx;
             if (i < base.length) {
@@ -219,14 +226,27 @@ function AutoTagStacksPage() {
     // Build ordered ids (right→left) from currently loaded items
     const loadedIdsLtr = (items || [])
       .filter((it): it is MediaGridItem => !!it)
-      .map((it) => (typeof it.id === 'string' ? Number.parseInt(it.id as string, 10) : (it.id as number)));
+      .map((it) =>
+        typeof it.id === 'string' ? Number.parseInt(it.id as string, 10) : (it.id as number)
+      );
     const ids = loadedIdsLtr.slice().reverse();
-    const clickedId = typeof item.id === 'string' ? Number.parseInt(item.id as string, 10) : (item.id as number);
-    const currentIndex = Math.max(0, ids.findIndex((id) => id === clickedId));
+    const clickedId =
+      typeof item.id === 'string' ? Number.parseInt(item.id as string, 10) : (item.id as number);
+    const currentIndex = Math.max(
+      0,
+      ids.findIndex((id) => id === clickedId)
+    );
 
     const mediaType = (item as any).mediaType as string | undefined;
     const token = genListToken({ datasetId, mediaType });
-    saveViewContext({ token, datasetId, mediaType: mediaType as any, ids, currentIndex, createdAt: Date.now() });
+    saveViewContext({
+      token,
+      datasetId,
+      mediaType: mediaType as any,
+      ids,
+      currentIndex,
+      createdAt: Date.now(),
+    });
 
     navigate({
       to: '/library/$datasetId/stacks/$stackId',

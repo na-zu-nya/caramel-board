@@ -65,7 +65,8 @@ export default function Header() {
   const isNavigationPinActive = (pin: any) => {
     const path = location.pathname;
     if (pin.type === 'COLLECTION' && pin.collectionId) {
-      const scratch = (pin.collection && isScratchCollection(pin.collection)) || pin.name === 'Scratch';
+      const scratch =
+        (pin.collection && isScratchCollection(pin.collection)) || pin.name === 'Scratch';
       return scratch
         ? path.includes(`/scratch/${pin.collectionId}`)
         : path.includes(`/collections/${pin.collectionId}`);
@@ -85,9 +86,13 @@ export default function Header() {
   const handleNavigationPinClick = (pin: any) => {
     if (pin.type === 'COLLECTION' && pin.collectionId) {
       // Scratch pins are stored as COLLECTION type; detect and route to scratch page
-      const isScratch = (pin.collection && isScratchCollection(pin.collection)) || pin.name === 'Scratch';
+      const isScratch =
+        (pin.collection && isScratchCollection(pin.collection)) || pin.name === 'Scratch';
       if (isScratch) {
-        navigate({ to: '/library/$datasetId/scratch/$scratchId', params: { datasetId, scratchId: String(pin.collectionId) } });
+        navigate({
+          to: '/library/$datasetId/scratch/$scratchId',
+          params: { datasetId, scratchId: String(pin.collectionId) },
+        });
       } else {
         navigate({
           to: '/library/$datasetId/collections/$collectionId',

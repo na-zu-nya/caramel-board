@@ -1,4 +1,4 @@
-import {prisma} from '../di';
+import { prisma } from '../di';
 
 export interface PaginationOptions {
   limit: number;

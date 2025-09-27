@@ -16,7 +16,16 @@ interface DropZoneProps {
   disabled?: boolean;
 }
 
-const QUALITY_KEYWORDS = ['original', 'orig', 'master', 'large', 'medium', 'small', 'thumb', 'mini'];
+const QUALITY_KEYWORDS = [
+  'original',
+  'orig',
+  'master',
+  'large',
+  'medium',
+  'small',
+  'thumb',
+  'mini',
+];
 const EXTENSION_PRIORITY = ['.png', '.webp', '.jpeg', '.jpg', '.gif', '.bmp', '.svg'];
 const FILENAME_PATTERNS = [
   /_master\d+/gi,
@@ -247,7 +256,9 @@ export function DropZone({
       const fileHandler = onDrop ?? onFilesDrop;
       const shouldHandleFiles = hasFilePayload && typeof fileHandler === 'function';
       const shouldHandleUrls =
-        urls.length > 0 && typeof onUrlDrop === 'function' && (!hasFilePayload || !shouldHandleFiles);
+        urls.length > 0 &&
+        typeof onUrlDrop === 'function' &&
+        (!hasFilePayload || !shouldHandleFiles);
 
       if (!shouldHandleFiles && !shouldHandleUrls) {
         return; // Let stack drops bubble to items

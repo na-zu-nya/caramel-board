@@ -1,4 +1,4 @@
-import {toPublicAssetPath, withPublicAssetArray} from './assetPath';
+import { toPublicAssetPath, withPublicAssetArray } from './assetPath';
 
 /**
  * Common helper functions for stack processing
@@ -22,10 +22,7 @@ export function processStackThumbnail<T extends StackWithAssets>(
   stack: T
 ): T & { thumbnail: string } {
   const assets = withPublicAssetArray(stack.assets as any[], stack.dataSetId);
-  const thumbnail = toPublicAssetPath(
-    assets[0]?.thumbnail || stack.thumbnail,
-    stack.dataSetId
-  );
+  const thumbnail = toPublicAssetPath(assets[0]?.thumbnail || stack.thumbnail, stack.dataSetId);
 
   return {
     ...stack,

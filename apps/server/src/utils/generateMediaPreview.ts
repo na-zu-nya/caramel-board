@@ -6,15 +6,7 @@ import { DataStorage } from '../lib/DataStorage';
 import { buildPreviewKey } from './assetPath';
 import { getFFMPEGPath, probeHasAudioStream } from './ffmpeg';
 
-const SUPPORTED_EXTENSIONS = new Set([
-  'gif',
-  'mov',
-  'mp4',
-  'avi',
-  'mkv',
-  'webm',
-  'm4v',
-]);
+const SUPPORTED_EXTENSIONS = new Set(['gif', 'mov', 'mp4', 'avi', 'mkv', 'webm', 'm4v']);
 
 interface GeneratePreviewOptions {
   dataSetId?: number;
@@ -69,16 +61,7 @@ export const generateMediaPreview = async (
 
   const hasAudio = ext !== 'gif' && probeHasAudioStream(inputPath);
   if (hasAudio) {
-    args.push(
-      '-c:a',
-      'aac',
-      '-ac',
-      '2',
-      '-ar',
-      '48000',
-      '-b:a',
-      '128k'
-    );
+    args.push('-c:a', 'aac', '-ac', '2', '-ar', '48000', '-b:a', '128k');
   } else {
     args.push('-an');
   }

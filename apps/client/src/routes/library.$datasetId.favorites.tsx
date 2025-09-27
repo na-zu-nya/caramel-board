@@ -74,7 +74,9 @@ function FavoritesPage() {
     const MAX = 0x100000000;
     const bound = MAX - (MAX % total);
     let r: number;
-    do { r = mtRef.current!.random_int(); } while (r >= bound);
+    do {
+      r = mtRef.current!.random_int();
+    } while (r >= bound);
     const targetIndex = r % total;
     const pageIndex = Math.floor(targetIndex / PAGE_SIZE);
     const withinPageIndex = targetIndex % PAGE_SIZE;
@@ -82,13 +84,39 @@ function FavoritesPage() {
     const item = page?.stacks?.[withinPageIndex] || allItems[targetIndex];
     if (!item) return;
 
-    const ids = (page?.stacks || []).map((s) => (typeof s.id === 'string' ? Number.parseInt(s.id as string, 10) : (s.id as number))).reverse();
-    const clickedId = typeof item.id === 'string' ? Number.parseInt(item.id as string, 10) : (item.id as number);
-    const currentIndex = Math.max(0, ids.findIndex((id) => id === clickedId));
-    const token = genListToken({ datasetId, mediaType: (item as any).mediaType, filters: { ...currentFilter, datasetId, isFavorite: true }, sort: currentSort });
-    saveViewContext({ token, datasetId, mediaType: (item as any).mediaType, filters: { ...currentFilter, datasetId, isFavorite: true } as any, sort: currentSort, ids, currentIndex, createdAt: Date.now() });
+    const ids = (page?.stacks || [])
+      .map((s) =>
+        typeof s.id === 'string' ? Number.parseInt(s.id as string, 10) : (s.id as number)
+      )
+      .reverse();
+    const clickedId =
+      typeof item.id === 'string' ? Number.parseInt(item.id as string, 10) : (item.id as number);
+    const currentIndex = Math.max(
+      0,
+      ids.findIndex((id) => id === clickedId)
+    );
+    const token = genListToken({
+      datasetId,
+      mediaType: (item as any).mediaType,
+      filters: { ...currentFilter, datasetId, isFavorite: true },
+      sort: currentSort,
+    });
+    saveViewContext({
+      token,
+      datasetId,
+      mediaType: (item as any).mediaType,
+      filters: { ...currentFilter, datasetId, isFavorite: true } as any,
+      sort: currentSort,
+      ids,
+      currentIndex,
+      createdAt: Date.now(),
+    });
 
-    navigate({ to: '/library/$datasetId/stacks/$stackId', params: { datasetId, stackId: String(item.id) }, search: { page: 0, mediaType: (item as any).mediaType, listToken: token } });
+    navigate({
+      to: '/library/$datasetId/stacks/$stackId',
+      params: { datasetId, stackId: String(item.id) },
+      search: { page: 0, mediaType: (item as any).mediaType, listToken: token },
+    });
   }, [total, allItems, datasetId, currentFilter, currentSort, navigate, loadPage]);
 
   useHeaderActions({ ...headerActionsConfig, onShuffle: handleShuffle });
@@ -108,7 +136,9 @@ function FavoritesPage() {
       setTimeout(() => requestAnimationFrame(() => step(n - 1)), delay);
     };
     step(retries);
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Load initial items when total is available and no pages are loaded
@@ -178,14 +208,25 @@ function FavoritesPage() {
     // 現在ロード済みのウィンドウから右→左順のID配列を構築
     const loadedIdsLtr = (allItems || [])
       .filter((it): it is MediaGridItem => !!it)
-      .map((it) => (typeof it.id === 'string' ? Number.parseInt(it.id as string, 10) : (it.id as number)));
+      .map((it) =>
+        typeof it.id === 'string' ? Number.parseInt(it.id as string, 10) : (it.id as number)
+      );
     const ids = loadedIdsLtr.slice().reverse();
-    const clickedId = typeof item.id === 'string' ? Number.parseInt(item.id as string, 10) : (item.id as number);
-    const currentIndex = Math.max(0, ids.findIndex((id) => id === clickedId));
+    const clickedId =
+      typeof item.id === 'string' ? Number.parseInt(item.id as string, 10) : (item.id as number);
+    const currentIndex = Math.max(
+      0,
+      ids.findIndex((id) => id === clickedId)
+    );
 
     // ViewContext を保存（お気に入りフィルタ固定）
     const mediaType = (item as any).mediaType as string | undefined;
-    const token = genListToken({ datasetId, mediaType, filters: { ...currentFilter, datasetId, isFavorite: true }, sort: currentSort });
+    const token = genListToken({
+      datasetId,
+      mediaType,
+      filters: { ...currentFilter, datasetId, isFavorite: true },
+      sort: currentSort,
+    });
     saveViewContext({
       token,
       datasetId,

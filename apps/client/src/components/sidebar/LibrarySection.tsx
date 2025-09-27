@@ -1,31 +1,42 @@
 // Removed MediaTypeContextMenu (pin/unpin) for Images/Comics/Videos per UX update
 // import {OverviewContextMenu} from '@/components/modals/OverviewContextMenu';
-import {DroppableSidebarItem} from '@/components/sidebar/DroppableSidebarItem';
+import { DroppableSidebarItem } from '@/components/sidebar/DroppableSidebarItem';
 import { SideMenuGroup, SideMenuListItem } from '@/components/ui/SideMenu';
 import { cn } from '@/lib/utils';
 import { DroppableSideMenuItem } from '@/components/ui/DroppableSideMenuItem';
-import {TagsSection} from '@/components/sidebar/TagsSection';
-import {AutoTagsSection} from '@/components/sidebar/AutoTagsSection';
-import {AuthorsSection} from '@/components/sidebar/AuthorsSection';
-import type {LibrarySectionProps} from '@/components/sidebar/types';
-import {apiClient} from '@/lib/api-client';
-import {useQuery, useQueryClient} from '@tanstack/react-query';
-import {NotebookText, BookOpen, Film, Heart, Home, Image, Star, Tag, User, ChevronRight} from 'lucide-react';
-import {useEffect, useRef, useState} from 'react';
+import { TagsSection } from '@/components/sidebar/TagsSection';
+import { AutoTagsSection } from '@/components/sidebar/AutoTagsSection';
+import { AuthorsSection } from '@/components/sidebar/AuthorsSection';
+import type { LibrarySectionProps } from '@/components/sidebar/types';
+import { apiClient } from '@/lib/api-client';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  NotebookText,
+  BookOpen,
+  Film,
+  Heart,
+  Home,
+  Image,
+  Star,
+  Tag,
+  User,
+  ChevronRight,
+} from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { useScratch } from '@/hooks/useScratch';
 import { ScratchContextMenu } from '@/components/modals/ScratchContextMenu';
 import { Link, useNavigate, useLocation } from '@tanstack/react-router';
 
 export function LibrarySection({
-                                 datasetId,
-                                 isCollapsed = false,
-                                 onToggle,
-                                 isPinned,
-                                 onPinMediaType,
-                                 onUnpinMediaType,
-                                 onPinOverview,
-                                 onUnpinOverview,
-                               }: LibrarySectionProps) {
+  datasetId,
+  isCollapsed = false,
+  onToggle,
+  isPinned,
+  onPinMediaType,
+  onUnpinMediaType,
+  onPinOverview,
+  onUnpinOverview,
+}: LibrarySectionProps) {
   const queryClient = useQueryClient();
   const { scratch, ensureScratch } = useScratch(datasetId);
   const navigate = useNavigate();
@@ -42,7 +53,12 @@ export function LibrarySection({
         apiClient.getStacks({ datasetId, filter: { mediaType: 'comic' }, limit: 1, offset: 0 }),
         apiClient.getStacks({ datasetId, filter: { mediaType: 'video' }, limit: 1, offset: 0 }),
         scratch?.id
-          ? apiClient.getStacks({ datasetId, filter: { collectionId: String(scratch.id) }, limit: 1, offset: 0 })
+          ? apiClient.getStacks({
+              datasetId,
+              filter: { collectionId: String(scratch.id) },
+              limit: 1,
+              offset: 0,
+            })
           : Promise.resolve({ total: 0 } as any),
       ]);
       return {
@@ -98,9 +114,15 @@ export function LibrarySection({
     prevAutoTagsCollapsed.current = autoTagsCollapsed;
     prevAuthorsCollapsed.current = authorsCollapsed;
   }, []);
-  useEffect(() => { prevTagsCollapsed.current = tagsCollapsed; }, [tagsCollapsed]);
-  useEffect(() => { prevAutoTagsCollapsed.current = autoTagsCollapsed; }, [autoTagsCollapsed]);
-  useEffect(() => { prevAuthorsCollapsed.current = authorsCollapsed; }, [authorsCollapsed]);
+  useEffect(() => {
+    prevTagsCollapsed.current = tagsCollapsed;
+  }, [tagsCollapsed]);
+  useEffect(() => {
+    prevAutoTagsCollapsed.current = autoTagsCollapsed;
+  }, [autoTagsCollapsed]);
+  useEffect(() => {
+    prevAuthorsCollapsed.current = authorsCollapsed;
+  }, [authorsCollapsed]);
 
   const toggleAuthorsCollapsed = () => {
     const newState = !authorsCollapsed;
@@ -125,12 +147,15 @@ export function LibrarySection({
     }
   };
 
-  const handleMediaTypeDrop = async (stackIds: number[], mediaType: 'image' | 'comic' | 'video') => {
+  const handleMediaTypeDrop = async (
+    stackIds: number[],
+    mediaType: 'image' | 'comic' | 'video'
+  ) => {
     try {
       await apiClient.bulkSetMediaType(stackIds, mediaType);
 
       // Invalidate all stack-related queries to refresh media type filters
-      await queryClient.invalidateQueries({queryKey: ['stacks']});
+      await queryClient.invalidateQueries({ queryKey: ['stacks'] });
       await queryClient.invalidateQueries({ queryKey: ['library-counts', datasetId] });
       await queryClient.invalidateQueries({ queryKey: ['tag-stacks'] });
       await queryClient.invalidateQueries({ queryKey: ['autotag-stacks'] });
@@ -184,11 +209,19 @@ export function LibrarySection({
           count={counts?.favorites}
           onStacksDrop={handleFavoriteDrop}
         >
-          <Link to="/library/$datasetId/favorites" params={{ datasetId }} activeProps={{ className: 'bg-gray-100 font-medium' }} />
+          <Link
+            to="/library/$datasetId/favorites"
+            params={{ datasetId }}
+            activeProps={{ className: 'bg-gray-100 font-medium' }}
+          />
         </DroppableSideMenuItem>
 
         <SideMenuListItem asChild icon={Heart} label="Likes" count={counts?.likes}>
-          <Link to="/library/$datasetId/likes" params={{ datasetId }} activeProps={{ className: 'bg-gray-100 font-medium' }} />
+          <Link
+            to="/library/$datasetId/likes"
+            params={{ datasetId }}
+            activeProps={{ className: 'bg-gray-100 font-medium' }}
+          />
         </SideMenuListItem>
 
         {/* Scratch */}
@@ -196,7 +229,10 @@ export function LibrarySection({
           <DroppableSideMenuItem
             onClick={async () => {
               const sc = scratch || (await ensureScratch());
-              navigate({ to: '/library/$datasetId/scratch/$scratchId', params: { datasetId, scratchId: String(sc.id) } });
+              navigate({
+                to: '/library/$datasetId/scratch/$scratchId',
+                params: { datasetId, scratchId: String(sc.id) },
+              });
             }}
             icon={NotebookText}
             label="Scratch"
@@ -219,7 +255,11 @@ export function LibrarySection({
           onPin={() => onPinMediaType?.('image', 'Image', 'Images')}
           onUnpin={() => onUnpinMediaType?.('image')}
         >
-          <Link to="/library/$datasetId/media-type/$mediaType" params={{ datasetId, mediaType: 'image' }} activeProps={{ className: 'bg-gray-100 font-medium' }} />
+          <Link
+            to="/library/$datasetId/media-type/$mediaType"
+            params={{ datasetId, mediaType: 'image' }}
+            activeProps={{ className: 'bg-gray-100 font-medium' }}
+          />
         </DroppableSideMenuItem>
 
         <DroppableSideMenuItem
@@ -234,7 +274,11 @@ export function LibrarySection({
           onPin={() => onPinMediaType?.('comic', 'BookOpen', 'Comics')}
           onUnpin={() => onUnpinMediaType?.('comic')}
         >
-          <Link to="/library/$datasetId/media-type/$mediaType" params={{ datasetId, mediaType: 'comic' }} activeProps={{ className: 'bg-gray-100 font-medium' }} />
+          <Link
+            to="/library/$datasetId/media-type/$mediaType"
+            params={{ datasetId, mediaType: 'comic' }}
+            activeProps={{ className: 'bg-gray-100 font-medium' }}
+          />
         </DroppableSideMenuItem>
 
         <DroppableSideMenuItem
@@ -249,12 +293,28 @@ export function LibrarySection({
           onPin={() => onPinMediaType?.('video', 'Film', 'Videos')}
           onUnpin={() => onUnpinMediaType?.('video')}
         >
-          <Link to="/library/$datasetId/media-type/$mediaType" params={{ datasetId, mediaType: 'video' }} activeProps={{ className: 'bg-gray-100 font-medium' }} />
+          <Link
+            to="/library/$datasetId/media-type/$mediaType"
+            params={{ datasetId, mediaType: 'video' }}
+            activeProps={{ className: 'bg-gray-100 font-medium' }}
+          />
         </DroppableSideMenuItem>
 
         <SideMenuListItem
-          label={(<span className="flex items-center gap-1.5"><Tag size={15} /><span>Tags</span></span>) as any}
-          right={<ChevronRight size={14} className={cn('ml-1 transition-transform', !tagsCollapsed && 'rotate-90')} />}
+          label={
+            (
+              <span className="flex items-center gap-1.5">
+                <Tag size={15} />
+                <span>Tags</span>
+              </span>
+            ) as any
+          }
+          right={
+            <ChevronRight
+              size={14}
+              className={cn('ml-1 transition-transform', !tagsCollapsed && 'rotate-90')}
+            />
+          }
           onClick={toggleTagsCollapsed}
         />
         {!tagsCollapsed && (
@@ -267,8 +327,20 @@ export function LibrarySection({
         )}
 
         <SideMenuListItem
-          label={(<span className="flex items-center gap-1.5"><Tag size={15} /><span>AutoTags</span></span>) as any}
-          right={<ChevronRight size={14} className={cn('ml-1 transition-transform', !autoTagsCollapsed && 'rotate-90')} />}
+          label={
+            (
+              <span className="flex items-center gap-1.5">
+                <Tag size={15} />
+                <span>AutoTags</span>
+              </span>
+            ) as any
+          }
+          right={
+            <ChevronRight
+              size={14}
+              className={cn('ml-1 transition-transform', !autoTagsCollapsed && 'rotate-90')}
+            />
+          }
           onClick={toggleAutoTagsCollapsed}
         />
         {!autoTagsCollapsed && (
@@ -281,8 +353,20 @@ export function LibrarySection({
         )}
 
         <SideMenuListItem
-          label={(<span className="flex items-center gap-1.5"><User size={15} /><span>Authors</span></span>) as any}
-          right={<ChevronRight size={14} className={cn('ml-1 transition-transform', !authorsCollapsed && 'rotate-90')} />}
+          label={
+            (
+              <span className="flex items-center gap-1.5">
+                <User size={15} />
+                <span>Authors</span>
+              </span>
+            ) as any
+          }
+          right={
+            <ChevronRight
+              size={14}
+              className={cn('ml-1 transition-transform', !authorsCollapsed && 'rotate-90')}
+            />
+          }
           onClick={toggleAuthorsCollapsed}
         />
         {!authorsCollapsed && (

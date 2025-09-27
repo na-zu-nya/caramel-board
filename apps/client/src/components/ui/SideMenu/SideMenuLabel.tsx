@@ -10,7 +10,13 @@ export interface SideMenuLabelProps {
   className?: string;
 }
 
-export function SideMenuLabel({ label, collapsed = false, onToggle, action, className }: SideMenuLabelProps) {
+export function SideMenuLabel({
+  label,
+  collapsed = false,
+  onToggle,
+  action,
+  className,
+}: SideMenuLabelProps) {
   return (
     <div className={cn('flex items-center justify-between mb-1', className)}>
       <button
@@ -25,4 +31,3 @@ export function SideMenuLabel({ label, collapsed = false, onToggle, action, clas
     </div>
   );
 }
-

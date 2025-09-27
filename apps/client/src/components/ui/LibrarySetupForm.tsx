@@ -1,11 +1,11 @@
-import {Button} from '@/components/ui/button';
-import {Input} from '@/components/ui/input';
-import {Label} from '@/components/ui/label';
-import {cn} from '@/lib/utils';
-import {Loader2, Sparkles, Plus} from 'lucide-react';
-import {Popover, PopoverContent, PopoverTrigger} from '@/components/ui/popover';
-import EmojiPicker, {type EmojiClickData} from 'emoji-picker-react';
-import React, {useState} from 'react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
+import { Loader2, Sparkles, Plus } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import EmojiPicker, { type EmojiClickData } from 'emoji-picker-react';
+import React, { useState } from 'react';
 
 export interface LibrarySetupFormProps {
   name: string;
@@ -71,11 +71,11 @@ export function LibrarySetupForm({
         <div className="p-8 text-center">
           <div
             className="mx-auto mb-4 flex h-24 w-24 items-center justify-center rounded-2xl bg-white shadow-lg transition-transform duration-200 hover:scale-105"
-            style={{boxShadow: `0 8px 32px ${color}40`}}
+            style={{ boxShadow: `0 8px 32px ${color}40` }}
           >
             <span className="text-5xl">{icon}</span>
           </div>
-          <h3 className="text-2xl font-bold text-gray-900" style={{color: color}}>
+          <h3 className="text-2xl font-bold text-gray-900" style={{ color: color }}>
             {name || '新しいライブラリ'}
           </h3>
           {description && <p className="mt-2 text-sm text-gray-600">{description}</p>}
@@ -121,16 +121,18 @@ export function LibrarySetupForm({
                       : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm',
                     'focus:outline-none focus:ring-2 focus:ring-offset-2'
                   )}
-                  style={{
-                    borderColor: icon === emoji ? '#C7743C' : undefined,
-                    '--tw-ring-color': '#C7743C'
-                  } as React.CSSProperties}
+                  style={
+                    {
+                      borderColor: icon === emoji ? '#C7743C' : undefined,
+                      '--tw-ring-color': '#C7743C',
+                    } as React.CSSProperties
+                  }
                 >
                   {emoji}
                 </button>
               ))}
             </div>
-            
+
             {/* お菓子系絵文字 + 拡張ボタン */}
             <div className="grid grid-cols-6 gap-2">
               {SWEET_EMOJIS.map((emoji) => (
@@ -148,15 +150,17 @@ export function LibrarySetupForm({
                       : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm',
                     'focus:outline-none focus:ring-2 focus:ring-offset-2'
                   )}
-                  style={{
-                    borderColor: icon === emoji ? '#C7743C' : undefined,
-                    '--tw-ring-color': '#C7743C'
-                  } as React.CSSProperties}
+                  style={
+                    {
+                      borderColor: icon === emoji ? '#C7743C' : undefined,
+                      '--tw-ring-color': '#C7743C',
+                    } as React.CSSProperties
+                  }
                 >
                   {emoji}
                 </button>
               ))}
-              
+
               {/* 絵文字拡張ボタン */}
               <Popover>
                 <PopoverTrigger asChild>
@@ -169,13 +173,13 @@ export function LibrarySetupForm({
                   </button>
                 </PopoverTrigger>
                 <PopoverContent align="start" className="p-0 border bg-white shadow-lg z-50">
-                  <EmojiPicker 
-                    autoFocusSearch={false} 
-                    lazyLoadEmojis 
+                  <EmojiPicker
+                    autoFocusSearch={false}
+                    lazyLoadEmojis
                     onEmojiClick={(emojiData: EmojiClickData) => {
                       onIconChange(emojiData.emoji);
-                    }} 
-                    theme="auto" 
+                    }}
+                    theme="auto"
                   />
                 </PopoverContent>
               </Popover>
@@ -251,8 +255,7 @@ export function LibrarySetupForm({
 
         {/* Error Message */}
         {error && (
-          <div
-            className="animate-in fade-in slide-in-from-top-2 duration-300 rounded-lg bg-red-50 p-4 text-sm text-red-800">
+          <div className="animate-in fade-in slide-in-from-top-2 duration-300 rounded-lg bg-red-50 p-4 text-sm text-red-800">
             {error}
           </div>
         )}
@@ -265,17 +268,17 @@ export function LibrarySetupForm({
           disabled={disabled || submitting || !name.trim()}
           className="w-full h-12 text-base text-white shadow-lg hover:shadow-xl transition-all duration-200"
           style={{
-            backgroundColor: '#C7743C'
+            backgroundColor: '#C7743C',
           }}
         >
           {submitting ? (
             <>
-              <Loader2 className="mr-2 h-5 w-5 animate-spin"/>
+              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
               作成中...
             </>
           ) : (
             <>
-              <Sparkles className="mr-2 h-5 w-5"/>
+              <Sparkles className="mr-2 h-5 w-5" />
               ライブラリを作成
             </>
           )}

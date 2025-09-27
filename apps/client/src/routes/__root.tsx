@@ -1,18 +1,24 @@
-import {useDatasets} from '@/hooks/useDatasets';
+import { useDatasets } from '@/hooks/useDatasets';
 import { apiClient } from '@/lib/api-client';
-import {useThemeColor} from '@/hooks/useThemeColor';
-import {useKeyboardShortcuts as useGenericKeyboardShortcuts} from '@/hooks/utils/useKeyboardShortcut';
-import {cn} from '@/lib/utils';
-import {currentDatasetAtom, selectionModeAtom, sidebarOpenAtom} from '@/stores/ui';
-import {createRootRoute, Outlet, useParams, useNavigate, useLocation} from '@tanstack/react-router';
+import { useThemeColor } from '@/hooks/useThemeColor';
+import { useKeyboardShortcuts as useGenericKeyboardShortcuts } from '@/hooks/utils/useKeyboardShortcut';
+import { cn } from '@/lib/utils';
+import { currentDatasetAtom, selectionModeAtom, sidebarOpenAtom } from '@/stores/ui';
+import {
+  createRootRoute,
+  Outlet,
+  useParams,
+  useNavigate,
+  useLocation,
+} from '@tanstack/react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import {TanStackRouterDevtools} from '@tanstack/react-router-devtools';
-import {useAtom} from 'jotai';
+import { TanStackRouterDevtools } from '@tanstack/react-router-devtools';
+import { useAtom } from 'jotai';
 
-import {UploadProgress} from '@/components/ui/upload-progress';
+import { UploadProgress } from '@/components/ui/upload-progress';
 import { useUploadQueue } from '@/hooks/useUploadQueue';
-import {DragProvider} from '@/contexts/DragContext';
+import { DragProvider } from '@/contexts/DragContext';
 import Header from '@/containers/header-container';
 import Sidebar from '@/containers/sidebar-container';
 import InfoSidebar from '../components/InfoSidebar';
@@ -34,12 +40,12 @@ function RootLayout() {
   const params = useParams({ strict: false });
   const location = useLocation();
   const isSetupRoute = location.pathname === '/setup';
-  
+
   // Route-bound dataset id (only present on dataset pages)
   const routeDatasetId = params.datasetId as string | undefined;
   // Determine default dataset from list
   const defaultDatasetId = useMemo(
-    () => (datasets.find((d) => (d as any).isDefault)?.id as string | undefined),
+    () => datasets.find((d) => (d as any).isDefault)?.id as string | undefined,
     [datasets]
   );
   // On root (no route dataset) and no current selection, adopt default if any
@@ -156,7 +162,9 @@ function RootLayout() {
                   try {
                     await apiClient.authDataset(routeDatasetId as string, passwordInput);
                     setPasswordInput('');
-                    await queryClient.invalidateQueries({ queryKey: ['dataset-protection', routeDatasetId] });
+                    await queryClient.invalidateQueries({
+                      queryKey: ['dataset-protection', routeDatasetId],
+                    });
                   } catch {
                     alert('Invalid password');
                   }
@@ -168,7 +176,9 @@ function RootLayout() {
                 try {
                   await apiClient.authDataset(routeDatasetId as string, passwordInput);
                   setPasswordInput('');
-                  await queryClient.invalidateQueries({ queryKey: ['dataset-protection', routeDatasetId] });
+                  await queryClient.invalidateQueries({
+                    queryKey: ['dataset-protection', routeDatasetId],
+                  });
                 } catch {
                   alert('Invalid password');
                 }

@@ -51,10 +51,7 @@ export const splitHashForDirectory = (hash: string) => ({
 
 const isAbsoluteUrl = (value: string) => /^https?:\/\//i.test(value);
 
-export const toPublicAssetPath = (
-  value: string | null | undefined,
-  dataSetId?: number
-): string => {
+export const toPublicAssetPath = (value: string | null | undefined, dataSetId?: number): string => {
   if (!value) return '';
   if (isAbsoluteUrl(value)) return value;
 
@@ -82,11 +79,13 @@ export const toPublicAssetPath = (
   return `/files/${normalized}`;
 };
 
-export const withPublicAssetPaths = <T extends {
-  file?: string | null;
-  thumbnail?: string | null;
-  preview?: string | null;
-}>(
+export const withPublicAssetPaths = <
+  T extends {
+    file?: string | null;
+    thumbnail?: string | null;
+    preview?: string | null;
+  },
+>(
   asset: T,
   dataSetId?: number
 ): T => {

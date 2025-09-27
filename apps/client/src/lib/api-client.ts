@@ -342,8 +342,7 @@ class ApiClient {
     const liked = typeof likedRaw === 'number' ? likedRaw : Number(likedRaw) || 0;
 
     const likeCountRaw = (stack as any).likeCount ?? liked;
-    const likeCount =
-      typeof likeCountRaw === 'number' ? likeCountRaw : Number(likeCountRaw) || 0;
+    const likeCount = typeof likeCountRaw === 'number' ? likeCountRaw : Number(likeCountRaw) || 0;
 
     const favoritedRaw = (stack as any).favorited ?? (stack as any).isFavorite ?? false;
     const favorited = Boolean(favoritedRaw);
@@ -383,10 +382,13 @@ class ApiClient {
     const { datasetId, stackId, assetId, meta } = params;
     // Prefer dataset-scoped feature route; fall back to assets-lite if unavailable
     try {
-      return await this.fetch(`/api/v1/datasets/${datasetId}/stacks/${stackId}/assets/${assetId}/meta`, {
-        method: 'PUT',
-        body: JSON.stringify(meta || {}),
-      });
+      return await this.fetch(
+        `/api/v1/datasets/${datasetId}/stacks/${stackId}/assets/${assetId}/meta`,
+        {
+          method: 'PUT',
+          body: JSON.stringify(meta || {}),
+        }
+      );
     } catch (e) {
       try {
         // Fallback (legacy): /api/v1/assets/:assetId/meta
@@ -557,7 +559,12 @@ class ApiClient {
     datasetId: string | number;
     limit?: number;
     offset?: number;
-  }): Promise<{ authors: Array<{ id: number; name: string; stackCount?: number }>; total: number; limit: number; offset: number }> {
+  }): Promise<{
+    authors: Array<{ id: number; name: string; stackCount?: number }>;
+    total: number;
+    limit: number;
+    offset: number;
+  }> {
     const query = new URLSearchParams();
     query.append('dataSetId', String(params.datasetId));
     if (params.limit !== undefined) query.append('limit', String(params.limit));
@@ -664,11 +671,7 @@ class ApiClient {
   }
 
   // Activity operations
-  async getYearlyLikes(params: {
-    year: number;
-    datasetId?: string;
-    search?: string;
-  }): Promise<{
+  async getYearlyLikes(params: { year: number; datasetId?: string; search?: string }): Promise<{
     year: number;
     groupedByMonth: Record<
       string,
@@ -837,13 +840,15 @@ class ApiClient {
     const numericSources = sourceIds.map((id) =>
       typeof id === 'string' ? Number.parseInt(id, 10) : id
     );
-    const res = await this.fetch<{ success: boolean; targetId: number; merged: number; stack?: any }>(
-      '/api/v1/stacks/merge',
-      {
-        method: 'POST',
-        body: JSON.stringify({ targetId, sourceIds: numericSources }),
-      }
-    );
+    const res = await this.fetch<{
+      success: boolean;
+      targetId: number;
+      merged: number;
+      stack?: any;
+    }>('/api/v1/stacks/merge', {
+      method: 'POST',
+      body: JSON.stringify({ targetId, sourceIds: numericSources }),
+    });
     return res;
   }
 
@@ -905,14 +910,19 @@ class ApiClient {
     orderDirection?: string;
     limit?: number;
     offset?: number;
-  }): Promise<{ tags: Array<{ id: number; title: string; name: string; _count?: { stacks: number } }>; total: number; limit: number; offset: number }> {
+  }): Promise<{
+    tags: Array<{ id: number; title: string; name: string; _count?: { stacks: number } }>;
+    total: number;
+    limit: number;
+    offset: number;
+  }> {
     const queryParams = new URLSearchParams();
     if (params.datasetId) queryParams.append('datasetId', params.datasetId);
     if (params.orderBy) queryParams.append('orderBy', params.orderBy);
     if (params.orderDirection) queryParams.append('orderDirection', params.orderDirection);
     if (params.limit) queryParams.append('limit', String(params.limit));
     if (params.offset) queryParams.append('offset', String(params.offset));
-    
+
     return this.fetch(`/api/v1/tags?${queryParams}`);
   }
 
@@ -921,7 +931,22 @@ class ApiClient {
     datasetId: string | number;
     limit?: number;
     offset?: number;
-  }): Promise<{ mappings: Array<{ id: number; autoTagKey: string; displayName?: string; description?: string; isActive: boolean; dataSetId: number; createdAt: string; updatedAt: string; tag?: { id: number; title: string } }>; total: number; limit: number; offset: number }> {
+  }): Promise<{
+    mappings: Array<{
+      id: number;
+      autoTagKey: string;
+      displayName?: string;
+      description?: string;
+      isActive: boolean;
+      dataSetId: number;
+      createdAt: string;
+      updatedAt: string;
+      tag?: { id: number; title: string };
+    }>;
+    total: number;
+    limit: number;
+    offset: number;
+  }> {
     const { datasetId, limit, offset } = params;
     const queryParams = new URLSearchParams();
     if (limit !== undefined) queryParams.append('limit', String(limit));
@@ -1205,7 +1230,8 @@ class ApiClient {
         // 失敗時は可能であればJSON本文からエラーメッセージを抽出
         try {
           const data = text ? JSON.parse(text) : {};
-          const message = data?.message || data?.error || `Upload failed: ${status} ${xhr.statusText}`;
+          const message =
+            data?.message || data?.error || `Upload failed: ${status} ${xhr.statusText}`;
           reject(new Error(message));
         } catch {
           reject(new Error(`Upload failed: ${status} ${xhr.statusText}`));
@@ -1293,14 +1319,18 @@ class ApiClient {
     return this.fetch('/api/v1/search/queue-status');
   }
 
-  async runDatasetAIAnalysis(datasetId: string, params: {
-    forceRegenerate?: boolean;
-    batchSize?: number;
-  }): Promise<{ totalCount: number; queued: number; message: string }> {
+  async runDatasetAIAnalysis(
+    datasetId: string,
+    params: {
+      forceRegenerate?: boolean;
+      batchSize?: number;
+    }
+  ): Promise<{ totalCount: number; queued: number; message: string }> {
     const queryParams = new URLSearchParams();
-    if (params.forceRegenerate) queryParams.append('forceRegenerate', String(params.forceRegenerate));
+    if (params.forceRegenerate)
+      queryParams.append('forceRegenerate', String(params.forceRegenerate));
     if (params.batchSize) queryParams.append('batchSize', String(params.batchSize));
-    
+
     const query = queryParams.toString();
     const response = await this.fetch<{ totalCount: number; queued: number; message: string }>(
       `/api/v1/datasets/${datasetId}/ai-analysis${query ? `?${query}` : ''}`,
@@ -1311,10 +1341,13 @@ class ApiClient {
     return response;
   }
 
-  async runDatasetRefreshAll(datasetId: string, params: {
-    forceRegenerate?: boolean;
-    batchSize?: number;
-  }): Promise<{
+  async runDatasetRefreshAll(
+    datasetId: string,
+    params: {
+      forceRegenerate?: boolean;
+      batchSize?: number;
+    }
+  ): Promise<{
     message: string;
     datasetId: number;
     totalStacks: number;
@@ -1322,14 +1355,14 @@ class ApiClient {
     totals: { embeddings: number };
   }> {
     const queryParams = new URLSearchParams();
-    if (params.forceRegenerate) queryParams.append('forceRegenerate', String(params.forceRegenerate));
+    if (params.forceRegenerate)
+      queryParams.append('forceRegenerate', String(params.forceRegenerate));
     if (params.batchSize) queryParams.append('batchSize', String(params.batchSize));
 
     const query = queryParams.toString();
-    return this.fetch(
-      `/api/v1/datasets/${datasetId}/refresh-all${query ? `?${query}` : ''}`,
-      { method: 'POST' }
-    );
+    return this.fetch(`/api/v1/datasets/${datasetId}/refresh-all${query ? `?${query}` : ''}`, {
+      method: 'POST',
+    });
   }
 }
 

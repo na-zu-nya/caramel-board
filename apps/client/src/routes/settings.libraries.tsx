@@ -1,5 +1,10 @@
 import { Button } from '@/components/ui/button';
-import { LibraryCard, type ColorStats, PRESET_COLOR_GROUPS, DEFAULT_CARAMEL_COLOR } from '@/components/ui/LibraryCard';
+import {
+  LibraryCard,
+  type ColorStats,
+  PRESET_COLOR_GROUPS,
+  DEFAULT_CARAMEL_COLOR,
+} from '@/components/ui/LibraryCard';
 import {
   Dialog,
   DialogContent,
@@ -17,7 +22,12 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Input } from '@/components/ui/input';
 import { RadioGroup } from '@/components/ui/radio-group';
-import { useCreateDataset, useDatasets, useDeleteDataset, useUpdateDataset } from '@/hooks/useDatasets';
+import {
+  useCreateDataset,
+  useDatasets,
+  useDeleteDataset,
+  useUpdateDataset,
+} from '@/hooks/useDatasets';
 import { useBootstrapNavigationPins } from '@/hooks/useBootstrapNavigationPins';
 import { useHeaderActions } from '@/hooks/useHeaderActions';
 import { apiClient } from '@/lib/api-client';
@@ -61,7 +71,11 @@ function DatasetManagement() {
   const [embeddingDialogOpen, setEmbeddingDialogOpen] = useState(false);
   const [selectedDatasetId, setSelectedDatasetId] = useState<string | null>(null);
   const [regenerateMode, setRegenerateMode] = useState<'incremental' | 'force'>('incremental');
-  const [protectionDialog, setProtectionDialog] = useState<{ open: boolean; mode: 'enable' | 'disable'; datasetId: string | null }>({
+  const [protectionDialog, setProtectionDialog] = useState<{
+    open: boolean;
+    mode: 'enable' | 'disable';
+    datasetId: string | null;
+  }>({
     open: false,
     mode: 'enable',
     datasetId: null,
@@ -166,7 +180,10 @@ function DatasetManagement() {
     mutationFn: async ({
       datasetId,
       forceRegenerate,
-    }: { datasetId: string; forceRegenerate: boolean }) =>
+    }: {
+      datasetId: string;
+      forceRegenerate: boolean;
+    }) =>
       apiClient.runDatasetRefreshAll(datasetId, {
         forceRegenerate,
         batchSize: 20,
@@ -248,7 +265,9 @@ function DatasetManagement() {
           <div className="space-y-4">
             {datasets.map((dataset, index) => {
               const colorStats = (colorStatsQueries[index]?.data ?? null) as ColorStats | null;
-              const isUpdating = Boolean(updatingAutoTags[dataset.id] || updatingColors[dataset.id]);
+              const isUpdating = Boolean(
+                updatingAutoTags[dataset.id] || updatingColors[dataset.id]
+              );
               const itemCount = itemCounts?.[dataset.id] ?? dataset.itemCount ?? 0;
               const libraryDataset = {
                 ...dataset,
@@ -378,11 +397,16 @@ function DatasetManagement() {
                                 <button
                                   key={hex}
                                   type="button"
-                                  onClick={() => { setNewColor(hex); setCreateColorOpen(false); }}
+                                  onClick={() => {
+                                    setNewColor(hex);
+                                    setCreateColorOpen(false);
+                                  }}
                                   className="relative h-8 w-8 rounded-full border focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white"
                                   style={{
                                     backgroundColor: hex,
-                                    borderColor: isSelected ? 'rgba(59, 130, 246, 0.9)' : 'transparent',
+                                    borderColor: isSelected
+                                      ? 'rgba(59, 130, 246, 0.9)'
+                                      : 'transparent',
                                   }}
                                   aria-label={`Use color ${hex}`}
                                   aria-pressed={isSelected}
@@ -484,7 +508,9 @@ function DatasetManagement() {
                   </div>
                   <div className="flex items-center gap-2">
                     <Palette size={14} />
-                    <span>Color analysis — extract key colors for better search and filtering.</span>
+                    <span>
+                      Color analysis — extract key colors for better search and filtering.
+                    </span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Wand2 size={14} />
@@ -496,7 +522,8 @@ function DatasetManagement() {
               {regenerateMode === 'force' && (
                 <div className="p-3 bg-amber-50 border border-amber-200 rounded-md">
                   <p className="text-sm text-amber-800">
-                    <strong>Heads-up:</strong> Force regenerate revisits every item and may take a long time for large libraries.
+                    <strong>Heads-up:</strong> Force regenerate revisits every item and may take a
+                    long time for large libraries.
                   </p>
                 </div>
               )}

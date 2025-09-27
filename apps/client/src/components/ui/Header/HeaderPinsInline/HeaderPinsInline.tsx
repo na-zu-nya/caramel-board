@@ -1,6 +1,10 @@
 import * as LucideIcons from 'lucide-react';
 import { HeaderIconButton } from '../HeaderIconButton';
-export interface NavPin { id: number | string; name: string; icon: string; }
+export interface NavPin {
+  id: number | string;
+  name: string;
+  icon: string;
+}
 
 export interface HeaderPinsInlineProps {
   navigationPins: NavPin[];
@@ -19,7 +23,12 @@ export function HeaderPinsInline({ navigationPins, isActive, onNavClick }: Heade
       {navigationPins.length > 0 && (
         <div className="flex items-center gap-2">
           {navigationPins.map((pin) => (
-            <HeaderIconButton key={pin.id} onClick={() => onNavClick?.(pin)} title={pin.name} isActive={isActive?.(pin)}>
+            <HeaderIconButton
+              key={pin.id}
+              onClick={() => onNavClick?.(pin)}
+              title={pin.name}
+              isActive={isActive?.(pin)}
+            >
               {renderIcon(pin.icon)}
             </HeaderIconButton>
           ))}

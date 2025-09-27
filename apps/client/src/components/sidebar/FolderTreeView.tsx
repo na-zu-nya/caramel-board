@@ -146,19 +146,31 @@ export function FolderTreeView({
 
     const [activeType, activeId] = (active.id as string).split('-');
     const overIdStr = String(over.id);
-    const [overType, overId] = overIdStr.includes('-') ? (overIdStr.split('-') as [string, string]) : ([overIdStr, ''] as [string, string]);
+    const [overType, overId] = overIdStr.includes('-')
+      ? (overIdStr.split('-') as [string, string])
+      : ([overIdStr, ''] as [string, string]);
 
     try {
       if (activeType === 'collection') {
         // Move collection into a folder or extract to root
-        const isRootDrop = overType === 'root' || overIdStr === 'root-edge-top' || overIdStr === 'root-edge-bottom';
-        const newFolderId = isRootDrop ? null : overType === 'folder' ? Number.parseInt(overId) : null;
+        const isRootDrop =
+          overType === 'root' || overIdStr === 'root-edge-top' || overIdStr === 'root-edge-bottom';
+        const newFolderId = isRootDrop
+          ? null
+          : overType === 'folder'
+            ? Number.parseInt(overId)
+            : null;
         await apiClient.updateCollection(Number.parseInt(activeId), { folderId: newFolderId });
       } else if (activeType === 'folder') {
         const sourceFolderId = Number.parseInt(activeId);
-        const isRootDrop = overType === 'root' || overIdStr === 'root-edge-top' || overIdStr === 'root-edge-bottom';
+        const isRootDrop =
+          overType === 'root' || overIdStr === 'root-edge-top' || overIdStr === 'root-edge-bottom';
         const targetIsFolder = overType === 'folder';
-        const newParentId = isRootDrop ? undefined : targetIsFolder ? Number.parseInt(overId) : undefined; // folder or root
+        const newParentId = isRootDrop
+          ? undefined
+          : targetIsFolder
+            ? Number.parseInt(overId)
+            : undefined; // folder or root
 
         // Prevent moving folder into itself or its children
         if (newParentId && isDescendant(newParentId, sourceFolderId)) {
@@ -384,7 +396,11 @@ export function FolderTreeView({
     id,
     children,
     folder,
-  }: { id: string; children: React.ReactNode; folder?: CollectionFolder }) => {
+  }: {
+    id: string;
+    children: React.ReactNode;
+    folder?: CollectionFolder;
+  }) => {
     const { isOver, setNodeRef } = useDroppable({ id });
     const [isDragOver, setIsDragOver] = useState(false);
 
@@ -476,7 +492,10 @@ export function FolderTreeView({
     return (
       <div
         ref={root.setNodeRef}
-        className={cn('transition-colors rounded relative', highlight && 'bg-blue-50 ring-2 ring-blue-200')}
+        className={cn(
+          'transition-colors rounded relative',
+          highlight && 'bg-blue-50 ring-2 ring-blue-200'
+        )}
         onDragEnter={handleDragEnter}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}

@@ -62,13 +62,11 @@ export function AutoTagsSection({ datasetId, autoFocusOnMount = false }: AutoTag
 
   const mappings = data?.mappings || [];
   const sortedMappings = useMemo(() => {
-    return mappings
-      .slice()
-      .sort((a, b) => {
-        const aLabel = (a.displayName || a.autoTagKey || '').toLocaleLowerCase();
-        const bLabel = (b.displayName || b.autoTagKey || '').toLocaleLowerCase();
-        return aLabel.localeCompare(bLabel);
-      });
+    return mappings.slice().sort((a, b) => {
+      const aLabel = (a.displayName || a.autoTagKey || '').toLocaleLowerCase();
+      const bLabel = (b.displayName || b.autoTagKey || '').toLocaleLowerCase();
+      return aLabel.localeCompare(bLabel);
+    });
   }, [mappings]);
 
   const filteredMappings = useMemo(() => {
@@ -83,9 +81,7 @@ export function AutoTagsSection({ datasetId, autoFocusOnMount = false }: AutoTag
     if (!isSearching) return sortedMappings;
 
     const base = filteredMappings.slice();
-    const seen = new Set(
-      base.map((m) => (m.autoTagKey ? m.autoTagKey.toLocaleLowerCase() : ''))
-    );
+    const seen = new Set(base.map((m) => (m.autoTagKey ? m.autoTagKey.toLocaleLowerCase() : '')));
 
     if (statisticsData?.tags) {
       let virtualId = -1;
@@ -123,38 +119,29 @@ export function AutoTagsSection({ datasetId, autoFocusOnMount = false }: AutoTag
         autoFocusOnMount={autoFocusOnMount}
       />
 
-      {isLoadingMappings && (
-        <SideMenuMessage variant="info">Loading auto-tags...</SideMenuMessage>
-      )}
+      {isLoadingMappings && <SideMenuMessage variant="info">Loading auto-tags...</SideMenuMessage>}
 
       {!isLoadingMappings && isSearching && isFetchingStatistics && (
         <SideMenuMessage variant="info">Searching auto-tags...</SideMenuMessage>
       )}
 
       {showEmptyMessage && (
-        <SideMenuMessage>
-          {isSearching ? 'No matching AutoTags' : 'No AutoTags'}
-        </SideMenuMessage>
+        <SideMenuMessage>{isSearching ? 'No matching AutoTags' : 'No AutoTags'}</SideMenuMessage>
       )}
 
-      {!isLoading && itemsToRender.map((m) => {
-        const label = m.displayName || m.autoTagKey;
-        return (
-          <SideMenuListItem
-            key={m.id}
-            icon={Wand2}
-            label={label}
-            indent={1}
-            asChild
-          >
-            <Link
-              to="/library/$datasetId/autotag/$autoTagKey"
-              params={{ datasetId, autoTagKey: encodeURIComponent(m.autoTagKey) }}
-              activeProps={{ className: 'bg-gray-100 font-medium' }}
-            />
-          </SideMenuListItem>
-        );
-      })}
+      {!isLoading &&
+        itemsToRender.map((m) => {
+          const label = m.displayName || m.autoTagKey;
+          return (
+            <SideMenuListItem key={m.id} icon={Wand2} label={label} indent={1} asChild>
+              <Link
+                to="/library/$datasetId/autotag/$autoTagKey"
+                params={{ datasetId, autoTagKey: encodeURIComponent(m.autoTagKey) }}
+                activeProps={{ className: 'bg-gray-100 font-medium' }}
+              />
+            </SideMenuListItem>
+          );
+        })}
     </div>
   );
 }

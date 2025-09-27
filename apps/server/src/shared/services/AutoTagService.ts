@@ -1,7 +1,7 @@
-import type {PrismaClient} from '@prisma/client';
-import {getAutoTagClient} from '../../lib/AutoTagClient';
+import type { PrismaClient } from '@prisma/client';
+import { getAutoTagClient } from '../../lib/AutoTagClient';
 import path from 'node:path';
-import {withPublicAssetArray, toPublicAssetPath} from '../../utils/assetPath';
+import { withPublicAssetArray, toPublicAssetPath } from '../../utils/assetPath';
 
 interface WeightedJaccardSimilarity {
   stackId: number;
@@ -54,7 +54,9 @@ export class AutoTagService {
       await this.stacksAIClient.healthCheck();
       aiAvailable = true;
     } catch (e) {
-      console.warn('AutoTagService: AI server not available, will reuse existing predictions if any');
+      console.warn(
+        'AutoTagService: AI server not available, will reuse existing predictions if any'
+      );
     }
 
     if (aiAvailable) {
@@ -114,7 +116,10 @@ export class AutoTagService {
                 },
               });
             } catch (fileKeyError: any) {
-              console.warn(`Key-based tagging failed for asset ${asset.id}:`, fileKeyError?.message || fileKeyError);
+              console.warn(
+                `Key-based tagging failed for asset ${asset.id}:`,
+                fileKeyError?.message || fileKeyError
+              );
               // Fallback: try absolute file path upload
               try {
                 const base = process.env.FILES_STORAGE || './data';
@@ -138,9 +143,10 @@ export class AutoTagService {
                   },
                 });
               } catch (fileUploadError: any) {
-                const msg = fileUploadError?.code === 'P2002'
-                  ? `AutoTagPrediction already exists for asset ${asset.id}; treat as success.`
-                  : `Skipping asset ${asset.id} (stack ${stackId}) due to file error:`;
+                const msg =
+                  fileUploadError?.code === 'P2002'
+                    ? `AutoTagPrediction already exists for asset ${asset.id}; treat as success.`
+                    : `Skipping asset ${asset.id} (stack ${stackId}) due to file error:`;
                 console.warn(msg, fileUploadError?.message || fileUploadError);
                 console.warn(`Asset file key was: ${fileKey}`);
                 skippedAssets++;
@@ -148,7 +154,9 @@ export class AutoTagService {
               }
             }
           } else {
-            console.warn('AI server unavailable; skipping prediction for this asset and relying on existing predictions if any');
+            console.warn(
+              'AI server unavailable; skipping prediction for this asset and relying on existing predictions if any'
+            );
             skippedAssets++;
             continue;
           }

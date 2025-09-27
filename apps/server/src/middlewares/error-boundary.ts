@@ -1,4 +1,4 @@
-import {createFactory} from 'hono/factory';
+import { createFactory } from 'hono/factory';
 
 export const errorBoundary = createFactory().createMiddleware(async (c, next) => {
   try {

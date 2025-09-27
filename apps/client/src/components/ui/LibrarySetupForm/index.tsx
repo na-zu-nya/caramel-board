@@ -95,7 +95,9 @@ export function LibrarySetupForm({
                 <span className="text-3xl leading-none">{icon || '📚'}</span>
                 <div className="flex flex-col">
                   <span className="text-sm font-medium text-gray-900">Choose emoji</span>
-                  <span className="text-xs text-muted-foreground">すぐに雰囲気が伝わるアイコンを選びましょう</span>
+                  <span className="text-xs text-muted-foreground">
+                    すぐに雰囲気が伝わるアイコンを選びましょう
+                  </span>
                 </div>
                 <Smile className="ml-auto h-4 w-4 text-muted-foreground" />
               </button>
@@ -140,14 +142,17 @@ export function LibrarySetupForm({
                     </span>
                     <div className="flex flex-wrap gap-2">
                       {group.colors.map((hex) => {
-                        const active = hex.toLowerCase() === (color || DEFAULT_CARAMEL_COLOR).toLowerCase();
+                        const active =
+                          hex.toLowerCase() === (color || DEFAULT_CARAMEL_COLOR).toLowerCase();
                         return (
                           <button
                             key={hex}
                             type="button"
                             className={cn(
                               'h-9 w-9 rounded-full border transition-transform duration-150',
-                              active ? 'scale-110 border-gray-900' : 'border-transparent hover:scale-105'
+                              active
+                                ? 'scale-110 border-gray-900'
+                                : 'border-transparent hover:scale-105'
                             )}
                             style={{ backgroundColor: hex }}
                             onClick={() => handleColorPick(hex)}

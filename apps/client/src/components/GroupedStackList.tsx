@@ -129,7 +129,15 @@ export function GroupedStackList({
                         const likeCount = Number(s.likeCount ?? s.liked ?? 0);
                         const pageCount = s.assetCount || s._count?.assets || s.assetsCount || 0;
                         const isFav = s.favorited || s.isFavorite || false;
-                        const { onOpen, onFindSimilar, onAddToScratch, onToggleFavorite, onLike, onInfo, dragProps } = actions;
+                        const {
+                          onOpen,
+                          onFindSimilar,
+                          onAddToScratch,
+                          onToggleFavorite,
+                          onLike,
+                          onInfo,
+                          dragProps,
+                        } = actions;
                         return (
                           <div key={item.id} className={itemWidth}>
                             <StackTile

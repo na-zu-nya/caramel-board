@@ -44,7 +44,9 @@ export function EntityCard({
         )}
       </div>
       <div className="p-4 bg-white">
-        <h3 className="font-medium text-sm truncate group-hover:text-blue-600 transition-colors">{title}</h3>
+        <h3 className="font-medium text-sm truncate group-hover:text-blue-600 transition-colors">
+          {title}
+        </h3>
         {subtitle && <p className="text-xs text-gray-500 mt-0.5">{subtitle}</p>}
       </div>
     </>
@@ -52,7 +54,12 @@ export function EntityCard({
 
   const tileInner = (
     <>
-      <div className={cn(aspectClass, 'relative overflow-hidden rounded-lg bg-gray-100 border border-gray-200 transition-colors group-hover:border-gray-300')}>
+      <div
+        className={cn(
+          aspectClass,
+          'relative overflow-hidden rounded-lg bg-gray-100 border border-gray-200 transition-colors group-hover:border-gray-300'
+        )}
+      >
         {thumbnailSrc ? (
           <img
             src={thumbnailSrc.startsWith('http') ? thumbnailSrc : getThumbnailPath(thumbnailSrc)}
@@ -66,14 +73,21 @@ export function EntityCard({
         )}
       </div>
       <div className="mt-2">
-        <h3 className="font-medium text-sm truncate group-hover:text-blue-600 transition-colors">{title}</h3>
+        <h3 className="font-medium text-sm truncate group-hover:text-blue-600 transition-colors">
+          {title}
+        </h3>
         {subtitle && <p className="text-xs text-gray-500">{subtitle}</p>}
       </div>
     </>
   );
 
   const content = (
-    <div className={cn('group cursor-pointer', variant === 'card' ? 'rounded-lg border border-gray-200 bg-white overflow-hidden' : '')}>
+    <div
+      className={cn(
+        'group cursor-pointer',
+        variant === 'card' ? 'rounded-lg border border-gray-200 bg-white overflow-hidden' : ''
+      )}
+    >
       {variant === 'card' ? cardInner : tileInner}
     </div>
   );

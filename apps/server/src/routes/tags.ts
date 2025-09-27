@@ -1,5 +1,5 @@
-import {zValidator} from '@hono/zod-validator';
-import {Hono} from 'hono';
+import { zValidator } from '@hono/zod-validator';
+import { Hono } from 'hono';
 import {
   CreateTagSchema,
   IdParamSchema,
@@ -28,7 +28,10 @@ tagsRoute.get('/', zValidator('query', PaginationSchema), async (c) => {
   try {
     const { limit, offset } = c.req.valid('query');
     const dataSetId = getDataSetIdFromQuery(c);
-    const auth = await (await import('../utils/dataset-protection')).ensureDatasetAuthorized(c as any, dataSetId);
+    const auth = await (await import('../utils/dataset-protection')).ensureDatasetAuthorized(
+      c as any,
+      dataSetId
+    );
     if (auth) return auth;
     const orderBy = (c.req.query('orderBy') || 'title') as string;
     const orderDirection = (c.req.query('orderDirection') || 'asc') as string;
@@ -47,7 +50,10 @@ tagsRoute.get('/management', zValidator('query', ManagementPaginationSchema), as
   try {
     const { limit, offset, dataSetId } = c.req.valid('query');
     const ds = dataSetId ?? getDataSetIdFromQuery(c);
-    const auth = await (await import('../utils/dataset-protection')).ensureDatasetAuthorized(c as any, ds);
+    const auth = await (await import('../utils/dataset-protection')).ensureDatasetAuthorized(
+      c as any,
+      ds
+    );
     if (auth) return auth;
     const service = makeService(c, ds);
     const result = await service.getAll({ limit, offset });
@@ -63,7 +69,10 @@ tagsRoute.get('/search', async (c) => {
   try {
     const key = c.req.query('key') || '';
     const dataSetId = getDataSetIdFromQuery(c);
-    const auth = await (await import('../utils/dataset-protection')).ensureDatasetAuthorized(c as any, dataSetId);
+    const auth = await (await import('../utils/dataset-protection')).ensureDatasetAuthorized(
+      c as any,
+      dataSetId
+    );
     if (auth) return auth;
     const service = makeService(c, dataSetId);
     // Return objects to align with client expectations: { id, title }
@@ -86,7 +95,10 @@ tagsRoute.post('/', zValidator('json', CreateTagSchema), async (c) => {
   try {
     const data = c.req.valid('json');
     const dataSetId = getDataSetIdFromQuery(c);
-    const auth = await (await import('../utils/dataset-protection')).ensureDatasetAuthorized(c as any, dataSetId);
+    const auth = await (await import('../utils/dataset-protection')).ensureDatasetAuthorized(
+      c as any,
+      dataSetId
+    );
     if (auth) return auth;
     const service = makeService(c, dataSetId);
     const tag = await service.create(data as any);
@@ -102,7 +114,10 @@ tagsRoute.post('/tag-stack', zValidator('json', TagStackSchema), async (c) => {
   try {
     const { stackId, tagIds } = c.req.valid('json');
     const dataSetId = getDataSetIdFromQuery(c);
-    const auth = await (await import('../utils/dataset-protection')).ensureDatasetAuthorized(c as any, dataSetId);
+    const auth = await (await import('../utils/dataset-protection')).ensureDatasetAuthorized(
+      c as any,
+      dataSetId
+    );
     if (auth) return auth;
     const service = makeService(c, dataSetId);
     await service.tagStack(stackId, tagIds);
@@ -124,7 +139,10 @@ tagsRoute.put('/:id/rename', zValidator('param', IdParamSchema), async (c) => {
     }
 
     const dataSetId = getDataSetIdFromQuery(c);
-    const auth = await (await import('../utils/dataset-protection')).ensureDatasetAuthorized(c as any, dataSetId);
+    const auth = await (await import('../utils/dataset-protection')).ensureDatasetAuthorized(
+      c as any,
+      dataSetId
+    );
     if (auth) return auth;
     const service = makeService(c, dataSetId);
     const tag = await service.rename(id, title);
@@ -149,7 +167,10 @@ tagsRoute.post('/merge', async (c) => {
     }
 
     const dataSetId = getDataSetIdFromQuery(c);
-    const auth = await (await import('../utils/dataset-protection')).ensureDatasetAuthorized(c as any, dataSetId);
+    const auth = await (await import('../utils/dataset-protection')).ensureDatasetAuthorized(
+      c as any,
+      dataSetId
+    );
     if (auth) return auth;
     const service = makeService(c, dataSetId);
     const result = await service.merge(sourceTagIds, targetTagId);
@@ -170,7 +191,10 @@ tagsRoute.get(
       const { id } = c.req.valid('param');
       const { limit, offset } = c.req.valid('query');
       const dataSetId = getDataSetIdFromQuery(c);
-      const auth = await (await import('../utils/dataset-protection')).ensureDatasetAuthorized(c as any, dataSetId);
+      const auth = await (await import('../utils/dataset-protection')).ensureDatasetAuthorized(
+        c as any,
+        dataSetId
+      );
       if (auth) return auth;
       const service = makeService(c, dataSetId);
       const result = await service.getStacksByTag(id, { limit, offset });
@@ -187,7 +211,10 @@ tagsRoute.delete('/:id', zValidator('param', IdParamSchema), async (c) => {
   try {
     const { id } = c.req.valid('param');
     const dataSetId = getDataSetIdFromQuery(c);
-    const auth = await (await import('../utils/dataset-protection')).ensureDatasetAuthorized(c as any, dataSetId);
+    const auth = await (await import('../utils/dataset-protection')).ensureDatasetAuthorized(
+      c as any,
+      dataSetId
+    );
     if (auth) return auth;
     const service = makeService(c, dataSetId);
     await service.delete(id);

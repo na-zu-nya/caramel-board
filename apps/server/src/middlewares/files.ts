@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import {createFactory} from 'hono/factory';
+import { createFactory } from 'hono/factory';
 
 const factory = createFactory();
 

@@ -1,15 +1,15 @@
-import {zValidator} from '@hono/zod-validator';
-import {Hono} from 'hono';
-import {z} from 'zod';
-import {getPrisma} from '../lib/Repository.js';
+import { zValidator } from '@hono/zod-validator';
+import { Hono } from 'hono';
+import { z } from 'zod';
+import { getPrisma } from '../lib/Repository.js';
 import {
   CollectionFolderQuerySchema,
   CreateCollectionFolderSchema,
   FolderTreeQuerySchema,
   UpdateCollectionFolderSchema,
 } from '../models/CollectionFolderModel.js';
-import {CollectionFolderService} from '../shared/services/CollectionFolderService';
-import {useResponse} from '../utils/useResponse.js';
+import { CollectionFolderService } from '../shared/services/CollectionFolderService';
+import { useResponse } from '../utils/useResponse.js';
 
 const app = new Hono();
 const collectionFolderService = new CollectionFolderService(getPrisma());

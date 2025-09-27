@@ -1,8 +1,14 @@
-import type {SidebarSectionProps} from '@/components/sidebar/types';
-import {SideMenuGroup} from '@/components/ui/SideMenu';
-import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select';
-import {useDatasets} from '@/hooks/useDatasets';
-import {useNavigate} from '@tanstack/react-router';
+import type { SidebarSectionProps } from '@/components/sidebar/types';
+import { SideMenuGroup } from '@/components/ui/SideMenu';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { useDatasets } from '@/hooks/useDatasets';
+import { useNavigate } from '@tanstack/react-router';
 
 interface DatasetSectionProps extends SidebarSectionProps {
   currentDataset: string | null;

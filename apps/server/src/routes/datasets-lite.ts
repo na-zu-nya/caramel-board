@@ -5,7 +5,13 @@ import { useDataStorage } from '../shared/di';
 import { createFileService } from '../features/datasets/services/file-service';
 import { createColorSearchService } from '../features/datasets/services/color-search-service';
 import { AutoTagService } from '../shared/services/AutoTagService';
-import { ensureDatasetAuthorized, hashPassword, isDatasetAuthorized, setDatasetAuthCookie, verifyPassword } from '../utils/dataset-protection';
+import {
+  ensureDatasetAuthorized,
+  hashPassword,
+  isDatasetAuthorized,
+  setDatasetAuthCookie,
+  verifyPassword,
+} from '../utils/dataset-protection';
 
 // Minimal datasets router to satisfy client needs without heavy deps
 const app = new Hono();
@@ -40,7 +46,7 @@ app.get('/:id/overview', async (c) => {
 // Authentication: verify password and set session cookie
 app.post('/:id/auth', async (c) => {
   const id = Number.parseInt(c.req.param('id'));
-  const body = await c.req.json().catch(() => ({} as any));
+  const body = await c.req.json().catch(() => ({}) as any);
   const password = String(body?.password || '');
   if (!password) return c.json({ error: 'Password required' }, 400);
   const ds = await dataSetService.getById(id);
@@ -57,29 +63,40 @@ app.post('/:id/auth', async (c) => {
 // Enable/disable protection
 app.post('/:id/protection', async (c) => {
   const id = Number.parseInt(c.req.param('id'));
-  const body = await c.req.json().catch(() => ({} as any));
+  const body = await c.req.json().catch(() => ({}) as any);
   const enable = Boolean(body?.enable);
   const password = String(body?.password || '');
   const currentPassword = String(body?.currentPassword || '');
 
   const prisma = getPrisma();
-  const ds = await prisma.dataSet.findUnique({ where: { id }, select: { isProtected: true, passwordHash: true, passwordSalt: true } });
+  const ds = await prisma.dataSet.findUnique({
+    where: { id },
+    select: { isProtected: true, passwordHash: true, passwordSalt: true },
+  });
   if (!ds) return c.json({ error: 'DataSet not found' }, 404);
 
   if (enable) {
     if (!password) return c.json({ error: 'Password required to enable protection' }, 400);
     const { salt, hash } = hashPassword(password);
-    await prisma.dataSet.update({ where: { id }, data: { isProtected: true, passwordSalt: salt, passwordHash: hash } });
+    await prisma.dataSet.update({
+      where: { id },
+      data: { isProtected: true, passwordSalt: salt, passwordHash: hash },
+    });
     // Set session cookie so user stays authorized
     setDatasetAuthCookie(c, id, hash);
     return c.json({ success: true, isProtected: true });
   } else {
     // disabling requires current password
-    if (!currentPassword) return c.json({ error: 'Current password required to disable protection' }, 400);
-    if (!ds.passwordHash || !ds.passwordSalt) return c.json({ error: 'Dataset was not protected' }, 400);
+    if (!currentPassword)
+      return c.json({ error: 'Current password required to disable protection' }, 400);
+    if (!ds.passwordHash || !ds.passwordSalt)
+      return c.json({ error: 'Dataset was not protected' }, 400);
     const ok = verifyPassword(currentPassword, ds.passwordSalt, ds.passwordHash);
     if (!ok) return c.json({ error: 'Invalid password' }, 401);
-    await prisma.dataSet.update({ where: { id }, data: { isProtected: false, passwordHash: null, passwordSalt: null } });
+    await prisma.dataSet.update({
+      where: { id },
+      data: { isProtected: false, passwordHash: null, passwordSalt: null },
+    });
     // Clear cookie by setting empty (client will drop it when hash changes anyway)
     return c.json({ success: true, isProtected: false });
   }
@@ -108,7 +125,7 @@ app.post('/:id/set-default', async (c) => {
 export { app as datasetsLiteRoute };
 // Create dataset (minimal)
 app.post('/', async (c) => {
-  const body = await c.req.json().catch(() => ({} as any));
+  const body = await c.req.json().catch(() => ({}) as any);
   if (!body?.name) return c.json({ error: 'Name is required' }, 400);
   try {
     const ds = await dataSetService.create({
@@ -127,7 +144,7 @@ app.post('/', async (c) => {
 // Update dataset
 app.put('/:id', async (c) => {
   const id = Number.parseInt(c.req.param('id'));
-  const body = await c.req.json().catch(() => ({} as any));
+  const body = await c.req.json().catch(() => ({}) as any);
 
   try {
     const updated = await dataSetService.update(id, {
@@ -147,7 +164,11 @@ app.put('/:id', async (c) => {
 });
 
 // Helper: simple concurrency controller
-async function runWithConcurrency<T>(items: T[], concurrency: number, worker: (item: T) => Promise<void>) {
+async function runWithConcurrency<T>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T) => Promise<void>
+) {
   const queue = [...items];
   const runners: Promise<void>[] = [];
   for (let i = 0; i < Math.min(concurrency, queue.length); i++) {
@@ -161,7 +182,7 @@ async function runWithConcurrency<T>(items: T[], concurrency: number, worker: (i
             console.error('Refresh worker error:', e);
           }
         }
-      })(),
+      })()
     );
   }
   await Promise.all(runners);
@@ -205,7 +226,9 @@ app.post('/:id/refresh-all', async (c) => {
     });
 
     return c.json({
-      message: forceRegenerate ? '全体リフレッシュ（再生成）を開始しました' : '全体リフレッシュを開始しました',
+      message: forceRegenerate
+        ? '全体リフレッシュ（再生成）を開始しました'
+        : '全体リフレッシュを開始しました',
       datasetId: id,
       totalStacks,
       scheduled: {

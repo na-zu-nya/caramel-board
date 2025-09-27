@@ -5,16 +5,22 @@ import { StackTile } from '@/components/ui/Stack';
 import { SmallSearchField, SmallSelect } from '@/components/ui/Controls';
 import { useStackTile } from '@/hooks/useStackTile';
 import AutoTagMappingModal from '@/components/modals/AutoTagMappingModal';
-import {StackContextMenu} from '@/components/modals/StackContextMenu';
-import {AutoTagDisplay} from '@/components/ui/autotag-display';
-import {Button} from '@/components/ui/button';
-import {HeaderIconButton} from '@/components/ui/Header/HeaderIconButton';
-import {Input} from '@/components/ui/input';
-import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue,} from '@/components/ui/select';
-import {SelectionActionBar} from '@/components/ui/selection-action-bar';
-import {useKeyboardShortcuts} from '@/hooks/features/useKeyboardShortcuts';
-import {apiClient} from '@/lib/api-client';
-import {cn} from '@/lib/utils';
+import { StackContextMenu } from '@/components/modals/StackContextMenu';
+import { AutoTagDisplay } from '@/components/ui/autotag-display';
+import { Button } from '@/components/ui/button';
+import { HeaderIconButton } from '@/components/ui/Header/HeaderIconButton';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { SelectionActionBar } from '@/components/ui/selection-action-bar';
+import { useKeyboardShortcuts } from '@/hooks/features/useKeyboardShortcuts';
+import { apiClient } from '@/lib/api-client';
+import { cn } from '@/lib/utils';
 import {
   currentFilterAtom,
   filterOpenAtom,
@@ -22,13 +28,27 @@ import {
   selectedItemIdAtom,
   selectionModeAtom,
 } from '@/stores/ui';
-import type {StackFilter} from '@/types';
-import {useInfiniteQuery, useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
-import {createFileRoute, Link, useLocation, useNavigate} from '@tanstack/react-router';
-import {useAtom} from 'jotai';
-import {ArrowRight, Check, Edit2, Filter, Info, Loader2, Pencil, Plus, Search, SquarePen, Tag, Trash2, X,} from 'lucide-react';
-import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {createPortal} from 'react-dom';
+import type { StackFilter } from '@/types';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { createFileRoute, Link, useLocation, useNavigate } from '@tanstack/react-router';
+import { useAtom } from 'jotai';
+import {
+  ArrowRight,
+  Check,
+  Edit2,
+  Filter,
+  Info,
+  Loader2,
+  Pencil,
+  Plus,
+  Search,
+  SquarePen,
+  Tag,
+  Trash2,
+  X,
+} from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 export const Route = createFileRoute('/library/$datasetId/autotag-config')({
   component: AutoTagConfigPage,
@@ -88,7 +108,7 @@ interface Tag {
 }
 
 function AutoTagConfigPage() {
-  const {datasetId} = Route.useParams();
+  const { datasetId } = Route.useParams();
   const location = useLocation();
   const navigate = useNavigate();
   const actions = useStackTile(datasetId);
@@ -211,7 +231,7 @@ function AutoTagConfigPage() {
     const run = async () => {
       for (let i = 0; i < missing.length; i += BATCH) {
         const batch = missing.slice(i, i + BATCH);
-        const params = new URLSearchParams({threshold: '0.4'});
+        const params = new URLSearchParams({ threshold: '0.4' });
         batch.forEach((k) => params.append('keys', k));
         try {
           const res = await apiClient.get(
@@ -224,7 +244,7 @@ function AutoTagConfigPage() {
           }>;
           if (Array.isArray(items)) {
             setStrictCounts((prev) => {
-              const next = {...prev};
+              const next = { ...prev };
               for (const it of items) {
                 next[it.autoTagKey] = {
                   predictionCount: it.predictionCount,
@@ -272,7 +292,7 @@ function AutoTagConfigPage() {
             for (let i = 0; i < keys.length; i += BATCH) {
               const batch = keys.slice(i, i + BATCH);
               batch.forEach((k) => requestedStrictKeysRef.current.add(k));
-              const params = new URLSearchParams({threshold: '0.4'});
+              const params = new URLSearchParams({ threshold: '0.4' });
               batch.forEach((k) => params.append('keys', k));
               try {
                 const res = await apiClient.get(
@@ -285,7 +305,7 @@ function AutoTagConfigPage() {
                 }>;
                 if (Array.isArray(items)) {
                   setStrictCounts((prev) => {
-                    const next = {...prev};
+                    const next = { ...prev };
                     for (const it of items) {
                       next[it.autoTagKey] = {
                         predictionCount: it.predictionCount,
@@ -302,7 +322,7 @@ function AutoTagConfigPage() {
           }, 200);
         }
       },
-      {root: null, rootMargin: '200px 0px', threshold: 0.01}
+      { root: null, rootMargin: '200px 0px', threshold: 0.01 }
     );
 
     // Start observing current items
@@ -377,8 +397,8 @@ function AutoTagConfigPage() {
     isLoading: stacksLoading,
   } = useInfiniteQuery({
     queryKey: ['autotag-stacks', datasetId, selectedAutoTag, localFilter],
-    queryFn: async ({pageParam = 0}) => {
-      if (!selectedAutoTag) return {stacks: [], total: 0, limit: 50, offset: 0};
+    queryFn: async ({ pageParam = 0 }) => {
+      if (!selectedAutoTag) return { stacks: [], total: 0, limit: 50, offset: 0 };
 
       const params = new URLSearchParams({
         autoTag: selectedAutoTag,
@@ -451,7 +471,7 @@ function AutoTagConfigPage() {
           }
         }
       },
-      {root: null, rootMargin: '400px 0px', threshold: 0.01}
+      { root: null, rootMargin: '400px 0px', threshold: 0.01 }
     );
 
     observer.observe(el);
@@ -464,7 +484,7 @@ function AutoTagConfigPage() {
       await apiClient.delete(`/api/v1/auto-tags/mappings/${datasetId}/${mappingId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({queryKey: ['autotag-mappings', datasetId]});
+      queryClient.invalidateQueries({ queryKey: ['autotag-mappings', datasetId] });
     },
   });
 
@@ -496,7 +516,11 @@ function AutoTagConfigPage() {
     try {
       const sp = new URLSearchParams(location.search);
       sp.set('autoTag', encodeURIComponent(autoTagKey));
-      navigate({ to: '/library/$datasetId/autotag-config', params: { datasetId }, search: () => Object.fromEntries(sp.entries()) as any });
+      navigate({
+        to: '/library/$datasetId/autotag-config',
+        params: { datasetId },
+        search: () => Object.fromEntries(sp.entries()) as any,
+      });
     } catch {}
   };
 
@@ -686,119 +710,129 @@ function AutoTagConfigPage() {
       <div className="w-80 flex-shrink-0">
         <div className="sticky top-14 h-[calc(100vh-56px)] border-r bg-white">
           <div className="overflow-y-auto h-full">
-        <div className="p-4 border-b">
-          <h2 className="text-lg font-semibold mb-3">AutoTag Statistics</h2>
+            <div className="p-4 border-b">
+              <h2 className="text-lg font-semibold mb-3">AutoTag Statistics</h2>
 
-          <div className="space-y-3">
-            <SmallSearchField value={searchQuery} onValueChange={setSearchQuery} placeholder="Search tags..." />
+              <div className="space-y-3">
+                <SmallSearchField
+                  value={searchQuery}
+                  onValueChange={setSearchQuery}
+                  placeholder="Search tags..."
+                />
 
-            <div className="space-y-2">
-              <SmallSelect value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)} placeholder="Sort by...">
-                <SelectItem value="name-asc">Name (A-Z)</SelectItem>
-                <SelectItem value="name-desc">Name (Z-A)</SelectItem>
-                <SelectItem value="count-desc">Prediction Count (High to Low)</SelectItem>
-                <SelectItem value="count-asc">Prediction Count (Low to High)</SelectItem>
-              </SmallSelect>
-            </div>
-          </div>
-        </div>
-
-        {/* Statistics list */}
-        <div className="p-2">
-          {statisticsError ? (
-            <div className="text-center py-8 text-red-500">
-              Error loading statistics: {(statisticsError as Error).message}
-            </div>
-          ) : statisticsLoading ? (
-            <div className="text-center py-8 text-muted-foreground">Loading statistics...</div>
-          ) : filteredStatistics.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              {searchQuery ? 'No tags found' : 'No AutoTag data yet'}
-            </div>
-          ) : (
-            <div className="space-y-0.5">
-              {filteredStatistics.map((stat) => {
-                const existingMapping = getExistingMapping(stat.autoTagKey);
-                const isSelected = selectedAutoTag === stat.autoTagKey;
-                return (
-                  <div
-                    key={stat.autoTagKey}
-                    data-autotag-key={stat.autoTagKey}
-                    ref={(el) => {
-                      if (el) {
-                        listItemRefs.current.set(stat.autoTagKey, el);
-                      } else {
-                        listItemRefs.current.delete(stat.autoTagKey);
-                      }
-                    }}
-                    onClick={() => handleAutoTagClick(stat.autoTagKey)}
-                    className={cn(
-                      'px-2 py-1.5 rounded transition-colors cursor-pointer group',
-                      isSelected
-                        ? 'bg-blue-50 text-blue-700'
-                        : 'hover:bg-accent hover:text-accent-foreground'
-                    )}
+                <div className="space-y-2">
+                  <SmallSelect
+                    value={sortBy}
+                    onValueChange={(v) => setSortBy(v as typeof sortBy)}
+                    placeholder="Sort by..."
                   >
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm truncate font-medium">{stat.autoTagKey}</span>
-                          {existingMapping && (
-                            <div className="flex items-center gap-1">
-                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
-                              <span className="text-xs text-blue-600">
-                                {existingMapping.displayName}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {strictCounts[stat.autoTagKey] ? (
-                            <>
-                              {strictCounts[stat.autoTagKey].predictionCount} predictions •{' '}
-                              {strictCounts[stat.autoTagKey].assetCount} assets
-                            </>
-                          ) : (
-                            <>
-                              {stat.predictionCount} stacks • ≈{stat.assetCount} assets
-                            </>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        {existingMapping ? (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleEditMapping(existingMapping);
-                            }}
-                            className="h-6 w-6 p-0"
-                          >
-                            <SquarePen className="h-3.5 w-3.5"/>
-                          </Button>
-                        ) : (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleCreateMapping(stat.autoTagKey);
-                            }}
-                            className="h-6 w-6 p-0"
-                          >
-                            <Plus className="h-3.5 w-3.5"/>
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+                    <SelectItem value="name-asc">Name (A-Z)</SelectItem>
+                    <SelectItem value="name-desc">Name (Z-A)</SelectItem>
+                    <SelectItem value="count-desc">Prediction Count (High to Low)</SelectItem>
+                    <SelectItem value="count-asc">Prediction Count (Low to High)</SelectItem>
+                  </SmallSelect>
+                </div>
+              </div>
             </div>
-          )}
-        </div>
+
+            {/* Statistics list */}
+            <div className="p-2">
+              {statisticsError ? (
+                <div className="text-center py-8 text-red-500">
+                  Error loading statistics: {(statisticsError as Error).message}
+                </div>
+              ) : statisticsLoading ? (
+                <div className="text-center py-8 text-muted-foreground">Loading statistics...</div>
+              ) : filteredStatistics.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  {searchQuery ? 'No tags found' : 'No AutoTag data yet'}
+                </div>
+              ) : (
+                <div className="space-y-0.5">
+                  {filteredStatistics.map((stat) => {
+                    const existingMapping = getExistingMapping(stat.autoTagKey);
+                    const isSelected = selectedAutoTag === stat.autoTagKey;
+                    return (
+                      <div
+                        key={stat.autoTagKey}
+                        data-autotag-key={stat.autoTagKey}
+                        ref={(el) => {
+                          if (el) {
+                            listItemRefs.current.set(stat.autoTagKey, el);
+                          } else {
+                            listItemRefs.current.delete(stat.autoTagKey);
+                          }
+                        }}
+                        onClick={() => handleAutoTagClick(stat.autoTagKey)}
+                        className={cn(
+                          'px-2 py-1.5 rounded transition-colors cursor-pointer group',
+                          isSelected
+                            ? 'bg-blue-50 text-blue-700'
+                            : 'hover:bg-accent hover:text-accent-foreground'
+                        )}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm truncate font-medium">
+                                {stat.autoTagKey}
+                              </span>
+                              {existingMapping && (
+                                <div className="flex items-center gap-1">
+                                  <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                                  <span className="text-xs text-blue-600">
+                                    {existingMapping.displayName}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {strictCounts[stat.autoTagKey] ? (
+                                <>
+                                  {strictCounts[stat.autoTagKey].predictionCount} predictions •{' '}
+                                  {strictCounts[stat.autoTagKey].assetCount} assets
+                                </>
+                              ) : (
+                                <>
+                                  {stat.predictionCount} stacks • ≈{stat.assetCount} assets
+                                </>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            {existingMapping ? (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleEditMapping(existingMapping);
+                                }}
+                                className="h-6 w-6 p-0"
+                              >
+                                <SquarePen className="h-3.5 w-3.5" />
+                              </Button>
+                            ) : (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCreateMapping(stat.autoTagKey);
+                                }}
+                                className="h-6 w-6 p-0"
+                              >
+                                <Plus className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -825,11 +859,15 @@ function AutoTagConfigPage() {
                     try {
                       const sp = new URLSearchParams(location.search);
                       sp.delete('autoTag');
-                      navigate({ to: '/library/$datasetId/autotag-config', params: { datasetId }, search: () => Object.fromEntries(sp.entries()) as any });
+                      navigate({
+                        to: '/library/$datasetId/autotag-config',
+                        params: { datasetId },
+                        search: () => Object.fromEntries(sp.entries()) as any,
+                      });
                     } catch {}
                   }}
                 >
-                  <X className="h-4 w-4"/>
+                  <X className="h-4 w-4" />
                 </Button>
               </div>
 
@@ -839,7 +877,7 @@ function AutoTagConfigPage() {
                   <div className="mt-3 bg-white rounded-lg p-3 border border-gray-200 space-y-2 max-w-lg">
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-2">
-                        <Tag className="h-4 w-4 text-blue-500 mt-0.5"/>
+                        <Tag className="h-4 w-4 text-blue-500 mt-0.5" />
                         <div>
                           <p className="text-sm text-gray-600">Mapped to:</p>
                           <p className="font-medium">{mapping.displayName}</p>
@@ -852,7 +890,7 @@ function AutoTagConfigPage() {
                           onClick={() => handleEditMapping(mapping)}
                           className="h-8 w-8 p-0"
                         >
-                          <Edit2 className="h-4 w-4"/>
+                          <Edit2 className="h-4 w-4" />
                         </Button>
                         <Button
                           size="sm"
@@ -860,7 +898,7 @@ function AutoTagConfigPage() {
                           onClick={() => handleDeleteMapping(mapping.id)}
                           className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
                         >
-                          <Trash2 className="h-4 w-4"/>
+                          <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     </div>
@@ -872,7 +910,7 @@ function AutoTagConfigPage() {
                   <div className="mt-3 bg-gray-100 rounded-lg p-3 border border-gray-200 max-w-lg">
                     <p className="text-sm text-muted-foreground mb-2">No mapping configured</p>
                     <Button size="sm" onClick={() => handleCreateMapping(selectedAutoTag)}>
-                      <Plus className="h-3.5 w-3.5 mr-1"/>
+                      <Plus className="h-3.5 w-3.5 mr-1" />
                       Create Mapping
                     </Button>
                   </div>
@@ -885,7 +923,7 @@ function AutoTagConfigPage() {
               <h3 className="text-lg font-semibold mb-4">Stacks with this AutoTag</h3>
               {stacksLoading ? (
                 <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground"/>
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>
               ) : allStacks.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
@@ -895,10 +933,19 @@ function AutoTagConfigPage() {
                 <>
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                     {allStacks.map((stack: any) => {
-                      const { onOpen, onFindSimilar, onAddToScratch, onToggleFavorite, onLike, dragProps, onInfo } = actions;
+                      const {
+                        onOpen,
+                        onFindSimilar,
+                        onAddToScratch,
+                        onToggleFavorite,
+                        onLike,
+                        dragProps,
+                        onInfo,
+                      } = actions;
                       const thumb = stack.thumbnail || stack.thumbnailUrl || '/no-image.png';
                       const likeCount = Number(stack.likeCount ?? stack.liked ?? 0);
-                      const pageCount = stack.assetCount || stack._count?.assets || stack.assetsCount || 0;
+                      const pageCount =
+                        stack.assetCount || stack._count?.assets || stack.assetsCount || 0;
                       const isFav = stack.favorited || stack.isFavorite || false;
                       return infoSidebarOpen ? (
                         <StackTile
@@ -907,8 +954,14 @@ function AutoTagConfigPage() {
                           pageCount={pageCount}
                           favorited={isFav}
                           likeCount={likeCount}
-                          onClick={() => { setSelectedItemId(stack.id); setInfoSidebarOpen(true); }}
-                          onInfo={() => { setSelectedItemId(stack.id); setInfoSidebarOpen(true); }}
+                          onClick={() => {
+                            setSelectedItemId(stack.id);
+                            setInfoSidebarOpen(true);
+                          }}
+                          onInfo={() => {
+                            setSelectedItemId(stack.id);
+                            setInfoSidebarOpen(true);
+                          }}
                           onFindSimilar={() => onFindSimilar(stack.id)}
                           onAddToScratch={() => onAddToScratch(stack.id)}
                           onToggleFavorite={() => onToggleFavorite(stack.id, isFav)}
@@ -923,7 +976,10 @@ function AutoTagConfigPage() {
                           favorited={isFav}
                           likeCount={likeCount}
                           onOpen={() => onOpen(stack.id)}
-                          onInfo={() => { setSelectedItemId(stack.id); setInfoSidebarOpen(true); }}
+                          onInfo={() => {
+                            setSelectedItemId(stack.id);
+                            setInfoSidebarOpen(true);
+                          }}
                           onFindSimilar={() => onFindSimilar(stack.id)}
                           onAddToScratch={() => onAddToScratch(stack.id)}
                           onToggleFavorite={() => onToggleFavorite(stack.id, isFav)}
@@ -943,7 +999,7 @@ function AutoTagConfigPage() {
                   {/* Loading indicator */}
                   {isFetchingNextPage && (
                     <div className="flex items-center justify-center py-8">
-                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground"/>
+                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                     </div>
                   )}
 
@@ -998,7 +1054,7 @@ function AutoTagConfigPage() {
           )}
         >
           <div className="text-center">
-            <Tag className="h-12 w-12 text-gray-400 mx-auto mb-4"/>
+            <Tag className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <p className="text-lg text-muted-foreground">Select an AutoTag to view details</p>
           </div>
         </div>
@@ -1017,15 +1073,15 @@ function AutoTagConfigPage() {
         autoTagKey={mappingAutoTagKey}
         existingMapping={editingMapping}
         onSuccess={(mapping) => {
-          queryClient.invalidateQueries({queryKey: ['autotag-mappings', datasetId]});
-          queryClient.invalidateQueries({queryKey: ['tags', datasetId]});
+          queryClient.invalidateQueries({ queryKey: ['autotag-mappings', datasetId] });
+          queryClient.invalidateQueries({ queryKey: ['tags', datasetId] });
           setMappingDialogOpen(false);
           resetForm();
         }}
       />
 
       {/* InfoSidebar - only show when not in selection mode */}
-      {!selectionMode && <InfoSidebar/>}
+      {!selectionMode && <InfoSidebar />}
 
       {/* BulkEditPanel - only show when in selection mode */}
       {isEditPanelOpen &&
@@ -1080,7 +1136,7 @@ function AutoTagConfigPage() {
                   : 'Open filter'
             }
           >
-            <Filter size={18}/>
+            <Filter size={18} />
           </HeaderIconButton>
 
           {/* Selection mode button */}
@@ -1096,7 +1152,7 @@ function AutoTagConfigPage() {
             isActive={selectionMode}
             aria-label={selectionMode ? 'Exit selection mode' : 'Enter selection mode'}
           >
-            <Check size={18}/>
+            <Check size={18} />
           </HeaderIconButton>
 
           {/* Info button - only show when not in selection mode */}
@@ -1106,7 +1162,7 @@ function AutoTagConfigPage() {
               isActive={infoSidebarOpen}
               aria-label={infoSidebarOpen ? 'Close info panel' : 'Open info panel'}
             >
-              <Info size={18}/>
+              <Info size={18} />
             </HeaderIconButton>
           )}
         </>,
@@ -1114,7 +1170,7 @@ function AutoTagConfigPage() {
       )}
 
       {/* Filter Panel */}
-      <FilterPanel currentFilter={localFilter} onFilterChange={handleFilterChange}/>
+      <FilterPanel currentFilter={localFilter} onFilterChange={handleFilterChange} />
     </div>
   );
 }

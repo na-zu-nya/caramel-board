@@ -1,7 +1,7 @@
 import fs from 'node:fs';
-import type {Prisma, PrismaClient} from '@prisma/client';
-import {DuplicateAssetError} from '../../../errors/DuplicateAssetError';
-import {AssetModel} from '../../../models/AssetModel';
+import type { Prisma, PrismaClient } from '@prisma/client';
+import { DuplicateAssetError } from '../../../errors/DuplicateAssetError';
+import { AssetModel } from '../../../models/AssetModel';
 import {
   buildUnifiedWhereClause,
   combineStackIdConstraints,
@@ -10,13 +10,13 @@ import {
   type StackIdConstraints,
   type UnifiedFilterOptions,
 } from '../../../utils/filterBuilder';
-import {getHash} from '../../../utils/functions';
-import {generateThumbnail} from '../../../utils/generateThumbnail';
-import {generateMediaPreview, shouldGeneratePreview} from '../../../utils/generateMediaPreview';
-import {formatStacksThumbnails} from '../../../utils/thumbnailPath';
-import {withPublicAssetArray, toPublicAssetPath} from '../../../utils/assetPath';
-import type {createColorSearchService} from './color-search-service';
-import {ensureSuperUser} from '../../../shared/services/UserService';
+import { getHash } from '../../../utils/functions';
+import { generateThumbnail } from '../../../utils/generateThumbnail';
+import { generateMediaPreview, shouldGeneratePreview } from '../../../utils/generateMediaPreview';
+import { formatStacksThumbnails } from '../../../utils/thumbnailPath';
+import { withPublicAssetArray, toPublicAssetPath } from '../../../utils/assetPath';
+import type { createColorSearchService } from './color-search-service';
+import { ensureSuperUser } from '../../../shared/services/UserService';
 
 export interface CreateStackData {
   name: string;
@@ -103,11 +103,11 @@ export const createStackService = (deps: {
   colorSearch: ReturnType<typeof createColorSearchService>;
   dataSetId: number;
 }) => {
-  const {prisma, colorSearch, dataSetId} = deps;
+  const { prisma, colorSearch, dataSetId } = deps;
 
-  async function annotateFavorites<T extends {id: number}>(
+  async function annotateFavorites<T extends { id: number }>(
     stacks: T[]
-  ): Promise<Array<T & {favorited: boolean; isFavorite: boolean}>> {
+  ): Promise<Array<T & { favorited: boolean; isFavorite: boolean }>> {
     if (stacks.length === 0) {
       return stacks.map((stack) => ({
         ...stack,
@@ -124,7 +124,7 @@ export const createStackService = (deps: {
           in: stacks.map((stack) => Number(stack.id)),
         },
       },
-      select: {stackId: true},
+      select: { stackId: true },
     });
     const favoriteSet = new Set(favoriteRows.map((row) => row.stackId));
 
@@ -139,9 +139,9 @@ export const createStackService = (deps: {
   }
 
   async function getAll(pagination: PaginationOptions) {
-    const {limit, offset, mediaType} = pagination;
+    const { limit, offset, mediaType } = pagination;
 
-    const where: Prisma.StackWhereInput = {dataSetId};
+    const where: Prisma.StackWhereInput = { dataSetId };
     if (mediaType) {
       where.mediaType = mediaType;
     }
@@ -151,18 +151,18 @@ export const createStackService = (deps: {
         where,
         skip: offset,
         take: limit,
-        orderBy: {createdAt: 'desc'},
+        orderBy: { createdAt: 'desc' },
         include: {
           assets: {
             take: 1,
-            orderBy: {createdAt: 'asc'},
+            orderBy: { createdAt: 'asc' },
           },
           _count: {
-            select: {assets: true},
+            select: { assets: true },
           },
         },
       }),
-      prisma.stack.count({where}),
+      prisma.stack.count({ where }),
     ]);
 
     const stacks = stacksRaw.map((stack) => {
@@ -243,8 +243,8 @@ export const createStackService = (deps: {
       // 基本Whereクラウスを構築（検索時にも他のフィルタを適用）
       const baseWhere: Prisma.StackWhereInput = {
         dataSetId,
-        ...(mediaType ? {mediaType} : {}),
-        ...(liked !== undefined ? {liked: liked ? {gt: 0} : 0} : {}),
+        ...(mediaType ? { mediaType } : {}),
+        ...(liked !== undefined ? { liked: liked ? { gt: 0 } : 0 } : {}),
       };
       if (favoriteFilter) {
         baseWhere.favorites = favoriteFilter;
@@ -320,11 +320,11 @@ export const createStackService = (deps: {
       customColor,
     };
 
-    if (hasColorFilter({colorFilter})) {
+    if (hasColorFilter({ colorFilter })) {
       // 追加のWhere条件を構築
       const additionalWhere: Prisma.StackWhereInput = {
-        ...(mediaType ? {mediaType} : {}),
-        ...(liked !== undefined ? {liked: liked ? {gt: 0} : 0} : {}),
+        ...(mediaType ? { mediaType } : {}),
+        ...(liked !== undefined ? { liked: liked ? { gt: 0 } : 0 } : {}),
       };
       if (favoriteFilter) {
         additionalWhere.favorites = favoriteFilter;
@@ -375,7 +375,7 @@ export const createStackService = (deps: {
 
       if (autoTagStackIds.length > 0) {
         idConstraints.autoTag = autoTagStackIds;
-      } else if (!search && !hasColorFilter({colorFilter})) {
+      } else if (!search && !hasColorFilter({ colorFilter })) {
         // AutoTagフィルタが指定されているが結果が0件の場合
         return {
           stacks: [],
@@ -401,10 +401,10 @@ export const createStackService = (deps: {
       // ID制約がある場合のみ追加
       ...(combinedStackIds.length > 0
         ? {
-          colorStackIds: idConstraints.color,
-          autoTagIds: idConstraints.autoTag,
-          searchStackIds: idConstraints.search,
-        }
+            colorStackIds: idConstraints.color,
+            autoTagIds: idConstraints.autoTag,
+            searchStackIds: idConstraints.search,
+          }
         : {}),
     };
 
@@ -412,7 +412,7 @@ export const createStackService = (deps: {
     const where = buildUnifiedWhereClause(unifiedOptions, userId);
 
     // 7. ソート順の決定 - 検索時はデータ取得後にJavaScriptでソート
-    let orderBy: any = {createdAt: 'desc'}; // default
+    let orderBy: any = { createdAt: 'desc' }; // default
     let searchRankedIds: number[] = [];
 
     if (effectiveSort === 'recommended' && search) {
@@ -421,20 +421,20 @@ export const createStackService = (deps: {
         search
           ? await performUnifiedSearch(search.trim(), where)
           : {
-            textMatches: new Set<number>(),
-            tagMatches: new Set<number>(),
-            autoTagMatches: new Set<number>(),
-          },
+              textMatches: new Set<number>(),
+              tagMatches: new Set<number>(),
+              autoTagMatches: new Set<number>(),
+            },
         idConstraints.color ? new Set(idConstraints.color) : undefined
       );
 
       searchRankedIds = rankedResults.map((r) => r.id);
       // 普通のorderByを使用（後でJavaScriptで並び替え）
-      orderBy = {createdAt: 'desc'};
+      orderBy = { createdAt: 'desc' };
     } else if (effectiveSort !== 'recommended') {
       const sortField = effectiveSort === 'updateAt' ? 'updatedAt' : effectiveSort;
       const sortOrder = order || 'desc';
-      orderBy = {[sortField]: sortOrder};
+      orderBy = { [sortField]: sortOrder };
     }
 
     // 8. データ取得
@@ -464,7 +464,7 @@ export const createStackService = (deps: {
           },
           assets: {
             take: 1,
-            orderBy: {createdAt: 'asc'},
+            orderBy: { createdAt: 'asc' },
             select: {
               id: true,
               thumbnail: true,
@@ -478,7 +478,7 @@ export const createStackService = (deps: {
           },
         },
       }),
-      prisma.stack.count({where}),
+      prisma.stack.count({ where }),
     ]);
 
     const stacks = stacksRaw.map((stack) => ({
@@ -492,18 +492,18 @@ export const createStackService = (deps: {
     const tagsData =
       stackIds.length > 0
         ? await prisma.tagsOnStack.findMany({
-          where: {
-            stackId: {in: stackIds},
-          },
-          select: {
-            stackId: true,
-            tag: {
-              select: {
-                title: true,
+            where: {
+              stackId: { in: stackIds },
+            },
+            select: {
+              stackId: true,
+              tag: {
+                select: {
+                  title: true,
+                },
               },
             },
-          },
-        })
+          })
         : [];
 
     // タグをスタックIDでグループ化
@@ -565,38 +565,38 @@ export const createStackService = (deps: {
   }
 
   async function getById(id: number, options: StackOptions = {}) {
-    const {assets = true, tags = true, author = true, collections = false} = options;
+    const { assets = true, tags = true, author = true, collections = false } = options;
 
     const stack = await prisma.stack.findFirst({
-      where: {id, dataSetId},
+      where: { id, dataSetId },
       include: {
         assets: assets
           ? {
-            orderBy: {
-              orderInStack: 'asc',
-            },
-          }
+              orderBy: {
+                orderInStack: 'asc',
+              },
+            }
           : false,
         author: author,
         tags: tags
           ? {
-            include: {
-              tag: true,
-            },
-          }
+              include: {
+                tag: true,
+              },
+            }
           : false,
         collectionStacks: collections
           ? {
-            include: {
-              collection: {
-                select: {
-                  id: true,
-                  name: true,
-                  type: true,
+              include: {
+                collection: {
+                  select: {
+                    id: true,
+                    name: true,
+                    type: true,
+                  },
                 },
               },
-            },
-          }
+            }
           : false,
         autoTagAggregate: true,
         // embeddings removed
@@ -629,7 +629,7 @@ export const createStackService = (deps: {
       const mappings = await prisma.autoTagMapping.findMany({
         where: {
           dataSetId: dataSetId,
-          autoTagKey: {in: autoTagKeys},
+          autoTagKey: { in: autoTagKeys },
           isActive: true,
         },
         include: {
@@ -647,7 +647,7 @@ export const createStackService = (deps: {
           return {
             autoTagKey: t.tag,
             displayName: mapping?.displayName || t.tag,
-            mappedTag: mapping?.tag ? {id: mapping.tag.id, title: mapping.tag.title} : null,
+            mappedTag: mapping?.tag ? { id: mapping.tag.id, title: mapping.tag.title } : null,
             score: t.score,
           };
         })
@@ -688,15 +688,14 @@ export const createStackService = (deps: {
     // 1) 事前に重複を検知（空スタック生成を防ぐ）
     const hash = await getHash(data.file.path);
     const existing = await prisma.asset.findFirst({
-      where: {hash, stack: {dataSetId}},
-      select: {id: true, stackId: true},
+      where: { hash, stack: { dataSetId } },
+      select: { id: true, stackId: true },
     });
     if (existing) {
       // tmpファイルを掃除
       try {
         fs.rmSync(data.file.path);
-      } catch {
-      }
+      } catch {}
       throw new DuplicateAssetError('重複画像のため作成できません', {
         assetId: existing.id,
         stackId: existing.stackId,
@@ -715,19 +714,14 @@ export const createStackService = (deps: {
       },
     });
 
-    await AssetModel.createWithFile(
-      data.file.path,
-      data.file.originalname,
-      stack.id,
-      dataSetId
-    );
+    await AssetModel.createWithFile(data.file.path, data.file.originalname, stack.id, dataSetId);
 
-    return getById(stack.id, {assets: true});
+    return getById(stack.id, { assets: true });
   }
 
   async function update(id: number, data: UpdateStackData) {
     return prisma.stack.update({
-      where: {id},
+      where: { id },
       data,
     });
   }
@@ -735,7 +729,7 @@ export const createStackService = (deps: {
   async function deleteStack(id: number) {
     // 対象のスタックがこのデータセットに属しているか確認
     const stack = await prisma.stack.findFirst({
-      where: {id, dataSetId},
+      where: { id, dataSetId },
     });
 
     if (!stack) {
@@ -744,13 +738,13 @@ export const createStackService = (deps: {
 
     // Delete related assets first
     const _assets = await prisma.asset.findMany({
-      where: {stackId: id},
+      where: { stackId: id },
     });
 
     // TODO: Delete actual files from storage
 
     return prisma.stack.delete({
-      where: {id},
+      where: { id },
     });
   }
 
@@ -773,16 +767,16 @@ export const createStackService = (deps: {
     const [nameMatches, tagSearchResults, autoTagMappings] = await Promise.all([
       // スタック名での検索
       query &&
-      prisma.stack.findMany({
-        where: {
-          ...baseWhere,
-          name: {
-            contains: query,
-            mode: 'insensitive',
+        prisma.stack.findMany({
+          where: {
+            ...baseWhere,
+            name: {
+              contains: query,
+              mode: 'insensitive',
+            },
           },
-        },
-        select: {id: true},
-      }),
+          select: { id: true },
+        }),
 
       // タグ名での検索
       (async () => {
@@ -797,12 +791,12 @@ export const createStackService = (deps: {
               },
               stack: {
                 dataSetId,
-                ...(baseWhere.mediaType ? {mediaType: baseWhere.mediaType} : {}),
-                ...(favoriteFilter ? {favorites: favoriteFilter} : {}),
-                ...(baseWhere.liked !== undefined ? {liked: baseWhere.liked} : {}),
+                ...(baseWhere.mediaType ? { mediaType: baseWhere.mediaType } : {}),
+                ...(favoriteFilter ? { favorites: favoriteFilter } : {}),
+                ...(baseWhere.liked !== undefined ? { liked: baseWhere.liked } : {}),
               },
             },
-            select: {stackId: true},
+            select: { stackId: true },
           });
         } catch (error) {
           console.error('Tag search failed:', error);
@@ -869,7 +863,7 @@ export const createStackService = (deps: {
    * Enhanced search with ranking algorithm
    */
   async function searchWithRanking(options: SearchWithRankingOptions) {
-    const {query, limit, offset, sort, order, filters} = options;
+    const { query, limit, offset, sort, order, filters } = options;
 
     const userId = await ensureSuperUser(prisma);
 
@@ -899,7 +893,7 @@ export const createStackService = (deps: {
           };
     }
     if (filters?.liked !== undefined && filters.liked > 0) {
-      baseWhere.liked = {gte: filters.liked};
+      baseWhere.liked = { gte: filters.liked };
     }
 
     // Tag filter
@@ -938,9 +932,9 @@ export const createStackService = (deps: {
 
     // Handle color filter separately if present
     let colorFilteredStackIds: number[] | undefined;
-    if (filters?.colorFilter && hasColorFilter({colorFilter: filters.colorFilter})) {
+    if (filters?.colorFilter && hasColorFilter({ colorFilter: filters.colorFilter })) {
       const colorFilterOptions = extractColorFilterOptions(
-        {colorFilter: filters.colorFilter, favorited: filters.favorited},
+        { colorFilter: filters.colorFilter, favorited: filters.favorited },
         dataSetId,
         10000, // Get all matching stacks for filtering
         0,
@@ -953,7 +947,7 @@ export const createStackService = (deps: {
 
         // Add color filter to base where clause
         if (colorFilteredStackIds.length > 0) {
-          baseWhere.id = {in: colorFilteredStackIds};
+          baseWhere.id = { in: colorFilteredStackIds };
         } else {
           // No color matches, return empty result
           return {
@@ -979,9 +973,9 @@ export const createStackService = (deps: {
           },
           stack: {
             dataSetId,
-            ...(baseWhere.mediaType ? {mediaType: baseWhere.mediaType} : {}),
-            ...(favoriteFilter ? {favorites: favoriteFilter} : {}),
-            ...(baseWhere.liked !== undefined ? {liked: baseWhere.liked} : {}),
+            ...(baseWhere.mediaType ? { mediaType: baseWhere.mediaType } : {}),
+            ...(favoriteFilter ? { favorites: favoriteFilter } : {}),
+            ...(baseWhere.liked !== undefined ? { liked: baseWhere.liked } : {}),
           },
         },
         select: {
@@ -998,7 +992,7 @@ export const createStackService = (deps: {
             mode: 'insensitive',
           },
         },
-        select: {id: true},
+        select: { id: true },
       }),
 
       // Search for prefix matches
@@ -1010,7 +1004,7 @@ export const createStackService = (deps: {
             mode: 'insensitive',
           },
         },
-        select: {id: true},
+        select: { id: true },
       }),
 
       // Search AutoTagMappings that might match the query
@@ -1060,9 +1054,9 @@ export const createStackService = (deps: {
         where: {
           stack: {
             dataSetId,
-            ...(baseWhere.mediaType ? {mediaType: baseWhere.mediaType} : {}),
-            ...(favoriteFilter ? {favorites: favoriteFilter} : {}),
-            ...(baseWhere.liked !== undefined ? {liked: baseWhere.liked} : {}),
+            ...(baseWhere.mediaType ? { mediaType: baseWhere.mediaType } : {}),
+            ...(favoriteFilter ? { favorites: favoriteFilter } : {}),
+            ...(baseWhere.liked !== undefined ? { liked: baseWhere.liked } : {}),
           },
         },
         select: {
@@ -1090,12 +1084,12 @@ export const createStackService = (deps: {
     if (linkedTagIds.length > 0) {
       const linkedTagMatches = await prisma.tagsOnStack.findMany({
         where: {
-          tagId: {in: linkedTagIds},
+          tagId: { in: linkedTagIds },
           stack: {
             dataSetId,
-            ...(baseWhere.mediaType ? {mediaType: baseWhere.mediaType} : {}),
-            ...(favoriteFilter ? {favorites: favoriteFilter} : {}),
-            ...(baseWhere.liked !== undefined ? {liked: baseWhere.liked} : {}),
+            ...(baseWhere.mediaType ? { mediaType: baseWhere.mediaType } : {}),
+            ...(favoriteFilter ? { favorites: favoriteFilter } : {}),
+            ...(baseWhere.liked !== undefined ? { liked: baseWhere.liked } : {}),
           },
         },
         select: {
@@ -1136,10 +1130,10 @@ export const createStackService = (deps: {
     // First, get the actual count of matching stacks after applying all filters
     const actualMatchingStackIds = await prisma.stack.findMany({
       where: {
-        id: {in: allUniqueStackIds},
+        id: { in: allUniqueStackIds },
         ...baseWhere,
       },
-      select: {id: true},
+      select: { id: true },
     });
 
     const actualTotal = actualMatchingStackIds.length;
@@ -1163,13 +1157,13 @@ export const createStackService = (deps: {
     // Fetch detailed stack data for the filtered results
     const allStacks = await prisma.stack.findMany({
       where: {
-        id: {in: actualMatchingStackIds.map((s) => s.id)},
+        id: { in: actualMatchingStackIds.map((s) => s.id) },
       },
       include: {
         author: true,
         assets: {
           take: 1,
-          orderBy: {orderInStack: 'asc'},
+          orderBy: { orderInStack: 'asc' },
           select: {
             id: true,
             thumbnail: true,
@@ -1324,7 +1318,7 @@ export const createStackService = (deps: {
 
   async function updateThumbnails(stackId: number) {
     const assets = await prisma.asset.findMany({
-      where: {stackId},
+      where: { stackId },
     });
 
     for (const asset of assets) {
@@ -1332,12 +1326,12 @@ export const createStackService = (deps: {
       const thumbnailKey = await generateThumbnail(asset.file, asset.fileType, true);
 
       await prisma.asset.update({
-        where: {id: asset.id},
-        data: {thumbnail: thumbnailKey},
+        where: { id: asset.id },
+        data: { thumbnail: thumbnailKey },
       });
     }
 
-    return {updated: assets.length};
+    return { updated: assets.length };
   }
 
   async function addTag(stackId: number, tagTitle: string) {
@@ -1347,7 +1341,7 @@ export const createStackService = (deps: {
 
     // スタックがこのデータセットに属しているか確認
     const stack = await prisma.stack.findFirst({
-      where: {id: stackId, dataSetId},
+      where: { id: stackId, dataSetId },
     });
 
     if (!stack) {
@@ -1356,12 +1350,12 @@ export const createStackService = (deps: {
 
     // Find or create tag
     let tag = await prisma.tag.findFirst({
-      where: {title: tagTitle, dataSetId},
+      where: { title: tagTitle, dataSetId },
     });
 
     if (!tag) {
       tag = await prisma.tag.create({
-        data: {title: tagTitle, dataSetId},
+        data: { title: tagTitle, dataSetId },
       });
     }
 
@@ -1386,13 +1380,13 @@ export const createStackService = (deps: {
       // Embedding regeneration removed
     }
 
-    return {success: true};
+    return { success: true };
   }
 
   async function removeTag(stackId: number, tagTitle: string) {
     // スタックがこのデータセットに属しているか確認
     const stack = await prisma.stack.findFirst({
-      where: {id: stackId, dataSetId},
+      where: { id: stackId, dataSetId },
     });
 
     if (!stack) {
@@ -1400,7 +1394,7 @@ export const createStackService = (deps: {
     }
 
     const tag = await prisma.tag.findFirst({
-      where: {title: tagTitle, dataSetId},
+      where: { title: tagTitle, dataSetId },
     });
 
     if (tag) {
@@ -1416,13 +1410,13 @@ export const createStackService = (deps: {
       // Embedding regeneration removed
     }
 
-    return {success: true};
+    return { success: true };
   }
 
   async function updateAuthor(stackId: number, authorName: string) {
     // スタックがこのデータセットに属しているか確認
     const stack = await prisma.stack.findFirst({
-      where: {id: stackId, dataSetId},
+      where: { id: stackId, dataSetId },
     });
 
     if (!stack) {
@@ -1432,30 +1426,30 @@ export const createStackService = (deps: {
     if (!authorName || authorName.trim() === '') {
       // Remove author
       await prisma.stack.update({
-        where: {id: stackId},
-        data: {authorId: null},
+        where: { id: stackId },
+        data: { authorId: null },
       });
     } else {
       // Find or create author
       let author = await prisma.author.findFirst({
-        where: {name: authorName, dataSetId},
+        where: { name: authorName, dataSetId },
       });
 
       if (!author) {
         author = await prisma.author.create({
-          data: {name: authorName, dataSetId},
+          data: { name: authorName, dataSetId },
         });
       }
 
       await prisma.stack.update({
-        where: {id: stackId},
-        data: {authorId: author.id},
+        where: { id: stackId },
+        data: { authorId: author.id },
       });
     }
 
     // Embedding regeneration removed
 
-    return {success: true};
+    return { success: true };
   }
 
   async function like(stackId: number) {
@@ -1463,7 +1457,7 @@ export const createStackService = (deps: {
 
     // Increment the liked count
     await prisma.stack.update({
-      where: {id: stackId},
+      where: { id: stackId },
       data: {
         liked: {
           increment: 1,
@@ -1479,7 +1473,7 @@ export const createStackService = (deps: {
       },
     });
 
-    return {success: true};
+    return { success: true };
   }
 
   async function setFavorite(stackId: number, favorited: boolean) {
@@ -1508,13 +1502,13 @@ export const createStackService = (deps: {
       });
     }
 
-    return {success: true};
+    return { success: true };
   }
 
   async function refreshThumbnail(id: number) {
     const stack = await prisma.stack.findUnique({
-      where: {id, dataSetId},
-      include: {assets: {take: 1, orderBy: {id: 'asc'}}},
+      where: { id, dataSetId },
+      include: { assets: { take: 1, orderBy: { id: 'asc' } } },
     });
 
     if (!stack) {
@@ -1534,18 +1528,18 @@ export const createStackService = (deps: {
     );
 
     await prisma.stack.update({
-      where: {id},
-      data: {thumbnail: newThumbnail},
+      where: { id },
+      data: { thumbnail: newThumbnail },
     });
 
-    return {success: true, message: 'Thumbnail refreshed successfully'};
+    return { success: true, message: 'Thumbnail refreshed successfully' };
   }
 
   async function regeneratePreviews(id: number, options?: { force?: boolean }) {
-    const {force = true} = options ?? {};
+    const { force = true } = options ?? {};
 
     const stack = await prisma.stack.findUnique({
-      where: {id, dataSetId},
+      where: { id, dataSetId },
       include: {
         assets: {
           select: {
@@ -1555,7 +1549,7 @@ export const createStackService = (deps: {
             hash: true,
             preview: true,
           },
-          orderBy: {orderInStack: 'asc'},
+          orderBy: { orderInStack: 'asc' },
         },
       },
     });
@@ -1565,7 +1559,7 @@ export const createStackService = (deps: {
     }
 
     const eligibleAssets = stack.assets.filter((asset) => shouldGeneratePreview(asset.fileType));
-    const results: Array<{assetId: number; preview: string | null}> = [];
+    const results: Array<{ assetId: number; preview: string | null }> = [];
     const failures: number[] = [];
 
     for (const asset of eligibleAssets) {
@@ -1577,23 +1571,23 @@ export const createStackService = (deps: {
 
         if (previewKey) {
           await prisma.asset.update({
-            where: {id: asset.id},
-            data: {preview: previewKey},
+            where: { id: asset.id },
+            data: { preview: previewKey },
           });
-          results.push({assetId: asset.id, preview: previewKey});
+          results.push({ assetId: asset.id, preview: previewKey });
         } else {
           if (force && !asset.preview) {
             await prisma.asset.update({
-              where: {id: asset.id},
-              data: {preview: null},
+              where: { id: asset.id },
+              data: { preview: null },
             });
           }
-          results.push({assetId: asset.id, preview: asset.preview ?? null});
+          results.push({ assetId: asset.id, preview: asset.preview ?? null });
         }
       } catch (error) {
         failures.push(asset.id);
         console.error(`Failed to regenerate preview for asset ${asset.id}`, error);
-        results.push({assetId: asset.id, preview: asset.preview ?? null});
+        results.push({ assetId: asset.id, preview: asset.preview ?? null });
       }
     }
 
@@ -1611,7 +1605,7 @@ export const createStackService = (deps: {
   async function bulkAddTags(stackIds: number[], tags: string[]) {
     // Verify all stacks exist in this dataset
     const stackCount = await prisma.stack.count({
-      where: {id: {in: stackIds}, dataSetId},
+      where: { id: { in: stackIds }, dataSetId },
     });
 
     if (stackCount !== stackIds.length) {
@@ -1622,12 +1616,12 @@ export const createStackService = (deps: {
     const tagRecords = await Promise.all(
       tags.map(async (tagTitle) => {
         let tag = await prisma.tag.findFirst({
-          where: {title: tagTitle, dataSetId},
+          where: { title: tagTitle, dataSetId },
         });
 
         if (!tag) {
           tag = await prisma.tag.create({
-            data: {title: tagTitle, dataSetId},
+            data: { title: tagTitle, dataSetId },
           });
         }
 
@@ -1667,13 +1661,13 @@ export const createStackService = (deps: {
 
     // Embedding regeneration removed
 
-    return {success: true, updated: stackIds.length};
+    return { success: true, updated: stackIds.length };
   }
 
   async function bulkSetAuthor(stackIds: number[], authorName: string) {
     // Verify all stacks exist in this dataset
     const stackCount = await prisma.stack.count({
-      where: {id: {in: stackIds}, dataSetId},
+      where: { id: { in: stackIds }, dataSetId },
     });
 
     if (stackCount !== stackIds.length) {
@@ -1682,30 +1676,30 @@ export const createStackService = (deps: {
 
     // Find or create author
     let author = await prisma.author.findFirst({
-      where: {name: authorName, dataSetId},
+      where: { name: authorName, dataSetId },
     });
 
     if (!author) {
       author = await prisma.author.create({
-        data: {name: authorName, dataSetId},
+        data: { name: authorName, dataSetId },
       });
     }
 
     // Update all stacks
     await prisma.stack.updateMany({
-      where: {id: {in: stackIds}, dataSetId},
-      data: {authorId: author.id},
+      where: { id: { in: stackIds }, dataSetId },
+      data: { authorId: author.id },
     });
 
     // Embedding regeneration removed
 
-    return {success: true, updated: stackIds.length};
+    return { success: true, updated: stackIds.length };
   }
 
   async function bulkSetMediaType(stackIds: number[], mediaType: 'image' | 'comic' | 'video') {
     // Verify all stacks exist in this dataset
     const stackCount = await prisma.stack.count({
-      where: {id: {in: stackIds}, dataSetId},
+      where: { id: { in: stackIds }, dataSetId },
     });
 
     if (stackCount !== stackIds.length) {
@@ -1714,17 +1708,17 @@ export const createStackService = (deps: {
 
     // Update all stacks
     await prisma.stack.updateMany({
-      where: {id: {in: stackIds}, dataSetId},
-      data: {mediaType},
+      where: { id: { in: stackIds }, dataSetId },
+      data: { mediaType },
     });
 
-    return {success: true, updated: stackIds.length};
+    return { success: true, updated: stackIds.length };
   }
 
   async function bulkSetFavorite(stackIds: number[], favorited: boolean) {
     // Verify all stacks exist in this dataset
     const stackCount = await prisma.stack.count({
-      where: {id: {in: stackIds}, dataSetId},
+      where: { id: { in: stackIds }, dataSetId },
     });
 
     if (stackCount !== stackIds.length) {
@@ -1734,7 +1728,7 @@ export const createStackService = (deps: {
     const userId = await ensureSuperUser(prisma);
 
     if (favorited) {
-      const data = stackIds.map((stackId) => ({userId, stackId}));
+      const data = stackIds.map((stackId) => ({ userId, stackId }));
       if (data.length > 0) {
         await prisma.stackFavorite.createMany({
           data,
@@ -1745,19 +1739,19 @@ export const createStackService = (deps: {
       await prisma.stackFavorite.deleteMany({
         where: {
           userId,
-          stackId: {in: stackIds},
+          stackId: { in: stackIds },
         },
       });
     }
 
-    return {success: true, updated: stackIds.length};
+    return { success: true, updated: stackIds.length };
   }
 
   async function bulkRefreshThumbnails(stackIds: number[]) {
     // Verify all stacks exist in this dataset
     const stacks = await prisma.stack.findMany({
-      where: {id: {in: stackIds}, dataSetId},
-      include: {assets: {take: 1, orderBy: {id: 'asc'}}},
+      where: { id: { in: stackIds }, dataSetId },
+      include: { assets: { take: 1, orderBy: { id: 'asc' } } },
     });
 
     if (stacks.length !== stackIds.length) {
@@ -1780,8 +1774,8 @@ export const createStackService = (deps: {
           );
 
           await prisma.stack.update({
-            where: {id: stack.id},
-            data: {thumbnail: newThumbnail},
+            where: { id: stack.id },
+            data: { thumbnail: newThumbnail },
           });
 
           updated++;
@@ -1811,19 +1805,19 @@ export const createStackService = (deps: {
     }
 
     // Fetch and validate stacks belong to this dataset
-    const target = await prisma.stack.findUnique({where: {id: targetId}});
+    const target = await prisma.stack.findUnique({ where: { id: targetId } });
     if (!target) throw new Error('Target stack not found');
     if (target.dataSetId !== dataSetId) throw new Error('Target stack not in this dataset');
 
-    const sources = await prisma.stack.findMany({where: {id: {in: uniqueSourceIds}}});
+    const sources = await prisma.stack.findMany({ where: { id: { in: uniqueSourceIds } } });
     if (sources.length !== uniqueSourceIds.length) throw new Error('Some source stacks not found');
     const invalid = sources.find((s) => s.dataSetId !== dataSetId);
     if (invalid) throw new Error('Source stack not in this dataset');
 
     // Determine next order position in target
     const [maxOrderAgg, currentCount] = await Promise.all([
-      prisma.asset.aggregate({where: {stackId: targetId}, _max: {orderInStack: true}}),
-      prisma.asset.count({where: {stackId: targetId}}),
+      prisma.asset.aggregate({ where: { stackId: targetId }, _max: { orderInStack: true } }),
+      prisma.asset.count({ where: { stackId: targetId } }),
     ]);
     let nextOrder = maxOrderAgg._max.orderInStack ?? currentCount ?? 0;
 
@@ -1832,32 +1826,32 @@ export const createStackService = (deps: {
     for (const sourceId of uniqueSourceIds) {
       const source = sources.find((s) => s.id === sourceId)!;
       const assets = await prisma.asset.findMany({
-        where: {stackId: source.id},
-        orderBy: [{orderInStack: 'asc'}, {createdAt: 'asc'}],
+        where: { stackId: source.id },
+        orderBy: [{ orderInStack: 'asc' }, { createdAt: 'asc' }],
       });
 
       for (const asset of assets) {
         await prisma.asset.update({
-          where: {id: asset.id},
-          data: {stackId: targetId, orderInStack: nextOrder++},
+          where: { id: asset.id },
+          data: { stackId: targetId, orderInStack: nextOrder++ },
         });
       }
     }
 
     // Sum likes across target + sources
     const likeSum = sources.reduce((acc, s) => acc + (s.liked || 0), target.liked || 0);
-    await prisma.stack.update({where: {id: targetId}, data: {liked: likeSum}});
+    await prisma.stack.update({ where: { id: targetId }, data: { liked: likeSum } });
 
     // Delete source stacks
-    await prisma.stack.deleteMany({where: {id: {in: uniqueSourceIds}}});
+    await prisma.stack.deleteMany({ where: { id: { in: uniqueSourceIds } } });
 
-    return prisma.stack.findUnique({where: {id: targetId}});
+    return prisma.stack.findUnique({ where: { id: targetId } });
   }
 
   async function bulkRemoveStacks(stackIds: number[]) {
     // Verify all stacks exist in this dataset
     const stackCount = await prisma.stack.count({
-      where: {id: {in: stackIds}, dataSetId},
+      where: { id: { in: stackIds }, dataSetId },
     });
 
     if (stackCount !== stackIds.length) {
@@ -1872,7 +1866,7 @@ export const createStackService = (deps: {
       try {
         // Delete the stack (cascading deletes will handle related data)
         await prisma.stack.delete({
-          where: {id: stackId},
+          where: { id: stackId },
         });
 
         removed++;
@@ -1894,7 +1888,7 @@ export const createStackService = (deps: {
   async function getCollectionsByStackId(stackId: number): Promise<{ collectionIds: number[] }> {
     // Verify stack exists in this dataset
     const stack = await prisma.stack.findFirst({
-      where: {id: stackId, dataSetId},
+      where: { id: stackId, dataSetId },
     });
 
     if (!stack) {
@@ -1903,8 +1897,8 @@ export const createStackService = (deps: {
 
     // Get collection IDs
     const collectionStacks = await prisma.collectionStack.findMany({
-      where: {stackId},
-      select: {collectionId: true},
+      where: { stackId },
+      select: { collectionId: true },
     });
 
     return {
@@ -1957,7 +1951,7 @@ export const createStackService = (deps: {
 
     // スコアでソート
     return Array.from(scores.entries())
-      .map(([id, score]) => ({id, score}))
+      .map(([id, score]) => ({ id, score }))
       .sort((a, b) => b.score - a.score);
   }
 

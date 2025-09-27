@@ -1,6 +1,6 @@
-import {cn} from '@/lib/utils';
-import {X} from 'lucide-react';
-import type {ReactNode} from 'react';
+import { cn } from '@/lib/utils';
+import { X } from 'lucide-react';
+import type { ReactNode } from 'react';
 
 export interface SideMenuProps {
   open?: boolean;
@@ -37,11 +37,11 @@ export function SideMenu({
             className="p-1.5 hover:bg-gray-100 rounded-md transition-colors"
             aria-label="Close sidebar"
           >
-            <X size={18} className="text-gray-600"/>
+            <X size={18} className="text-gray-600" />
           </button>
         </div>
       </div>
-      <div className="p-2 space-y-3 overflow-y-auto" style={{maxHeight: 'calc(100vh - 64px)'}}>
+      <div className="p-2 space-y-3 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 64px)' }}>
         {children}
       </div>
     </aside>

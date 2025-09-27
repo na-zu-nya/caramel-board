@@ -42,7 +42,10 @@ export async function generateThumbnail(
         .jpeg({ quality: 80 })
         .toFile(outputPath);
     } catch (e) {
-      console.warn('sharp failed; falling back via ffmpeg transcode', e instanceof Error ? e.message : e);
+      console.warn(
+        'sharp failed; falling back via ffmpeg transcode',
+        e instanceof Error ? e.message : e
+      );
       // 破損JPEGなどの救済: ffmpeg でJPEGにデコードしてから sharp でサムネ生成
       const tmpKey = `${key}.fallback.jpg`;
       const tmpPath = DataStorage.getPath(tmpKey);

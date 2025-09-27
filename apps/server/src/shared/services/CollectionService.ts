@@ -1,8 +1,17 @@
-import {type Collection, Prisma, type PrismaClient} from '@prisma/client';
-import type {CollectionQuery, CreateCollectionInput, UpdateCollectionInput,} from '../../models/CollectionModel';
+import { type Collection, Prisma, type PrismaClient } from '@prisma/client';
+import type {
+  CollectionQuery,
+  CreateCollectionInput,
+  UpdateCollectionInput,
+} from '../../models/CollectionModel';
 import type { FilterConfig } from '../../utils/filterBuilder';
 import { createColorSearchService } from '../../features/datasets/services/color-search-service';
-import { createSearchService, SearchMode, type SearchFilters, type SortOptions } from '../../features/datasets/services/search-service';
+import {
+  createSearchService,
+  SearchMode,
+  type SearchFilters,
+  type SortOptions,
+} from '../../features/datasets/services/search-service';
 import { createTagStatsService } from '../../features/datasets/services/tag-stats-service';
 import { toPublicAssetPath, withPublicAssetArray } from '../../utils/assetPath';
 
@@ -130,7 +139,8 @@ export class CollectionService {
     if (data.type !== undefined) updateData.type = data.type as any;
     // Allow null to move to root
     if (data.folderId !== undefined) updateData.folderId = data.folderId as number | null;
-    if (data.filterConfig !== undefined) updateData.filterConfig = data.filterConfig as Prisma.JsonValue;
+    if (data.filterConfig !== undefined)
+      updateData.filterConfig = data.filterConfig as Prisma.JsonValue;
 
     return this.prisma.collection.update({
       where: { id },
@@ -248,9 +258,20 @@ export class CollectionService {
     };
 
     // Create dataset-scoped services
-    const colorSearch = createColorSearchService({ prisma: this.prisma, dataSetId: collection.dataSetId });
-    const tagStats = createTagStatsService({ prisma: this.prisma, dataSetId: collection.dataSetId });
-    const searchService = createSearchService({ prisma: this.prisma, colorSearch, tagStats, dataSetId: collection.dataSetId });
+    const colorSearch = createColorSearchService({
+      prisma: this.prisma,
+      dataSetId: collection.dataSetId,
+    });
+    const tagStats = createTagStatsService({
+      prisma: this.prisma,
+      dataSetId: collection.dataSetId,
+    });
+    const searchService = createSearchService({
+      prisma: this.prisma,
+      colorSearch,
+      tagStats,
+      dataSetId: collection.dataSetId,
+    });
 
     // Map FilterConfig -> SearchFilters
     const filters: SearchFilters = {};
@@ -287,7 +308,10 @@ export class CollectionService {
     }
 
     const sort: SortOptions = { by: 'recommended', order: 'desc' };
-    const mode = filterConfig.search && filterConfig.search.trim().length > 0 ? SearchMode.UNIFIED : SearchMode.ALL;
+    const mode =
+      filterConfig.search && filterConfig.search.trim().length > 0
+        ? SearchMode.UNIFIED
+        : SearchMode.ALL;
     const result = await searchService.search({
       mode,
       datasetId: collection.dataSetId,
@@ -316,7 +340,8 @@ export class CollectionService {
       });
       // Only keep first by stackId
       for (const fa of firstAssets) {
-        if (!firstAssetMap.has(fa.stackId)) firstAssetMap.set(fa.stackId, fa.thumbnail || undefined);
+        if (!firstAssetMap.has(fa.stackId))
+          firstAssetMap.set(fa.stackId, fa.thumbnail || undefined);
       }
     }
 

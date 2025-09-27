@@ -58,4 +58,3 @@ export function genListToken(input: {
   }
   return 'vc_' + (h >>> 0).toString(36);
 }
-

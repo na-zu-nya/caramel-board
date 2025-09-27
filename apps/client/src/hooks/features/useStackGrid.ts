@@ -1,14 +1,19 @@
 import { apiClient } from '@/lib/api-client';
-import {infoSidebarOpenAtom, selectedItemIdAtom, selectionModeAtom, sidebarOpenAtom,} from '@/stores/ui';
-import type {MediaGridItem} from '@/types';
-import {useMutation, useQueryClient} from '@tanstack/react-query';
-import {useAtom} from 'jotai';
-import {useCallback, useEffect, useRef, useState} from 'react';
-import {useThrottle} from '../utils/useThrottle';
-import {useAnimationState} from './useAnimationState';
-import {useKeyboardShortcuts} from './useKeyboardShortcuts';
-import {useScrollPreservation} from './useScrollPreservation';
-import {useSelectionMode} from './useSelectionMode';
+import {
+  infoSidebarOpenAtom,
+  selectedItemIdAtom,
+  selectionModeAtom,
+  sidebarOpenAtom,
+} from '@/stores/ui';
+import type { MediaGridItem } from '@/types';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useAtom } from 'jotai';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useThrottle } from '../utils/useThrottle';
+import { useAnimationState } from './useAnimationState';
+import { useKeyboardShortcuts } from './useKeyboardShortcuts';
+import { useScrollPreservation } from './useScrollPreservation';
+import { useSelectionMode } from './useSelectionMode';
 
 interface UseStackGridProps {
   items: (MediaGridItem | undefined)[];
@@ -121,16 +126,17 @@ export function useStackGrid({
   const [favoriteOverrides, setFavoriteOverrides] = useState<Map<string | number, boolean>>(
     () => new Map()
   );
-  const [favoritePending, setFavoritePending] = useState<Set<string | number>>(
-    () => new Set()
-  );
+  const [favoritePending, setFavoritePending] = useState<Set<string | number>>(() => new Set());
 
   // Favorite mutation (server-side)
   const favoriteMutation = useMutation({
     mutationFn: async ({
       stackId,
       favorited,
-    }: { stackId: string | number; favorited: boolean }) => {
+    }: {
+      stackId: string | number;
+      favorited: boolean;
+    }) => {
       const response = await fetch(`/api/v1/stacks/${stackId}/favorite`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -181,7 +187,9 @@ export function useStackGrid({
     const totalRows = Math.ceil(Math.max(1, total) / columnsPerRow);
     const startRow = Math.max(0, Math.floor(visibleTopPx / itemSize) - BUFFER_ROWS);
     // 最終可視行（inclusive）+ バッファ + 下方向の余白を含める
-    const lastVisibleRow = Math.floor(Math.max(0, (visibleTopPx + Math.max(0, visibleHeightPx) - 1)) / itemSize);
+    const lastVisibleRow = Math.floor(
+      Math.max(0, visibleTopPx + Math.max(0, visibleHeightPx) - 1) / itemSize
+    );
     const endRowInclusive = Math.min(
       totalRows - 1,
       lastVisibleRow + BUFFER_ROWS + EXTRA_ROWS_BELOW
@@ -201,7 +209,15 @@ export function useStackGrid({
       newEndExclusive - 1 + PREFETCH_ROWS_BELOW * columnsPerRow
     );
     throttledLoadRange(requestStartIndex, requestEndInclusive);
-  }, [onLoadRange, total, itemSize, isCurrentlyAnimating, throttledLoadRange, columnsPerRow, useWindowScroll]);
+  }, [
+    onLoadRange,
+    total,
+    itemSize,
+    isCurrentlyAnimating,
+    throttledLoadRange,
+    columnsPerRow,
+    useWindowScroll,
+  ]);
 
   // Handle animation state changes
   useEffect(() => {
@@ -257,10 +273,9 @@ export function useStackGrid({
     async (item: MediaGridItem, event: React.MouseEvent) => {
       event.stopPropagation();
       const id = item.id;
-      const currentFavorited =
-        favoriteOverrides.has(id)
-          ? (favoriteOverrides.get(id) as boolean)
-          : item.favorited ?? item.isFavorite ?? false;
+      const currentFavorited = favoriteOverrides.has(id)
+        ? (favoriteOverrides.get(id) as boolean)
+        : (item.favorited ?? item.isFavorite ?? false);
       const nextFavorited = !currentFavorited;
 
       // Optimistically update local override and mark as pending

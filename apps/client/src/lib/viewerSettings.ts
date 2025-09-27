@@ -2,7 +2,7 @@ const FPS_KEY = 'viewer.fps';
 const MUTED_KEY = 'viewer.muted';
 
 export const VIEWER_FPS_OPTIONS = [24, 30, 48, 60] as const;
-export type ViewerFps = typeof VIEWER_FPS_OPTIONS[number];
+export type ViewerFps = (typeof VIEWER_FPS_OPTIONS)[number];
 
 export function getViewerFps(): ViewerFps {
   try {
@@ -20,7 +20,10 @@ export function setViewerFps(v: ViewerFps) {
 }
 
 export function cycleViewerFps(current?: number): ViewerFps {
-  const cur = (current && VIEWER_FPS_OPTIONS.includes(current as ViewerFps)) ? (current as ViewerFps) : getViewerFps();
+  const cur =
+    current && VIEWER_FPS_OPTIONS.includes(current as ViewerFps)
+      ? (current as ViewerFps)
+      : getViewerFps();
   const idx = VIEWER_FPS_OPTIONS.indexOf(cur);
   const next = VIEWER_FPS_OPTIONS[(idx + 1) % VIEWER_FPS_OPTIONS.length];
   setViewerFps(next);
@@ -41,4 +44,3 @@ export function setViewerMuted(muted: boolean) {
     localStorage.setItem(MUTED_KEY, String(muted));
   } catch {}
 }
-

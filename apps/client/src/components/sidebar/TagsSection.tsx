@@ -73,13 +73,13 @@ export function TagsSection({ datasetId, autoFocusOnMount = false }: TagsSection
   const handleTagDrop = async (stackIds: number[], tagName: string) => {
     try {
       await apiClient.bulkAddTags(stackIds, [tagName]);
-      
+
       // Invalidate both tags and stacks queries to refresh tag counts and stack data
       await queryClient.invalidateQueries({ queryKey: ['tags', datasetId] });
       await queryClient.invalidateQueries({ queryKey: ['stacks'] });
       await queryClient.invalidateQueries({ queryKey: ['tag-stacks'] });
       await queryClient.invalidateQueries({ queryKey: ['autotag-stacks'] });
-      
+
       console.log(`✅ Added tag "${tagName}" to ${stackIds.length} stacks`);
     } catch (error) {
       console.error(`❌ Failed to add tag "${tagName}":`, error);

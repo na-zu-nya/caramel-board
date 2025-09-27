@@ -47,8 +47,13 @@ export function useUpdateDataset() {
     mutationFn: ({
       id,
       ...data
-    }: { id: string; name?: string; icon?: string; themeColor?: string; description?: string }) =>
-      apiClient.updateDataset(id, data),
+    }: {
+      id: string;
+      name?: string;
+      icon?: string;
+      themeColor?: string;
+      description?: string;
+    }) => apiClient.updateDataset(id, data),
     onMutate: async ({ id, ...updates }) => {
       await Promise.all([
         queryClient.cancelQueries({ queryKey: datasetKeys.all }),
@@ -58,7 +63,12 @@ export function useUpdateDataset() {
       const previousAll = queryClient.getQueryData(datasetKeys.all);
       const previousDetail = queryClient.getQueryData(datasetKeys.detail(id));
 
-      if ('name' in updates || 'icon' in updates || 'themeColor' in updates || 'description' in updates) {
+      if (
+        'name' in updates ||
+        'icon' in updates ||
+        'themeColor' in updates ||
+        'description' in updates
+      ) {
         queryClient.setQueryData(datasetKeys.all, (old: Dataset[] | undefined) => {
           if (!old) return old;
           return old.map((item) =>

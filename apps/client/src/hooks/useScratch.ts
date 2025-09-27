@@ -10,7 +10,12 @@ export function isScratchCollection(c?: Partial<Collection> | null): boolean {
   const type = (c as any).type;
   if (type === 'SCRATCH') return true;
   const k = (c as any).kind || (c.filterConfig as any)?.kind;
-  return k === 'scratch' || String(c.name || '').trim().toLowerCase() === 'scratch';
+  return (
+    k === 'scratch' ||
+    String(c.name || '')
+      .trim()
+      .toLowerCase() === 'scratch'
+  );
 }
 
 // Scratch コレクションの取得/作成
@@ -68,7 +73,11 @@ export function useScratch(datasetId: string | number) {
       collectionId,
       dataSetId,
       name,
-    }: { collectionId: number; dataSetId: string | number; name: string }) => {
+    }: {
+      collectionId: number;
+      dataSetId: string | number;
+      name: string;
+    }) => {
       const ids = await listStackIdsInCollection(collectionId);
       // 新しいコレクションを作成
       const newCol = await apiClient.createCollection({

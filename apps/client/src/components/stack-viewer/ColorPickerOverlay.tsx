@@ -16,7 +16,12 @@ function toHex(r: number, g: number, b: number) {
   return `#${h(r)}${h(g)}${h(b)}`.toUpperCase();
 }
 
-export default function ColorPickerOverlay({ getImageEl, onCancel, onCopied, altMode = false }: Props) {
+export default function ColorPickerOverlay({
+  getImageEl,
+  onCancel,
+  onCopied,
+  altMode = false,
+}: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
   const imgCacheRef = useRef<HTMLImageElement | null>(null);
@@ -202,7 +207,13 @@ export default function ColorPickerOverlay({ getImageEl, onCancel, onCopied, alt
             'absolute rounded-full shadow-lg border',
             error ? 'bg-white text-red-600 border-red-300' : 'border-white'
           )}
-          style={{ left: lensPos.left, top: lensPos.top, width: lensPos.size, height: lensPos.size, background: hex || 'white' }}
+          style={{
+            left: lensPos.left,
+            top: lensPos.top,
+            width: lensPos.size,
+            height: lensPos.size,
+            background: hex || 'white',
+          }}
         >
           <div className="absolute -bottom-7 left-1/2 -translate-x-1/2 text-xs font-medium px-2 py-1 rounded-md bg-black/80 text-white whitespace-nowrap">
             {error ? error : hex}

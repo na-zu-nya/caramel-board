@@ -10,4 +10,3 @@ type Story = StoryObj<typeof CountBadge>;
 
 export const Small: Story = { args: { count: 1 } };
 export const Large: Story = { args: { count: 12345 } };
-

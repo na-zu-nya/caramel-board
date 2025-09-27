@@ -6,8 +6,14 @@ export interface SmallButtonProps extends ButtonHTMLAttributes<HTMLButtonElement
   variant?: 'default' | 'outline' | 'destructive' | 'ghost' | 'secondary';
 }
 
-export function SmallButton({ className, variant = 'default', children, ...rest }: SmallButtonProps) {
-  const base = 'inline-flex items-center justify-center rounded-md text-xs h-7 px-2 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 disabled:pointer-events-none';
+export function SmallButton({
+  className,
+  variant = 'default',
+  children,
+  ...rest
+}: SmallButtonProps) {
+  const base =
+    'inline-flex items-center justify-center rounded-md text-xs h-7 px-2 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 disabled:pointer-events-none';
   const variants =
     variant === 'outline'
       ? 'border border-input bg-background hover:bg-accent hover:text-accent-foreground'
@@ -24,4 +30,3 @@ export function SmallButton({ className, variant = 'default', children, ...rest 
     </button>
   );
 }
-

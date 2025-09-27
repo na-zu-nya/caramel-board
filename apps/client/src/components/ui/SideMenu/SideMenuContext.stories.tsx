@@ -11,7 +11,9 @@ export default meta;
 type Story = StoryObj<typeof SideMenuListItem>;
 
 export const OpenOnly: Story = {
-  render: () => <SideMenuListItem icon={Home} label="Overview" enableContextMenu onOpen={() => alert('Open')} />,
+  render: () => (
+    <SideMenuListItem icon={Home} label="Overview" enableContextMenu onOpen={() => alert('Open')} />
+  ),
 };
 
 export const PinToggle: Story = {

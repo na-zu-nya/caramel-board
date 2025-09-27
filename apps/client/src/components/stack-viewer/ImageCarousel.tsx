@@ -1,6 +1,14 @@
 import { cn } from '@/lib/utils';
 import type { Asset } from '@/types';
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import VideoSeekBar from '@/components/ui/SeekBar/VideoSeekBar';
 import type { VideoMarker } from '@/types';
 import { createPortal } from 'react-dom';
@@ -98,7 +106,12 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
     ref
   ) => {
     const [loadedImages, setLoadedImages] = useState<Set<string>>(new Set());
-    const [videoState, setVideoState] = useState<VideoState>({ currentTime: 0, duration: 0, isPlaying: false, muted: getViewerMuted() });
+    const [videoState, setVideoState] = useState<VideoState>({
+      currentTime: 0,
+      duration: 0,
+      isPlaying: false,
+      muted: getViewerMuted(),
+    });
     const [fps, setFps] = useState<number>(getViewerFps());
     const [isScrubbing, setIsScrubbing] = useState(false);
     const wasPlayingBeforeScrubRef = useRef<boolean>(false);
@@ -110,18 +123,24 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
     const currentVideoRef = useRef<HTMLVideoElement | null>(null);
     const currentVideoHostRef = useRef<HTMLDivElement | null>(null);
     const ownedVideoRef = useRef<HTMLVideoElement | null>(null);
-    const lastPlaybackRef = useRef<{ time: number; wasPlaying: boolean }>({ time: 0, wasPlaying: false });
+    const lastPlaybackRef = useRef<{ time: number; wasPlaying: boolean }>({
+      time: 0,
+      wasPlaying: false,
+    });
     const pendingRestoreRef = useRef<{ time: number; wasPlaying: boolean } | null>(null);
     const currentTranslateXRef = useRef(0);
     const currentVerticalTransformRef = useRef({ translateY: 0, scale: 1, opacity: 1 });
     // const [activePointers, setActivePointers] = useState<Set<number>>(new Set());
 
-    const getVideoSource = (asset?: Asset | null) => asset?.preview || asset?.file || asset?.url || '';
+    const getVideoSource = (asset?: Asset | null) =>
+      asset?.preview || asset?.file || asset?.url || '';
 
     const getPreloadTarget = (asset?: Asset | null) => {
       if (!asset) return null;
       if (isVideoAsset(asset)) {
-        return asset.thumbnail || asset.thumbnailUrl || asset.preview || asset.file || asset.url || null;
+        return (
+          asset.thumbnail || asset.thumbnailUrl || asset.preview || asset.file || asset.url || null
+        );
       }
       return asset.file || asset.url || null;
     };
@@ -156,7 +175,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
 
         if (nextAssetRef.current) {
           // Next page sits on the left to align with forward direction (left)
-          nextAssetRef.current.style.transform = `translate3d(${ 
+          nextAssetRef.current.style.transform = `translate3d(${
             totalTranslateX - containerWidth
           }px, ${finalTranslateY}px, 0) scale(${finalScale})`;
           nextAssetRef.current.style.transformOrigin = 'center bottom';
@@ -166,7 +185,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
 
         if (prevAssetRef.current) {
           // Previous page sits on the right
-          prevAssetRef.current.style.transform = `translate3d(${ 
+          prevAssetRef.current.style.transform = `translate3d(${
             totalTranslateX + containerWidth
           }px, ${finalTranslateY}px, 0) scale(${finalScale})`;
           prevAssetRef.current.style.transformOrigin = 'center bottom';
@@ -405,7 +424,11 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
     // Auto-play video when current asset (id or file) changes
     useEffect(() => {
       // Guard: only reset when the actual asset identity changes (id/file)
-      setVideoState((prev) => ({ ...prev, currentTime: prev.currentTime ?? 0, duration: prev.duration ?? 0 }));
+      setVideoState((prev) => ({
+        ...prev,
+        currentTime: prev.currentTime ?? 0,
+        duration: prev.duration ?? 0,
+      }));
 
       if (currentAsset && isVideoAsset(currentAsset)) {
         // Give browser time to render the video element
@@ -426,16 +449,19 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
       console.log('Video toggled:', {
         paused: video.paused,
         muted: video.muted,
-        src: video.src
+        src: video.src,
       });
       // mute自動変更は行わない（UIのスピーカーボタンで操作）
 
       if (video.paused) {
-        video.play().then(() => {
-          console.log('Video playing');
-        }).catch(err => {
-          console.error('Video play failed:', err);
-        });
+        video
+          .play()
+          .then(() => {
+            console.log('Video playing');
+          })
+          .catch((err) => {
+            console.error('Video play failed:', err);
+          });
       } else {
         video.pause();
         console.log('Video paused');
@@ -449,7 +475,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
       const next = !getViewerMuted();
       setViewerMuted(next);
       v.muted = next;
-      setVideoState(prev => ({ ...prev, muted: next }));
+      setVideoState((prev) => ({ ...prev, muted: next }));
     }, []);
 
     // FPS toggle
@@ -466,9 +492,21 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
         if (v) {
           const dur = Number.isFinite(v.duration) ? v.duration : 0;
           const ct = Number.isFinite(v.currentTime) ? v.currentTime : 0;
-          setVideoState(prev => {
-            if (prev.currentTime === ct && prev.duration === dur && prev.isPlaying === !v.paused && prev.muted === v.muted) return prev;
-            return { ...prev, currentTime: ct, duration: dur, isPlaying: !v.paused, muted: v.muted };
+          setVideoState((prev) => {
+            if (
+              prev.currentTime === ct &&
+              prev.duration === dur &&
+              prev.isPlaying === !v.paused &&
+              prev.muted === v.muted
+            )
+              return prev;
+            return {
+              ...prev,
+              currentTime: ct,
+              duration: dur,
+              isPlaying: !v.paused,
+              muted: v.muted,
+            };
           });
           lastPlaybackRef.current = { time: v.currentTime || 0, wasPlaying: !v.paused };
         }
@@ -483,7 +521,11 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
       const v = currentVideoRef.current;
       if (!payload || !v) return false;
       if (v.readyState < 1) return false; // HAVE_METADATA 未満
-      const dur = Number.isFinite(v.duration) ? v.duration : (Number.isFinite(videoState.duration) ? videoState.duration : 0);
+      const dur = Number.isFinite(v.duration)
+        ? v.duration
+        : Number.isFinite(videoState.duration)
+          ? videoState.duration
+          : 0;
       const clamped = Math.min(Math.max(payload.time, 0), Math.max(0, dur));
       v.currentTime = clamped;
       setVideoState((prev) => ({ ...prev, currentTime: clamped, duration: dur }));
@@ -497,7 +539,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
 
     // Handle video metadata loaded
     const handleVideoLoadedMetadata = useCallback((video: HTMLVideoElement) => {
-      setVideoState(prev => ({
+      setVideoState((prev) => ({
         ...prev,
         duration: video.duration,
         currentTime: video.currentTime,
@@ -510,9 +552,9 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
     const handleSeek = useCallback((seekTime: number) => {
       if (currentVideoRef.current) {
         currentVideoRef.current.currentTime = seekTime;
-        setVideoState(prev => ({
+        setVideoState((prev) => ({
           ...prev,
-          currentTime: seekTime
+          currentTime: seekTime,
         }));
       }
     }, []);
@@ -576,15 +618,23 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
       // 現在表示の動画のみ、ネイティブ要素を手動で保持して再マウントを避ける
       if (isVideo && position === 'current') {
         return (
-          <div ref={getRef()} className="absolute inset-0 flex items-center justify-center" style={style}>
-          <div ref={setCurrentVideoHost} className="max-w-full max-h-full w-full h-full" />
+          <div
+            ref={getRef()}
+            className="absolute inset-0 flex items-center justify-center"
+            style={style}
+          >
+            <div ref={setCurrentVideoHost} className="max-w-full max-h-full w-full h-full" />
           </div>
         );
       }
 
       // それ以外は従来どおり
       return (
-        <div ref={getRef()} className="absolute inset-0 flex items-center justify-center" style={style}>
+        <div
+          ref={getRef()}
+          className="absolute inset-0 flex items-center justify-center"
+          style={style}
+        >
           {isVideo ? (
             <video
               key={position === 'next' ? 'next-video' : 'prev-video'}
@@ -603,7 +653,10 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
               alt={asset.preview || asset.file || asset.url || ''}
               className="max-w-full max-h-full w-full h-full object-contain select-none"
               draggable={nativeDragEnabled}
-              style={{ cursor: nativeDragEnabled ? 'grab' : 'default', WebkitUserDrag: nativeDragEnabled ? 'element' as any : 'none' as any }}
+              style={{
+                cursor: nativeDragEnabled ? 'grab' : 'default',
+                WebkitUserDrag: nativeDragEnabled ? ('element' as any) : ('none' as any),
+              }}
             />
           )}
         </div>
@@ -612,16 +665,18 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
 
     const isCurrentVideo = isVideoAsset(currentAsset);
     const currentPreloadKey = getPreloadTarget(currentAsset);
-    const shouldShowLoader = Boolean(currentAsset && currentPreloadKey && !loadedImages.has(currentPreloadKey));
-    const currentAssetIdKey = useMemo(() => (currentAsset ? String(currentAsset.id) : null), [currentAsset?.id]);
-    const currentVideoBaseSrc = useMemo(
-      () => {
-        if (!isCurrentVideo || !currentAsset) return null;
-        const src = getVideoSource(currentAsset);
-        return src ? stripUrlParams(src) : null;
-      },
-      [isCurrentVideo, currentAsset?.preview, currentAsset?.file, currentAsset?.url]
+    const shouldShowLoader = Boolean(
+      currentAsset && currentPreloadKey && !loadedImages.has(currentPreloadKey)
     );
+    const currentAssetIdKey = useMemo(
+      () => (currentAsset ? String(currentAsset.id) : null),
+      [currentAsset?.id]
+    );
+    const currentVideoBaseSrc = useMemo(() => {
+      if (!isCurrentVideo || !currentAsset) return null;
+      const src = getVideoSource(currentAsset);
+      return src ? stripUrlParams(src) : null;
+    }, [isCurrentVideo, currentAsset?.preview, currentAsset?.file, currentAsset?.url]);
 
     const currentVideoSrcRef = useRef<string | null>(null);
 
@@ -653,7 +708,9 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
         const v = ownedVideoRef.current;
         currentVideoRef.current = v;
         if (v.parentElement !== host) {
-          try { host.innerHTML = ''; } catch {}
+          try {
+            host.innerHTML = '';
+          } catch {}
           host.appendChild(v);
         }
         // 可能なら直ちに再生状態を復元（pending → last の順で優先）
@@ -663,7 +720,12 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
           const clamped = Math.min(Math.max(payload.time || 0, 0), Math.max(0, dur));
           if (Number.isFinite(clamped)) {
             v.currentTime = clamped;
-            setVideoState((prev) => ({ ...prev, currentTime: clamped, duration: dur, isPlaying: payload.wasPlaying }));
+            setVideoState((prev) => ({
+              ...prev,
+              currentTime: clamped,
+              duration: dur,
+              isPlaying: payload.wasPlaying,
+            }));
           }
           if (payload.wasPlaying) void v.play().catch(() => {});
           else v.pause();
@@ -703,7 +765,12 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
             const clamped = Math.min(Math.max(last.time || 0, 0), Math.max(0, dur));
             if (Number.isFinite(clamped)) {
               v.currentTime = clamped;
-              setVideoState((prev) => ({ ...prev, currentTime: clamped, duration: dur, isPlaying: last.wasPlaying }));
+              setVideoState((prev) => ({
+                ...prev,
+                currentTime: clamped,
+                duration: dur,
+                isPlaying: last.wasPlaying,
+              }));
             }
             if (last.wasPlaying) void v.play().catch(() => {});
             else v.pause();
@@ -711,20 +778,23 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
         }
       };
       const onDurationChange = () => {
-        setVideoState(prev => ({
+        setVideoState((prev) => ({
           ...prev,
           duration: Number.isFinite(v.duration) ? v.duration : prev.duration,
         }));
       };
       const onLoadedData = () => {
-        setVideoState(prev => ({
+        setVideoState((prev) => ({
           ...prev,
           duration: Number.isFinite(v.duration) ? v.duration : prev.duration,
           currentTime: Number.isFinite(v.currentTime) ? v.currentTime : prev.currentTime,
         }));
       };
       const onSeeked = () => {
-        setVideoState(prev => ({ ...prev, currentTime: Number.isFinite(v.currentTime) ? v.currentTime : prev.currentTime }));
+        setVideoState((prev) => ({
+          ...prev,
+          currentTime: Number.isFinite(v.currentTime) ? v.currentTime : prev.currentTime,
+        }));
       };
       const onPlay = () => {
         setVideoState((prev) => ({ ...prev, isPlaying: true }));
@@ -751,7 +821,9 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
 
       // 古い要素を除去して差し替え
       if (ownedVideoRef.current && ownedVideoRef.current.parentElement === host) {
-        try { host.removeChild(ownedVideoRef.current); } catch {}
+        try {
+          host.removeChild(ownedVideoRef.current);
+        } catch {}
       }
       host.appendChild(v);
       ownedVideoRef.current = v;
@@ -768,7 +840,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
         v.removeEventListener('click', onClick);
         v.removeEventListener('touchend', onTouchEnd);
       };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentAssetIdKey, currentVideoBaseSrc]);
 
     return (
@@ -789,11 +861,17 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
         }}
       >
         {/* Video seek bar - show only for videos */}
-        {isCurrentVideo && uiInsets &&
+        {isCurrentVideo &&
+          uiInsets &&
           createPortal(
             <div
               className="fixed z-[100] pointer-events-auto"
-              style={{ top: uiInsets.top, left: uiInsets.left, right: uiInsets.right, touchAction: 'none' as any }}
+              style={{
+                top: uiInsets.top,
+                left: uiInsets.left,
+                right: uiInsets.right,
+                touchAction: 'none' as any,
+              }}
             >
               <VideoSeekBar
                 currentTime={videoState.currentTime}

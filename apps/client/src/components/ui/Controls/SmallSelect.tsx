@@ -8,7 +8,12 @@ export interface SmallSelectProps<T extends string = string> {
   children?: ReactNode; // usually a list of <SelectItem/>
 }
 
-export function SmallSelect<T extends string = string>({ value, onValueChange, placeholder, children }: SmallSelectProps<T>) {
+export function SmallSelect<T extends string = string>({
+  value,
+  onValueChange,
+  placeholder,
+  children,
+}: SmallSelectProps<T>) {
   return (
     <Select value={value} onValueChange={onValueChange as any}>
       <SelectTrigger className="h-8 text-sm">
@@ -18,4 +23,3 @@ export function SmallSelect<T extends string = string>({ value, onValueChange, p
     </Select>
   );
 }
-

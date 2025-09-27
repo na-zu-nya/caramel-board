@@ -50,7 +50,9 @@ export function useSwipeClose<T extends HTMLElement>({
     const list = pointerTypesKey
       .split(',')
       .map((type) => type.trim())
-      .filter((type): type is PointerKind => type === 'touch' || type === 'pen' || type === 'mouse');
+      .filter(
+        (type): type is PointerKind => type === 'touch' || type === 'pen' || type === 'mouse'
+      );
 
     if (list.length === 0) {
       return ['touch', 'pen'];
@@ -121,12 +123,7 @@ export function useSwipeClose<T extends HTMLElement>({
     originalTransformRef.current = '';
   };
 
-  const animateTo = (
-    target: number,
-    duration: number,
-    easing: string,
-    onComplete?: () => void
-  ) => {
+  const animateTo = (target: number, duration: number, easing: string, onComplete?: () => void) => {
     const element = elementRef.current;
     if (!element) {
       onComplete?.();

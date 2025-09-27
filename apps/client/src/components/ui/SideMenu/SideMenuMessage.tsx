@@ -16,4 +16,3 @@ export function SideMenuMessage({ variant = 'muted', className, ...p }: SideMenu
           : 'text-gray-400';
   return <p className={cn('px-2 py-1 text-xs', color, className)} {...p} />;
 }
-

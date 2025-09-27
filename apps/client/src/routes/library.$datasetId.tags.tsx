@@ -29,14 +29,32 @@ import {
 import { SelectionActionBar } from '@/components/ui/selection-action-bar';
 import { apiClient } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
-import { infoSidebarOpenAtom, selectedItemIdAtom, selectionModeAtom, currentFilterAtom } from '@/stores/ui';
+import {
+  infoSidebarOpenAtom,
+  selectedItemIdAtom,
+  selectionModeAtom,
+  currentFilterAtom,
+} from '@/stores/ui';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, useLocation, useNavigate, Link } from '@tanstack/react-router';
 import { useHeaderActions } from '@/hooks/useHeaderActions';
 import MersenneTwister from 'mersenne-twister';
 import { genListToken, saveViewContext } from '@/stores/view-context';
 import { useAtom } from 'jotai';
-import { Check, Clapperboard, Edit2, GitMerge, Info, Loader2, Pencil, RefreshCw, Search, Tag, Trash2, X } from 'lucide-react';
+import {
+  Check,
+  Clapperboard,
+  Edit2,
+  GitMerge,
+  Info,
+  Loader2,
+  Pencil,
+  RefreshCw,
+  Search,
+  Tag,
+  Trash2,
+  X,
+} from 'lucide-react';
 // moved React hooks import above; see lazy import note
 import { createPortal } from 'react-dom';
 
@@ -193,7 +211,7 @@ function TagsPage() {
 
   // Build a stable filter key to drive refetches (avoid object identity pitfalls)
   const filterKey = useMemo(() => {
-    const f = currentFilter || {} as any;
+    const f = currentFilter || ({} as any);
     const key = {
       mediaType: f.mediaType ?? undefined,
       search: f.search ?? undefined,
@@ -203,14 +221,16 @@ function TagsPage() {
       isLiked: f.isLiked ?? undefined,
       hasNoTags: f.hasNoTags ?? undefined,
       hasNoAuthor: f.hasNoAuthor ?? undefined,
-      colorFilter: f.colorFilter ? {
-        hueCategories: f.colorFilter.hueCategories ?? undefined,
-        toneSaturation: f.colorFilter.toneSaturation ?? undefined,
-        toneLightness: f.colorFilter.toneLightness ?? undefined,
-        toneTolerance: f.colorFilter.toneTolerance ?? undefined,
-        similarityThreshold: f.colorFilter.similarityThreshold ?? undefined,
-        customColor: f.colorFilter.customColor ?? undefined,
-      } : undefined,
+      colorFilter: f.colorFilter
+        ? {
+            hueCategories: f.colorFilter.hueCategories ?? undefined,
+            toneSaturation: f.colorFilter.toneSaturation ?? undefined,
+            toneLightness: f.colorFilter.toneLightness ?? undefined,
+            toneTolerance: f.colorFilter.toneTolerance ?? undefined,
+            similarityThreshold: f.colorFilter.similarityThreshold ?? undefined,
+            customColor: f.colorFilter.customColor ?? undefined,
+          }
+        : undefined,
     };
     return JSON.stringify(key);
   }, [currentFilter]);
@@ -238,7 +258,8 @@ function TagsPage() {
         const extras = currentFilter.tags.filter((t) => t !== selectedTag.title);
         if (extras.length) qp.tag = [...qp.tag, ...extras];
       }
-      if (currentFilter.authors && currentFilter.authors.length > 0) qp.author = currentFilter.authors;
+      if (currentFilter.authors && currentFilter.authors.length > 0)
+        qp.author = currentFilter.authors;
       if (currentFilter.isFavorite === true) qp.fav = 1;
       if (currentFilter.isFavorite === false) qp.fav = 0;
       if (currentFilter.isLiked === true) qp.liked = 1;
@@ -257,7 +278,12 @@ function TagsPage() {
       }
 
       const res = await apiClient.getStacksWithFilters(qp);
-      return { stacks: res.stacks as any[], total: res.total, limit: res.limit, offset: res.offset } as StacksResponse;
+      return {
+        stacks: res.stacks as any[],
+        total: res.total,
+        limit: res.limit,
+        offset: res.offset,
+      } as StacksResponse;
     },
     getNextPageParam: (lastPage) => {
       const nextOffset = lastPage.offset + lastPage.limit;
@@ -282,7 +308,9 @@ function TagsPage() {
     const MAX = 0x100000000;
     const bound = MAX - (MAX % total);
     let r: number;
-    do { r = mtRef.current!.random_int(); } while (r >= bound);
+    do {
+      r = mtRef.current!.random_int();
+    } while (r >= bound);
     const targetIndex = r % total;
     const pageIndex = Math.floor(targetIndex / PAGE_SIZE);
     const withinPageIndex = targetIndex % PAGE_SIZE;
@@ -298,7 +326,8 @@ function TagsPage() {
       const extras = currentFilter.tags.filter((t) => t !== selectedTag.title);
       if (extras.length) qp.tag = [...qp.tag, ...extras];
     }
-    if (currentFilter.authors && currentFilter.authors.length > 0) qp.author = currentFilter.authors;
+    if (currentFilter.authors && currentFilter.authors.length > 0)
+      qp.author = currentFilter.authors;
     if (currentFilter.isFavorite === true) qp.fav = 1;
     if (currentFilter.isFavorite === false) qp.fav = 0;
     if (currentFilter.isLiked === true) qp.liked = 1;
@@ -318,15 +347,43 @@ function TagsPage() {
     const page = await apiClient.getStacksWithFilters(qp);
     const item = page?.stacks?.[withinPageIndex];
     if (!item) return;
-    const ids = (page.stacks || []).map((s: any) => (typeof s.id === 'string' ? Number.parseInt(s.id, 10) : (s.id as number))).reverse();
-    const clickedId = typeof item.id === 'string' ? Number.parseInt(item.id, 10) : (item.id as number);
-    const currentIndex = Math.max(0, ids.findIndex((id: number) => id === clickedId));
-    const token = genListToken({ datasetId: String(selectedTag.dataSetId), mediaType: item.mediaType, filters: { tags: [String(selectedTag.id)] } as any });
-    saveViewContext({ token, datasetId: String(selectedTag.dataSetId), mediaType: item.mediaType, filters: { tags: [String(selectedTag.id)] } as any, ids, currentIndex, createdAt: Date.now() });
-    navigate({ to: '/library/$datasetId/stacks/$stackId', params: { datasetId: String(selectedTag.dataSetId), stackId: String(item.id) }, search: { page: 0, mediaType: item.mediaType, listToken: token }, replace: true });
+    const ids = (page.stacks || [])
+      .map((s: any) => (typeof s.id === 'string' ? Number.parseInt(s.id, 10) : (s.id as number)))
+      .reverse();
+    const clickedId =
+      typeof item.id === 'string' ? Number.parseInt(item.id, 10) : (item.id as number);
+    const currentIndex = Math.max(
+      0,
+      ids.findIndex((id: number) => id === clickedId)
+    );
+    const token = genListToken({
+      datasetId: String(selectedTag.dataSetId),
+      mediaType: item.mediaType,
+      filters: { tags: [String(selectedTag.id)] } as any,
+    });
+    saveViewContext({
+      token,
+      datasetId: String(selectedTag.dataSetId),
+      mediaType: item.mediaType,
+      filters: { tags: [String(selectedTag.id)] } as any,
+      ids,
+      currentIndex,
+      createdAt: Date.now(),
+    });
+    navigate({
+      to: '/library/$datasetId/stacks/$stackId',
+      params: { datasetId: String(selectedTag.dataSetId), stackId: String(item.id) },
+      search: { page: 0, mediaType: item.mediaType, listToken: token },
+      replace: true,
+    });
   }, [selectedTag, stacksData, navigate]);
 
-  useHeaderActions({ showShuffle: true, showFilter: true, showSelection: true, onShuffle: handleShuffle });
+  useHeaderActions({
+    showShuffle: true,
+    showFilter: true,
+    showSelection: true,
+    onShuffle: handleShuffle,
+  });
 
   // Handle infinite scroll (observe page scroll via viewport)
   useEffect(() => {
@@ -401,7 +458,11 @@ function TagsPage() {
     try {
       const sp = new URLSearchParams(location.search);
       sp.set('tagId', String(tag.id));
-      navigate({ to: '/library/$datasetId/tags', params: { datasetId }, search: () => Object.fromEntries(sp.entries()) as any });
+      navigate({
+        to: '/library/$datasetId/tags',
+        params: { datasetId },
+        search: () => Object.fromEntries(sp.entries()) as any,
+      });
     } catch {}
   };
 
@@ -535,15 +596,34 @@ function TagsPage() {
       }
 
       // Normal navigation: build ids from loaded stacks (right→left)
-      const loadedIdsLtr = (allStacks || [])
-        .map((s) => (typeof s.id === 'string' ? Number.parseInt(s.id as string, 10) : (s.id as number)));
+      const loadedIdsLtr = (allStacks || []).map((s) =>
+        typeof s.id === 'string' ? Number.parseInt(s.id as string, 10) : (s.id as number)
+      );
       const ids = loadedIdsLtr.slice().reverse();
-      const clickedId = typeof stack.id === 'string' ? Number.parseInt(stack.id as string, 10) : (stack.id as number);
-      const currentIndex = Math.max(0, ids.findIndex((id) => id === clickedId));
+      const clickedId =
+        typeof stack.id === 'string'
+          ? Number.parseInt(stack.id as string, 10)
+          : (stack.id as number);
+      const currentIndex = Math.max(
+        0,
+        ids.findIndex((id) => id === clickedId)
+      );
 
       const mediaType = (stack as any).mediaType as string | undefined;
-      const token = genListToken({ datasetId, mediaType, filters: { tags: [String(selectedTag?.id)] } as any });
-      saveViewContext({ token, datasetId, mediaType: mediaType as any, filters: { tags: [String(selectedTag?.id)] } as any, ids, currentIndex, createdAt: Date.now() });
+      const token = genListToken({
+        datasetId,
+        mediaType,
+        filters: { tags: [String(selectedTag?.id)] } as any,
+      });
+      saveViewContext({
+        token,
+        datasetId,
+        mediaType: mediaType as any,
+        filters: { tags: [String(selectedTag?.id)] } as any,
+        ids,
+        currentIndex,
+        createdAt: Date.now(),
+      });
 
       navigate({
         to: '/library/$datasetId/stacks/$stackId',
@@ -551,7 +631,17 @@ function TagsPage() {
         search: { page: 0, mediaType, listToken: token },
       });
     },
-    [selectionMode, allStacks, datasetId, selectedTag, selectedStackItems, setSelectedStackItems, handleStackItemSelect, navigate, setSelectionMode]
+    [
+      selectionMode,
+      allStacks,
+      datasetId,
+      selectedTag,
+      selectedStackItems,
+      setSelectedStackItems,
+      handleStackItemSelect,
+      navigate,
+      setSelectionMode,
+    ]
   );
 
   const clearStackSelection = useCallback(() => {
@@ -704,7 +794,7 @@ function TagsPage() {
           }
           setInfoSidebarOpen(!infoSidebarOpen);
           break;
-    case 'e':
+        case 'e':
           e.preventDefault();
           if (selectionMode && selectedStackItems.size > 0) {
             toggleEditPanel();
@@ -741,120 +831,128 @@ function TagsPage() {
       <div className="w-80 flex-shrink-0">
         <div className="sticky top-14 h-[calc(100vh-56px)] border-r bg-white">
           <div className="overflow-y-auto h-full">
-        <div className="p-4 border-b">
-          <h2 className="text-lg font-semibold mb-3">Tags</h2>
+            <div className="p-4 border-b">
+              <h2 className="text-lg font-semibold mb-3">Tags</h2>
 
-          <div className="space-y-3">
-            <SmallSearchField value={searchQuery} onValueChange={setSearchQuery} placeholder="Search tags..." />
+              <div className="space-y-3">
+                <SmallSearchField
+                  value={searchQuery}
+                  onValueChange={setSearchQuery}
+                  placeholder="Search tags..."
+                />
 
-            <div className="space-y-2">
-              <SmallSelect value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)} placeholder="Sort by...">
-                <SelectItem value="title-asc">Name (A-Z)</SelectItem>
-                <SelectItem value="title-desc">Name (Z-A)</SelectItem>
-                <SelectItem value="count-desc">Stack Count (High to Low)</SelectItem>
-                <SelectItem value="count-asc">Stack Count (Low to High)</SelectItem>
-              </SmallSelect>
-            </div>
-
-            {/* Action buttons */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-muted-foreground">
-                  {selectedTags.size > 0
-                    ? `${selectedTags.size} tags selected`
-                    : 'Select tags to perform actions'}
-                </span>
-                {selectedTags.size > 0 && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-6 px-2 text-xs"
-                    onClick={() => setSelectedTags(new Set())}
+                <div className="space-y-2">
+                  <SmallSelect
+                    value={sortBy}
+                    onValueChange={(v) => setSortBy(v as typeof sortBy)}
+                    placeholder="Sort by..."
                   >
-                    Clear
-                  </Button>
-                )}
-              </div>
+                    <SelectItem value="title-asc">Name (A-Z)</SelectItem>
+                    <SelectItem value="title-desc">Name (Z-A)</SelectItem>
+                    <SelectItem value="count-desc">Stack Count (High to Low)</SelectItem>
+                    <SelectItem value="count-asc">Stack Count (Low to High)</SelectItem>
+                  </SmallSelect>
+                </div>
 
-              <div className="flex gap-1.5">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleRename}
-                  disabled={selectedTags.size > 1 || (selectedTags.size === 0 && !selectedTag)}
-                  className="h-7 px-2 text-xs flex-1"
-                >
-                  <Edit2 className="h-3 w-3 mr-1" />
-                  Rename
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleMerge}
-                  disabled={selectedTags.size < 2}
-                  className="h-7 px-2 text-xs flex-1"
-                >
-                  <GitMerge className="h-3 w-3 mr-1" />
-                  Merge
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-7 px-2 text-xs text-destructive hover:text-destructive border-destructive/50 hover:border-destructive"
-                  onClick={handleDelete}
-                  disabled={selectedTags.size === 0}
-                >
-                  <Trash2 className="h-3 w-3" />
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Tags list */}
-        <div className="p-2">
-          {tagsError ? (
-            <div className="text-center py-8 text-red-500">
-              Error loading tags: {(tagsError as Error).message}
-            </div>
-          ) : tagsLoading ? (
-            <div className="text-center py-8 text-muted-foreground">Loading tags...</div>
-          ) : filteredTags.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              {searchQuery ? 'No tags found' : 'No tags yet'}
-            </div>
-          ) : (
-            <div className="space-y-0.5">
-              {filteredTags.map((tag) => (
-                <div
-                  key={tag.id}
-                  onClick={() => handleTagClick(tag)}
-                  className={cn(
-                    'px-2 py-1.5 rounded transition-colors cursor-pointer group',
-                    selectedTag?.id === tag.id
-                      ? 'bg-blue-50 text-blue-700'
-                      : 'hover:bg-accent hover:text-accent-foreground'
-                  )}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                      <Checkbox
-                        checked={selectedTags.has(tag.id)}
-                        onCheckedChange={(checked) => handleTagSelect(tag, checked as boolean)}
-                        onClick={(e) => e.stopPropagation()}
-                        className="h-3 w-3"
-                      />
-                      <span className="text-sm truncate font-medium">{tag.title}</span>
-                    </div>
-                    <span className="text-xs text-muted-foreground ml-2 flex-shrink-0">
-                      {tag.stackCount}
+                {/* Action buttons */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground">
+                      {selectedTags.size > 0
+                        ? `${selectedTags.size} tags selected`
+                        : 'Select tags to perform actions'}
                     </span>
+                    {selectedTags.size > 0 && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 px-2 text-xs"
+                        onClick={() => setSelectedTags(new Set())}
+                      >
+                        Clear
+                      </Button>
+                    )}
+                  </div>
+
+                  <div className="flex gap-1.5">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleRename}
+                      disabled={selectedTags.size > 1 || (selectedTags.size === 0 && !selectedTag)}
+                      className="h-7 px-2 text-xs flex-1"
+                    >
+                      <Edit2 className="h-3 w-3 mr-1" />
+                      Rename
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleMerge}
+                      disabled={selectedTags.size < 2}
+                      className="h-7 px-2 text-xs flex-1"
+                    >
+                      <GitMerge className="h-3 w-3 mr-1" />
+                      Merge
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 px-2 text-xs text-destructive hover:text-destructive border-destructive/50 hover:border-destructive"
+                      onClick={handleDelete}
+                      disabled={selectedTags.size === 0}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
                   </div>
                 </div>
-              ))}
+              </div>
             </div>
-          )}
-        </div>
+
+            {/* Tags list */}
+            <div className="p-2">
+              {tagsError ? (
+                <div className="text-center py-8 text-red-500">
+                  Error loading tags: {(tagsError as Error).message}
+                </div>
+              ) : tagsLoading ? (
+                <div className="text-center py-8 text-muted-foreground">Loading tags...</div>
+              ) : filteredTags.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  {searchQuery ? 'No tags found' : 'No tags yet'}
+                </div>
+              ) : (
+                <div className="space-y-0.5">
+                  {filteredTags.map((tag) => (
+                    <div
+                      key={tag.id}
+                      onClick={() => handleTagClick(tag)}
+                      className={cn(
+                        'px-2 py-1.5 rounded transition-colors cursor-pointer group',
+                        selectedTag?.id === tag.id
+                          ? 'bg-blue-50 text-blue-700'
+                          : 'hover:bg-accent hover:text-accent-foreground'
+                      )}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <Checkbox
+                            checked={selectedTags.has(tag.id)}
+                            onCheckedChange={(checked) => handleTagSelect(tag, checked as boolean)}
+                            onClick={(e) => e.stopPropagation()}
+                            className="h-3 w-3"
+                          />
+                          <span className="text-sm truncate font-medium">{tag.title}</span>
+                        </div>
+                        <span className="text-xs text-muted-foreground ml-2 flex-shrink-0">
+                          {tag.stackCount}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -880,7 +978,11 @@ function TagsPage() {
                     try {
                       const sp = new URLSearchParams(location.search);
                       sp.delete('tagId');
-                      navigate({ to: '/library/$datasetId/tags', params: { datasetId }, search: () => Object.fromEntries(sp.entries()) as any });
+                      navigate({
+                        to: '/library/$datasetId/tags',
+                        params: { datasetId },
+                        search: () => Object.fromEntries(sp.entries()) as any,
+                      });
                     } catch {}
                   }}
                 >
@@ -901,55 +1003,84 @@ function TagsPage() {
                 </div>
               ) : (
                 <>
-                  <Suspense fallback={<div className="py-8 text-center text-muted-foreground">Loading…</div>}>
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 list-stable">
-                    {allStacks.map((stack) => {
-                      const thumb = (stack as any).thumbnail || (stack as any).thumbnailUrl || '/no-image.png';
-                      const likeCount = Number(
-                        (stack as any).likeCount ?? (stack as any).liked ?? 0
-                      );
-                      const pageCount = (stack as any).assetCount || (stack as any)._count?.assets || (stack as any).assetsCount || 0;
-                      const isFav = (stack as any).favorited || (stack as any).isFavorite || false;
-                      const { onOpen, onFindSimilar, onAddToScratch, onToggleFavorite, onLike, dragProps, onInfo } = actions;
-                      return infoSidebarOpen ? (
-                        <StackTile
-                          key={stack.id}
-                          thumbnailUrl={thumb}
-                          pageCount={pageCount}
-                          favorited={isFav}
-                          likeCount={likeCount}
-                          onClick={() => { setSelectedItemId(stack.id); setInfoSidebarOpen(true); }}
-                          onInfo={() => { setSelectedItemId(stack.id); setInfoSidebarOpen(true); }}
-                          onFindSimilar={() => onFindSimilar(stack.id)}
-                          onAddToScratch={() => onAddToScratch(stack.id)}
-                          onToggleFavorite={() => onToggleFavorite(stack.id, isFav)}
-                          onLike={() => onLike(stack.id)}
-                          dragHandlers={dragProps(stack.id)}
-                        />
-                      ) : (
-                        <StackTile
-                          key={stack.id}
-                          thumbnailUrl={thumb}
-                          pageCount={pageCount}
-                          favorited={isFav}
-                          likeCount={likeCount}
-                          onOpen={() => onOpen(stack.id)}
-                          onInfo={() => { setSelectedItemId(stack.id); setInfoSidebarOpen(true); }}
-                          onFindSimilar={() => onFindSimilar(stack.id)}
-                          onAddToScratch={() => onAddToScratch(stack.id)}
-                          onToggleFavorite={() => onToggleFavorite(stack.id, isFav)}
-                          onLike={() => onLike(stack.id)}
-                          dragHandlers={dragProps(stack.id)}
-                          asChild
-                        >
-                          <Link
-                            to="/library/$datasetId/stacks/$stackId"
-                            params={{ datasetId, stackId: String(stack.id) }}
+                  <Suspense
+                    fallback={
+                      <div className="py-8 text-center text-muted-foreground">Loading…</div>
+                    }
+                  >
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 list-stable">
+                      {allStacks.map((stack) => {
+                        const thumb =
+                          (stack as any).thumbnail ||
+                          (stack as any).thumbnailUrl ||
+                          '/no-image.png';
+                        const likeCount = Number(
+                          (stack as any).likeCount ?? (stack as any).liked ?? 0
+                        );
+                        const pageCount =
+                          (stack as any).assetCount ||
+                          (stack as any)._count?.assets ||
+                          (stack as any).assetsCount ||
+                          0;
+                        const isFav =
+                          (stack as any).favorited || (stack as any).isFavorite || false;
+                        const {
+                          onOpen,
+                          onFindSimilar,
+                          onAddToScratch,
+                          onToggleFavorite,
+                          onLike,
+                          dragProps,
+                          onInfo,
+                        } = actions;
+                        return infoSidebarOpen ? (
+                          <StackTile
+                            key={stack.id}
+                            thumbnailUrl={thumb}
+                            pageCount={pageCount}
+                            favorited={isFav}
+                            likeCount={likeCount}
+                            onClick={() => {
+                              setSelectedItemId(stack.id);
+                              setInfoSidebarOpen(true);
+                            }}
+                            onInfo={() => {
+                              setSelectedItemId(stack.id);
+                              setInfoSidebarOpen(true);
+                            }}
+                            onFindSimilar={() => onFindSimilar(stack.id)}
+                            onAddToScratch={() => onAddToScratch(stack.id)}
+                            onToggleFavorite={() => onToggleFavorite(stack.id, isFav)}
+                            onLike={() => onLike(stack.id)}
+                            dragHandlers={dragProps(stack.id)}
                           />
-                        </StackTile>
-                      );
-                    })}
-                  </div>
+                        ) : (
+                          <StackTile
+                            key={stack.id}
+                            thumbnailUrl={thumb}
+                            pageCount={pageCount}
+                            favorited={isFav}
+                            likeCount={likeCount}
+                            onOpen={() => onOpen(stack.id)}
+                            onInfo={() => {
+                              setSelectedItemId(stack.id);
+                              setInfoSidebarOpen(true);
+                            }}
+                            onFindSimilar={() => onFindSimilar(stack.id)}
+                            onAddToScratch={() => onAddToScratch(stack.id)}
+                            onToggleFavorite={() => onToggleFavorite(stack.id, isFav)}
+                            onLike={() => onLike(stack.id)}
+                            dragHandlers={dragProps(stack.id)}
+                            asChild
+                          >
+                            <Link
+                              to="/library/$datasetId/stacks/$stackId"
+                              params={{ datasetId, stackId: String(stack.id) }}
+                            />
+                          </StackTile>
+                        );
+                      })}
+                    </div>
                   </Suspense>
 
                   {/* Loading indicator */}
@@ -1175,11 +1306,10 @@ function TagsPage() {
       </Dialog>
 
       {/* Filter panel to apply additional filters to selected tag's stacks */}
-    <FilterPanel
-      currentFilter={currentFilter as any}
-      onFilterChange={(f) => setCurrentFilter({ ...f, datasetId })}
-    />
+      <FilterPanel
+        currentFilter={currentFilter as any}
+        onFilterChange={(f) => setCurrentFilter({ ...f, datasetId })}
+      />
     </div>
   );
 }
- 

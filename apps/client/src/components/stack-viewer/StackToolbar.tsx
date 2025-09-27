@@ -1,6 +1,6 @@
-import {cn} from '@/lib/utils';
-import type {Stack} from '@/types';
-import {ArrowUpDown, Heart, Layers, Star} from 'lucide-react';
+import { cn } from '@/lib/utils';
+import type { Stack } from '@/types';
+import { ArrowUpDown, Heart, Layers, Star } from 'lucide-react';
 
 interface StackToolbarProps {
   stack: Stack;
@@ -35,22 +35,26 @@ export default function StackToolbar({
         onClick={onFavoriteToggle}
         className={cn(
           'p-3 rounded-full transition-colors',
-          stack.favorited ? 'bg-yellow-500 text-white' : 'bg-black/40 text-white hover:bg-black/60 hover:text-primary'
+          stack.favorited
+            ? 'bg-yellow-500 text-white'
+            : 'bg-black/40 text-white hover:bg-black/60 hover:text-primary'
         )}
         aria-label={stack.favorited ? 'Remove from favorites' : 'Add to favorites'}
       >
-        <Star size={20} className={stack.favorited ? 'fill-current' : ''}/>
+        <Star size={20} className={stack.favorited ? 'fill-current' : ''} />
       </button>
 
       <button
         onClick={onLikeToggle}
         className={cn(
           'p-3 rounded-full transition-colors flex items-center gap-1',
-          (stack.liked ?? 0) > 0 ? 'bg-like text-white' : 'bg-black/40 text-white hover:bg-black/60 hover:text-primary'
+          (stack.liked ?? 0) > 0
+            ? 'bg-like text-white'
+            : 'bg-black/40 text-white hover:bg-black/60 hover:text-primary'
         )}
         aria-label={(stack.liked ?? 0) > 0 ? 'Unlike' : 'Like'}
       >
-        <Heart size={20} className={(stack.liked ?? 0) > 0 ? 'fill-current' : ''}/>
+        <Heart size={20} className={(stack.liked ?? 0) > 0 ? 'fill-current' : ''} />
         {(stack.liked ?? 0) > 0 && <span className="text-sm">{stack.liked}</span>}
       </button>
 
@@ -58,11 +62,13 @@ export default function StackToolbar({
         onClick={onListModeToggle}
         className={cn(
           'p-3 rounded-full transition-colors',
-          isListMode ? 'bg-blue-500 text-white' : 'bg-black/40 text-white hover:bg-black/60 hover:text-primary'
+          isListMode
+            ? 'bg-blue-500 text-white'
+            : 'bg-black/40 text-white hover:bg-black/60 hover:text-primary'
         )}
         aria-label={isListMode ? 'Exit list mode' : 'Enter list mode'}
       >
-        <Layers size={20}/>
+        <Layers size={20} />
       </button>
 
       {isListMode && onReorderToggle && (
@@ -70,11 +76,13 @@ export default function StackToolbar({
           onClick={onReorderToggle}
           className={cn(
             'p-3 rounded-full transition-colors',
-            isReorderMode ? 'bg-green-500 text-white' : 'bg-black/40 text-white hover:bg-black/60 hover:text-primary'
+            isReorderMode
+              ? 'bg-green-500 text-white'
+              : 'bg-black/40 text-white hover:bg-black/60 hover:text-primary'
           )}
           aria-label={isReorderMode ? 'Exit reorder mode' : 'Enter reorder mode'}
         >
-          <ArrowUpDown size={20}/>
+          <ArrowUpDown size={20} />
         </button>
       )}
     </div>

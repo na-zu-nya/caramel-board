@@ -38,10 +38,7 @@ function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
     : null;
 }
 
-export const createColorSearchService = (deps: {
-  prisma: PrismaClient;
-  dataSetId: number;
-}) => {
+export const createColorSearchService = (deps: { prisma: PrismaClient; dataSetId: number }) => {
   const { prisma, dataSetId } = deps;
 
   /**
@@ -258,12 +255,7 @@ export const createColorSearchService = (deps: {
 
     return {
       stacks: orderedStacks,
-      total: await getColorSearchCount(
-        targetHsl,
-        hueCategory,
-        maxDistance,
-        mediaType
-      ),
+      total: await getColorSearchCount(targetHsl, hueCategory, maxDistance, mediaType),
       searchColor: {
         rgb: color,
         hsl: targetHsl,
@@ -426,7 +418,7 @@ export const createColorSearchService = (deps: {
       _count: true,
     });
     const assetsWithJson = await prisma.asset.count({
-      where: { 
+      where: {
         dominantColors: { not: null },
         stack: { dataSetId },
       },
@@ -498,13 +490,7 @@ export const createColorSearchService = (deps: {
    * 色フィルタの総件数取得（修正版）
    */
   async function getColorFilterCount(options: ColorFilterOptions): Promise<number> {
-    const {
-      hueCategories,
-      tonePoint,
-      toneTolerance = 10,
-      customColor,
-      mediaType,
-    } = options;
+    const { hueCategories, tonePoint, toneTolerance = 10, customColor, mediaType } = options;
 
     const conditions: string[] = [];
 

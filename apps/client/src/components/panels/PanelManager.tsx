@@ -13,12 +13,7 @@ interface PanelManagerProps {
   onSave: (updates: EditUpdates) => Promise<void>;
 }
 
-export function PanelManager({
-  children,
-  selectedItems,
-  items,
-  onSave,
-}: PanelManagerProps) {
+export function PanelManager({ children, selectedItems, items, onSave }: PanelManagerProps) {
   const [isSelectionMode, setSelectionMode] = useAtom(selectionModeAtom);
 
   return (

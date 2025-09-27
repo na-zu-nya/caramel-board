@@ -1,15 +1,20 @@
-import type {Asset, Author, Stack, Tag, TagsOnStack} from '@prisma/client';
-import {getPrisma} from '../lib/Repository';
-import {ServerError} from '../utils/ServerError';
-import {AssetModel} from './AssetModel';
-import {toPublicAssetPath} from '../utils/assetPath';
-import {AuthorModel} from './AuthorModel';
-import {TagModel} from './TagModel';
+import type { Asset, Author, Stack, Tag, TagsOnStack } from '@prisma/client';
+import { getPrisma } from '../lib/Repository';
+import { ServerError } from '../utils/ServerError';
+import { AssetModel } from './AssetModel';
+import { toPublicAssetPath } from '../utils/assetPath';
+import { AuthorModel } from './AuthorModel';
+import { TagModel } from './TagModel';
 
 const prisma = getPrisma();
 
 export class StackModel {
-  static async create(name = '', thumbnail = '', mediaType = 'image', dataSetId = 1): Promise<Stack> {
+  static async create(
+    name = '',
+    thumbnail = '',
+    mediaType = 'image',
+    dataSetId = 1
+  ): Promise<Stack> {
     return prisma.stack.create({
       data: {
         name,

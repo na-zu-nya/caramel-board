@@ -1,5 +1,5 @@
-import {Badge} from '@/components/ui/badge';
-import {Button} from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -9,8 +9,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import {Input} from '@/components/ui/input';
-import {Label} from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -18,17 +18,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {Slider} from '@/components/ui/slider';
-import {SuggestInput} from '@/components/ui/suggest-input';
-import {useSwipeClose} from '@/hooks/features/useSwipeClose';
-import {useDebounce} from '@/hooks/utils/useDebounce';
-import {apiClient} from '@/lib/api-client';
-import {cn} from '@/lib/utils';
-import {customColorAtom, filterOpenAtom, selectionModeAtom} from '@/stores/ui';
-import type {HueCategory, StackFilter} from '@/types';
-import {useQueryClient} from '@tanstack/react-query';
-import {useParams} from '@tanstack/react-router';
-import {useAtom} from 'jotai';
+import { Slider } from '@/components/ui/slider';
+import { SuggestInput } from '@/components/ui/suggest-input';
+import { useSwipeClose } from '@/hooks/features/useSwipeClose';
+import { useDebounce } from '@/hooks/utils/useDebounce';
+import { apiClient } from '@/lib/api-client';
+import { cn } from '@/lib/utils';
+import { customColorAtom, filterOpenAtom, selectionModeAtom } from '@/stores/ui';
+import type { HueCategory, StackFilter } from '@/types';
+import { useQueryClient } from '@tanstack/react-query';
+import { useParams } from '@tanstack/react-router';
+import { useAtom } from 'jotai';
 import {
   ArrowUpDown,
   Calendar,
@@ -41,17 +41,17 @@ import {
   Tag,
   X,
 } from 'lucide-react';
-import {useCallback, useEffect, useRef, useState} from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 // 色味カテゴリの定義（7色、ブライト-ライト間のトーン）
 const HUE_CATEGORIES: { id: HueCategory; name: string; color: string }[] = [
-  {id: 'red', name: '赤', color: '#FF8888'},
-  {id: 'orange', name: 'オレンジ', color: '#FFB366'},
-  {id: 'yellow', name: '黄', color: '#FFE066'},
-  {id: 'green', name: '緑', color: '#66DD66'},
-  {id: 'cyan', name: 'シアン', color: '#66CCFF'},
-  {id: 'blue', name: '青', color: '#6699FF'},
-  {id: 'violet', name: '紫', color: '#BB66FF'},
+  { id: 'red', name: '赤', color: '#FF8888' },
+  { id: 'orange', name: 'オレンジ', color: '#FFB366' },
+  { id: 'yellow', name: '黄', color: '#FFE066' },
+  { id: 'green', name: '緑', color: '#66DD66' },
+  { id: 'cyan', name: 'シアン', color: '#66CCFF' },
+  { id: 'blue', name: '青', color: '#6699FF' },
+  { id: 'violet', name: '紫', color: '#BB66FF' },
 ];
 
 interface FilterPanelProps {
@@ -88,7 +88,7 @@ export default function FilterPanel({
   const debounceTimerRef = useRef<number | null>(null);
   // Ref for the Search input to focus when panel opens
   const searchInputRef = useRef<HTMLInputElement | null>(null);
-  const params = useParams({strict: false});
+  const params = useParams({ strict: false });
   const datasetId = (params as { datasetId?: string }).datasetId;
   const queryClient = useQueryClient();
 
@@ -162,7 +162,11 @@ export default function FilterPanel({
       const timer = window.setTimeout(() => {
         const root = panelRootRef.current;
         const active = document.activeElement as HTMLElement | null;
-        const activeInsidePanel = !!(active && root && active.closest('[data-filter-panel-root="true"]') === root);
+        const activeInsidePanel = !!(
+          active &&
+          root &&
+          active.closest('[data-filter-panel-root="true"]') === root
+        );
         // Only auto-focus when nothing else inside the panel is focused
         if (!activeInsidePanel || active === document.body) {
           searchInputRef.current?.focus({ preventScroll: true });
@@ -189,7 +193,7 @@ export default function FilterPanel({
   // Apply filter changes with debouncing for text inputs
   const updateFilter = useCallback(
     (updates: Partial<StackFilter>, immediate = false) => {
-      const newFilter = {...localFilter, ...updates};
+      const newFilter = { ...localFilter, ...updates };
       setLocalFilter(newFilter);
 
       if (immediate) {
@@ -227,8 +231,8 @@ export default function FilterPanel({
       onFilterChange(restoredFilter);
     } else {
       // For regular views and manual collections, clear all filters
-      const {datasetId, mediaType} = localFilter;
-      const clearedFilter = {datasetId, mediaType};
+      const { datasetId, mediaType } = localFilter;
+      const clearedFilter = { datasetId, mediaType };
       setLocalFilter(clearedFilter);
       onFilterChange(clearedFilter);
     }
@@ -238,9 +242,9 @@ export default function FilterPanel({
     isSmartCollection && isFilterModified
       ? true // For smart collections, show "Clear all" when filter is modified
       : Object.keys(localFilter).some(
-        (key) =>
-          key !== 'datasetId' && key !== 'mediaType' && localFilter[key as keyof StackFilter]
-      );
+          (key) =>
+            key !== 'datasetId' && key !== 'mediaType' && localFilter[key as keyof StackFilter]
+        );
 
   // Convert filter to config format
   const convertFilterToConfig = (filter: StackFilter): Record<string, any> => {
@@ -272,7 +276,7 @@ export default function FilterPanel({
       });
 
       // Refresh collection data
-      queryClient.invalidateQueries({queryKey: ['collection', collectionId]});
+      queryClient.invalidateQueries({ queryKey: ['collection', collectionId] });
       setHasFilterChanges(false);
     } catch (error) {
       console.error('Error updating smart collection:', error);
@@ -327,7 +331,7 @@ export default function FilterPanel({
                 className="p-1 hover:bg-gray-100 rounded-md transition-colors"
                 aria-label="Close filter panel"
               >
-                <X size={20} className="text-gray-600"/>
+                <X size={20} className="text-gray-600" />
               </button>
             </div>
           </div>
@@ -337,17 +341,21 @@ export default function FilterPanel({
             {/* Search */}
             <div className="space-y-2">
               <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                <Search size={16}/>
+                <Search size={16} />
                 Search
               </label>
               <input
                 type="text"
                 ref={searchInputRef}
                 value={localFilter.search || ''}
-                onChange={(e) => updateFilter({search: e.target.value || undefined})}
+                onChange={(e) => updateFilter({ search: e.target.value || undefined })}
                 onKeyDown={(e) => {
                   if (e.key === 'Escape') {
-                    if ((e as any).isComposing || (e.nativeEvent as any)?.isComposing || searchIsComposingRef.current) {
+                    if (
+                      (e as any).isComposing ||
+                      (e.nativeEvent as any)?.isComposing ||
+                      searchIsComposingRef.current
+                    ) {
                       return; // let IME handle it
                     }
                     e.currentTarget.blur();
@@ -371,13 +379,13 @@ export default function FilterPanel({
             {/* Favorites */}
             <div className="space-y-3">
               <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                <Star size={16}/>
+                <Star size={16} />
                 Favorites
               </label>
               <div className="grid grid-cols-3 gap-2">
                 <button
                   type="button"
-                  onClick={() => updateFilter({isFavorite: undefined}, true)}
+                  onClick={() => updateFilter({ isFavorite: undefined }, true)}
                   className={cn(
                     'px-4 py-3 rounded-md text-sm font-medium transition-colors',
                     localFilter.isFavorite === undefined
@@ -389,7 +397,7 @@ export default function FilterPanel({
                 </button>
                 <button
                   type="button"
-                  onClick={() => updateFilter({isFavorite: true}, true)}
+                  onClick={() => updateFilter({ isFavorite: true }, true)}
                   className={cn(
                     'px-4 py-3 rounded-md text-sm font-medium transition-colors',
                     localFilter.isFavorite === true
@@ -401,7 +409,7 @@ export default function FilterPanel({
                 </button>
                 <button
                   type="button"
-                  onClick={() => updateFilter({isFavorite: false}, true)}
+                  onClick={() => updateFilter({ isFavorite: false }, true)}
                   className={cn(
                     'px-4 py-3 rounded-md text-sm font-medium transition-colors',
                     localFilter.isFavorite === false
@@ -417,13 +425,13 @@ export default function FilterPanel({
             {/* Likes */}
             <div className="space-y-3">
               <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                <Heart size={16}/>
+                <Heart size={16} />
                 Likes
               </label>
               <div className="grid grid-cols-3 gap-2">
                 <button
                   type="button"
-                  onClick={() => updateFilter({isLiked: undefined}, true)}
+                  onClick={() => updateFilter({ isLiked: undefined }, true)}
                   className={cn(
                     'px-4 py-3 rounded-md text-sm font-medium transition-colors',
                     localFilter.isLiked === undefined
@@ -435,7 +443,7 @@ export default function FilterPanel({
                 </button>
                 <button
                   type="button"
-                  onClick={() => updateFilter({isLiked: true}, true)}
+                  onClick={() => updateFilter({ isLiked: true }, true)}
                   className={cn(
                     'px-4 py-3 rounded-md text-sm font-medium transition-colors',
                     localFilter.isLiked === true
@@ -447,7 +455,7 @@ export default function FilterPanel({
                 </button>
                 <button
                   type="button"
-                  onClick={() => updateFilter({isLiked: false}, true)}
+                  onClick={() => updateFilter({ isLiked: false }, true)}
                   className={cn(
                     'px-4 py-3 rounded-md text-sm font-medium transition-colors',
                     localFilter.isLiked === false
@@ -463,7 +471,7 @@ export default function FilterPanel({
             {/* Tags */}
             <div className="space-y-2">
               <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                <Tag size={16}/>
+                <Tag size={16} />
                 Tags
               </label>
               <div className="space-y-2">
@@ -473,7 +481,7 @@ export default function FilterPanel({
                     type="checkbox"
                     checked={localFilter.hasNoTags || false}
                     onChange={(e) =>
-                      updateFilter({hasNoTags: e.target.checked ? true : undefined}, true)
+                      updateFilter({ hasNoTags: e.target.checked ? true : undefined }, true)
                     }
                     className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
                   />
@@ -532,7 +540,7 @@ export default function FilterPanel({
                           }}
                         >
                           {tag}
-                          <X size={12} className="ml-1"/>
+                          <X size={12} className="ml-1" />
                         </Badge>
                       ))}
                     </div>
@@ -545,7 +553,7 @@ export default function FilterPanel({
             {/* Authors */}
             <div className="space-y-2">
               <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                <Calendar size={16}/>
+                <Calendar size={16} />
                 Authors
               </label>
               <div className="space-y-2">
@@ -555,7 +563,7 @@ export default function FilterPanel({
                     type="checkbox"
                     checked={localFilter.hasNoAuthor || false}
                     onChange={(e) =>
-                      updateFilter({hasNoAuthor: e.target.checked ? true : undefined}, true)
+                      updateFilter({ hasNoAuthor: e.target.checked ? true : undefined }, true)
                     }
                     className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
                   />
@@ -616,7 +624,7 @@ export default function FilterPanel({
                         }}
                       >
                         {author}
-                        <X size={12} className="ml-1"/>
+                        <X size={12} className="ml-1" />
                       </Badge>
                     ))}
                   </div>
@@ -630,7 +638,7 @@ export default function FilterPanel({
             {/* Color Filter */}
             <div className="space-y-4">
               <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                <Palette size={16}/>
+                <Palette size={16} />
                 Color Filter
               </label>
 
@@ -667,7 +675,7 @@ export default function FilterPanel({
                             ? 'border-gray-800 ring-2 ring-primary ring-offset-1'
                             : 'border-gray-300 hover:border-gray-400'
                         )}
-                        style={{backgroundColor: hue.color}}
+                        style={{ backgroundColor: hue.color }}
                         title={hue.name}
                       />
                     );
@@ -697,7 +705,7 @@ export default function FilterPanel({
                           ? 'border-gray-800 ring-2 ring-primary ring-offset-1'
                           : 'border-gray-300 hover:border-gray-400'
                       )}
-                      style={{backgroundColor: customColor}}
+                      style={{ backgroundColor: customColor }}
                       title="カスタムカラー"
                     />
                     <input
@@ -727,7 +735,7 @@ export default function FilterPanel({
                 </div>
                 {/* Selected color badges */}
                 {((localFilter.colorFilter?.hueCategories &&
-                    localFilter.colorFilter.hueCategories.length > 0) ||
+                  localFilter.colorFilter.hueCategories.length > 0) ||
                   localFilter.colorFilter?.customColor) && (
                   <div className="flex flex-wrap gap-1">
                     {/* Hue category badges */}
@@ -753,7 +761,7 @@ export default function FilterPanel({
                           }}
                         >
                           {category.name}
-                          <X size={10} className="ml-1"/>
+                          <X size={10} className="ml-1" />
                         </Badge>
                       ) : null;
                     })}
@@ -783,10 +791,10 @@ export default function FilterPanel({
                       >
                         <div
                           className="w-2 h-2 rounded-full border border-gray-400"
-                          style={{backgroundColor: localFilter.colorFilter.customColor}}
+                          style={{ backgroundColor: localFilter.colorFilter.customColor }}
                         />
                         カスタム
-                        <X size={10} className="ml-1"/>
+                        <X size={10} className="ml-1" />
                       </Badge>
                     )}
                   </div>
@@ -803,7 +811,7 @@ export default function FilterPanel({
                 <button
                   type="button"
                   onClick={() => {
-                    updateFilter({colorFilter: undefined}, true);
+                    updateFilter({ colorFilter: undefined }, true);
                     setColorSimilarityThreshold(85);
                   }}
                   className="text-xs text-red-600 hover:text-red-800 underline"
@@ -816,7 +824,7 @@ export default function FilterPanel({
             {/* Media Type */}
             <div className="space-y-2">
               <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                <Monitor size={16}/>
+                <Monitor size={16} />
                 Media Type
               </label>
               <Select
@@ -832,7 +840,7 @@ export default function FilterPanel({
                 }
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue/>
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Types</SelectItem>
@@ -847,18 +855,18 @@ export default function FilterPanel({
             {onSortChange && (
               <div className="space-y-2">
                 <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                  <ArrowUpDown size={16}/>
+                  <ArrowUpDown size={16} />
                   Sort By
                 </label>
                 <div className="space-y-2">
                   <Select
                     value={currentSort?.field || 'recommended'}
                     onValueChange={(value) =>
-                      onSortChange({field: value, order: currentSort?.order || 'desc'})
+                      onSortChange({ field: value, order: currentSort?.order || 'desc' })
                     }
                   >
                     <SelectTrigger className="w-full">
-                      <SelectValue/>
+                      <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="recommended">Recommended</SelectItem>
@@ -872,7 +880,7 @@ export default function FilterPanel({
                     <button
                       type="button"
                       onClick={() =>
-                        onSortChange({field: currentSort?.field || 'recommended', order: 'asc'})
+                        onSortChange({ field: currentSort?.field || 'recommended', order: 'asc' })
                       }
                       className={cn(
                         'flex-1 px-3 py-2 rounded-md text-sm font-medium transition-colors',
@@ -886,7 +894,7 @@ export default function FilterPanel({
                     <button
                       type="button"
                       onClick={() =>
-                        onSortChange({field: currentSort?.field || 'recommended', order: 'desc'})
+                        onSortChange({ field: currentSort?.field || 'recommended', order: 'desc' })
                       }
                       className={cn(
                         'flex-1 px-3 py-2 rounded-md text-sm font-medium transition-colors',
@@ -909,7 +917,7 @@ export default function FilterPanel({
               <div className="text-sm text-gray-600">
                 {hasActiveFilters ? (
                   <span className="flex items-center gap-2">
-                    <div className="w-2 h-2 bg-primary rounded-full"/>
+                    <div className="w-2 h-2 bg-primary rounded-full" />
                     Filters active
                   </span>
                 ) : (
@@ -933,7 +941,7 @@ export default function FilterPanel({
                   >
                     <DialogTrigger asChild>
                       <Button size="sm" className="flex items-center gap-1">
-                        <PlusCircle size={16}/>
+                        <PlusCircle size={16} />
                         Create
                       </Button>
                     </DialogTrigger>
@@ -987,7 +995,7 @@ export default function FilterPanel({
                               setIsSmartCollectionDialogOpen(false);
                               setSmartCollectionName('');
                               // Invalidate collections query to refresh sidebar
-                              queryClient.invalidateQueries({queryKey: ['collection-folders']});
+                              queryClient.invalidateQueries({ queryKey: ['collection-folders'] });
                             } catch (error) {
                               console.error('Error creating smart collection:', error);
                               // TODO: Show error toast instead of alert

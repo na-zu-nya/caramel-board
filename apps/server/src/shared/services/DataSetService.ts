@@ -1,6 +1,6 @@
-import type {DataSet, PrismaClient} from '@prisma/client';
-import {processStacksThumbnails} from '../../utils/stackHelpers';
-import {prisma} from '../di';
+import type { DataSet, PrismaClient } from '@prisma/client';
+import { processStacksThumbnails } from '../../utils/stackHelpers';
+import { prisma } from '../di';
 
 export interface CreateDataSetData {
   name: string;

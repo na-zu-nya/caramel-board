@@ -1,13 +1,18 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import {zValidator} from '@hono/zod-validator';
-import type {Stack} from '@prisma/client';
-import {Hono} from 'hono';
-import {DuplicateAssetError} from '../../../errors/DuplicateAssetError';
-import {DatasetIdParamSchema, IdParamSchema, StackQuerySchema, UpdateStackSchema,} from '../../../schemas';
-import {SearchQuerySchema} from '../../../schemas/search-schema.js';
-import {datasetScope} from '../middleware/dataset-scope';
-import type {SearchMode, SearchRequest} from '../services/search-service.js';
+import { zValidator } from '@hono/zod-validator';
+import type { Stack } from '@prisma/client';
+import { Hono } from 'hono';
+import { DuplicateAssetError } from '../../../errors/DuplicateAssetError';
+import {
+  DatasetIdParamSchema,
+  IdParamSchema,
+  StackQuerySchema,
+  UpdateStackSchema,
+} from '../../../schemas';
+import { SearchQuerySchema } from '../../../schemas/search-schema.js';
+import { datasetScope } from '../middleware/dataset-scope';
+import type { SearchMode, SearchRequest } from '../services/search-service.js';
 
 const app = new Hono();
 
@@ -27,7 +32,7 @@ app.get(
       // Get SearchService from context
       const searchService = c.get('searchService');
       if (!searchService) {
-        return c.json({error: 'Search service not available'}, 500);
+        return c.json({ error: 'Search service not available' }, 500);
       }
 
       // Build search request
@@ -37,7 +42,7 @@ app.get(
         referenceStackId: queryParams.referenceStackId,
         query: queryParams.query,
         filters: queryParams.filters || {},
-        sort: queryParams.sort || ({by: 'recommended', order: 'desc'} as const),
+        sort: queryParams.sort || ({ by: 'recommended', order: 'desc' } as const),
         pagination: {
           limit: queryParams.limit,
           offset: queryParams.offset,
@@ -57,7 +62,7 @@ app.get(
       );
     } catch (error) {
       console.error('Error searching stacks:', error);
-      return c.json({error: 'Failed to search stacks'}, 500);
+      return c.json({ error: 'Failed to search stacks' }, 500);
     }
   }
 );
@@ -69,20 +74,20 @@ app.get(
   zValidator('query', StackQuerySchema),
   async (c) => {
     try {
-      const {id} = c.req.valid('param');
+      const { id } = c.req.valid('param');
       const options = c.req.valid('query');
       const stackService = c.get('stackService');
 
       const stack = await stackService.getById(id, options);
 
       if (!stack) {
-        return c.json({error: 'Stack not found'}, 404);
+        return c.json({ error: 'Stack not found' }, 404);
       }
 
       return c.json(stack);
     } catch (error) {
       console.error('Error getting stack:', error);
-      return c.json({error: 'Failed to get stack'}, 500);
+      return c.json({ error: 'Failed to get stack' }, 500);
     }
   }
 );
@@ -122,7 +127,7 @@ app.post('/:dataSetId/stacks', async (c) => {
     const storageRoot = process.env.FILES_STORAGE || path.resolve('./data');
     const tempDir = path.join(storageRoot, 'tmp');
     if (!fs.existsSync(tempDir)) {
-      fs.mkdirSync(tempDir, {recursive: true});
+      fs.mkdirSync(tempDir, { recursive: true });
     }
 
     // Create a temporary file for processing
@@ -167,7 +172,7 @@ app.post('/:dataSetId/stacks', async (c) => {
       );
     }
     console.error('Error creating stack:', error);
-    return c.json({error: 'Failed to create stack'}, 500);
+    return c.json({ error: 'Failed to create stack' }, 500);
   }
 });
 
@@ -178,7 +183,7 @@ app.put(
   zValidator('json', UpdateStackSchema),
   async (c) => {
     try {
-      const {id} = c.req.valid('param');
+      const { id } = c.req.valid('param');
       const data = c.req.valid('json');
       const stackService = c.get('stackService');
 
@@ -186,10 +191,10 @@ app.put(
       return c.json(stack);
     } catch (error: any) {
       if (error.message === 'Stack not found in this dataset') {
-        return c.json({error: error.message}, 404);
+        return c.json({ error: error.message }, 404);
       }
       console.error('Error updating stack:', error);
-      return c.json({error: 'Failed to update stack'}, 500);
+      return c.json({ error: 'Failed to update stack' }, 500);
     }
   }
 );
@@ -197,95 +202,95 @@ app.put(
 // Delete stack
 app.delete('/:dataSetId/stacks/:id', zValidator('param', IdParamSchema), async (c) => {
   try {
-    const {id} = c.req.valid('param');
+    const { id } = c.req.valid('param');
     const stackService = c.get('stackService');
 
     await stackService.delete(id);
-    return c.json({success: true});
+    return c.json({ success: true });
   } catch (error: any) {
     if (error.message === 'Stack not found in this dataset') {
-      return c.json({error: error.message}, 404);
+      return c.json({ error: error.message }, 404);
     }
     console.error('Error deleting stack:', error);
-    return c.json({error: 'Failed to delete stack'}, 500);
+    return c.json({ error: 'Failed to delete stack' }, 500);
   }
 });
 
 // Add tag to stack
 app.post('/:dataSetId/stacks/:id/tags', zValidator('param', IdParamSchema), async (c) => {
   try {
-    const {id} = c.req.valid('param');
-    const {tag} = await c.req.json();
+    const { id } = c.req.valid('param');
+    const { tag } = await c.req.json();
     const stackService = c.get('stackService');
 
     if (!tag) {
-      return c.json({error: 'Tag is required'}, 400);
+      return c.json({ error: 'Tag is required' }, 400);
     }
 
     await stackService.addTag(id, tag);
-    return c.json({success: true});
+    return c.json({ success: true });
   } catch (error) {
     console.error('Error adding tag:', error);
-    return c.json({error: 'Failed to add tag'}, 500);
+    return c.json({ error: 'Failed to add tag' }, 500);
   }
 });
 
 // Remove tag from stack
 app.delete('/:dataSetId/stacks/:id/tags/:tag', zValidator('param', IdParamSchema), async (c) => {
   try {
-    const {id} = c.req.valid('param');
+    const { id } = c.req.valid('param');
     const tag = c.req.param('tag');
     const stackService = c.get('stackService');
 
     await stackService.removeTag(id, tag);
-    return c.json({success: true});
+    return c.json({ success: true });
   } catch (error) {
     console.error('Error removing tag:', error);
-    return c.json({error: 'Failed to remove tag'}, 500);
+    return c.json({ error: 'Failed to remove tag' }, 500);
   }
 });
 
 // Update stack author
 app.put('/:dataSetId/stacks/:id/author', zValidator('param', IdParamSchema), async (c) => {
   try {
-    const {id} = c.req.valid('param');
-    const {author} = await c.req.json();
+    const { id } = c.req.valid('param');
+    const { author } = await c.req.json();
     const stackService = c.get('stackService');
 
     await stackService.updateAuthor(id, author);
-    return c.json({success: true});
+    return c.json({ success: true });
   } catch (error) {
     console.error('Error updating author:', error);
-    return c.json({error: 'Failed to update author'}, 500);
+    return c.json({ error: 'Failed to update author' }, 500);
   }
 });
 
 // Favorite/unfavorite stack
 app.put('/:dataSetId/stacks/:id/favorite', zValidator('param', IdParamSchema), async (c) => {
   try {
-    const {id} = c.req.valid('param');
-    const {favorited} = await c.req.json();
+    const { id } = c.req.valid('param');
+    const { favorited } = await c.req.json();
     const stackService = c.get('stackService');
 
     await stackService.setFavorite(id, favorited);
-    return c.json({success: true});
+    return c.json({ success: true });
   } catch (error) {
     console.error('Error setting favorite:', error);
-    return c.json({error: 'Failed to set favorite'}, 500);
+    return c.json({ error: 'Failed to set favorite' }, 500);
   }
 });
 
 // Like stack
 app.post('/:dataSetId/stacks/:id/like', zValidator('param', IdParamSchema), async (c) => {
   try {
-    const {id} = c.req.valid('param');
+    const { id } = c.req.valid('param');
     const stackService = c.get('stackService');
 
     await stackService.like(id);
-    return c.json({success: true});
+    return c.json({ success: true });
   } catch (error) {
     console.error('Error liking stack:', error);
-    return c.json({error: 'Failed to like stack'}, 500);
+    return c.json({ error: 'Failed to like stack' }, 500);
   }
 });
 
@@ -299,8 +304,8 @@ app.get('/:dataSetId/tags/search', async (c) => {
     return c.json(tags);
   } catch (error) {
     console.error('Error searching tags:', error);
-    return c.json({error: 'Failed to search tags'}, 500);
+    return c.json({ error: 'Failed to search tags' }, 500);
   }
 });
 
-export {app as datasetStacksRoute};
+export { app as datasetStacksRoute };

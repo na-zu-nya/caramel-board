@@ -13,4 +13,3 @@ export function CountBadge({ count, className }: { count?: number; className?: s
     </span>
   );
 }
-

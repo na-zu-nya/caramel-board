@@ -15,11 +15,17 @@ export function useStackTile(datasetId: string) {
   const setSelectedItemId = useSetAtom(selectedItemIdAtom);
 
   const onOpen = async (stackId: number | string) => {
-    await navigate({ to: '/library/$datasetId/stacks/$stackId', params: { datasetId, stackId: String(stackId) } });
+    await navigate({
+      to: '/library/$datasetId/stacks/$stackId',
+      params: { datasetId, stackId: String(stackId) },
+    });
   };
 
   const onFindSimilar = async (stackId: number | string) => {
-    await navigate({ to: '/library/$datasetId/stacks/$stackId/similar', params: { datasetId, stackId: String(stackId) } });
+    await navigate({
+      to: '/library/$datasetId/stacks/$stackId/similar',
+      params: { datasetId, stackId: String(stackId) },
+    });
   };
 
   const onAddToScratch = async (stackId: number | string) => {
@@ -50,7 +56,11 @@ export function useStackTile(datasetId: string) {
           const pages = data.pages.map((pg: any) => ({
             ...pg,
             stacks: Array.isArray(pg.stacks)
-              ? pg.stacks.map((s: any) => (String(s.id) === String(stackId) ? { ...s, favorited: nextFav, isFavorite: nextFav } : s))
+              ? pg.stacks.map((s: any) =>
+                  String(s.id) === String(stackId)
+                    ? { ...s, favorited: nextFav, isFavorite: nextFav }
+                    : s
+                )
               : pg.stacks,
           }));
           queryClient.setQueryData(key as any, { ...data, pages });
@@ -63,7 +73,11 @@ export function useStackTile(datasetId: string) {
           const pages = data.pages.map((pg: any) => ({
             ...pg,
             stacks: Array.isArray(pg.stacks)
-              ? pg.stacks.map((s: any) => (String(s.id) === String(stackId) ? { ...s, favorited: nextFav, isFavorite: nextFav } : s))
+              ? pg.stacks.map((s: any) =>
+                  String(s.id) === String(stackId)
+                    ? { ...s, favorited: nextFav, isFavorite: nextFav }
+                    : s
+                )
               : pg.stacks,
           }));
           queryClient.setQueryData(key as any, { ...data, pages });
@@ -89,10 +103,20 @@ export function useStackTile(datasetId: string) {
         if (overviewData?.recentLikes) {
           const recentLikes = overviewData.recentLikes.map((it: any) =>
             String(it.id ?? it.stack?.id ?? it) === String(stackId)
-              ? { ...it, favorited: nextFav, isFavorite: nextFav, stack: it.stack ? { ...it.stack, favorited: nextFav, isFavorite: nextFav } : it.stack }
+              ? {
+                  ...it,
+                  favorited: nextFav,
+                  isFavorite: nextFav,
+                  stack: it.stack
+                    ? { ...it.stack, favorited: nextFav, isFavorite: nextFav }
+                    : it.stack,
+                }
               : it
           );
-          queryClient.setQueryData(['dataset-overview', datasetId], { ...overviewData, recentLikes });
+          queryClient.setQueryData(['dataset-overview', datasetId], {
+            ...overviewData,
+            recentLikes,
+          });
         }
       } catch {}
 

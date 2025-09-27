@@ -67,7 +67,11 @@ function ScratchView() {
     setCurrentFilter({ datasetId, collectionId });
   }, [datasetId, collectionId, setCurrentFilter]);
 
-  const { data: stacksData, isLoading: isStacksLoading, refetch: refetchStacks } = useQuery({
+  const {
+    data: stacksData,
+    isLoading: isStacksLoading,
+    refetch: refetchStacks,
+  } = useQuery({
     queryKey: ['scratch-stacks', collectionId, currentSort, currentFilter],
     queryFn: async () => {
       // Special-case: when sort is "recommended", order by collection addition order
@@ -93,10 +97,16 @@ function ScratchView() {
         });
 
         // 2) Fetch collection order
-        const ordered = await apiClient.getCollectionStacks(collectionId, { limit: 100, offset: 0 });
+        const ordered = await apiClient.getCollectionStacks(collectionId, {
+          limit: 100,
+          offset: 0,
+        });
         const orderMap = new Map<number, number>();
         ordered.forEach((it) => {
-          const id = typeof it.stack.id === 'string' ? parseInt(it.stack.id as string, 10) : (it.stack.id as number);
+          const id =
+            typeof it.stack.id === 'string'
+              ? parseInt(it.stack.id as string, 10)
+              : (it.stack.id as number);
           orderMap.set(id, it.orderIndex);
         });
 
@@ -123,7 +133,8 @@ function ScratchView() {
       };
       if (currentFilter.mediaType) qp.mediaType = currentFilter.mediaType;
       if (currentFilter.tags && currentFilter.tags.length > 0) qp.tag = currentFilter.tags;
-      if (currentFilter.authors && currentFilter.authors.length > 0) qp.author = currentFilter.authors;
+      if (currentFilter.authors && currentFilter.authors.length > 0)
+        qp.author = currentFilter.authors;
       if (currentFilter.isFavorite) qp.fav = 1;
       if (currentFilter.isLiked) qp.liked = 1;
       if (currentFilter.search) qp.search = currentFilter.search;
@@ -157,28 +168,70 @@ function ScratchView() {
 
   // Shuffle action (same as collection)
   const handleShuffle = useCallback(async () => {
-    const countResp = await apiClient.getStacks({ datasetId, filter: { datasetId, collectionId }, sort: currentSort, limit: 1, offset: 0 });
+    const countResp = await apiClient.getStacks({
+      datasetId,
+      filter: { datasetId, collectionId },
+      sort: currentSort,
+      limit: 1,
+      offset: 0,
+    });
     const total = countResp.total || 0;
     if (total <= 0) return;
     const PAGE_SIZE = 50;
     const MAX = 0x100000000;
     const bound = MAX - (MAX % total);
     let r: number;
-    do { r = mtRef.current!.random_int(); } while (r >= bound);
+    do {
+      r = mtRef.current!.random_int();
+    } while (r >= bound);
     const targetIndex = r % total;
     const pageIndex = Math.floor(targetIndex / PAGE_SIZE);
     const withinPageIndex = targetIndex % PAGE_SIZE;
-    const page = await apiClient.getStacks({ datasetId, filter: { datasetId, collectionId }, sort: currentSort, limit: PAGE_SIZE, offset: pageIndex * PAGE_SIZE });
+    const page = await apiClient.getStacks({
+      datasetId,
+      filter: { datasetId, collectionId },
+      sort: currentSort,
+      limit: PAGE_SIZE,
+      offset: pageIndex * PAGE_SIZE,
+    });
     const item = page.stacks?.[withinPageIndex];
     if (!item) return;
 
-    const ids = (page.stacks || []).map((s) => (typeof s.id === 'string' ? Number.parseInt(s.id as string, 10) : (s.id as number))).reverse();
-    const clickedId = typeof item.id === 'string' ? Number.parseInt(item.id as string, 10) : (item.id as number);
-    const currentIndex = Math.max(0, ids.findIndex((id) => id === clickedId));
-    const token = genListToken({ datasetId, mediaType: (item as any).mediaType, filters: { datasetId, collectionId }, sort: currentSort, collectionId });
-    saveViewContext({ token, datasetId, mediaType: (item as any).mediaType, filters: { datasetId, collectionId } as any, sort: currentSort as any, collectionId, ids, currentIndex, createdAt: Date.now() });
+    const ids = (page.stacks || [])
+      .map((s) =>
+        typeof s.id === 'string' ? Number.parseInt(s.id as string, 10) : (s.id as number)
+      )
+      .reverse();
+    const clickedId =
+      typeof item.id === 'string' ? Number.parseInt(item.id as string, 10) : (item.id as number);
+    const currentIndex = Math.max(
+      0,
+      ids.findIndex((id) => id === clickedId)
+    );
+    const token = genListToken({
+      datasetId,
+      mediaType: (item as any).mediaType,
+      filters: { datasetId, collectionId },
+      sort: currentSort,
+      collectionId,
+    });
+    saveViewContext({
+      token,
+      datasetId,
+      mediaType: (item as any).mediaType,
+      filters: { datasetId, collectionId } as any,
+      sort: currentSort as any,
+      collectionId,
+      ids,
+      currentIndex,
+      createdAt: Date.now(),
+    });
 
-    navigate({ to: '/library/$datasetId/stacks/$stackId', params: { datasetId, stackId: String(item.id) }, search: { page: 0, mediaType: (item as any).mediaType, listToken: token } });
+    navigate({
+      to: '/library/$datasetId/stacks/$stackId',
+      params: { datasetId, stackId: String(item.id) },
+      search: { page: 0, mediaType: (item as any).mediaType, listToken: token },
+    });
   }, [datasetId, collectionId, currentSort, navigate]);
 
   const items: MediaGridItem[] = useMemo(() => {
@@ -194,15 +247,42 @@ function ScratchView() {
     return list;
   }, [stacksData]);
 
-  const handleItemClick = useCallback((item: MediaGridItem) => {
-    const loadedIdsLtr = (items || []).map((it) => Number(it.id));
-    const loadedIds = loadedIdsLtr.slice().reverse();
-    const clickedId = typeof item.id === 'string' ? Number.parseInt(item.id as string, 10) : (item.id as number);
-    const currentIndex = Math.max(0, loadedIds.findIndex((id) => id === clickedId));
-    const token = genListToken({ datasetId, mediaType: (item as any).mediaType, filters: { datasetId, collectionId }, sort: currentSort, collectionId });
-    saveViewContext({ token, datasetId, mediaType: (item as any).mediaType, filters: { datasetId, collectionId } as any, sort: currentSort as any, collectionId, ids: loadedIds, currentIndex, createdAt: Date.now() });
-    navigate({ to: '/library/$datasetId/stacks/$stackId', params: { datasetId, stackId: String(item.id) }, search: { page: 0, listToken: token } });
-  }, [items, datasetId, collectionId, currentSort, navigate]);
+  const handleItemClick = useCallback(
+    (item: MediaGridItem) => {
+      const loadedIdsLtr = (items || []).map((it) => Number(it.id));
+      const loadedIds = loadedIdsLtr.slice().reverse();
+      const clickedId =
+        typeof item.id === 'string' ? Number.parseInt(item.id as string, 10) : (item.id as number);
+      const currentIndex = Math.max(
+        0,
+        loadedIds.findIndex((id) => id === clickedId)
+      );
+      const token = genListToken({
+        datasetId,
+        mediaType: (item as any).mediaType,
+        filters: { datasetId, collectionId },
+        sort: currentSort,
+        collectionId,
+      });
+      saveViewContext({
+        token,
+        datasetId,
+        mediaType: (item as any).mediaType,
+        filters: { datasetId, collectionId } as any,
+        sort: currentSort as any,
+        collectionId,
+        ids: loadedIds,
+        currentIndex,
+        createdAt: Date.now(),
+      });
+      navigate({
+        to: '/library/$datasetId/stacks/$stackId',
+        params: { datasetId, stackId: String(item.id) },
+        search: { page: 0, listToken: token },
+      });
+    },
+    [items, datasetId, collectionId, currentSort, navigate]
+  );
 
   const isLoading = isCollectionLoading || isStacksLoading;
   const total = stacksData?.total || 0;
@@ -218,9 +298,15 @@ function ScratchView() {
         dataset={dataset}
         onItemClick={handleItemClick}
         onLoadRange={() => {}}
-        onRefreshAll={async () => { await refetchStacks(); }}
+        onRefreshAll={async () => {
+          await refetchStacks();
+        }}
         onReorderStacks={undefined}
-        emptyState={{ icon: '📂', title: 'No items in "Scratch"', description: 'Drag and drop stacks here to collect them temporarily.' }}
+        emptyState={{
+          icon: '📂',
+          title: 'No items in "Scratch"',
+          description: 'Drag and drop stacks here to collect them temporarily.',
+        }}
         allowRemoveFromScratch
         scratchCollectionId={collectionId}
       />

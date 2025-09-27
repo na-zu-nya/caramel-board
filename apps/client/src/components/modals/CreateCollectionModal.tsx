@@ -1,14 +1,20 @@
-import {Button} from '@/components/ui/button';
-import {Dialog, DialogContent, DialogHeader, DialogTitle} from '@/components/ui/dialog';
-import {Input} from '@/components/ui/input';
-import {Label} from '@/components/ui/label';
-import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue,} from '@/components/ui/select';
-import {apiClient} from '@/lib/api-client';
-import {currentDatasetAtom} from '@/stores/ui';
-import type {CollectionFolder, CollectionType} from '@/types';
-import {useParams} from '@tanstack/react-router';
-import {useAtomValue} from 'jotai';
-import {useEffect, useState} from 'react';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { apiClient } from '@/lib/api-client';
+import { currentDatasetAtom } from '@/stores/ui';
+import type { CollectionFolder, CollectionType } from '@/types';
+import { useParams } from '@tanstack/react-router';
+import { useAtomValue } from 'jotai';
+import { useEffect, useState } from 'react';
 
 interface CreateCollectionModalProps {
   open: boolean;
@@ -23,7 +29,7 @@ export function CreateCollectionModal({
   onSuccess,
   type,
 }: CreateCollectionModalProps) {
-  const params = useParams({strict: false});
+  const params = useParams({ strict: false });
   const currentDataset = useAtomValue(currentDatasetAtom);
   const datasetId = (params as { datasetId?: string }).datasetId || currentDataset || '1';
   const [loading, setLoading] = useState(false);
@@ -70,7 +76,7 @@ export function CreateCollectionModal({
     const result: Array<{ folder: CollectionFolder; level: number }> = [];
 
     for (const folder of folders) {
-      result.push({folder, level});
+      result.push({ folder, level });
       if (folder.children && folder.children.length > 0) {
         result.push(...flattenFolders(folder.children, level + 1));
       }
@@ -151,7 +157,7 @@ export function CreateCollectionModal({
               onValueChange={(value: CollectionType) => setCollectionType(value)}
             >
               <SelectTrigger>
-                <SelectValue/>
+                <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="MANUAL">Collection</SelectItem>
@@ -176,7 +182,7 @@ export function CreateCollectionModal({
               }
             >
               <SelectTrigger>
-                <SelectValue placeholder="Create at root (without folder)"/>
+                <SelectValue placeholder="Create at root (without folder)" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="root">Create at root (without folder)</SelectItem>
@@ -189,9 +195,9 @@ export function CreateCollectionModal({
                     No folders available
                   </SelectItem>
                 ) : (
-                  flatFolders.map(({folder, level}) => (
+                  flatFolders.map(({ folder, level }) => (
                     <SelectItem key={folder.id} value={String(folder.id)}>
-                      <span style={{paddingLeft: `${level * 16}px`}}>
+                      <span style={{ paddingLeft: `${level * 16}px` }}>
                         {folder.icon} {folder.name}
                       </span>
                     </SelectItem>

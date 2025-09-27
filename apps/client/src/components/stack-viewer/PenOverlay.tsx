@@ -1,6 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Slider } from '@/components/ui/slider';
-import { Eraser, Trash2, Undo2, Redo2, X, SlidersHorizontal, PenTool, Eye, EyeOff, Layers, Sun } from 'lucide-react';
+import {
+  Eraser,
+  Trash2,
+  Undo2,
+  Redo2,
+  X,
+  SlidersHorizontal,
+  PenTool,
+  Eye,
+  EyeOff,
+  Layers,
+  Sun,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // Stateless presentational helpers (no hooks)
@@ -39,13 +51,24 @@ function ToolButton({
 
 function PopCard({ children }: { children: React.ReactNode }) {
   return (
-    <div className="absolute right-12 top-0 bg-white/98 border border-gray-300 rounded-md p-3 w-56 shadow-sm z-[70]" style={{ pointerEvents: 'auto' }}>
+    <div
+      className="absolute right-12 top-0 bg-white/98 border border-gray-300 rounded-md p-3 w-56 shadow-sm z-[70]"
+      style={{ pointerEvents: 'auto' }}
+    >
       {children}
     </div>
   );
 }
 
-function ColorSwatch({ value, active, onClick }: { value: string; active?: boolean; onClick?: (v: string) => void }) {
+function ColorSwatch({
+  value,
+  active,
+  onClick,
+}: {
+  value: string;
+  active?: boolean;
+  onClick?: (v: string) => void;
+}) {
   return (
     <button
       type="button"
@@ -92,7 +115,14 @@ const DEFAULT_COLORS = [
   '#FFFFFF', // white
 ];
 
-export default function PenOverlay({ leftInset, rightInset, topInset = 56, docKey, onExit, getImageEl }: PenOverlayProps) {
+export default function PenOverlay({
+  leftInset,
+  rightInset,
+  topInset = 56,
+  docKey,
+  onExit,
+  getImageEl,
+}: PenOverlayProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   // base canvas: committed strokes
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -114,7 +144,12 @@ export default function PenOverlay({ leftInset, rightInset, topInset = 56, docKe
   const [bgFade, setBgFade] = useState<number>(0);
   const [openAuxPanel, setOpenAuxPanel] = useState<'none' | 'layer' | 'bg'>('none');
   const [isAdjusting, setIsAdjusting] = useState<boolean>(false); // 操作中のみにミニプレビュー表示
-  const [bgRect, setBgRect] = useState<{ left: number; top: number; width: number; height: number } | null>(null);
+  const [bgRect, setBgRect] = useState<{
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  } | null>(null);
 
   // Clear strokes when page key changes
   useEffect(() => {
@@ -127,7 +162,7 @@ export default function PenOverlay({ leftInset, rightInset, topInset = 56, docKe
     const container = containerRef.current;
     if (!canvas || !container) return;
     const rect = container.getBoundingClientRect();
-    const dpr = (window.devicePixelRatio || 1);
+    const dpr = window.devicePixelRatio || 1;
     dprRef.current = dpr;
     const cssW = Math.max(1, Math.floor(rect.width));
     const cssH = Math.max(1, Math.floor(rect.height));
@@ -178,13 +213,24 @@ export default function PenOverlay({ leftInset, rightInset, topInset = 56, docKe
   // Track image rect for background fade (image-only overlay)
   useEffect(() => {
     const updateRect = () => {
-      if (!getImageEl) { setBgRect(null); return; }
+      if (!getImageEl) {
+        setBgRect(null);
+        return;
+      }
       const img = getImageEl();
       const container = containerRef.current;
-      if (!img || !container) { setBgRect(null); return; }
+      if (!img || !container) {
+        setBgRect(null);
+        return;
+      }
       const ir = img.getBoundingClientRect();
       const cr = container.getBoundingClientRect();
-      setBgRect({ left: Math.max(0, ir.left - cr.left), top: Math.max(0, ir.top - cr.top), width: ir.width, height: ir.height });
+      setBgRect({
+        left: Math.max(0, ir.left - cr.left),
+        top: Math.max(0, ir.top - cr.top),
+        width: ir.width,
+        height: ir.height,
+      });
     };
     updateRect();
     const onScroll = () => updateRect();
@@ -198,27 +244,33 @@ export default function PenOverlay({ leftInset, rightInset, topInset = 56, docKe
     };
   }, [getImageEl, docKey, leftInset, rightInset, topInset]);
 
-  const drawStrokePath = useCallback((ctx: CanvasRenderingContext2D, s: Stroke, alphaFactor = 1) => {
-    const n = s.points.length;
-    if (n < 2) return;
-    ctx.save();
-    ctx.globalAlpha = Math.max(0, Math.min(1, s.opacity * alphaFactor));
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.lineWidth = s.size;
-    ctx.globalCompositeOperation = s.mode === 'erase' ? 'destination-out' : 'source-over';
-    ctx.strokeStyle = s.mode === 'erase' ? 'rgba(0,0,0,1)' : s.color;
-    ctx.beginPath();
-    ctx.moveTo(s.points[0].x, s.points[0].y);
-    for (let i = 1; i < n; i++) ctx.lineTo(s.points[i].x, s.points[i].y);
-    ctx.stroke();
-    ctx.restore();
-  }, []);
+  const drawStrokePath = useCallback(
+    (ctx: CanvasRenderingContext2D, s: Stroke, alphaFactor = 1) => {
+      const n = s.points.length;
+      if (n < 2) return;
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, Math.min(1, s.opacity * alphaFactor));
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.lineWidth = s.size;
+      ctx.globalCompositeOperation = s.mode === 'erase' ? 'destination-out' : 'source-over';
+      ctx.strokeStyle = s.mode === 'erase' ? 'rgba(0,0,0,1)' : s.color;
+      ctx.beginPath();
+      ctx.moveTo(s.points[0].x, s.points[0].y);
+      for (let i = 1; i < n; i++) ctx.lineTo(s.points[i].x, s.points[i].y);
+      ctx.stroke();
+      ctx.restore();
+    },
+    []
+  );
 
-  const redrawAll = useCallback((ctx: CanvasRenderingContext2D, all: Stroke[], w: number, h: number, alphaFactor = 1) => {
-    ctx.clearRect(0, 0, w, h);
-    for (const s of all) drawStrokePath(ctx, s, alphaFactor);
-  }, [drawStrokePath]);
+  const redrawAll = useCallback(
+    (ctx: CanvasRenderingContext2D, all: Stroke[], w: number, h: number, alphaFactor = 1) => {
+      ctx.clearRect(0, 0, w, h);
+      for (const s of all) drawStrokePath(ctx, s, alphaFactor);
+    },
+    [drawStrokePath]
+  );
 
   const [activeStroke, setActiveStroke] = useState<Stroke | null>(null);
   const activePointerRef = useRef<number | null>(null);
@@ -274,7 +326,9 @@ export default function PenOverlay({ leftInset, rightInset, topInset = 56, docKe
     if (activePointerRef.current !== e.pointerId) return;
     e.preventDefault();
     e.stopPropagation();
-    try { (e.currentTarget as HTMLCanvasElement).releasePointerCapture(e.pointerId); } catch {}
+    try {
+      (e.currentTarget as HTMLCanvasElement).releasePointerCapture(e.pointerId);
+    } catch {}
     activePointerRef.current = null;
     if (activeStroke) {
       // clear preview then push and repaint base with layer opacity
@@ -284,7 +338,14 @@ export default function PenOverlay({ leftInset, rightInset, topInset = 56, docKe
       setStrokes((prev) => {
         const next = [...prev, activeStroke];
         const ctx = ctxRef.current;
-        if (ctx) redrawAll(ctx, next, Math.floor(rect.width), Math.floor(rect.height), layerVisible ? layerOpacity : 0);
+        if (ctx)
+          redrawAll(
+            ctx,
+            next,
+            Math.floor(rect.width),
+            Math.floor(rect.height),
+            layerVisible ? layerOpacity : 0
+          );
         return next;
       });
       setActiveStroke(null);
@@ -345,7 +406,13 @@ export default function PenOverlay({ leftInset, rightInset, topInset = 56, docKe
     const ctx = ctxRef.current;
     if (!canvas || !ctx) return;
     const rect = canvas.getBoundingClientRect();
-    redrawAll(ctx, strokes, Math.floor(rect.width), Math.floor(rect.height), layerVisible ? layerOpacity : 0);
+    redrawAll(
+      ctx,
+      strokes,
+      Math.floor(rect.width),
+      Math.floor(rect.height),
+      layerVisible ? layerOpacity : 0
+    );
   }, [layerOpacity, layerVisible, strokes, redrawAll]);
 
   // ESC to exit
@@ -408,7 +475,10 @@ export default function PenOverlay({ leftInset, rightInset, topInset = 56, docKe
     );
 
     const ColorGlyph = () => (
-      <div className="w-5 h-5 rounded-sm border" style={{ backgroundColor: color, borderColor: '#e5e7eb' }} />
+      <div
+        className="w-5 h-5 rounded-sm border"
+        style={{ backgroundColor: color, borderColor: '#e5e7eb' }}
+      />
     );
 
     const hexToRgb = (hex: string) => {
@@ -450,28 +520,46 @@ export default function PenOverlay({ leftInset, rightInset, topInset = 56, docKe
           />
         </div>
         <div className="flex-1 h-4 rounded-full overflow-hidden">
-          <div className="h-full" style={{ width: Math.max(2, Math.min(100, size * 3)) + 'px', background: rgba(color, opacity) }} />
+          <div
+            className="h-full"
+            style={{
+              width: Math.max(2, Math.min(100, size * 3)) + 'px',
+              background: rgba(color, opacity),
+            }}
+          />
         </div>
         <div className="text-xs text-gray-600 w-12 text-right">{size}px</div>
       </div>
     );
 
-
     const MiniBrush = () => (
-      <div className="absolute right-12 top-1/2 -translate-y-1/2 z-[70]" style={{ pointerEvents: 'none' }}>
+      <div
+        className="absolute right-12 top-1/2 -translate-y-1/2 z-[70]"
+        style={{ pointerEvents: 'none' }}
+      >
         <div className="w-12 h-12 rounded-md bg-white/90 border border-gray-300 flex items-center justify-center shadow-sm">
           <div
             className="rounded-full ring-1 ring-black/30"
-            style={{ width: Math.max(2, Math.min(32, size)) + 'px', height: Math.max(2, Math.min(32, size)) + 'px', background: rgba(color, opacity) }}
+            style={{
+              width: Math.max(2, Math.min(32, size)) + 'px',
+              height: Math.max(2, Math.min(32, size)) + 'px',
+              background: rgba(color, opacity),
+            }}
           />
         </div>
       </div>
     );
 
     return (
-      <div className="absolute right-3 top-1/2 -translate-y-1/2 flex flex-col gap-2 z-[66]" style={{ pointerEvents: 'auto' }}>
+      <div
+        className="absolute right-3 top-1/2 -translate-y-1/2 flex flex-col gap-2 z-[66]"
+        style={{ pointerEvents: 'auto' }}
+      >
         {isAdjusting && <MiniBrush />}
-        <div className="flex flex-col gap-2 bg-white/80 backdrop-blur-sm p-1 rounded-md border border-gray-300" style={{ pointerEvents: 'auto' }}>
+        <div
+          className="flex flex-col gap-2 bg-white/80 backdrop-blur-sm p-1 rounded-md border border-gray-300"
+          style={{ pointerEvents: 'auto' }}
+        >
           {/* Tool mode: Pen or Eraser (exclusive) */}
           <ToolButton aria="Pen" active={!eraser} onClick={() => setEraser(false)}>
             <PenTool size={16} />
@@ -482,14 +570,28 @@ export default function PenOverlay({ leftInset, rightInset, topInset = 56, docKe
 
           {/* Size */}
           <div className="relative">
-            <ToolButton aria={`Size ${size}px`} active={openPanel === 'size'} onClick={() => setOpenPanel((p) => (p === 'size' ? 'none' : 'size'))}>
+            <ToolButton
+              aria={`Size ${size}px`}
+              active={openPanel === 'size'}
+              onClick={() => setOpenPanel((p) => (p === 'size' ? 'none' : 'size'))}
+            >
               <SizeGlyph />
             </ToolButton>
             {openPanel === 'size' && (
               <PopCard>
                 <div className="text-xs text-gray-600 mb-2">Size: {size}px</div>
-                <div onPointerDown={() => setIsAdjusting(true)} onPointerUp={() => setIsAdjusting(false)} onPointerCancel={() => setIsAdjusting(false)}>
-                  <Slider min={1} max={32} step={1} value={[size]} onValueChange={(v) => setSize(v[0] ?? 4)} />
+                <div
+                  onPointerDown={() => setIsAdjusting(true)}
+                  onPointerUp={() => setIsAdjusting(false)}
+                  onPointerCancel={() => setIsAdjusting(false)}
+                >
+                  <Slider
+                    min={1}
+                    max={32}
+                    step={1}
+                    value={[size]}
+                    onValueChange={(v) => setSize(v[0] ?? 4)}
+                  />
                 </div>
                 <BrushPreview />
               </PopCard>
@@ -498,14 +600,30 @@ export default function PenOverlay({ leftInset, rightInset, topInset = 56, docKe
 
           {/* Opacity */}
           <div className="relative">
-            <ToolButton aria={`Opacity ${Math.round(opacity * 100)}%`} active={openPanel === 'opacity'} onClick={() => setOpenPanel((p) => (p === 'opacity' ? 'none' : 'opacity'))}>
+            <ToolButton
+              aria={`Opacity ${Math.round(opacity * 100)}%`}
+              active={openPanel === 'opacity'}
+              onClick={() => setOpenPanel((p) => (p === 'opacity' ? 'none' : 'opacity'))}
+            >
               <SlidersHorizontal size={16} />
             </ToolButton>
             {openPanel === 'opacity' && (
               <PopCard>
-                <div className="text-xs text-gray-600 mb-2">Opacity: {Math.round(opacity * 100)}%</div>
-                <div onPointerDown={() => setIsAdjusting(true)} onPointerUp={() => setIsAdjusting(false)} onPointerCancel={() => setIsAdjusting(false)}>
-                  <Slider min={0.1} max={1} step={0.05} value={[opacity]} onValueChange={(v) => setOpacity(v[0] ?? 1)} />
+                <div className="text-xs text-gray-600 mb-2">
+                  Opacity: {Math.round(opacity * 100)}%
+                </div>
+                <div
+                  onPointerDown={() => setIsAdjusting(true)}
+                  onPointerUp={() => setIsAdjusting(false)}
+                  onPointerCancel={() => setIsAdjusting(false)}
+                >
+                  <Slider
+                    min={0.1}
+                    max={1}
+                    step={0.05}
+                    value={[opacity]}
+                    onValueChange={(v) => setOpacity(v[0] ?? 1)}
+                  />
                 </div>
                 <BrushPreview />
               </PopCard>
@@ -514,7 +632,11 @@ export default function PenOverlay({ leftInset, rightInset, topInset = 56, docKe
 
           {/* Color */}
           <div className="relative">
-            <ToolButton aria={`Color ${color}`} active={openPanel === 'color'} onClick={() => setOpenPanel((p) => (p === 'color' ? 'none' : 'color'))}>
+            <ToolButton
+              aria={`Color ${color}`}
+              active={openPanel === 'color'}
+              onClick={() => setOpenPanel((p) => (p === 'color' ? 'none' : 'color'))}
+            >
               <ColorGlyph />
             </ToolButton>
             {openPanel === 'color' && (
@@ -522,7 +644,12 @@ export default function PenOverlay({ leftInset, rightInset, topInset = 56, docKe
                 <div className="text-xs text-gray-600 mb-2">Color</div>
                 <div className="grid grid-cols-6 gap-2">
                   {DEFAULT_COLORS.map((c) => (
-                    <ColorSwatch key={c} value={c} active={c === color} onClick={(v) => setColor(v)} />
+                    <ColorSwatch
+                      key={c}
+                      value={c}
+                      active={c === color}
+                      onClick={(v) => setColor(v)}
+                    />
                   ))}
                 </div>
                 <BrushPreview />
@@ -531,26 +658,55 @@ export default function PenOverlay({ leftInset, rightInset, topInset = 56, docKe
           </div>
 
           {/* Undo/Redo */}
-          <ToolButton aria="Undo" disabled={strokes.length === 0} onClick={undo} title="Undo (⌘/Ctrl+Z)">
+          <ToolButton
+            aria="Undo"
+            disabled={strokes.length === 0}
+            onClick={undo}
+            title="Undo (⌘/Ctrl+Z)"
+          >
             <Undo2 size={16} />
           </ToolButton>
-          <ToolButton aria="Redo" disabled={redoStack.length === 0} onClick={redo} title="Redo (⌘/Ctrl+Shift+Z / Ctrl+Y)">
+          <ToolButton
+            aria="Redo"
+            disabled={redoStack.length === 0}
+            onClick={redo}
+            title="Redo (⌘/Ctrl+Shift+Z / Ctrl+Y)"
+          >
             <Redo2 size={16} />
           </ToolButton>
 
           {/* Layer opacity / visibility */}
-          <ToolButton aria={layerVisible ? 'Hide pen layer' : 'Show pen layer'} onClick={() => setLayerVisible((v) => !v)}>
+          <ToolButton
+            aria={layerVisible ? 'Hide pen layer' : 'Show pen layer'}
+            onClick={() => setLayerVisible((v) => !v)}
+          >
             {layerVisible ? <Eye size={16} /> : <EyeOff size={16} />}
           </ToolButton>
           <div className="relative">
-            <ToolButton aria={`Layer opacity ${Math.round(layerOpacity * 100)}%`} active={openAuxPanel === 'layer'} onClick={() => setOpenAuxPanel((p) => (p === 'layer' ? 'none' : 'layer'))}>
+            <ToolButton
+              aria={`Layer opacity ${Math.round(layerOpacity * 100)}%`}
+              active={openAuxPanel === 'layer'}
+              onClick={() => setOpenAuxPanel((p) => (p === 'layer' ? 'none' : 'layer'))}
+            >
               <Layers size={16} />
             </ToolButton>
             {openAuxPanel === 'layer' && (
               <PopCard>
-                <div className="text-xs text-gray-600 mb-2">Pen layer opacity: {Math.round(layerOpacity * 100)}%</div>
-                <div onPointerDown={() => setIsAdjusting(true)} onPointerUp={() => setIsAdjusting(false)} onPointerCancel={() => setIsAdjusting(false)}>
-                  <Slider min={0} max={1} step={0.05} value={[layerOpacity]} onValueChange={(v) => setLayerOpacity(v[0] ?? 1)} />
+                <div className="text-xs text-gray-600 mb-2">
+                  Pen layer opacity: {Math.round(layerOpacity * 100)}%
+                </div>
+                <div
+                  onPointerDown={() => setIsAdjusting(true)}
+                  onPointerUp={() => setIsAdjusting(false)}
+                  onPointerCancel={() => setIsAdjusting(false)}
+                >
+                  <Slider
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    value={[layerOpacity]}
+                    onValueChange={(v) => setLayerOpacity(v[0] ?? 1)}
+                  />
                 </div>
               </PopCard>
             )}
@@ -558,14 +714,30 @@ export default function PenOverlay({ leftInset, rightInset, topInset = 56, docKe
 
           {/* Background fade */}
           <div className="relative">
-            <ToolButton aria={`Background fade ${Math.round(bgFade * 100)}%`} active={openAuxPanel === 'bg'} onClick={() => setOpenAuxPanel((p) => (p === 'bg' ? 'none' : 'bg'))}>
+            <ToolButton
+              aria={`Background fade ${Math.round(bgFade * 100)}%`}
+              active={openAuxPanel === 'bg'}
+              onClick={() => setOpenAuxPanel((p) => (p === 'bg' ? 'none' : 'bg'))}
+            >
               <Sun size={16} />
             </ToolButton>
             {openAuxPanel === 'bg' && (
               <PopCard>
-                <div className="text-xs text-gray-600 mb-2">Background fade: {Math.round(bgFade * 100)}%</div>
-                <div onPointerDown={() => setIsAdjusting(true)} onPointerUp={() => setIsAdjusting(false)} onPointerCancel={() => setIsAdjusting(false)}>
-                  <Slider min={0} max={0.9} step={0.05} value={[bgFade]} onValueChange={(v) => setBgFade(v[0] ?? 0)} />
+                <div className="text-xs text-gray-600 mb-2">
+                  Background fade: {Math.round(bgFade * 100)}%
+                </div>
+                <div
+                  onPointerDown={() => setIsAdjusting(true)}
+                  onPointerUp={() => setIsAdjusting(false)}
+                  onPointerCancel={() => setIsAdjusting(false)}
+                >
+                  <Slider
+                    min={0}
+                    max={0.9}
+                    step={0.05}
+                    value={[bgFade]}
+                    onValueChange={(v) => setBgFade(v[0] ?? 0)}
+                  />
                 </div>
               </PopCard>
             )}
@@ -583,7 +755,20 @@ export default function PenOverlay({ leftInset, rightInset, topInset = 56, docKe
         </div>
       </div>
     );
-  }, [eraser, openPanel, openAuxPanel, size, opacity, color, strokes.length, redoStack.length, layerOpacity, layerVisible, bgFade, onExit]);
+  }, [
+    eraser,
+    openPanel,
+    openAuxPanel,
+    size,
+    opacity,
+    color,
+    strokes.length,
+    redoStack.length,
+    layerOpacity,
+    layerVisible,
+    bgFade,
+    onExit,
+  ]);
 
   return (
     <div
@@ -615,7 +800,12 @@ export default function PenOverlay({ leftInset, rightInset, topInset = 56, docKe
       <canvas
         ref={canvasRef}
         className="absolute inset-0"
-        style={{ pointerEvents: (isAdjusting || openPanel !== 'none' || openAuxPanel !== 'none') ? 'none' : 'auto', touchAction: 'none', cursor: eraser ? 'crosshair' : 'crosshair' }}
+        style={{
+          pointerEvents:
+            isAdjusting || openPanel !== 'none' || openAuxPanel !== 'none' ? 'none' : 'auto',
+          touchAction: 'none',
+          cursor: eraser ? 'crosshair' : 'crosshair',
+        }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}

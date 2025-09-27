@@ -1,5 +1,5 @@
-import type {PrismaClient} from '@prisma/client';
-import type {createFileService} from './file-service';
+import type { PrismaClient } from '@prisma/client';
+import type { createFileService } from './file-service';
 
 export const createStacksService = (deps: {
   prisma: PrismaClient;

@@ -73,8 +73,13 @@ export default function MarkerEditorDialog({
               type="text"
               inputMode="decimal"
               value={localTimeStr}
-              onChange={(e) => { setLocalTimeStr(e.target.value); setError(null); }}
-              className={cn('w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary')}
+              onChange={(e) => {
+                setLocalTimeStr(e.target.value);
+                setError(null);
+              }}
+              className={cn(
+                'w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary'
+              )}
               autoFocus
               placeholder="e.g. 12.34"
             />
@@ -93,7 +98,9 @@ export default function MarkerEditorDialog({
                   onClick={() => setLocalColor(key)}
                   className={cn(
                     'relative h-8 w-8 rounded-md border transition-transform',
-                    localColor === key ? 'ring-2 ring-offset-2 ring-primary scale-105' : 'hover:scale-105',
+                    localColor === key
+                      ? 'ring-2 ring-offset-2 ring-primary scale-105'
+                      : 'hover:scale-105'
                   )}
                   style={{ backgroundColor: hex, borderColor: '#e5e7eb' }}
                   aria-pressed={localColor === key}
@@ -107,9 +114,7 @@ export default function MarkerEditorDialog({
             <Button type="button" variant="outline" onClick={onDelete}>
               Delete
             </Button>
-            <Button type="submit">
-              Save
-            </Button>
+            <Button type="submit">Save</Button>
           </div>
         </form>
       </DialogContent>

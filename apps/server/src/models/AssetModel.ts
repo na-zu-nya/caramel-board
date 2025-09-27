@@ -1,17 +1,17 @@
 import path from 'path';
 import fs from 'fs';
-import type {Asset} from '@prisma/client';
+import type { Asset } from '@prisma/client';
 import urlJoin from 'url-join';
-import {DataStorage} from '../lib/DataStorage';
-import {getPrisma} from '../lib/Repository';
-import {getAutoTagClient} from '../lib/AutoTagClient';
-import {AutoTagService} from '../shared/services/AutoTagService';
-import {ColorExtractor} from '../utils/colorExtractor';
-import {getExtension, getFileType, getHash} from '../utils/functions';
-import {generateThumbnail} from '../utils/generateThumbnail';
-import {buildAssetKey, toPublicAssetPath} from '../utils/assetPath';
-import {generateMediaPreview} from '../utils/generateMediaPreview';
-import {StackModel} from './StackModel';
+import { DataStorage } from '../lib/DataStorage';
+import { getPrisma } from '../lib/Repository';
+import { getAutoTagClient } from '../lib/AutoTagClient';
+import { AutoTagService } from '../shared/services/AutoTagService';
+import { ColorExtractor } from '../utils/colorExtractor';
+import { getExtension, getFileType, getHash } from '../utils/functions';
+import { generateThumbnail } from '../utils/generateThumbnail';
+import { buildAssetKey, toPublicAssetPath } from '../utils/assetPath';
+import { generateMediaPreview } from '../utils/generateMediaPreview';
+import { StackModel } from './StackModel';
 import { DuplicateAssetError } from '../errors/DuplicateAssetError';
 
 const prisma = getPrisma();
@@ -39,7 +39,9 @@ export class AssetModel {
 
     if (existing) {
       // Clean up temp source if it still exists
-      try { fs.rmSync(sourcePath); } catch {}
+      try {
+        fs.rmSync(sourcePath);
+      } catch {}
       if (existing.stackId === stackId) {
         throw new DuplicateAssetError('このスタックに同一画像が既に存在します', {
           assetId: existing.id,
@@ -122,7 +124,10 @@ export class AssetModel {
 
     // If stack has no thumbnail yet, set it to this asset's thumbnail
     try {
-      const stack = await prisma.stack.findUnique({ where: { id: stackId }, select: { thumbnail: true } });
+      const stack = await prisma.stack.findUnique({
+        where: { id: stackId },
+        select: { thumbnail: true },
+      });
       const currentThumb = stack?.thumbnail ?? '';
       if (!currentThumb && thumbnailKey) {
         await prisma.stack.update({ where: { id: stackId }, data: { thumbnail: thumbnailKey } });
@@ -352,11 +357,7 @@ export class AssetModel {
 }
 
 export class PictureModel {
-  static async create(
-    sourcePath: string,
-    fileType?: string,
-    dataSetId = 1
-  ) {
+  static async create(sourcePath: string, fileType?: string, dataSetId = 1) {
     const id = await getHash(sourcePath);
     const ext = (fileType ?? sourcePath.substr(sourcePath.lastIndexOf('.') + 1))
       .toLowerCase()

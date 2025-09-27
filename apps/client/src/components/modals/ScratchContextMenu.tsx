@@ -45,12 +45,19 @@ export function ScratchContextMenu({ datasetId, scratchId, children }: ScratchCo
 
   const handleConvert = async () => {
     if (!scratchId || !newName.trim()) return;
-    const result = await convertScratch({ collectionId: scratchId, dataSetId: datasetId, name: newName.trim() });
+    const result = await convertScratch({
+      collectionId: scratchId,
+      dataSetId: datasetId,
+      name: newName.trim(),
+    });
     setShowConvertDialog(false);
     // 変換後のコレクションへ遷移
     const newId = (result as any)?.newCol?.id ?? (result as any)?.id;
     if (newId) {
-      navigate({ to: '/library/$datasetId/collections/$collectionId', params: { datasetId, collectionId: String(newId) } });
+      navigate({
+        to: '/library/$datasetId/collections/$collectionId',
+        params: { datasetId, collectionId: String(newId) },
+      });
     }
     try {
       // Scratch 側が空になった旨を通知
@@ -85,10 +92,18 @@ export function ScratchContextMenu({ datasetId, scratchId, children }: ScratchCo
             </DialogDescription>
           </DialogHeader>
           <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
-            <Button variant="outline" onClick={() => setShowClearDialog(false)} disabled={isClearing}>
+            <Button
+              variant="outline"
+              onClick={() => setShowClearDialog(false)}
+              disabled={isClearing}
+            >
               Cancel
             </Button>
-            <Button className="bg-red-600 hover:bg-red-700" onClick={handleClear} disabled={isClearing}>
+            <Button
+              className="bg-red-600 hover:bg-red-700"
+              onClick={handleClear}
+              disabled={isClearing}
+            >
               {isClearing ? 'Clearing...' : 'Clear'}
             </Button>
           </div>
@@ -99,18 +114,31 @@ export function ScratchContextMenu({ datasetId, scratchId, children }: ScratchCo
       <Dialog open={showConvertDialog} onOpenChange={setShowConvertDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader className="border-b border-gray-200 pb-4">
-            <DialogTitle className="text-lg font-semibold text-gray-900">Convert to Collection</DialogTitle>
+            <DialogTitle className="text-lg font-semibold text-gray-900">
+              Convert to Collection
+            </DialogTitle>
             <DialogDescription className="text-gray-600 mt-2">
               Creates a new collection with current Scratch items, then clears Scratch.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-6 pt-2">
             <div className="space-y-2">
-              <Label htmlFor="new-name" className="text-gray-700">Collection Name *</Label>
-              <Input id="new-name" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Enter collection name" />
+              <Label htmlFor="new-name" className="text-gray-700">
+                Collection Name *
+              </Label>
+              <Input
+                id="new-name"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                placeholder="Enter collection name"
+              />
             </div>
             <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
-              <Button variant="outline" onClick={() => setShowConvertDialog(false)} disabled={isConverting}>
+              <Button
+                variant="outline"
+                onClick={() => setShowConvertDialog(false)}
+                disabled={isConverting}
+              >
                 Cancel
               </Button>
               <Button onClick={handleConvert} disabled={isConverting || !newName.trim()}>

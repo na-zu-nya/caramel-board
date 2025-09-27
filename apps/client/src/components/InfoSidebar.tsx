@@ -70,7 +70,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
   // Close Info panel on route changes, except when staying within StackViewer
   useEffect(() => {
     const path = location.pathname || '';
-  const inStackViewer = /^\/library\/[^/]+\/stacks\/[^/]+(\/.*)?$/.test(path);
+    const inStackViewer = /^\/library\/[^/]+\/stacks\/[^/]+(\/.*)?$/.test(path);
     if (!inStackViewer) {
       try {
         // Defer close to end of tick to avoid race with other updates
@@ -195,8 +195,12 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
       queryClient.invalidateQueries({ queryKey: ['tags', datasetId] });
       queryClient.invalidateQueries({ queryKey: ['library-counts', datasetId] });
       // Tag-specific list pages
-      try { queryClient.invalidateQueries({ queryKey: ['tag-stacks'] }); } catch {}
-      try { queryClient.invalidateQueries({ queryKey: ['autotag-stacks'] }); } catch {}
+      try {
+        queryClient.invalidateQueries({ queryKey: ['tag-stacks'] });
+      } catch {}
+      try {
+        queryClient.invalidateQueries({ queryKey: ['autotag-stacks'] });
+      } catch {}
     },
   });
 
@@ -216,8 +220,12 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
       queryClient.invalidateQueries({ queryKey: ['tags', datasetId] });
       queryClient.invalidateQueries({ queryKey: ['library-counts', datasetId] });
       // Tag-specific list pages
-      try { queryClient.invalidateQueries({ queryKey: ['tag-stacks'] }); } catch {}
-      try { queryClient.invalidateQueries({ queryKey: ['autotag-stacks'] }); } catch {}
+      try {
+        queryClient.invalidateQueries({ queryKey: ['tag-stacks'] });
+      } catch {}
+      try {
+        queryClient.invalidateQueries({ queryKey: ['autotag-stacks'] });
+      } catch {}
     },
   });
 
@@ -261,7 +269,10 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
     mutationFn: async ({
       stackId,
       mediaType,
-    }: { stackId: number; mediaType: 'image' | 'comic' | 'video' }) => {
+    }: {
+      stackId: number;
+      mediaType: 'image' | 'comic' | 'video';
+    }) => {
       const response = await fetch(`/api/v1/stacks/bulk/media-type`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -810,9 +821,15 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
                                   const copied = hexForCopy(color.hex);
                                   const ok = await copyText(copied);
                                   if (ok) {
-                                    addNotification({ type: 'success', message: `Copied ${copied} to clipboard` });
+                                    addNotification({
+                                      type: 'success',
+                                      message: `Copied ${copied} to clipboard`,
+                                    });
                                   } else {
-                                    addNotification({ type: 'error', message: 'Failed to copy to clipboard' });
+                                    addNotification({
+                                      type: 'error',
+                                      message: 'Failed to copy to clipboard',
+                                    });
                                   }
                                 }}
                                 title="Copy hex"
@@ -905,7 +922,10 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
                   className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
                   onClick={async () => {
                     if (!selectedItem) return;
-                    const id = typeof selectedItem.id === 'string' ? parseInt(selectedItem.id, 10) : Number(selectedItem.id);
+                    const id =
+                      typeof selectedItem.id === 'string'
+                        ? parseInt(selectedItem.id, 10)
+                        : Number(selectedItem.id);
                     await navigate({
                       to: '/library/$datasetId/stacks/$stackId/similar',
                       params: { datasetId, stackId: String(id) },
@@ -925,7 +945,9 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
                       const sc = await ensureScratch();
                       await apiClient.addStackToCollection(sc.id, Number(selectedItem.id));
                       await queryClient.invalidateQueries({ queryKey: ['stacks'] });
-                      await queryClient.invalidateQueries({ queryKey: ['library-counts', datasetId] });
+                      await queryClient.invalidateQueries({
+                        queryKey: ['library-counts', datasetId],
+                      });
                     } catch (e) {
                       console.error('Failed to add to Scratch', e);
                     }
@@ -959,7 +981,9 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
                 <button
                   type="button"
                   className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
-                  onClick={() => selectedItem && refreshAllMutation.mutate({ stackId: Number(selectedItem.id) })}
+                  onClick={() =>
+                    selectedItem && refreshAllMutation.mutate({ stackId: Number(selectedItem.id) })
+                  }
                   disabled={!selectedItem || refreshAllMutation.isPending}
                 >
                   {refreshAllMutation.isPending ? (
@@ -983,20 +1007,21 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
                           // Close sidebar and refresh list
                           queryClient.invalidateQueries({ queryKey: ['stacks'] });
                           console.log('✅ Stack removed successfully');
-                          
+
                           // Navigate back to the list page
                           const currentPath = window.location.pathname;
-                          
+
                           // Check if we're in the stack viewer page
                           if (currentPath.includes('/stacks/')) {
                             // Extract mediaType from current path or use default
                             const mediaTypeMatch = currentPath.match(/media-type\/(\w+)/);
-                            const mediaType = selectedItem.mediaType || mediaTypeMatch?.[1] || 'image';
-                            
+                            const mediaType =
+                              selectedItem.mediaType || mediaTypeMatch?.[1] || 'image';
+
                             // Navigate to the appropriate media type page
                             navigate({
                               to: '/library/$datasetId/media-type/$mediaType',
-                              params: { datasetId, mediaType }
+                              params: { datasetId, mediaType },
                             });
                           }
                         } catch (error) {

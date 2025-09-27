@@ -16,7 +16,13 @@ import { isScratchCollection, useScratch } from '@/hooks/useScratch';
 import { createPortal } from 'react-dom';
 import { HeaderIconButton } from '@/components/ui/Header/HeaderIconButton';
 import { Eraser } from 'lucide-react';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 
 export const Route = createFileRoute('/library/$datasetId/collections/$collectionId')({
@@ -62,28 +68,70 @@ function CollectionView() {
   const handleShuffle = useCallback(async () => {
     if (!collection) return;
     // Use unified stacks API with current filter (includes collectionId for MANUAL or restored filters for SMART)
-    const countResp = await apiClient.getStacks({ datasetId, filter: currentFilter, sort: currentSort, limit: 1, offset: 0 });
+    const countResp = await apiClient.getStacks({
+      datasetId,
+      filter: currentFilter,
+      sort: currentSort,
+      limit: 1,
+      offset: 0,
+    });
     const total = countResp.total || 0;
     if (total <= 0) return;
     const PAGE_SIZE = 50;
     const MAX = 0x100000000;
     const bound = MAX - (MAX % total);
     let r: number;
-    do { r = mtRef.current!.random_int(); } while (r >= bound);
+    do {
+      r = mtRef.current!.random_int();
+    } while (r >= bound);
     const targetIndex = r % total;
     const pageIndex = Math.floor(targetIndex / PAGE_SIZE);
     const withinPageIndex = targetIndex % PAGE_SIZE;
-    const page = await apiClient.getStacks({ datasetId, filter: currentFilter, sort: currentSort, limit: PAGE_SIZE, offset: pageIndex * PAGE_SIZE });
+    const page = await apiClient.getStacks({
+      datasetId,
+      filter: currentFilter,
+      sort: currentSort,
+      limit: PAGE_SIZE,
+      offset: pageIndex * PAGE_SIZE,
+    });
     const item = page.stacks?.[withinPageIndex];
     if (!item) return;
 
-    const ids = (page.stacks || []).map((s) => (typeof s.id === 'string' ? Number.parseInt(s.id as string, 10) : (s.id as number))).reverse();
-    const clickedId = typeof item.id === 'string' ? Number.parseInt(item.id as string, 10) : (item.id as number);
-    const currentIndex = Math.max(0, ids.findIndex((id) => id === clickedId));
-    const token = genListToken({ datasetId, mediaType: (item as any).mediaType, filters: currentFilter, sort: currentSort, collectionId });
-    saveViewContext({ token, datasetId, mediaType: (item as any).mediaType, filters: currentFilter, sort: currentSort, collectionId, ids, currentIndex, createdAt: Date.now() });
+    const ids = (page.stacks || [])
+      .map((s) =>
+        typeof s.id === 'string' ? Number.parseInt(s.id as string, 10) : (s.id as number)
+      )
+      .reverse();
+    const clickedId =
+      typeof item.id === 'string' ? Number.parseInt(item.id as string, 10) : (item.id as number);
+    const currentIndex = Math.max(
+      0,
+      ids.findIndex((id) => id === clickedId)
+    );
+    const token = genListToken({
+      datasetId,
+      mediaType: (item as any).mediaType,
+      filters: currentFilter,
+      sort: currentSort,
+      collectionId,
+    });
+    saveViewContext({
+      token,
+      datasetId,
+      mediaType: (item as any).mediaType,
+      filters: currentFilter,
+      sort: currentSort,
+      collectionId,
+      ids,
+      currentIndex,
+      createdAt: Date.now(),
+    });
 
-    navigate({ to: '/library/$datasetId/stacks/$stackId', params: { datasetId, stackId: String(item.id) }, search: { page: 0, mediaType: (item as any).mediaType, listToken: token } });
+    navigate({
+      to: '/library/$datasetId/stacks/$stackId',
+      params: { datasetId, stackId: String(item.id) },
+      search: { page: 0, mediaType: (item as any).mediaType, listToken: token },
+    });
   }, [collection, datasetId, currentFilter, currentSort, collectionId, navigate]);
 
   useHeaderActions({ ...headerActionsConfig, onShuffle: handleShuffle });
@@ -101,7 +149,9 @@ function CollectionView() {
       setTimeout(() => requestAnimationFrame(() => step(n - 1)), delay);
     };
     step(retries);
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Set filters based on collection type
@@ -210,17 +260,25 @@ function CollectionView() {
           });
 
           // 2) Fetch collection order (orderIndex)
-          const ordered = await apiClient.getCollectionStacks(collection.id, { limit: 100, offset: 0 });
+          const ordered = await apiClient.getCollectionStacks(collection.id, {
+            limit: 100,
+            offset: 0,
+          });
           const orderMap = new Map<number, number>();
           ordered.forEach((it) => {
-            const id = typeof it.stack.id === 'string' ? Number.parseInt(it.stack.id as string, 10) : (it.stack.id as number);
+            const id =
+              typeof it.stack.id === 'string'
+                ? Number.parseInt(it.stack.id as string, 10)
+                : (it.stack.id as number);
             orderMap.set(id, it.orderIndex);
           });
 
           // 3) Sort filtered stacks by orderIndex (desc => newest first)
           const stacks = (filtered.stacks || []).slice().sort((a, b) => {
-            const aid = typeof a.id === 'string' ? Number.parseInt(a.id as string, 10) : (a.id as number);
-            const bid = typeof b.id === 'string' ? Number.parseInt(b.id as string, 10) : (b.id as number);
+            const aid =
+              typeof a.id === 'string' ? Number.parseInt(a.id as string, 10) : (a.id as number);
+            const bid =
+              typeof b.id === 'string' ? Number.parseInt(b.id as string, 10) : (b.id as number);
             const ai = orderMap.get(aid) ?? 0;
             const bi = orderMap.get(bid) ?? 0;
             return currentSort.order === 'asc' ? ai - bi : bi - ai;
@@ -242,20 +300,29 @@ function CollectionView() {
           filterParams.collection = Number.parseInt(collectionId);
         }
         if (currentFilter.mediaType) filterParams.mediaType = currentFilter.mediaType;
-        if (currentFilter.tags && currentFilter.tags.length > 0) filterParams.tag = currentFilter.tags;
-        if (currentFilter.authors && currentFilter.authors.length > 0) filterParams.author = currentFilter.authors;
+        if (currentFilter.tags && currentFilter.tags.length > 0)
+          filterParams.tag = currentFilter.tags;
+        if (currentFilter.authors && currentFilter.authors.length > 0)
+          filterParams.author = currentFilter.authors;
         if (currentFilter.isFavorite) filterParams.fav = 1;
         if (currentFilter.isLiked) filterParams.liked = 1;
         if (currentFilter.search) filterParams.search = currentFilter.search;
         if (currentFilter.hasNoTags !== undefined) filterParams.hasNoTags = currentFilter.hasNoTags;
-        if (currentFilter.hasNoAuthor !== undefined) filterParams.hasNoAuthor = currentFilter.hasNoAuthor;
+        if (currentFilter.hasNoAuthor !== undefined)
+          filterParams.hasNoAuthor = currentFilter.hasNoAuthor;
         if (currentFilter.colorFilter) {
-          if (currentFilter.colorFilter.hueCategories?.length > 0) filterParams.hueCategories = currentFilter.colorFilter.hueCategories;
-          if (currentFilter.colorFilter.toneSaturation !== undefined) filterParams.toneSaturation = currentFilter.colorFilter.toneSaturation;
-          if (currentFilter.colorFilter.toneLightness !== undefined) filterParams.toneLightness = currentFilter.colorFilter.toneLightness;
-          if (currentFilter.colorFilter.toneTolerance !== undefined) filterParams.toneTolerance = currentFilter.colorFilter.toneTolerance;
-          if (currentFilter.colorFilter.similarityThreshold !== undefined) filterParams.similarityThreshold = currentFilter.colorFilter.similarityThreshold;
-          if (currentFilter.colorFilter.customColor) filterParams.customColor = currentFilter.colorFilter.customColor;
+          if (currentFilter.colorFilter.hueCategories?.length > 0)
+            filterParams.hueCategories = currentFilter.colorFilter.hueCategories;
+          if (currentFilter.colorFilter.toneSaturation !== undefined)
+            filterParams.toneSaturation = currentFilter.colorFilter.toneSaturation;
+          if (currentFilter.colorFilter.toneLightness !== undefined)
+            filterParams.toneLightness = currentFilter.colorFilter.toneLightness;
+          if (currentFilter.colorFilter.toneTolerance !== undefined)
+            filterParams.toneTolerance = currentFilter.colorFilter.toneTolerance;
+          if (currentFilter.colorFilter.similarityThreshold !== undefined)
+            filterParams.similarityThreshold = currentFilter.colorFilter.similarityThreshold;
+          if (currentFilter.colorFilter.customColor)
+            filterParams.customColor = currentFilter.colorFilter.customColor;
         }
 
         return apiClient.getStacksWithFilters(filterParams);
@@ -295,7 +362,11 @@ function CollectionView() {
 
   // Restore scroll after stacks are loaded
   useEffect(() => {
-    if (navigationState && navigationState.lastPath === window.location.pathname && !isStacksLoading) {
+    if (
+      navigationState &&
+      navigationState.lastPath === window.location.pathname &&
+      !isStacksLoading
+    ) {
       setTimeout(() => {
         restoreScrollSafely(navigationState.scrollPosition);
         setNavigationState(null);
@@ -333,8 +404,12 @@ function CollectionView() {
       typeof it.id === 'string' ? Number.parseInt(it.id, 10) : (it.id as number)
     );
     const loadedIds = loadedIdsLtr.slice().reverse();
-    const clickedId = typeof item.id === 'string' ? Number.parseInt(item.id, 10) : (item.id as number);
-    const currentIndex = Math.max(0, loadedIds.findIndex((id) => id === clickedId));
+    const clickedId =
+      typeof item.id === 'string' ? Number.parseInt(item.id, 10) : (item.id as number);
+    const currentIndex = Math.max(
+      0,
+      loadedIds.findIndex((id) => id === clickedId)
+    );
 
     const token = genListToken({
       datasetId,
@@ -359,7 +434,12 @@ function CollectionView() {
     navigate({
       to: '/library/$datasetId/stacks/$stackId',
       params: { datasetId, stackId: String(item.id) },
-      search: { page: 0, from: 'collection', collectionId: Number.parseInt(collectionId), listToken: token },
+      search: {
+        page: 0,
+        from: 'collection',
+        collectionId: Number.parseInt(collectionId),
+        listToken: token,
+      },
     });
   };
 
@@ -451,7 +531,11 @@ function CollectionView() {
             </DialogDescription>
           </DialogHeader>
           <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
-            <Button variant="outline" onClick={() => setShowClearDialog(false)} disabled={isClearing}>
+            <Button
+              variant="outline"
+              onClick={() => setShowClearDialog(false)}
+              disabled={isClearing}
+            >
               Cancel
             </Button>
             <Button
@@ -460,7 +544,9 @@ function CollectionView() {
                 if (!collection) return;
                 await clearScratch(collection.id);
                 // 即時に一覧を更新
-                try { await refetchStacks(); } catch {}
+                try {
+                  await refetchStacks();
+                } catch {}
                 setShowClearDialog(false);
               }}
               disabled={isClearing}

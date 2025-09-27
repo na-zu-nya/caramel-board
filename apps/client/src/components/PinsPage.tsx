@@ -104,9 +104,13 @@ export default function PinsPage() {
         .map((collection: Collection) => ({ id: collection.id, name: collection.name }));
       setCollections(availableCollections);
 
-      const currentSelectionValid = availableCollections.some((collection) => collection.id === selectedCollectionId);
+      const currentSelectionValid = availableCollections.some(
+        (collection) => collection.id === selectedCollectionId
+      );
       if (!currentSelectionValid) {
-        setSelectedCollectionId(availableCollections.length > 0 ? availableCollections[0].id : null);
+        setSelectedCollectionId(
+          availableCollections.length > 0 ? availableCollections[0].id : null
+        );
       }
     } catch (error) {
       console.error('Failed to load collections:', error);
@@ -131,11 +135,7 @@ export default function PinsPage() {
     return pin.name;
   };
 
-  const renderFixedTypePreview = (
-    iconName: AvailableIcon,
-    title: string,
-    description: string
-  ) => (
+  const renderFixedTypePreview = (iconName: AvailableIcon, title: string, description: string) => (
     <div className="space-y-2">
       <Label>{title}</Label>
       <div className="grid grid-cols-3 gap-2">
@@ -207,7 +207,10 @@ export default function PinsPage() {
     mutationFn: async ({
       pinId,
       data,
-    }: { pinId: number; data: { name: string; icon: string } }) => {
+    }: {
+      pinId: number;
+      data: { name: string; icon: string };
+    }) => {
       console.log('Updating navigation pin via API:', pinId, data);
       return apiClient.updateNavigationPin(pinId, data);
     },
@@ -368,7 +371,9 @@ export default function PinsPage() {
     setDraggedItem(null);
   };
 
-  const canEditIcon = editingPin ? editingPin.type === 'COLLECTION' && !isScratchPin(editingPin) : false;
+  const canEditIcon = editingPin
+    ? editingPin.type === 'COLLECTION' && !isScratchPin(editingPin)
+    : false;
   const editIconPreview = editingPin ? (resolveFixedIconForPin(editingPin) ?? editIcon) : editIcon;
 
   return (
@@ -430,7 +435,10 @@ export default function PinsPage() {
                     <div className="font-medium">{formatPinDisplayName(pin)}</div>
                     <div className="text-muted-foreground text-sm">
                       {pin.type === 'COLLECTION'
-                        ? ((pin.collection && isScratchCollection(pin.collection)) || pin.name === 'Scratch' ? 'Scratch' : 'Collection')
+                        ? (pin.collection && isScratchCollection(pin.collection)) ||
+                          pin.name === 'Scratch'
+                          ? 'Scratch'
+                          : 'Collection'
                         : pin.type === 'MEDIA_TYPE'
                           ? 'Media Type'
                           : pin.type === 'OVERVIEW'
@@ -712,7 +720,9 @@ export default function PinsPage() {
                 <Label>Icon</Label>
                 <div className="flex items-center gap-3 rounded-md border border-dashed bg-muted/50 p-3">
                   <div className="rounded bg-background p-2">{renderIcon(editIconPreview, 20)}</div>
-                  <span className="text-sm text-muted-foreground">Icon is fixed for this pin type.</span>
+                  <span className="text-sm text-muted-foreground">
+                    Icon is fixed for this pin type.
+                  </span>
                 </div>
               </div>
             ) : null}

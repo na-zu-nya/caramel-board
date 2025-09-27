@@ -1,17 +1,17 @@
-import {CollectionsSection} from '@/components/sidebar/CollectionsSection';
-import {DatasetSection} from '@/components/sidebar/DatasetSection';
-import {LibrarySection} from '@/components/sidebar/LibrarySection';
-import {SettingsSection} from '@/components/sidebar/SettingsSection';
-import type {NavigationPinHandlers} from '@/components/sidebar/types';
-import {useSwipeClose} from '@/hooks/features/useSwipeClose';
-import {apiClient} from '@/lib/api-client';
-import {cn} from '@/lib/utils';
-import {currentDatasetAtom, sidebarOpenAtom} from '@/stores/ui';
-import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
-import {useParams} from '@tanstack/react-router';
-import {useAtom} from 'jotai';
-import {X} from 'lucide-react';
-import {useEffect, useState} from 'react';
+import { CollectionsSection } from '@/components/sidebar/CollectionsSection';
+import { DatasetSection } from '@/components/sidebar/DatasetSection';
+import { LibrarySection } from '@/components/sidebar/LibrarySection';
+import { SettingsSection } from '@/components/sidebar/SettingsSection';
+import type { NavigationPinHandlers } from '@/components/sidebar/types';
+import { useSwipeClose } from '@/hooks/features/useSwipeClose';
+import { apiClient } from '@/lib/api-client';
+import { cn } from '@/lib/utils';
+import { currentDatasetAtom, sidebarOpenAtom } from '@/stores/ui';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useParams } from '@tanstack/react-router';
+import { useAtom } from 'jotai';
+import { X } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 // LocalStorage keys for collapsed state
 const COLLAPSED_STATE_KEY = 'sidebar-collapsed-groups';
@@ -39,7 +39,7 @@ export default function Sidebar() {
   const [isOpen, setIsOpen] = useAtom(sidebarOpenAtom);
   const [currentDataset] = useAtom(currentDatasetAtom);
   // @ts-ignore
-  const params = useParams({strict: false});
+  const params = useParams({ strict: false });
   const datasetId = (params as { datasetId?: string }).datasetId || currentDataset || '1';
   const queryClient = useQueryClient();
 
@@ -48,7 +48,7 @@ export default function Sidebar() {
     useState<Record<string, boolean>>(loadCollapsedState);
 
   // Fetch navigation pins for current dataset
-  const {data: navigationPins = []} = useQuery({
+  const { data: navigationPins = [] } = useQuery({
     queryKey: ['navigation-pins', datasetId],
     queryFn: async () => {
       return apiClient.getNavigationPinsByDataset(datasetId);
@@ -61,7 +61,7 @@ export default function Sidebar() {
       return apiClient.createNavigationPin(newPin);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({queryKey: ['navigation-pins', datasetId]});
+      queryClient.invalidateQueries({ queryKey: ['navigation-pins', datasetId] });
     },
   });
 
@@ -70,7 +70,7 @@ export default function Sidebar() {
       return apiClient.deleteNavigationPin(pinId);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({queryKey: ['navigation-pins', datasetId]});
+      queryClient.invalidateQueries({ queryKey: ['navigation-pins', datasetId] });
     },
   });
 
@@ -86,14 +86,14 @@ export default function Sidebar() {
 
   // Handle collection creation success
   const handleCollectionCreated = () => {
-    queryClient.invalidateQueries({queryKey: ['collection-folders', datasetId]});
+    queryClient.invalidateQueries({ queryKey: ['collection-folders', datasetId] });
   };
 
   // Handle collection update/delete
   const handleCollectionChanged = () => {
-    queryClient.invalidateQueries({queryKey: ['collection-folders', datasetId]});
+    queryClient.invalidateQueries({ queryKey: ['collection-folders', datasetId] });
     // Also invalidate stacks queries to refresh collection membership
-    queryClient.invalidateQueries({queryKey: ['stacks']});
+    queryClient.invalidateQueries({ queryKey: ['stacks'] });
   };
 
   // Pin management functions - implementation of NavigationPinHandlers
@@ -115,7 +115,7 @@ export default function Sidebar() {
     iconName,
     name
   ) => {
-    console.log('Pin collection:', {collection, iconName, name});
+    console.log('Pin collection:', { collection, iconName, name });
 
     const newPin = {
       type: 'COLLECTION' as const,
@@ -150,7 +150,7 @@ export default function Sidebar() {
     iconName,
     name
   ) => {
-    console.log('Pin media type:', {mediaType, iconName, name});
+    console.log('Pin media type:', { mediaType, iconName, name });
 
     const newPin = {
       type: 'MEDIA_TYPE' as const,
@@ -181,7 +181,7 @@ export default function Sidebar() {
   };
 
   const handlePinOverview: NavigationPinHandlers['onPinOverview'] = async (iconName, name) => {
-    console.log('Pin overview:', {iconName, name});
+    console.log('Pin overview:', { iconName, name });
 
     const newPin = {
       type: 'OVERVIEW' as const,
@@ -236,12 +236,12 @@ export default function Sidebar() {
           className="p-1.5 hover:bg-gray-100 rounded-md transition-colors"
           aria-label="Close sidebar"
         >
-          <X size={18} className="text-gray-600"/>
+          <X size={18} className="text-gray-600" />
         </button>
       </div>
 
       {/* Content */}
-      <div className="p-2 space-y-3 overflow-y-auto" style={{maxHeight: 'calc(100vh - 64px)'}}>
+      <div className="p-2 space-y-3 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 64px)' }}>
         {/* Dataset Selection */}
         <DatasetSection
           datasetId={datasetId}

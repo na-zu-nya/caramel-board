@@ -7,8 +7,9 @@
 html,
 body {
   @apply m-0;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu",
-    "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell",
+    "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   /* 縦スクロールをbodyに委譲（iOSの上部タップで先頭へ対応） */
@@ -210,7 +211,7 @@ code {
   body.list-stable-body {
     scrollbar-gutter: stable;
   }
-  
+
   /* Safari/macOS fallback for scrollbar-gutter */
   @supports not (scrollbar-gutter: stable) {
     body.list-stable-body {
@@ -218,14 +219,14 @@ code {
       padding-right: 15px;
       transition: padding-right 0.2s ease;
     }
-    
+
     /* Detect overlay scrollbars (typically macOS) and disable padding */
     @media (pointer: coarse) {
       body.list-stable-body {
         padding-right: 0;
       }
     }
-    
+
     /* Also check for WebKit overlay scrollbars */
     body.list-stable-body::-webkit-scrollbar {
       width: 0px;

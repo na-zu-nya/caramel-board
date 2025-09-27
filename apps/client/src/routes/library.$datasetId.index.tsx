@@ -1,37 +1,37 @@
-import {EntityCard} from '@/components/ui/Card/EntityCard';
-import {TagChip} from '@/components/ui/Chip/TagChip';
-import {SectionBlock, SectionHeader} from '@/components/ui/Section/Section';
-import {StackTile} from '@/components/ui/Stack';
-import {useDatasetOverview} from '@/hooks/useDatasetOverview';
-import {useDataset} from '@/hooks/useDatasets';
-import {useHeaderActions} from '@/hooks/useHeaderActions';
-import {isScratchCollection} from '@/hooks/useScratch';
-import {useStackTile} from '@/hooks/useStackTile';
-import {apiClient} from '@/lib/api-client';
-import {currentFilterAtom} from '@/stores/ui';
-import type {MediaType} from '@/types';
-import {useQuery} from '@tanstack/react-query';
-import {createFileRoute, Link} from '@tanstack/react-router';
-import {useAtom} from 'jotai';
-import {BookOpen, Film, Image} from 'lucide-react';
-import {useEffect, useMemo} from 'react';
+import { EntityCard } from '@/components/ui/Card/EntityCard';
+import { TagChip } from '@/components/ui/Chip/TagChip';
+import { SectionBlock, SectionHeader } from '@/components/ui/Section/Section';
+import { StackTile } from '@/components/ui/Stack';
+import { useDatasetOverview } from '@/hooks/useDatasetOverview';
+import { useDataset } from '@/hooks/useDatasets';
+import { useHeaderActions } from '@/hooks/useHeaderActions';
+import { isScratchCollection } from '@/hooks/useScratch';
+import { useStackTile } from '@/hooks/useStackTile';
+import { apiClient } from '@/lib/api-client';
+import { currentFilterAtom } from '@/stores/ui';
+import type { MediaType } from '@/types';
+import { useQuery } from '@tanstack/react-query';
+import { createFileRoute, Link } from '@tanstack/react-router';
+import { useAtom } from 'jotai';
+import { BookOpen, Film, Image } from 'lucide-react';
+import { useEffect, useMemo } from 'react';
 
 export const Route = createFileRoute('/library/$datasetId/')({
   component: DatasetHome,
 });
 
 function DatasetHome() {
-  const {datasetId} = Route.useParams();
+  const { datasetId } = Route.useParams();
   const [, setCurrentFilter] = useAtom(currentFilterAtom);
-  const {data: dataset} = useDataset(datasetId);
-  const {data: overview, isLoading} = useDatasetOverview(datasetId);
+  const { data: dataset } = useDataset(datasetId);
+  const { data: overview, isLoading } = useDatasetOverview(datasetId);
   const stackTileActions = useStackTile(datasetId);
 
   // Scratch detection (without creating one): find scratch collection and fetch recent items
-  const {data: scratchData} = useQuery({
+  const { data: scratchData } = useQuery({
     queryKey: ['overview-scratch', datasetId],
     queryFn: async () => {
-      const {collections} = await apiClient.getCollections({
+      const { collections } = await apiClient.getCollections({
         dataSetId: Number(datasetId),
         limit: 1000,
       });
@@ -39,12 +39,12 @@ function DatasetHome() {
       if (!scratch) return null as null | { id: number; stacks: any[]; total: number };
       const res = await apiClient.getStacks({
         datasetId,
-        filter: {collectionId: String(scratch.id)},
-        sort: {field: 'updatedAt', order: 'desc'},
+        filter: { collectionId: String(scratch.id) },
+        sort: { field: 'updatedAt', order: 'desc' },
         limit: 10,
         offset: 0,
       });
-      return {id: scratch.id, stacks: res.stacks, total: res.total};
+      return { id: scratch.id, stacks: res.stacks, total: res.total };
     },
     staleTime: 5000,
   });
@@ -63,19 +63,19 @@ function DatasetHome() {
 
   // Reset filter when landing on dataset overview
   useEffect(() => {
-    setCurrentFilter({datasetId});
+    setCurrentFilter({ datasetId });
   }, [datasetId, setCurrentFilter]);
 
   const mediaTypeConfig: Record<MediaType, { label: string; Icon: any }> = {
-    image: {label: 'Images', Icon: Image},
-    comic: {label: 'Comics', Icon: BookOpen},
-    video: {label: 'Videos', Icon: Film},
+    image: { label: 'Images', Icon: Image },
+    comic: { label: 'Comics', Icon: BookOpen },
+    video: { label: 'Videos', Icon: Film },
   };
 
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-gray-300 border-t-transparent rounded-full animate-spin"/>
+        <div className="w-8 h-8 border-2 border-gray-300 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -94,7 +94,7 @@ function DatasetHome() {
 
         {/* Media Types Section */}
         <section>
-          <SectionHeader title="Media Types"/>
+          <SectionHeader title="Media Types" />
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {overview?.mediaTypes.map((media) => {
               const config = mediaTypeConfig[media.mediaType as MediaType];
@@ -105,17 +105,17 @@ function DatasetHome() {
                   aspect="16/9"
                   title={
                     <span className="flex items-center gap-2">
-                      {config?.Icon && <config.Icon size={20}/>}
+                      {config?.Icon && <config.Icon size={20} />}
                       <span className="text-lg font-semibold">{config?.label}</span>
                     </span>
                   }
                   subtitle={`${media.count.toLocaleString()} items`}
                   thumbnailSrc={media.thumbnail || null}
-                  icon={config?.Icon ? <config.Icon size={64} className="opacity-20"/> : undefined}
+                  icon={config?.Icon ? <config.Icon size={64} className="opacity-20" /> : undefined}
                 >
                   <Link
                     to="/library/$datasetId/media-type/$mediaType"
-                    params={{datasetId, mediaType: media.mediaType}}
+                    params={{ datasetId, mediaType: media.mediaType }}
                   />
                 </EntityCard>
               );
@@ -126,7 +126,7 @@ function DatasetHome() {
         {/* Collections Section (exclude Scratch) */}
         {overview?.collections && overview.collections.length > 0 && (
           <section>
-            <SectionHeader title="Collections"/>
+            <SectionHeader title="Collections" />
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
               {overview.collections
                 .filter((c) => !isScratchCollection(c))
@@ -148,7 +148,7 @@ function DatasetHome() {
         {/* Tag Cloud Section */}
         {overview?.tagCloud && overview.tagCloud.length > 0 && (
           <section>
-            <SectionHeader title="Popular Tags"/>
+            <SectionHeader title="Popular Tags" />
             <div className="flex flex-wrap gap-2">
               {overview.tagCloud.slice(0, 30).map((tag) => (
                 <TagChip
@@ -164,7 +164,7 @@ function DatasetHome() {
                       datasetId,
                       mediaType: 'image',
                     })}
-                    search={{tags: [tag.name]}}
+                    search={{ tags: [tag.name] }}
                   />
                 </TagChip>
               ))}
@@ -179,7 +179,7 @@ function DatasetHome() {
             action={
               <Link
                 to="/library/$datasetId/likes"
-                params={{datasetId}}
+                params={{ datasetId }}
                 className="text-blue-600 hover:text-blue-800 font-medium"
               >
                 Recently Liked ›
@@ -198,9 +198,7 @@ function DatasetHome() {
                 } = stackTileActions;
                 const thumb =
                   (item as any).thumbnail || (item as any).thumbnailUrl || '/no-image.png';
-                const likeCount = Number(
-                  (item as any).likeCount ?? (item as any).liked ?? 0
-                );
+                const likeCount = Number((item as any).likeCount ?? (item as any).liked ?? 0);
                 const pageCount =
                   (item as any).assetCount ??
                   (item as any)._count?.assets ??
@@ -226,7 +224,7 @@ function DatasetHome() {
                   >
                     <Link
                       to="/library/$datasetId/stacks/$stackId"
-                      params={{datasetId, stackId: String(item.id)}}
+                      params={{ datasetId, stackId: String(item.id) }}
                     />
                   </StackTile>
                 );
@@ -242,7 +240,7 @@ function DatasetHome() {
             action={
               <Link
                 to="/library/$datasetId/scratch/$scratchId"
-                params={{datasetId, scratchId: String(scratchData.id)}}
+                params={{ datasetId, scratchId: String(scratchData.id) }}
                 className="text-blue-600 hover:text-blue-800 font-medium"
               >
                 Recently Scratch ›
@@ -261,9 +259,7 @@ function DatasetHome() {
                 } = stackTileActions;
                 const thumb =
                   (item as any).thumbnail || (item as any).thumbnailUrl || '/no-image.png';
-                const likeCount = Number(
-                  (item as any).likeCount ?? (item as any).liked ?? 0
-                );
+                const likeCount = Number((item as any).likeCount ?? (item as any).liked ?? 0);
                 const pageCount =
                   (item as any).assetCount ??
                   (item as any)._count?.assets ??
@@ -289,7 +285,7 @@ function DatasetHome() {
                   >
                     <Link
                       to="/library/$datasetId/stacks/$stackId"
-                      params={{datasetId, stackId: String(item.id)}}
+                      params={{ datasetId, stackId: String(item.id) }}
                     />
                   </StackTile>
                 );
@@ -318,15 +314,15 @@ function CollectionCard({
   count: number;
   thumbnail?: string | null;
 }) {
-  const {data: meta} = useQuery({
+  const { data: meta } = useQuery({
     queryKey: ['collection-meta', id],
     enabled: !thumbnail || !count,
     queryFn: async () => {
       // Try general stacks API first
       const res = await apiClient.getStacks({
         datasetId,
-        filter: {collectionId: String(id)},
-        sort: {field: 'updatedAt', order: 'desc'},
+        filter: { collectionId: String(id) },
+        sort: { field: 'updatedAt', order: 'desc' },
         limit: 1,
         offset: 0,
       });
@@ -336,17 +332,16 @@ function CollectionCard({
       // Fallback for SMART collections where general filter may not apply
       if ((!s || total === 0) && typeof id === 'number') {
         try {
-          const smart = await apiClient.getSmartCollectionStacks(id, {limit: 1, offset: 0});
+          const smart = await apiClient.getSmartCollectionStacks(id, { limit: 1, offset: 0 });
           if (smart.total > 0) {
             s = smart.stacks?.[0] as any;
             total = smart.total;
           }
-        } catch {
-        }
+        } catch {}
       }
 
       const t = (s as any)?.thumbnailUrl || (s as any)?.thumbnail || null;
-      return {thumb: t as string | null, total};
+      return { thumb: t as string | null, total };
     },
     staleTime: 30000,
   });
@@ -365,7 +360,7 @@ function CollectionCard({
     >
       <Link
         to="/library/$datasetId/collections/$collectionId"
-        params={{datasetId, collectionId: String(id)}}
+        params={{ datasetId, collectionId: String(id) }}
       />
     </EntityCard>
   );

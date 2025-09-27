@@ -28,7 +28,14 @@ export interface SetupGuideProps {
 const DRAG_THRESHOLD_RATIO = 1 / 3;
 const MAX_DRAG_RATIO = 0.45;
 
-export function SetupGuide({ steps, activeIndex, onRequestPrev, onRequestNext, onStepSelect, className }: SetupGuideProps) {
+export function SetupGuide({
+  steps,
+  activeIndex,
+  onRequestPrev,
+  onRequestNext,
+  onStepSelect,
+  className,
+}: SetupGuideProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const trackRef = useRef<HTMLDivElement | null>(null);
   const dragStartXRef = useRef<number | null>(null);
@@ -221,14 +228,26 @@ export function SetupGuide({ steps, activeIndex, onRequestPrev, onRequestNext, o
           style={trackStyle}
         >
           {steps.map((step) => (
-            <section key={step.id} className="w-full shrink-0 px-10 py-12 flex flex-col gap-6" aria-label={step.title}>
-              {step.eyebrow && <span className="text-sm font-medium uppercase tracking-widest text-amber-500">{step.eyebrow}</span>}
+            <section
+              key={step.id}
+              className="w-full shrink-0 px-10 py-12 flex flex-col gap-6"
+              aria-label={step.title}
+            >
+              {step.eyebrow && (
+                <span className="text-sm font-medium uppercase tracking-widest text-amber-500">
+                  {step.eyebrow}
+                </span>
+              )}
               <div className="space-y-4">
                 <h3 className="text-2xl font-semibold text-gray-900">{step.title}</h3>
-                {step.description && <p className="text-base text-muted-foreground">{step.description}</p>}
+                {step.description && (
+                  <p className="text-base text-muted-foreground">{step.description}</p>
+                )}
               </div>
               {step.illustration && (
-                <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 p-6">{step.illustration}</div>
+                <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 p-6">
+                  {step.illustration}
+                </div>
               )}
               {step.content && <div className="space-y-4">{step.content}</div>}
             </section>
@@ -251,8 +270,10 @@ export function SetupGuide({ steps, activeIndex, onRequestPrev, onRequestNext, o
             />
           ))}
         </div>
-        <span className="text-sm text-muted-foreground">左へスワイプで前のステップ、右へスワイプで次のステップに進みます</span>
-     </div>
+        <span className="text-sm text-muted-foreground">
+          左へスワイプで前のステップ、右へスワイプで次のステップに進みます
+        </span>
+      </div>
     </div>
   );
 }

@@ -25,7 +25,17 @@ function getReadableTextColor(bg: string): string {
   return yiq >= 140 ? '#111111' : '#ffffff';
 }
 
-export function TagChip({ asChild, name, displayName, count, prefixHash = true, color, className, children, ...rest }: TagChipProps) {
+export function TagChip({
+  asChild,
+  name,
+  displayName,
+  count,
+  prefixHash = true,
+  color,
+  className,
+  children,
+  ...rest
+}: TagChipProps) {
   const label = `${prefixHash ? '#' : ''}${displayName || name}`;
 
   const usesCustomColor = !!color;
@@ -37,14 +47,20 @@ export function TagChip({ asChild, name, displayName, count, prefixHash = true, 
     <span
       className={cn(
         'inline-flex items-center rounded-full px-3 py-1.5 text-sm font-medium cursor-pointer hover:opacity-80 transition-opacity',
-        usesCustomColor ? 'border border-transparent' : 'border border-transparent bg-primary text-primary-foreground',
+        usesCustomColor
+          ? 'border border-transparent'
+          : 'border border-transparent bg-primary text-primary-foreground',
         className
       )}
       style={style}
       {...rest}
     >
       {label}
-      {typeof count === 'number' && <span className={cn('ml-1.5', usesCustomColor ? 'opacity-90' : 'opacity-70')}>({count})</span>}
+      {typeof count === 'number' && (
+        <span className={cn('ml-1.5', usesCustomColor ? 'opacity-90' : 'opacity-70')}>
+          ({count})
+        </span>
+      )}
     </span>
   );
 

@@ -8,4 +8,3 @@ export interface SideMenuFolderItemProps extends Omit<SideMenuListItemProps, 'ic
 export function SideMenuFolderItem({ open = false, ...rest }: SideMenuFolderItemProps) {
   return <SideMenuListItem icon={open ? FolderOpen : Folder} {...rest} />;
 }
-

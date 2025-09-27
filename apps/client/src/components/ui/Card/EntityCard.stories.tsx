@@ -27,4 +27,3 @@ export const Widescreen: Story = {
     icon: '🖼️',
   },
 };
-

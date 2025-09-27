@@ -1,8 +1,17 @@
 import * as LucideIcons from 'lucide-react';
 import { ChevronDown } from 'lucide-react';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../../dropdown-menu';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '../../dropdown-menu';
 
-export interface NavPin { id: number | string; name: string; icon: string; }
+export interface NavPin {
+  id: number | string;
+  name: string;
+  icon: string;
+}
 
 export interface HeaderPinsCompactProps {
   navigationPins: NavPin[];
@@ -10,7 +19,11 @@ export interface HeaderPinsCompactProps {
   isActive?: (pin: NavPin) => boolean;
 }
 
-export function HeaderPinsCompact({ navigationPins, onNavClick, isActive }: HeaderPinsCompactProps) {
+export function HeaderPinsCompact({
+  navigationPins,
+  onNavClick,
+  isActive,
+}: HeaderPinsCompactProps) {
   const renderIcon = (iconName: string) => {
     const IconComponent = (LucideIcons as any)[iconName];
     return IconComponent ? <IconComponent size={18} /> : <LucideIcons.Bookmark size={18} />;

@@ -1,7 +1,11 @@
-import type {PrismaClient} from '@prisma/client';
-import {AssetModel} from '../../../models/AssetModel';
-import type {DataStorageService} from '../../../shared/services/DataStorageService';
-import {withPublicAssetArray, withPublicAssetPaths, toPublicAssetPath} from '../../../utils/assetPath';
+import type { PrismaClient } from '@prisma/client';
+import { AssetModel } from '../../../models/AssetModel';
+import type { DataStorageService } from '../../../shared/services/DataStorageService';
+import {
+  withPublicAssetArray,
+  withPublicAssetPaths,
+  toPublicAssetPath,
+} from '../../../utils/assetPath';
 
 export interface PaginationOptions {
   limit: number;
@@ -28,7 +32,9 @@ export const createAssetService = (deps: {
     });
   };
 
-  const mapAsset = <T extends { file?: string | null; thumbnail?: string | null; stack?: any }>(asset: T) => {
+  const mapAsset = <T extends { file?: string | null; thumbnail?: string | null; stack?: any }>(
+    asset: T
+  ) => {
     const mapped = withPublicAssetPaths(asset, dataSetId);
     if (mapped.stack) {
       mapped.stack = {
@@ -50,7 +56,7 @@ export const createAssetService = (deps: {
       const [assetsRaw, total] = await Promise.all([
         prisma.asset.findMany({
           where: {
-            stack: { dataSetId }
+            stack: { dataSetId },
           },
           skip: offset,
           take: limit,
@@ -66,8 +72,8 @@ export const createAssetService = (deps: {
         }),
         prisma.asset.count({
           where: {
-            stack: { dataSetId }
-          }
+            stack: { dataSetId },
+          },
         }),
       ]);
 
@@ -227,7 +233,7 @@ export const createAssetService = (deps: {
     async getRecentAssets(limit = 10) {
       const assets = await prisma.asset.findMany({
         where: {
-          stack: { dataSetId }
+          stack: { dataSetId },
         },
         orderBy: { createdAt: 'desc' },
         take: limit,
@@ -248,7 +254,7 @@ export const createAssetService = (deps: {
       const assets = await prisma.asset.findMany({
         where: {
           fileType,
-          stack: { dataSetId }
+          stack: { dataSetId },
         },
         include: {
           stack: {
@@ -267,15 +273,15 @@ export const createAssetService = (deps: {
       const counts = await prisma.asset.groupBy({
         by: ['fileType'],
         where: {
-          stack: { dataSetId }
+          stack: { dataSetId },
         },
         _count: true,
       });
 
-      return counts.map(c => ({
+      return counts.map((c) => ({
         fileType: c.fileType,
-        count: c._count
+        count: c._count,
       }));
-    }
+    },
   };
 };

@@ -1,10 +1,10 @@
-import {execSync} from 'child_process';
+import { execSync } from 'child_process';
 import path from 'path';
-import type {PrismaClient} from '@prisma/client';
-import {mkdirpSync} from 'fs-extra';
+import type { PrismaClient } from '@prisma/client';
+import { mkdirpSync } from 'fs-extra';
 import sharp from 'sharp';
-import type {DataStorageService} from '../../../shared/services/DataStorageService';
-import {buildThumbnailKey} from '../../../utils/assetPath';
+import type { DataStorageService } from '../../../shared/services/DataStorageService';
+import { buildThumbnailKey } from '../../../utils/assetPath';
 
 function getFFMPEGPath() {
   return process.env.FFMPEG_PATH;
@@ -14,7 +14,7 @@ function getFileType(ext: string): 'movie' | 'image' {
   return ext.match(/mov|mp4/) ? 'movie' : 'image';
 }
 
-export const createFileService = (deps: { 
+export const createFileService = (deps: {
   prisma: PrismaClient;
   dataStorage: DataStorageService;
 }) => {
@@ -76,9 +76,7 @@ export const createFileService = (deps: {
         mkdirpSync(path.dirname(outputPath));
         execSync(cmd.filter(Boolean).join(' '));
 
-        await sharp(dataStorage.getPath(tmpKey))
-          .jpeg({ quality: 80 })
-          .toFile(outputPath);
+        await sharp(dataStorage.getPath(tmpKey)).jpeg({ quality: 80 }).toFile(outputPath);
 
         // 一時ファイルを削除
         await dataStorage.delete(tmpKey, dataSetId);

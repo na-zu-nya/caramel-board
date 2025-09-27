@@ -1,4 +1,4 @@
-import type {CollectionFolder, Prisma, PrismaClient} from '@prisma/client';
+import type { CollectionFolder, Prisma, PrismaClient } from '@prisma/client';
 import type {
   CollectionFolderQuery,
   CreateCollectionFolderInput,

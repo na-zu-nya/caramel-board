@@ -1,15 +1,15 @@
-import {CollectionsSection} from '@/components/sidebar/CollectionsSection';
-import {DatasetSection} from '@/components/sidebar/DatasetSection';
-import {LibrarySection} from '@/components/sidebar/LibrarySection';
-import {SettingsSection} from '@/components/sidebar/SettingsSection';
-import type {NavigationPinHandlers} from '@/components/sidebar/types';
-import {SideMenu} from '@/components/ui/SideMenu';
-import {apiClient} from '@/lib/api-client';
-import {currentDatasetAtom, sidebarOpenAtom} from '@/stores/ui';
-import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
-import {Link, useParams} from '@tanstack/react-router';
-import {useAtom} from 'jotai';
-import {useEffect, useState} from 'react';
+import { CollectionsSection } from '@/components/sidebar/CollectionsSection';
+import { DatasetSection } from '@/components/sidebar/DatasetSection';
+import { LibrarySection } from '@/components/sidebar/LibrarySection';
+import { SettingsSection } from '@/components/sidebar/SettingsSection';
+import type { NavigationPinHandlers } from '@/components/sidebar/types';
+import { SideMenu } from '@/components/ui/SideMenu';
+import { apiClient } from '@/lib/api-client';
+import { currentDatasetAtom, sidebarOpenAtom } from '@/stores/ui';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link, useParams } from '@tanstack/react-router';
+import { useAtom } from 'jotai';
+import { useEffect, useState } from 'react';
 
 // LocalStorage keys for collapsed state
 const COLLAPSED_STATE_KEY = 'sidebar-collapsed-groups';
@@ -35,14 +35,14 @@ export default function SidebarContainer() {
   const [isOpen, setIsOpen] = useAtom(sidebarOpenAtom);
   const [currentDataset] = useAtom(currentDatasetAtom);
   // @ts-ignore
-  const params = useParams({strict: false});
+  const params = useParams({ strict: false });
   const datasetId = (params as { datasetId?: string }).datasetId || currentDataset || '1';
   const queryClient = useQueryClient();
 
   const [collapsedGroups, setCollapsedGroups] =
     useState<Record<string, boolean>>(loadCollapsedState);
 
-  const {data: navigationPins = []} = useQuery({
+  const { data: navigationPins = [] } = useQuery({
     queryKey: ['navigation-pins', datasetId],
     queryFn: async () => apiClient.getNavigationPinsByDataset(datasetId),
   });
@@ -50,28 +50,28 @@ export default function SidebarContainer() {
   const createNavigationPinMutation = useMutation({
     mutationFn: async (newPin: Parameters<typeof apiClient.createNavigationPin>[0]) =>
       apiClient.createNavigationPin(newPin),
-    onSuccess: () => queryClient.invalidateQueries({queryKey: ['navigation-pins', datasetId]}),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['navigation-pins', datasetId] }),
   });
 
   const deleteNavigationPinMutation = useMutation({
     mutationFn: async (pinId: number) => apiClient.deleteNavigationPin(pinId),
-    onSuccess: () => queryClient.invalidateQueries({queryKey: ['navigation-pins', datasetId]}),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['navigation-pins', datasetId] }),
   });
 
   const toggleGroup = (groupKey: string) => {
-    const newState = {...collapsedGroups, [groupKey]: !collapsedGroups[groupKey]};
+    const newState = { ...collapsedGroups, [groupKey]: !collapsedGroups[groupKey] };
     setCollapsedGroups(newState);
     saveCollapsedState(newState);
   };
 
   const handleCollectionCreated = () => {
-    queryClient.invalidateQueries({queryKey: ['collection-folders', datasetId]});
+    queryClient.invalidateQueries({ queryKey: ['collection-folders', datasetId] });
   };
 
   const handleCollectionChanged = () => {
-    queryClient.invalidateQueries({queryKey: ['collection-folders', datasetId]});
-    queryClient.invalidateQueries({queryKey: ['collection-stacks']});
-    queryClient.invalidateQueries({queryKey: ['stacks']});
+    queryClient.invalidateQueries({ queryKey: ['collection-folders', datasetId] });
+    queryClient.invalidateQueries({ queryKey: ['collection-stacks'] });
+    queryClient.invalidateQueries({ queryKey: ['stacks'] });
   };
 
   const isPinned: NavigationPinHandlers['isPinned'] = (type, id, mediaType) =>

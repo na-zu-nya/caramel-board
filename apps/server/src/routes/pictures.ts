@@ -1,7 +1,7 @@
-import {zValidator} from '@hono/zod-validator';
-import {Hono} from 'hono';
-import {AutoTagPredictSchema, IdParamSchema} from '../schemas/index.js';
-import {PictureService} from '../shared/services/PictureService';
+import { zValidator } from '@hono/zod-validator';
+import { Hono } from 'hono';
+import { AutoTagPredictSchema, IdParamSchema } from '../schemas/index.js';
+import { PictureService } from '../shared/services/PictureService';
 
 export const picturesRoute = new Hono();
 const pictureService = new PictureService();

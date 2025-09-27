@@ -80,7 +80,7 @@ export default function VideoSeekBar({
         let best: { time: number; px: number } | null = null;
         for (const m of markers) {
           const px = Math.abs((m.time / duration) * rect.width - x);
-          if (px <= NUDGE_PX && (!best || px < best.px)) best = {time: m.time, px};
+          if (px <= NUDGE_PX && (!best || px < best.px)) best = { time: m.time, px };
         }
         if (best) t = best.time;
       }
@@ -181,10 +181,10 @@ export default function VideoSeekBar({
           aria-pressed={!!muted}
           title={muted ? 'Unmute' : 'Mute'}
         >
-          {muted ? <VolumeX className="w-4 h-4"/> : <Volume2 className="w-4 h-4"/>}
+          {muted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
         </button>
         {/* Current time */}
-        <TimeBadge seconds={isDragging ? dragTime : currentTime}/>
+        <TimeBadge seconds={isDragging ? dragTime : currentTime} />
 
         {/* Seek area (判定2倍), 内部に細いトラックを描画 */}
         <div
@@ -196,7 +196,7 @@ export default function VideoSeekBar({
           {/* Visible track (細い) */}
           <div className="absolute inset-0 flex items-center">
             <div className="w-full h-1 bg-black/40 rounded-full overflow-hidden">
-              <div className="h-full bg-primary/80" style={{width: `${progressPercent}%`}}/>
+              <div className="h-full bg-primary/80" style={{ width: `${progressPercent}%` }} />
             </div>
           </div>
 
@@ -206,11 +206,11 @@ export default function VideoSeekBar({
               {markers.map((m, idx) => {
                 const pct = Math.min(Math.max((m.time / duration) * 100, 0), 100);
                 return (
-                  <div key={idx} className="absolute" style={{left: `${pct}%`}}>
+                  <div key={idx} className="absolute" style={{ left: `${pct}%` }}>
                     {/* Marker group: make hover affect icon while preserving hit area */}
                     <div
                       className="absolute -translate-x-1/2 group/marker pointer-events-auto"
-                      style={{top: 0, height: `${HIT_HEIGHT_PX}px`, width: '36px'}}
+                      style={{ top: 0, height: `${HIT_HEIGHT_PX}px`, width: '36px' }}
                       onDoubleClick={(e) => {
                         e.stopPropagation();
                         onEditMarkerRequest?.(m, idx);
@@ -250,7 +250,7 @@ export default function VideoSeekBar({
           {/* Handle: 普段非表示、バーhoverでscale-up、さらにhoverで少し拡大 */}
           <div
             className={cn('absolute top-1/2 -translate-y-1/2 -translate-x-1/2')}
-            style={{left: `${progressPercent}%`}}
+            style={{ left: `${progressPercent}%` }}
           >
             <div
               className={cn(
@@ -266,7 +266,7 @@ export default function VideoSeekBar({
         </div>
 
         {/* Duration */}
-        <TimeBadge seconds={duration}/>
+        <TimeBadge seconds={duration} />
 
         {/* FPS toggle at right end */}
         <button
@@ -282,7 +282,7 @@ export default function VideoSeekBar({
           )}
           title="Change step FPS"
         >
-          <SquareStack className="w-4 h-4"/>
+          <SquareStack className="w-4 h-4" />
           <span className="tabular-nums">{fps ?? 30}</span>
         </button>
       </div>

@@ -1,3 +1,3 @@
-import {logger} from 'hono/logger';
+import { logger } from 'hono/logger';
 
 export const loggerMiddleware = logger();

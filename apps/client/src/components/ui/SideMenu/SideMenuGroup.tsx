@@ -11,7 +11,14 @@ export interface SideMenuGroupProps {
   className?: string;
 }
 
-export function SideMenuGroup({ label, collapsed, onToggle, action, children, className }: SideMenuGroupProps) {
+export function SideMenuGroup({
+  label,
+  collapsed,
+  onToggle,
+  action,
+  children,
+  className,
+}: SideMenuGroupProps) {
   return (
     <div className={cn('pb-1', className)}>
       <SideMenuLabel label={label} collapsed={collapsed} onToggle={onToggle} action={action} />
@@ -19,4 +26,3 @@ export function SideMenuGroup({ label, collapsed, onToggle, action, children, cl
     </div>
   );
 }
-

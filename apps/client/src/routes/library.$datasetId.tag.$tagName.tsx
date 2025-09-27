@@ -60,11 +60,16 @@ function TagDetailPage() {
       setTimeout(() => requestAnimationFrame(() => step(n - 1)), delay);
     };
     step(retries);
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // このページではベースとしてタグ条件を強制しつつ、他のフィルタも併用可能にする
-  const tagFilter = useMemo<StackFilter>(() => ({ datasetId, tags: [decodedTagName] }), [datasetId, decodedTagName]);
+  const tagFilter = useMemo<StackFilter>(
+    () => ({ datasetId, tags: [decodedTagName] }),
+    [datasetId, decodedTagName]
+  );
   useEffect(() => {
     setCurrentFilter(tagFilter);
   }, [tagFilter, setCurrentFilter]);
@@ -117,7 +122,14 @@ function TagDetailPage() {
         void loadRange(0, Math.min(49, total - 1));
       }
     }
-  }, [total, loadedPages.size, loadRange, navigationState, setNavigationState, restoreScrollSafely]);
+  }, [
+    total,
+    loadedPages.size,
+    loadRange,
+    navigationState,
+    setNavigationState,
+    restoreScrollSafely,
+  ]);
 
   // Memoize loaded items to prevent unnecessary recalculations
   const stableLoadedItems = useMemo(() => {
@@ -126,10 +138,13 @@ function TagDetailPage() {
   }, [allItems]);
 
   // Handle filter changes - preserve tag filter
-  const handleFilterChange = useCallback((newFilter: StackFilter) => {
-    // タグ条件と datasetId は常に固定
-    setCurrentFilter({ ...newFilter, datasetId, tags: [decodedTagName] });
-  }, [datasetId, decodedTagName, setCurrentFilter]);
+  const handleFilterChange = useCallback(
+    (newFilter: StackFilter) => {
+      // タグ条件と datasetId は常に固定
+      setCurrentFilter({ ...newFilter, datasetId, tags: [decodedTagName] });
+    },
+    [datasetId, decodedTagName, setCurrentFilter]
+  );
 
   // Handle sort changes
   const handleSortChange = useCallback((newSort: { field: string; order: 'asc' | 'desc' }) => {
@@ -158,14 +173,28 @@ function TagDetailPage() {
     // Build ordered ids (right-to-left) from loaded items
     const loadedIdsLtr = (allItems || [])
       .filter((it): it is MediaGridItem => !!it)
-      .map((it) => (typeof it.id === 'string' ? Number.parseInt(it.id as string, 10) : (it.id as number)));
+      .map((it) =>
+        typeof it.id === 'string' ? Number.parseInt(it.id as string, 10) : (it.id as number)
+      );
     const ids = loadedIdsLtr.slice().reverse();
-    const clickedId = typeof item.id === 'string' ? Number.parseInt(item.id as string, 10) : (item.id as number);
-    const currentIndex = Math.max(0, ids.findIndex((id) => id === clickedId));
+    const clickedId =
+      typeof item.id === 'string' ? Number.parseInt(item.id as string, 10) : (item.id as number);
+    const currentIndex = Math.max(
+      0,
+      ids.findIndex((id) => id === clickedId)
+    );
 
     const mediaType = (item as any).mediaType as string | undefined;
     const token = genListToken({ datasetId, mediaType, filters: effectiveFilter });
-    saveViewContext({ token, datasetId, mediaType: mediaType as any, filters: effectiveFilter, ids, currentIndex, createdAt: Date.now() });
+    saveViewContext({
+      token,
+      datasetId,
+      mediaType: mediaType as any,
+      filters: effectiveFilter,
+      ids,
+      currentIndex,
+      createdAt: Date.now(),
+    });
 
     navigate({
       to: '/library/$datasetId/stacks/$stackId',

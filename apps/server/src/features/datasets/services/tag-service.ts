@@ -12,10 +12,7 @@ export interface PaginationOptions {
   orderDirection?: string;
 }
 
-export const createTagService = (deps: {
-  prisma: PrismaClient;
-  dataSetId: number;
-}) => {
+export const createTagService = (deps: { prisma: PrismaClient; dataSetId: number }) => {
   const { prisma, dataSetId } = deps;
 
   async function getAll(pagination: PaginationOptions) {

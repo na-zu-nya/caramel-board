@@ -5,11 +5,7 @@ export const Route = createFileRoute('/setup')({
   validateSearch: (search: Record<string, unknown>) => {
     const preview = search.preview;
     return {
-      preview:
-        preview === true ||
-        preview === 'true' ||
-        preview === '1' ||
-        preview === 1,
+      preview: preview === true || preview === 'true' || preview === '1' || preview === 1,
     };
   },
   component: SetupPage,

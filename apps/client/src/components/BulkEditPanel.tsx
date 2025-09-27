@@ -1,12 +1,18 @@
-import {Badge} from '@/components/ui/badge';
-import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue,} from '@/components/ui/select';
-import {SuggestInput} from '@/components/ui/suggest-input';
-import {useSwipeClose} from '@/hooks/features/useSwipeClose';
-import {apiClient} from '@/lib/api-client';
-import {cn} from '@/lib/utils';
-import {useParams} from '@tanstack/react-router';
-import {Calendar, Monitor, Save, Search, Tag, X} from 'lucide-react';
-import {useEffect, useRef, useState} from 'react';
+import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { SuggestInput } from '@/components/ui/suggest-input';
+import { useSwipeClose } from '@/hooks/features/useSwipeClose';
+import { apiClient } from '@/lib/api-client';
+import { cn } from '@/lib/utils';
+import { useParams } from '@tanstack/react-router';
+import { Calendar, Monitor, Save, Search, Tag, X } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 
 interface EditPanelProps {
   isOpen: boolean;

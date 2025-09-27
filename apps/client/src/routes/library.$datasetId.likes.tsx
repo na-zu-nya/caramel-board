@@ -1,27 +1,27 @@
-import {GroupedLikesList} from '@/components/GroupedLikesList';
-import {YearPagination} from '@/components/YearPagination';
+import { GroupedLikesList } from '@/components/GroupedLikesList';
+import { YearPagination } from '@/components/YearPagination';
 import InfoSidebar from '@/components/InfoSidebar';
-import {useDataset} from '@/hooks/useDatasets';
-import {useHeaderActions} from '@/hooks/useHeaderActions';
-import {apiClient} from '@/lib/api-client';
-import {navigationStateAtom} from '@/stores/navigation';
-import {currentFilterAtom} from '@/stores/ui';
-import {useQuery} from '@tanstack/react-query';
-import {createFileRoute} from '@tanstack/react-router';
-import {useAtom} from 'jotai';
-import {useCallback, useEffect, useMemo, useState} from 'react';
+import { useDataset } from '@/hooks/useDatasets';
+import { useHeaderActions } from '@/hooks/useHeaderActions';
+import { apiClient } from '@/lib/api-client';
+import { navigationStateAtom } from '@/stores/navigation';
+import { currentFilterAtom } from '@/stores/ui';
+import { useQuery } from '@tanstack/react-query';
+import { createFileRoute } from '@tanstack/react-router';
+import { useAtom } from 'jotai';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 export const Route = createFileRoute('/library/$datasetId/likes')({
   component: LikesPage,
 });
 
 function LikesPage() {
-  const {datasetId} = Route.useParams();
+  const { datasetId } = Route.useParams();
   const [, setCurrentFilter] = useAtom(currentFilterAtom);
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
   const [accumulatedData, setAccumulatedData] = useState<Record<string, any[]>>({});
 
-// Enable header actions (library routes)
+  // Enable header actions (library routes)
   const headerActionsConfig = useMemo(
     () => ({
       showShuffle: false,
@@ -34,7 +34,7 @@ function LikesPage() {
   useHeaderActions(headerActionsConfig);
   // Reset global filter when entering Likes top page
   useEffect(() => {
-    setCurrentFilter({datasetId});
+    setCurrentFilter({ datasetId });
   }, [datasetId, setCurrentFilter]);
   const [navigationState, setNavigationState] = useAtom(navigationStateAtom);
   const restoreScrollSafely = useCallback((targetY: number, retries = 40, delay = 50) => {
@@ -56,7 +56,7 @@ function LikesPage() {
   }, []);
 
   // Fetch yearly likes data (search removed)
-  const {data, isLoading, refetch} = useQuery({
+  const { data, isLoading, refetch } = useQuery({
     queryKey: ['likes', 'yearly', datasetId, currentYear],
     queryFn: () =>
       apiClient.getYearlyLikes({
@@ -76,7 +76,7 @@ function LikesPage() {
   useEffect(() => {
     if (data?.groupedByMonth) {
       setAccumulatedData((prev) => {
-        const merged = {...prev};
+        const merged = { ...prev };
         for (const [month, items] of Object.entries(data.groupedByMonth)) {
           if (!merged[month]) {
             merged[month] = [];
