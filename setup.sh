@@ -84,14 +84,17 @@ ensure_huggingface_cli() {
   if [ -z "$hf_bin" ]; then
     say "[setup] $(t hf_install_start)"
     set +e
+    INSTALL_HF=1
     if [ -x "$target_dir/venv/bin/python" ]; then
       # shellcheck disable=SC1091
       source "$target_dir/venv/bin/activate" 2>/dev/null
+      python -m ensurepip --upgrade >/dev/null 2>&1
       python -m pip install --upgrade pip >/dev/null 2>&1
       python -m pip install --upgrade huggingface_hub
       INSTALL_HF=$?
       deactivate 2>/dev/null || true
-    else
+    elif have python3; then
+      python3 -m ensurepip --default-pip >/dev/null 2>&1
       python3 -m pip install --user --upgrade pip >/dev/null 2>&1
       python3 -m pip install --user --upgrade huggingface_hub
       INSTALL_HF=$?
@@ -185,6 +188,9 @@ t(){ local k="$1"; case "$CB_LANG" in ja)
     py_install_start) echo "Python3 が見つからないため、apt-get でインストールします（pyenv 推奨ですが自動インストールを試みます）。";; \
     py_install_success) echo "Python3 のインストールが完了しました。";; \
     py_install_failed) echo "Python3 のインストールに失敗しました。手動で pyenv などを使用してセットアップしてください。";; \
+    py_ensurepip_start) echo "venv/pip を有効化するために python3-venv 等をインストールします。";; \
+    py_ensurepip_success) echo "venv/pip の有効化が完了しました。";; \
+    py_ensurepip_failed) printf "venv/pip を自動設定できませんでした。'sudo apt install %s' を実行してから再試行してください。" "$2";; \
     py_required) echo "自動タグ付けを有効化するには Python3 が必要です。インストール後にもう一度実行してください。";; \
     hf_install_start) echo "huggingface-cli が見つからないため、pip でインストールします。";; \
     hf_install_success) echo "huggingface-cli をインストールしました。";; \
@@ -243,6 +249,9 @@ t(){ local k="$1"; case "$CB_LANG" in ja)
     py_install_start) echo "Python3 not found. Attempting apt-get install (pyenv recommended for advanced usage).";; \
     py_install_success) echo "Python3 installation completed.";; \
     py_install_failed) echo "Failed to install Python3. Please install it manually (pyenv recommended).";; \
+    py_ensurepip_start) echo "Installing python3-venv/pip packages to enable venv and pip.";; \
+    py_ensurepip_success) echo "venv/pip enablement completed.";; \
+    py_ensurepip_failed) printf "Could not enable venv/pip automatically. Please run 'sudo apt install %s' manually and retry." "$2";; \
     py_required) echo "Python3 is required to enable auto-tagging. Please install it and run again.";; \
     hf_install_start) echo "huggingface-cli not found. Installing via pip.";; \
     hf_install_success) echo "huggingface-cli installed.";; \
@@ -395,6 +404,49 @@ fi
 if ! $python_ok; then
   say "[setup] $(t py_hint)"
   echo ""
+fi
+if $python_ok; then
+  PY_MM=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null || echo "")
+  PY_VENV_HINT="python3-venv"
+  if [ -n "$PY_MM" ]; then
+    PY_VENV_HINT="$PY_VENV_HINT python${PY_MM}-venv"
+  fi
+  if ! python3 -m ensurepip --version >/dev/null 2>&1; then
+    if have apt-get; then
+      say "[setup] $(t py_ensurepip_start)"
+      set +e
+      if have sudo; then
+        sudo apt-get update >/dev/null 2>&1
+      else
+        apt-get update >/dev/null 2>&1
+      fi
+      PKG_CANDIDATES=(python3-venv python3-pip python3-distutils python3-ensurepip)
+      if [ -n "$PY_MM" ]; then
+        PKG_CANDIDATES+=("python${PY_MM}-venv" "python${PY_MM}-distutils" "python${PY_MM}-pip" "python${PY_MM}-ensurepip")
+      fi
+      for pkg in "${PKG_CANDIDATES[@]}"; do
+        if [ -n "$pkg" ]; then
+          if have sudo; then
+            sudo apt-get install -y "$pkg" >/dev/null 2>&1
+          else
+            apt-get install -y "$pkg" >/dev/null 2>&1
+          fi
+        fi
+      done
+      set -e
+    fi
+    if python3 -m ensurepip --version >/dev/null 2>&1; then
+      say "[setup] $(t py_ensurepip_success)"
+    else
+      say "[setup] $(t py_ensurepip_failed "$PY_VENV_HINT")" >&2
+    fi
+  fi
+  if python3 -m ensurepip --version >/dev/null 2>&1; then
+    set +e
+    python3 -m ensurepip --default-pip >/dev/null 2>&1
+    python3 -m pip install --upgrade pip >/dev/null 2>&1
+    set -e
+  fi
 fi
 
 # 2) Ensure default directories
