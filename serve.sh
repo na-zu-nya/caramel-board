@@ -259,6 +259,7 @@ case "$MODE" in
       echo "[update] $(t update_git_not_repo)"
       exit 0
     fi
+    git checkout .
     git fetch --all --prune || true
     git pull --rebase || true
     # Build new image and apply
