@@ -132,4 +132,3 @@ git clone https://github.com/na-zu-nya/caramel-board.git caramel-board
   - 名前に `CaramelBoard` と入力して `完了`
 - 他の端末から http://<IPアドレス>:6766 にアクセスできることを確認します
 
-#### データフォルダを移動したい
