@@ -1,6 +1,7 @@
 import {Badge} from '@/components/ui/badge';
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue,} from '@/components/ui/select';
 import {SuggestInput} from '@/components/ui/suggest-input';
+import {useSwipeClose} from '@/hooks/features/useSwipeClose';
 import {apiClient} from '@/lib/api-client';
 import {cn} from '@/lib/utils';
 import {useParams} from '@tanstack/react-router';
@@ -121,13 +122,20 @@ export default function BulkEditPanel({
 
   const hasChanges = tagsToAdd.length > 0 || selectedAuthor || selectedMediaType;
 
+  const swipeRef = useSwipeClose<HTMLDivElement>({
+    direction: 'right',
+    isActive: isOpen,
+    onClose,
+  });
+
   return (
     <div
+      ref={swipeRef}
       className={cn(
         'fixed top-14 bottom-0 right-0 w-80 bg-white border-l border-gray-200 transform transition-transform duration-300 ease-in-out z-40 shadow-xl',
         isOpen ? 'translate-x-0' : 'translate-x-full'
       )}
-      style={{ backgroundColor: '#ffffff' }}
+      style={{ backgroundColor: '#ffffff', touchAction: 'pan-y' }}
     >
       <div className="flex flex-col h-full">
         {/* Header */}

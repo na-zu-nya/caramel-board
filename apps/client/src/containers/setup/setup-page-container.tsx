@@ -2,7 +2,7 @@ import {DEFAULT_CARAMEL_COLOR} from '@/components/ui/LibraryCard';
 import {LibrarySetupForm} from '@/components/ui/LibrarySetupForm';
 import {SetupGuide} from '@/components/ui/SetupGuide';
 import {useCreateDataset, useDatasets} from '@/hooks/useDatasets';
-import {useFirstLibraryBootstrap} from '@/hooks/useFirstLibraryBootstrap';
+import {useBootstrapNavigationPins} from '@/hooks/useBootstrapNavigationPins';
 import {useHeaderActions} from '@/hooks/useHeaderActions';
 import {useNavigate} from '@tanstack/react-router';
 import {
@@ -29,7 +29,7 @@ export interface SetupPageContainerProps {
 export function SetupPageContainer({preview = false}: SetupPageContainerProps) {
   const {data: datasets = [], isLoading} = useDatasets();
   const createDataset = useCreateDataset();
-  const bootstrapFirstLibrary = useFirstLibraryBootstrap();
+  const bootstrapNavigationPins = useBootstrapNavigationPins();
   const navigate = useNavigate();
 
   useHeaderActions(
@@ -69,8 +69,8 @@ export function SetupPageContainer({preview = false}: SetupPageContainerProps) {
         themeColor: color,
       });
 
-      if (!preview && isFirstLibrary) {
-        await bootstrapFirstLibrary(created.id);
+      if (!preview) {
+        await bootstrapNavigationPins(created.id, {setAsDefault: isFirstLibrary});
       }
 
       await navigate({to: '/library/$datasetId', params: {datasetId: String(created.id)}});
@@ -79,7 +79,7 @@ export function SetupPageContainer({preview = false}: SetupPageContainerProps) {
       setError('ライブラリの作成に失敗しました。時間をおいて再試行してください。');
       setActiveIndex(createStepIndexRef.current);
     }
-  }, [name, icon, color, createDataset, isFirstLibrary, bootstrapFirstLibrary, navigate]);
+  }, [name, icon, color, createDataset, isFirstLibrary, bootstrapNavigationPins, navigate]);
 
   useEffect(() => {
     if (!preview && !isLoading && !isFirstLibrary) {

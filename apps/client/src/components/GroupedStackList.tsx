@@ -126,7 +126,7 @@ export function GroupedStackList({
                       {dateItems.map((item) => {
                         const s: any = item.stack as any;
                         const thumb = s.thumbnail || s.thumbnailUrl || '/no-image.png';
-                        const likeCount = s.liked || s.likeCount || 0;
+                        const likeCount = Number(s.likeCount ?? s.liked ?? 0);
                         const pageCount = s.assetCount || s._count?.assets || s.assetsCount || 0;
                         const isFav = s.favorited || s.isFavorite || false;
                         const { onOpen, onFindSimilar, onAddToScratch, onToggleFavorite, onLike, onInfo, dragProps } = actions;

@@ -198,7 +198,9 @@ function DatasetHome() {
                 } = stackTileActions;
                 const thumb =
                   (item as any).thumbnail || (item as any).thumbnailUrl || '/no-image.png';
-                const likeCount = (item as any).liked || (item as any).likeCount || 0;
+                const likeCount = Number(
+                  (item as any).likeCount ?? (item as any).liked ?? 0
+                );
                 const pageCount =
                   (item as any).assetCount ??
                   (item as any)._count?.assets ??
@@ -259,7 +261,9 @@ function DatasetHome() {
                 } = stackTileActions;
                 const thumb =
                   (item as any).thumbnail || (item as any).thumbnailUrl || '/no-image.png';
-                const likeCount = (item as any).liked || (item as any).likeCount || 0;
+                const likeCount = Number(
+                  (item as any).likeCount ?? (item as any).liked ?? 0
+                );
                 const pageCount =
                   (item as any).assetCount ??
                   (item as any)._count?.assets ??

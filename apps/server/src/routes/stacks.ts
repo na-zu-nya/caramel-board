@@ -182,6 +182,8 @@ stacksRoute.get('/paginated', async (c) => {
   // Enrich with asset counts in a single query
   const ids = result.stacks.map((s: any) => s.id);
   let assetCountMap = new Map<number, number>();
+  let favoriteSet = new Set<number>();
+
   if (ids.length > 0) {
     const counts = await prisma.asset.groupBy({
       by: ['stackId'],
@@ -189,18 +191,39 @@ stacksRoute.get('/paginated', async (c) => {
       _count: {stackId: true},
     });
     assetCountMap = new Map(counts.map((c: any) => [c.stackId, c._count.stackId]));
+
+    try {
+      const userId = await ensureSuperUser(prisma);
+      const favorites = await prisma.stackFavorite.findMany({
+        where: {
+          userId,
+          stackId: {in: ids},
+        },
+        select: {stackId: true},
+      });
+      favoriteSet = new Set(favorites.map((row) => row.stackId));
+    } catch (error) {
+      console.error('[stacks/paginated] Failed to resolve favorites', error);
+    }
   }
 
-  // Ensure thumbnail paths are under /files, and attach assetCount
+  // Ensure thumbnail paths are under /files, and attach assetCount / favorite flags
   const stacks = result.stacks.map((s: any) => {
     const assets = withPublicAssetArray(s.assets as any[], s.dataSetId);
     const thumbnail = toPublicAssetPath(assets[0]?.thumbnail || s.thumbnail, s.dataSetId);
+    const isFavorite = favoriteSet.has(s.id);
+    const likeCount = typeof s.liked === 'number' ? s.liked : Number(s.liked ?? 0);
 
     return {
       ...s,
       assets,
       thumbnail,
       assetCount: assetCountMap.get(s.id) ?? 0,
+      assetsCount: assetCountMap.get(s.id) ?? 0,
+      favorited: isFavorite,
+      isFavorite,
+      liked: likeCount,
+      likeCount,
     };
   });
 

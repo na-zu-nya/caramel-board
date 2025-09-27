@@ -221,7 +221,10 @@ class ApiClient {
     if (params.limit) queryParams.append('limit', String(params.limit));
     if (params.offset) queryParams.append('offset', String(params.offset));
 
-    return this.fetch<StackPaginatedResponse>(`/api/v1/stacks/paginated?${queryParams}`);
+    const response = await this.fetch<StackPaginatedResponse>(
+      `/api/v1/stacks/paginated?${queryParams}`
+    );
+    return this.normalizeStackResponse(response);
   }
 
   // Alias method for collection compatibility
@@ -262,7 +265,10 @@ class ApiClient {
       }
     }
 
-    return this.fetch<StackPaginatedResponse>(`/api/v1/stacks/paginated?${queryParams}`);
+    const response = await this.fetch<StackPaginatedResponse>(
+      `/api/v1/stacks/paginated?${queryParams}`
+    );
+    return this.normalizeStackResponse(response);
   }
 
   async getStack(stackId: string | number, datasetId?: string | number): Promise<Stack> {
@@ -287,9 +293,12 @@ class ApiClient {
     if (limit !== undefined) query.append('limit', String(limit));
     if (offset !== undefined) query.append('offset', String(offset));
     if (threshold !== undefined) query.append('threshold', String(threshold));
-    return this.fetch<StackPaginatedResponse>(
-      `/api/v1/datasets/${datasetId}/stacks/${stackId}/similar${query.toString() ? `?${query}` : ''}`
+    const response = await this.fetch<StackPaginatedResponse>(
+      `/api/v1/datasets/${datasetId}/stacks/${stackId}/similar${
+        query.toString() ? `?${query}` : ''
+      }`
     );
+    return this.normalizeStackResponse(response);
   }
 
   async toggleStackFavorite(
@@ -317,6 +326,44 @@ class ApiClient {
     return this.fetch<{ success: boolean }>(`/api/v1/assets/${assetId}`, {
       method: 'DELETE',
     });
+  }
+
+  private normalizeStackResponse(response: StackPaginatedResponse): StackPaginatedResponse {
+    return {
+      ...response,
+      stacks: Array.isArray(response.stacks)
+        ? response.stacks.map((stack) => this.normalizeStack(stack))
+        : response.stacks,
+    };
+  }
+
+  private normalizeStack(stack: Stack): Stack {
+    const likedRaw = (stack as any).liked ?? (stack as any).likeCount ?? 0;
+    const liked = typeof likedRaw === 'number' ? likedRaw : Number(likedRaw) || 0;
+
+    const likeCountRaw = (stack as any).likeCount ?? liked;
+    const likeCount =
+      typeof likeCountRaw === 'number' ? likeCountRaw : Number(likeCountRaw) || 0;
+
+    const favoritedRaw = (stack as any).favorited ?? (stack as any).isFavorite ?? false;
+    const favorited = Boolean(favoritedRaw);
+
+    const assetCountRaw =
+      (stack as any).assetCount ??
+      (stack as any).assetsCount ??
+      (Array.isArray((stack as any).assets) ? (stack as any).assets.length : undefined);
+    const assetCount =
+      typeof assetCountRaw === 'number' ? assetCountRaw : Number(assetCountRaw) || 0;
+
+    return {
+      ...stack,
+      liked,
+      likeCount,
+      favorited,
+      isFavorite: favorited,
+      assetCount,
+      assetsCount: assetCount,
+    };
   }
 
   async updateAssetOrder(assetId: string | number, order: number): Promise<{ success: boolean }> {

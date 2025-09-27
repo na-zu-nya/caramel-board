@@ -6,6 +6,11 @@ const meta: Meta<typeof BulkEditPanel> = {
   component: BulkEditPanel,
   parameters: {
     layout: 'fullscreen',
+    docs: {
+      description: {
+        component: 'モバイル環境では右方向へスワイプするとパネルを閉じられます。',
+      },
+    },
   },
 };
 

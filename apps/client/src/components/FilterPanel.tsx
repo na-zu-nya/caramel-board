@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/select';
 import {Slider} from '@/components/ui/slider';
 import {SuggestInput} from '@/components/ui/suggest-input';
+import {useSwipeClose} from '@/hooks/features/useSwipeClose';
 import {useDebounce} from '@/hooks/utils/useDebounce';
 import {apiClient} from '@/lib/api-client';
 import {cn} from '@/lib/utils';
@@ -105,6 +106,19 @@ export default function FilterPanel({
   // Composition state for Search input (avoid interfering with IME)
   const searchIsComposingRef = useRef(false);
   const panelRootRef = useRef<HTMLDivElement | null>(null);
+  const swipeRef = useSwipeClose<HTMLDivElement>({
+    direction: 'right',
+    isActive: isOpen,
+    onClose: () => setIsOpen(false),
+  });
+
+  const setPanelRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      panelRootRef.current = node;
+      swipeRef(node);
+    },
+    [swipeRef]
+  );
 
   // デバウンスされた類似度閾値更新
   const debouncedSimilarityUpdate = useDebounce((threshold: number) => {
@@ -285,12 +299,13 @@ export default function FilterPanel({
     <>
       {/* Filter Panel - Pure Floating Style with slide animation */}
       <div
-        ref={panelRootRef}
+        ref={setPanelRef}
         data-filter-panel-root="true"
         className={cn(
           'fixed top-16 right-4 h-[calc(100vh-5rem)] w-96 bg-white border border-gray-200 rounded-lg shadow-xl z-50 transform transition-transform duration-300 ease-in-out',
           isOpen ? 'translate-x-0' : 'translate-x-[calc(100%+1rem)]'
         )}
+        style={{ touchAction: 'pan-y' }}
       >
         <div className="flex flex-col h-full">
           {/* Header */}

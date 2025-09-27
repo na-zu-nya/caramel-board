@@ -189,7 +189,7 @@ function ScratchView() {
       thumbnailUrl: s.thumbnailUrl || s.thumbnail,
       favorited: s.favorited || s.isFavorite,
       isFavorite: s.isFavorite || s.favorited,
-      likeCount: s.likeCount || s.liked || 0,
+      likeCount: Number(s.likeCount ?? s.liked ?? 0),
     }));
     return list;
   }, [stacksData]);

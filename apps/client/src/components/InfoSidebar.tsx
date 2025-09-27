@@ -10,6 +10,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { SuggestInput } from '@/components/ui/suggest-input';
+import { useSwipeClose } from '@/hooks/features/useSwipeClose';
 import { apiClient } from '@/lib/api-client';
 import { cn, hexForCopy } from '@/lib/utils';
 import {
@@ -453,8 +454,15 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
     });
   };
 
+  const swipeRef = useSwipeClose<HTMLDivElement>({
+    direction: 'right',
+    isActive: isOpen,
+    onClose: () => setIsOpen(false),
+  });
+
   return (
     <div
+      ref={swipeRef}
       className={cn(
         // Lower z-index so dialogs and modals appear above the sidebar
         'fixed top-14 bottom-0 right-0 w-80 bg-white/95 backdrop-blur-sm border-l border-gray-200 shadow-xl z-[40]',
@@ -462,6 +470,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
         'transform-gpu will-change-[transform,opacity] transition-all duration-300 ease-in-out',
         isOpen ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0 pointer-events-none'
       )}
+      style={{ touchAction: 'pan-y' }}
     >
       {!selectedItemId ? (
         <div className="h-full flex items-center justify-center text-gray-400">

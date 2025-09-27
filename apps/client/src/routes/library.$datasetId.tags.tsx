@@ -905,7 +905,9 @@ function TagsPage() {
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 list-stable">
                     {allStacks.map((stack) => {
                       const thumb = (stack as any).thumbnail || (stack as any).thumbnailUrl || '/no-image.png';
-                      const likeCount = (stack as any).liked || (stack as any).likeCount || 0;
+                      const likeCount = Number(
+                        (stack as any).likeCount ?? (stack as any).liked ?? 0
+                      );
                       const pageCount = (stack as any).assetCount || (stack as any)._count?.assets || (stack as any).assetsCount || 0;
                       const isFav = (stack as any).favorited || (stack as any).isFavorite || false;
                       const { onOpen, onFindSimilar, onAddToScratch, onToggleFavorite, onLike, dragProps, onInfo } = actions;

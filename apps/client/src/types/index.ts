@@ -58,6 +58,7 @@ export interface Stack {
   thumbnailUrl?: string;
   thumbnail?: string; // Legacy support
   assetCount: number;
+  assetsCount?: number;
   createdAt: string;
   updatedAt: string;
   tags?: Tag[] | string[]; // Can be either Tag objects or strings

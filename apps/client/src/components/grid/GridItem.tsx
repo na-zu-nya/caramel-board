@@ -37,7 +37,7 @@ export function GridItem({
 
   const currentFavorited = item.favorited ?? item.isFavorite ?? false;
   const thumbnailUrl = item.thumbnail || item.thumbnailUrl || '/no-image.png';
-  const likeCount = (item as any).likeCount ?? (item as any).liked ?? 0;
+  const likeCount = Number((item as any).likeCount ?? (item as any).liked ?? 0);
 
   // Fade-in animation state
   const [isVisible, setIsVisible] = useState(false);

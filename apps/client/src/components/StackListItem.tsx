@@ -46,8 +46,14 @@ export function StackListItem({
   onClick,
   className = '',
 }: StackItemProps) {
-  const likeCount = stack.likeCount || stack.liked || 0;
-  const isFavorited = stack.favorited || stack.isFavorite || false;
+  const likeCount = Number(stack.likeCount ?? stack.liked ?? 0);
+  const isFavorited = Boolean(stack.favorited ?? stack.isFavorite);
+  const totalAssets =
+    (typeof stack.assetCount === 'number' && stack.assetCount >= 0
+      ? stack.assetCount
+      : undefined) ??
+    (typeof stack.assetsCount === 'number' ? stack.assetsCount : undefined) ??
+    (Array.isArray(stack.assets) ? stack.assets.length : 0);
   const {setIsDragging} = useDrag();
   const [, setNavigationState] = useAtom(navigationStateAtom);
 
@@ -203,12 +209,12 @@ export function StackListItem({
             )}
 
             {/* Pages (asset count) badge — style consistent with Like/Fav */}
-            {stack.assetsCount > 1 && (
+            {totalAssets > 1 && (
               <div className={cn('absolute', selectable ? 'top-2 left-2' : 'top-2 right-2')}>
                 <div
                   className="flex items-center gap-1 bg-black/60 text-white px-2 py-1 rounded-full text-xs font-medium shadow-md">
                   <Book size={12}/>
-                  <span>{stack.assetsCount}</span>
+                  <span>{totalAssets}</span>
                 </div>
               </div>
             )}

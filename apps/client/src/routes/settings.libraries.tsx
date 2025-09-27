@@ -18,7 +18,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Input } from '@/components/ui/input';
 import { RadioGroup } from '@/components/ui/radio-group';
 import { useCreateDataset, useDatasets, useDeleteDataset, useUpdateDataset } from '@/hooks/useDatasets';
-import { useFirstLibraryBootstrap } from '@/hooks/useFirstLibraryBootstrap';
+import { useBootstrapNavigationPins } from '@/hooks/useBootstrapNavigationPins';
 import { useHeaderActions } from '@/hooks/useHeaderActions';
 import { apiClient } from '@/lib/api-client';
 import { sidebarOpenAtom } from '@/stores/ui';
@@ -39,7 +39,7 @@ function DatasetManagement() {
   const createDataset = useCreateDataset();
   const updateDataset = useUpdateDataset();
   const deleteDataset = useDeleteDataset();
-  const bootstrapFirstLibrary = useFirstLibraryBootstrap();
+  const bootstrapNavigationPins = useBootstrapNavigationPins();
   const [_sidebarOpen] = useAtom(sidebarOpenAtom);
   const queryClient = useQueryClient();
 
@@ -142,8 +142,8 @@ function DatasetManagement() {
         themeColor: newColor,
       });
 
-      if (wasEmpty && created?.id) {
-        await bootstrapFirstLibrary(created.id);
+      if (created?.id) {
+        await bootstrapNavigationPins(created.id, { setAsDefault: wasEmpty });
       }
 
       setShowCreateModal(false);

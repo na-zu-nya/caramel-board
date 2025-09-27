@@ -10,3 +10,4 @@ export { useStackSwipeNavigation } from './useStackSwipeNavigation';
 export { useStackKeyboardShortcuts } from './useStackKeyboardShortcuts';
 export { useAdjacentStacks } from './useAdjacentStacks';
 export { useStackHistory } from './useStackHistory';
+export { useSwipeClose } from './useSwipeClose';

@@ -52,7 +52,7 @@ export function StackGridItem({
 }: StackGridItemProps) {
   const currentFavorited = overrideFavorited ?? item.favorited ?? item.isFavorite ?? false;
   const thumbnailUrl = item.thumbnail || item.thumbnailUrl || '/no-image.png';
-  const likeCount = (item as any).likeCount ?? (item as any).liked ?? 0;
+  const likeCount = Number((item as any).likeCount ?? (item as any).liked ?? 0);
   const pageCount = (item as any).assetCount ?? (item as any)._count?.assets ?? 0;
   const [isDragging, setIsDragging] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);

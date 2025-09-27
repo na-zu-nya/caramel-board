@@ -3,6 +3,7 @@ import {DatasetSection} from '@/components/sidebar/DatasetSection';
 import {LibrarySection} from '@/components/sidebar/LibrarySection';
 import {SettingsSection} from '@/components/sidebar/SettingsSection';
 import type {NavigationPinHandlers} from '@/components/sidebar/types';
+import {useSwipeClose} from '@/hooks/features/useSwipeClose';
 import {apiClient} from '@/lib/api-client';
 import {cn} from '@/lib/utils';
 import {currentDatasetAtom, sidebarOpenAtom} from '@/stores/ui';
@@ -211,12 +212,20 @@ export default function Sidebar() {
     saveCollapsedState(collapsedGroups);
   }, [collapsedGroups]);
 
+  const swipeRef = useSwipeClose<HTMLDivElement>({
+    direction: 'left',
+    isActive: isOpen,
+    onClose: () => setIsOpen(false),
+  });
+
   return (
     <aside
+      ref={swipeRef}
       className={cn(
         'fixed top-0 left-0 h-full w-80 bg-white border-r border-gray-200 z-40 transform transition-transform duration-300 ease-in-out',
         isOpen ? 'translate-x-0' : '-translate-x-full'
       )}
+      style={{ touchAction: 'pan-y' }}
     >
       {/* Header */}
       <div className="flex items-center justify-between p-3 border-b border-gray-200">

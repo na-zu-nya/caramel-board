@@ -897,7 +897,7 @@ function AutoTagConfigPage() {
                     {allStacks.map((stack: any) => {
                       const { onOpen, onFindSimilar, onAddToScratch, onToggleFavorite, onLike, dragProps, onInfo } = actions;
                       const thumb = stack.thumbnail || stack.thumbnailUrl || '/no-image.png';
-                      const likeCount = stack.liked || stack.likeCount || 0;
+                      const likeCount = Number(stack.likeCount ?? stack.liked ?? 0);
                       const pageCount = stack.assetCount || stack._count?.assets || stack.assetsCount || 0;
                       const isFav = stack.favorited || stack.isFavorite || false;
                       return infoSidebarOpen ? (
