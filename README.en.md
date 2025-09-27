@@ -111,8 +111,8 @@ Run `start.sh` in your terminal on macOS/Linux or WSL on Windows to launch the s
 
 After the services start, access the app at:
 
-- http://localhost:9000
-- http://<local-ip>:9000
+- http://localhost:6766
+- http://<local-ip>:6766
 
 If you plan to use phones or tablets, assigning a static IP to the host machine is recommended.
 
@@ -184,7 +184,7 @@ If you encounter permission errors, adjust ownership or permissions on the host 
 
 ## Troubleshooting
 
-- Port 9000 is already in use → change the `ports` setting in `docker-compose.yml`, then rerun `./serve.sh`
+- Port 6766 is already in use → change the `ports` setting in `docker-compose.yml`, then rerun `./serve.sh`
 - PostgreSQL port 5432 is already occupied during development → adjust the `ports` section in `docker-compose.dev.yml`
 - Cannot connect to JoyTag → check with `curl http://localhost:5001/health` and verify `JOYTAG_SERVER_URL`
 - Storage permission errors → fix ownership/permissions on the host directories

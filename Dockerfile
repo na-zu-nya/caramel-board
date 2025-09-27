@@ -78,11 +78,11 @@ RUN addgroup --system --gid 1001 nodejs \
 # Ensure runtime ownership.
 RUN chown -R nodejs:nodejs /app
 
-EXPOSE 9000
+EXPOSE 6766
 
 # Health check served by the application.
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
-  CMD curl -f http://localhost:9000/api/v1/health || exit 1
+  CMD curl -f http://localhost:6766/api/v1/health || exit 1
 
 # Default command: start the production server.
 WORKDIR /app/apps/server

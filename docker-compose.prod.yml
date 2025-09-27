@@ -5,10 +5,10 @@ services:
       args:
         - NODE_ENV=production
     ports:
-      - "9000:9000"
+      - "6766:6766"
     environment:
       - NODE_ENV=production
-      - PORT=9000
+      - PORT=6766
       - DATABASE_URL=postgresql://caramel_user:caramel_pass@postgres:5432/caramel_board_db?connection_limit=20&pool_timeout=0
       - FILES_STORAGE=/app/data
       - JOYTAG_SERVER_URL=http://host.docker.internal:5001

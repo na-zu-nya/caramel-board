@@ -1,9 +1,9 @@
+import { resolve } from 'node:path';
+
 import tailwindcss from '@tailwindcss/vite';
+import { TanStackRouterVite } from '@tanstack/router-plugin/vite';
 import viteReact from '@vitejs/plugin-react';
 import { defineConfig, loadEnv } from 'vite';
-
-import { resolve } from 'node:path';
-import { TanStackRouterVite } from '@tanstack/router-plugin/vite';
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
@@ -11,7 +11,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
 
   // APIのURLを決定（優先順位: 環境変数 > デフォルト）
-  const apiUrl = env.VITE_API_URL || 'http://localhost:9000';
+  const apiUrl = env.VITE_API_URL || 'http://localhost:6766';
 
   console.log(`🚀 API Proxy Target: ${apiUrl}`);
 
