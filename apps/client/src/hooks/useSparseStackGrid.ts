@@ -1,10 +1,10 @@
-import { apiClient } from '@/lib/api-client';
-import { navigationStateAtom } from '@/stores/navigation';
-import type { MediaGridItem, StackFilter } from '@/types';
 import { useQuery } from '@tanstack/react-query';
 import { useLocation } from '@tanstack/react-router';
 import { useAtom } from 'jotai';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { apiClient } from '@/lib/api-client';
+import { navigationStateAtom } from '@/stores/navigation';
+import type { MediaGridItem, StackFilter } from '@/types';
 
 interface UseSparseStackGridOptions {
   datasetId: string;

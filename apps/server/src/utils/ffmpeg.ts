@@ -1,5 +1,5 @@
-import fs from 'fs';
-import { execFileSync } from 'child_process';
+import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
 
 type Candidate = string | undefined;
 

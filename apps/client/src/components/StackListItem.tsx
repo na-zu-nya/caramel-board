@@ -1,3 +1,17 @@
+import { useQueryClient } from '@tanstack/react-query';
+import { Link, useNavigate } from '@tanstack/react-router';
+import { useAtom, useSetAtom } from 'jotai';
+import {
+  Book,
+  Check,
+  GalleryVerticalEnd,
+  Heart,
+  Image,
+  Info,
+  NotebookText,
+  Star,
+  Trash2,
+} from 'lucide-react';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -13,20 +27,6 @@ import { navigationStateAtom } from '@/stores/navigation';
 import { infoSidebarOpenAtom, selectedItemIdAtom } from '@/stores/ui';
 import type { Stack } from '@/types';
 import { getThumbnailPath } from '@/utils/thumbnailPath';
-import { useQueryClient } from '@tanstack/react-query';
-import { Link, useNavigate } from '@tanstack/react-router';
-import { useAtom, useSetAtom } from 'jotai';
-import {
-  Book,
-  Check,
-  GalleryVerticalEnd,
-  Heart,
-  Image,
-  NotebookText,
-  Star,
-  Trash2,
-  Info,
-} from 'lucide-react';
 
 export type StackItemVariant = 'thumbnail' | 'with-title' | 'with-description';
 

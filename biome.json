@@ -12,7 +12,8 @@
       "!externals",
       "!.claude",
       "!.vscode",
-      "!__tests__"
+      "!__tests__",
+      "!*.gen.ts"
     ],
     "ignoreUnknown": true
   },

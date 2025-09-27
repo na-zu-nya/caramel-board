@@ -1,5 +1,5 @@
-import { createHash } from 'crypto';
-import type { Stream } from 'stream';
+import { createHash } from 'node:crypto';
+import type { Stream } from 'node:stream';
 
 export function createStreamDigest(stream: Stream): Promise<string> {
   return new Promise((resolve, reject) => {

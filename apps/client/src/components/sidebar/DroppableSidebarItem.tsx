@@ -1,7 +1,7 @@
-import { cn } from '@/lib/utils';
-import { selectionModeAtom } from '@/stores/ui';
 import { useAtom } from 'jotai';
 import { useSidebarDrop } from '@/hooks/useSidebarDrop';
+import { cn } from '@/lib/utils';
+import { selectionModeAtom } from '@/stores/ui';
 import { SidebarItem, type SidebarItemProps } from './SidebarItem';
 
 interface DroppableSidebarItemProps {

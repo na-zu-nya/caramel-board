@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { AppHeader, AppHeaderDivider } from './AppHeader';
+import { Check, Filter, Menu, Shuffle } from 'lucide-react';
 import { HeaderIconButton } from '../HeaderIconButton';
-import { Filter, Menu, Shuffle, Check } from 'lucide-react';
+import { AppHeader, AppHeaderDivider } from './AppHeader';
 
 const meta: Meta<typeof AppHeader> = {
   title: 'App Shell/AppHeader',

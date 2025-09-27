@@ -1,7 +1,7 @@
-import { selectionModeAtom } from '@/stores/ui';
-import type { MediaGridItem } from '@/types';
 import { useAtom } from 'jotai';
 import type { ReactNode } from 'react';
+import { selectionModeAtom } from '@/stores/ui';
+import type { MediaGridItem } from '@/types';
 import BulkEditPanel from '../BulkEditPanel.tsx';
 import InfoSidebar from '../InfoSidebar';
 import { EditPanelProvider, type EditUpdates } from './EditPanelProvider';

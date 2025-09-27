@@ -15,9 +15,9 @@ import { createStackService } from '../features/datasets/services/stack-service'
 import { createStacksService } from '../features/datasets/services/stacks-service';
 import { createTagStatsService } from '../features/datasets/services/tag-stats-service';
 import { prisma, useDataStorage, usePrisma } from '../shared/di';
-import { ensureSuperUser } from '../shared/services/UserService';
-import { CollectionService } from '../shared/services/CollectionService';
 import { AutoTagService } from '../shared/services/AutoTagService';
+import { CollectionService } from '../shared/services/CollectionService';
+import { ensureSuperUser } from '../shared/services/UserService';
 import { toPublicAssetPath, withPublicAssetArray } from '../utils/assetPath';
 
 const PaginatedQuerySchema = z.object({
@@ -408,7 +408,7 @@ stacksRoute.get('/search/autotag', async (c) => {
 
 // POST /stacks/:id/like
 stacksRoute.post('/:id{[0-9]+}/like', async (c) => {
-  const id = Number.parseInt(c.req.param('id'));
+  const id = Number.parseInt(c.req.param('id'), 10);
   const prisma = usePrisma(c);
   const ds = await resolveDatasetId(prisma, id);
   const colorSearch = createColorSearchService({ prisma, dataSetId: ds });
@@ -420,7 +420,7 @@ stacksRoute.post('/:id{[0-9]+}/like', async (c) => {
 
 // PUT /stacks/:id/favorite
 stacksRoute.put('/:id{[0-9]+}/favorite', async (c) => {
-  const id = Number.parseInt(c.req.param('id'));
+  const id = Number.parseInt(c.req.param('id'), 10);
   const body = await c.req.json().catch(() => ({}));
   const favorited = Boolean(body?.favorited);
   const prisma = usePrisma(c);
@@ -433,7 +433,7 @@ stacksRoute.put('/:id{[0-9]+}/favorite', async (c) => {
 
 // POST /stacks/:id/refresh-thumbnail
 stacksRoute.post('/:id{[0-9]+}/refresh-thumbnail', async (c) => {
-  const id = Number.parseInt(c.req.param('id'));
+  const id = Number.parseInt(c.req.param('id'), 10);
   const prisma = usePrisma(c);
   const ds = await resolveDatasetId(prisma, id);
   const colorSearch = createColorSearchService({ prisma, dataSetId: ds });
@@ -444,7 +444,7 @@ stacksRoute.post('/:id{[0-9]+}/refresh-thumbnail', async (c) => {
 
 // POST /stacks/:id/aggregate-tags
 stacksRoute.post('/:id{[0-9]+}/aggregate-tags', async (c) => {
-  const id = Number.parseInt(c.req.param('id'));
+  const id = Number.parseInt(c.req.param('id'), 10);
   const prisma = usePrisma(c);
   try {
     const body = await c.req.json().catch(() => ({}) as any);
@@ -460,7 +460,7 @@ stacksRoute.post('/:id{[0-9]+}/aggregate-tags', async (c) => {
 
 // POST /stacks/:id/tags - add a tag to stack
 stacksRoute.post('/:id{[0-9]+}/tags', async (c) => {
-  const id = Number.parseInt(c.req.param('id'));
+  const id = Number.parseInt(c.req.param('id'), 10);
   const prisma = usePrisma(c);
   try {
     const body = await c.req.json();
@@ -478,7 +478,7 @@ stacksRoute.post('/:id{[0-9]+}/tags', async (c) => {
 
 // DELETE /stacks/:id/tags/:tag - remove a tag from stack
 stacksRoute.delete('/:id{[0-9]+}/tags/:tag', async (c) => {
-  const id = Number.parseInt(c.req.param('id'));
+  const id = Number.parseInt(c.req.param('id'), 10);
   const tag = c.req.param('tag');
   const prisma = usePrisma(c);
   try {
@@ -495,7 +495,7 @@ stacksRoute.delete('/:id{[0-9]+}/tags/:tag', async (c) => {
 // POST /stacks/:id/assets - add asset to existing stack
 stacksRoute.post('/:id{[0-9]+}/assets', async (c) => {
   try {
-    const id = Number.parseInt(c.req.param('id'));
+    const id = Number.parseInt(c.req.param('id'), 10);
     const formData = await c.req.formData();
     const file = formData.get('file') as File | null;
     if (!file) return c.json({ error: 'File is required' }, 400);
@@ -545,7 +545,7 @@ stacksRoute.post('/:id{[0-9]+}/assets', async (c) => {
 
 // GET /stacks/:id/collections
 stacksRoute.get('/:id{[0-9]+}/collections', async (c) => {
-  const id = Number.parseInt(c.req.param('id'));
+  const id = Number.parseInt(c.req.param('id'), 10);
   const prisma = usePrisma(c);
   const ds = await resolveDatasetId(prisma, id);
   const colorSearch = createColorSearchService({ prisma, dataSetId: ds });
@@ -864,7 +864,7 @@ stacksRoute.delete('/bulk/remove', async (c) => {
 
 // DELETE /stacks/:id
 stacksRoute.delete('/:id{[0-9]+}', async (c) => {
-  const id = Number.parseInt(c.req.param('id'));
+  const id = Number.parseInt(c.req.param('id'), 10);
   const prisma = usePrisma(c);
   const ds = await resolveDatasetId(prisma, id);
   const colorSearch = createColorSearchService({ prisma, dataSetId: ds });
@@ -875,7 +875,7 @@ stacksRoute.delete('/:id{[0-9]+}', async (c) => {
 
 // PUT /stacks/:id/author - update author name
 stacksRoute.put('/:id{[0-9]+}/author', async (c) => {
-  const id = Number.parseInt(c.req.param('id'));
+  const id = Number.parseInt(c.req.param('id'), 10);
   const prisma = usePrisma(c);
   try {
     const body = await c.req.json().catch(() => ({}) as any);
@@ -893,8 +893,8 @@ stacksRoute.put('/:id{[0-9]+}/author', async (c) => {
 
 // GET /stacks/:id
 stacksRoute.get('/:id{[0-9]+}', async (c) => {
-  const id = Number.parseInt(c.req.param('id'));
-  const dataSetId = Number.parseInt(c.req.query('dataSetId') || '');
+  const id = Number.parseInt(c.req.param('id'), 10);
+  const dataSetId = Number.parseInt(c.req.query('dataSetId') || '', 10);
   const prisma = usePrisma(c);
   const effectiveDs = Number.isNaN(dataSetId) ? await resolveDatasetId(prisma, id) : dataSetId;
   const auth = await (await import('../utils/dataset-protection')).ensureDatasetAuthorized(
@@ -925,7 +925,7 @@ stacksRoute.post('/', async (c) => {
     const dsRaw = (formData.get('dataSetId') ||
       formData.get('datasetId') ||
       formData.get('dataSetID')) as string | null;
-    const dataSetId = dsRaw ? Number.parseInt(dsRaw) : Number.NaN;
+    const dataSetId = dsRaw ? Number.parseInt(dsRaw, 10) : Number.NaN;
     if (Number.isNaN(dataSetId) || dataSetId <= 0)
       return c.json({ error: 'dataSetId is required' }, 400);
 

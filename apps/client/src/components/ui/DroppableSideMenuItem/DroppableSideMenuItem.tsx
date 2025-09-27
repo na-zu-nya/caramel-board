@@ -1,5 +1,5 @@
-import { cn } from '@/lib/utils';
 import { useSidebarDrop } from '@/hooks/useSidebarDrop';
+import { cn } from '@/lib/utils';
 import { SideMenuListItem, type SideMenuListItemProps } from '../SideMenu';
 
 export interface DroppableSideMenuItemProps extends Omit<SideMenuListItemProps, 'onDrop'> {

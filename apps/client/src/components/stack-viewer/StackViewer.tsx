@@ -1,6 +1,10 @@
-import { FullPageDropZone } from '@/components/ui/DropZone';
-import { HeaderIconButton } from '@/components/ui/Header/HeaderIconButton';
-import MarkerEditorDialog from '@/components/ui/SeekBar/MarkerEditorDialog';
+import { useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from '@tanstack/react-router';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
+import { GalleryVerticalEnd, Info, NotebookText, PenTool, Pipette, Trash2 } from 'lucide-react';
+import MersenneTwister from 'mersenne-twister';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -8,6 +12,9 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
+import { FullPageDropZone } from '@/components/ui/DropZone';
+import { HeaderIconButton } from '@/components/ui/Header/HeaderIconButton';
+import MarkerEditorDialog from '@/components/ui/SeekBar/MarkerEditorDialog';
 import { useStackNavigation } from '@/hooks/features/useStackNavigation';
 import { useStackViewer } from '@/hooks/features/useStackViewer';
 import { useStackViewerInteractions } from '@/hooks/features/useStackViewerInteractions';
@@ -29,13 +36,6 @@ import {
   uploadNotificationsAtom,
 } from '@/stores/upload';
 import type { Asset, VideoMarker as TVideoMarker, VideoMarker } from '@/types';
-import { useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from '@tanstack/react-router';
-import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import { GalleryVerticalEnd, Info, NotebookText, PenTool, Pipette, Trash2 } from 'lucide-react';
-import MersenneTwister from 'mersenne-twister';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import AssetGrid from './AssetGrid';
 import ColorPickerOverlay from './ColorPickerOverlay';
 import ImageCarousel from './ImageCarousel';

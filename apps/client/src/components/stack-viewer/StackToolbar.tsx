@@ -1,6 +1,6 @@
+import { ArrowUpDown, Heart, Layers, Star } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Stack } from '@/types';
-import { ArrowUpDown, Heart, Layers, Star } from 'lucide-react';
 
 interface StackToolbarProps {
   stack: Stack;

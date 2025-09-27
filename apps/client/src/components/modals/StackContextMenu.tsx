@@ -1,3 +1,5 @@
+import { useQueryClient } from '@tanstack/react-query';
+import { NotebookText } from 'lucide-react';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -6,8 +8,6 @@ import {
 } from '@/components/ui/context-menu';
 import { useScratch } from '@/hooks/useScratch';
 import { apiClient } from '@/lib/api-client';
-import { useQueryClient } from '@tanstack/react-query';
-import { NotebookText } from 'lucide-react';
 
 interface StackContextMenuProps {
   datasetId: string;

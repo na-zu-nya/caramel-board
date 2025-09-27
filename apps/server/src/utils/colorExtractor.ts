@@ -1,4 +1,4 @@
-import fs from 'fs';
+import fs from 'node:fs';
 import sharp from 'sharp';
 
 export interface DominantColor {
@@ -88,7 +88,7 @@ export class ColorExtractor {
         if (brightness < 20 || brightness > 235) continue;
 
         // 3. 中央重み付け：画像中央に近いほど重要度を上げる
-        const distanceFromCenter = Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2));
+        const distanceFromCenter = Math.sqrt((x - centerX) ** 2 + (y - centerY) ** 2);
         const maxDistance = Math.sqrt(centerX * centerX + centerY * centerY);
         const centerWeight = 1 + (1 - distanceFromCenter / maxDistance); // 1.0-2.0の範囲
 
@@ -244,7 +244,7 @@ export class ColorExtractor {
 
     const variance =
       positions.reduce((sum, p) => {
-        return sum + Math.pow(p.x - meanX, 2) + Math.pow(p.y - meanY, 2);
+        return sum + (p.x - meanX) ** 2 + (p.y - meanY) ** 2;
       }, 0) / positions.length;
 
     return variance;
@@ -297,9 +297,7 @@ export class ColorExtractor {
    */
   static calculateColorSimilarity(color1: DominantColor, color2: DominantColor): number {
     const distance = Math.sqrt(
-      Math.pow(color1.r - color2.r, 2) +
-        Math.pow(color1.g - color2.g, 2) +
-        Math.pow(color1.b - color2.b, 2)
+      (color1.r - color2.r) ** 2 + (color1.g - color2.g) ** 2 + (color1.b - color2.b) ** 2
     );
 
     // 最大距離は√(255²×3) ≈ 441.67

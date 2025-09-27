@@ -1,3 +1,6 @@
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useAtom } from 'jotai';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiClient } from '@/lib/api-client';
 import {
   infoSidebarOpenAtom,
@@ -6,9 +9,6 @@ import {
   sidebarOpenAtom,
 } from '@/stores/ui';
 import type { MediaGridItem } from '@/types';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useAtom } from 'jotai';
-import { useCallback, useEffect, useRef, useState } from 'react';
 import { useThrottle } from '../utils/useThrottle';
 import { useAnimationState } from './useAnimationState';
 import { useKeyboardShortcuts } from './useKeyboardShortcuts';

@@ -1,6 +1,6 @@
+import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import type { SortOption, StackFilter } from '@/types';
-import { useQuery } from '@tanstack/react-query';
 
 // Query keys
 export const stackKeys = {

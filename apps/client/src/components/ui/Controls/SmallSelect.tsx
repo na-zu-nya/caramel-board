@@ -1,5 +1,5 @@
-import { Select, SelectContent, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { ReactNode } from 'react';
+import { Select, SelectContent, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export interface SmallSelectProps<T extends string = string> {
   value?: T;

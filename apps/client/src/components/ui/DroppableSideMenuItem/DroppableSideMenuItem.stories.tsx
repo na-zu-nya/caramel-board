@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { DroppableSideMenuItem } from './DroppableSideMenuItem';
 import { Star } from 'lucide-react';
+import { DroppableSideMenuItem } from './DroppableSideMenuItem';
 
 const meta: Meta<typeof DroppableSideMenuItem> = {
   title: 'SideMenu/DroppableItem',

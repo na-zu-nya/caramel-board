@@ -1,9 +1,3 @@
-import { DEFAULT_CARAMEL_COLOR } from '@/components/ui/LibraryCard';
-import { LibrarySetupForm } from '@/components/ui/LibrarySetupForm';
-import { SetupGuide } from '@/components/ui/SetupGuide';
-import { useCreateDataset, useDatasets } from '@/hooks/useDatasets';
-import { useBootstrapNavigationPins } from '@/hooks/useBootstrapNavigationPins';
-import { useHeaderActions } from '@/hooks/useHeaderActions';
 import { useNavigate } from '@tanstack/react-router';
 import {
   ArrowLeft,
@@ -21,6 +15,12 @@ import {
   Star,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { DEFAULT_CARAMEL_COLOR } from '@/components/ui/LibraryCard';
+import { LibrarySetupForm } from '@/components/ui/LibrarySetupForm';
+import { SetupGuide } from '@/components/ui/SetupGuide';
+import { useBootstrapNavigationPins } from '@/hooks/useBootstrapNavigationPins';
+import { useCreateDataset, useDatasets } from '@/hooks/useDatasets';
+import { useHeaderActions } from '@/hooks/useHeaderActions';
 
 export interface SetupPageContainerProps {
   preview?: boolean;

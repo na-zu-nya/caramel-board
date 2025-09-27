@@ -1,5 +1,5 @@
-import type { MediaType, StackFilter } from '@/types';
 import { atom } from 'jotai';
+import type { MediaType, StackFilter } from '@/types';
 
 export type ViewContext = {
   token: string;

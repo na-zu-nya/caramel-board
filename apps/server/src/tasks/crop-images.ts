@@ -1,11 +1,11 @@
-import { execSync } from 'child_process';
-import * as fs from 'fs';
-import path from 'path';
+import { execSync } from 'node:child_process';
 import dotenv from 'dotenv';
+import * as fs from 'node:fs';
+import path from 'node:path';
 import 'source-map-support/register';
 
-import yargs from 'yargs';
 import type { ArgumentsCamelCase } from 'yargs';
+import yargs from 'yargs';
 
 dotenv.config();
 

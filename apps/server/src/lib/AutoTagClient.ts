@@ -1,4 +1,4 @@
-import fs from 'fs';
+import fs from 'node:fs';
 import axios, { type AxiosInstance } from 'axios';
 import FormData from 'form-data';
 

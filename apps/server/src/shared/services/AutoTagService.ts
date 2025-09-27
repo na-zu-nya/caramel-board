@@ -1,7 +1,7 @@
+import path from 'node:path';
 import type { PrismaClient } from '@prisma/client';
 import { getAutoTagClient } from '../../lib/AutoTagClient';
-import path from 'node:path';
-import { withPublicAssetArray, toPublicAssetPath } from '../../utils/assetPath';
+import { toPublicAssetPath, withPublicAssetArray } from '../../utils/assetPath';
 
 interface WeightedJaccardSimilarity {
   stackId: number;

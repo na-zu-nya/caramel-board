@@ -1,3 +1,9 @@
+import { useQuery } from '@tanstack/react-query';
+import { useLocation, useNavigate, useParams } from '@tanstack/react-router';
+import { useAtom } from 'jotai';
+import * as LucideIcons from 'lucide-react';
+import { ArrowUpDown, Check, ChevronDown, Filter, Menu, Shuffle } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -6,8 +12,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { HeaderIconButton } from '@/components/ui/Header/HeaderIconButton';
 import { useDatasets } from '@/hooks/useDatasets';
-import { apiClient } from '@/lib/api-client';
 import { isScratchCollection } from '@/hooks/useScratch';
+import { apiClient } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 import {
   currentDatasetAtom,
@@ -19,12 +25,6 @@ import {
   selectionModeAtom,
   sidebarOpenAtom,
 } from '@/stores/ui';
-import { useQuery } from '@tanstack/react-query';
-import { useLocation, useNavigate, useParams } from '@tanstack/react-router';
-import { useAtom } from 'jotai';
-import { ArrowUpDown, Check, ChevronDown, Filter, Menu, Shuffle } from 'lucide-react';
-import * as LucideIcons from 'lucide-react';
-import { useEffect, useState } from 'react';
 
 export default function Header() {
   const [sidebarOpen, setSidebarOpen] = useAtom(sidebarOpenAtom);

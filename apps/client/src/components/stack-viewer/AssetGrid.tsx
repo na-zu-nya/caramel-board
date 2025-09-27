@@ -1,8 +1,8 @@
+import { X } from 'lucide-react';
+import React, { useCallback, useState } from 'react';
 import { isVideoAsset } from '@/lib/media';
 import { cn } from '@/lib/utils';
 import type { Asset } from '@/types';
-import { X } from 'lucide-react';
-import React, { useCallback, useState } from 'react';
 
 interface AssetGridProps {
   assets: Asset[];

@@ -1,6 +1,6 @@
-import { selectionModeAtom } from '@/stores/ui';
 import { useAtom } from 'jotai';
 import { useEffect, useState } from 'react';
+import { selectionModeAtom } from '@/stores/ui';
 
 export function useSelectionMode(isSelectionMode: boolean) {
   const [, setSelectionMode] = useAtom(selectionModeAtom);

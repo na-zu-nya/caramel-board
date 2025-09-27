@@ -1,11 +1,12 @@
+import EmojiPicker, { type EmojiClickData } from 'emoji-picker-react';
+import { Loader2, Plus, Sparkles } from 'lucide-react';
+import type React from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { cn } from '@/lib/utils';
-import { Loader2, Sparkles, Plus } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import EmojiPicker, { type EmojiClickData } from 'emoji-picker-react';
-import React, { useState } from 'react';
+import { cn } from '@/lib/utils';
 
 export interface LibrarySetupFormProps {
   name: string;

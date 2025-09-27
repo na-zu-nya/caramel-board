@@ -1,5 +1,5 @@
-import { execSync } from 'child_process';
-import path from 'path';
+import { execSync } from 'node:child_process';
+import path from 'node:path';
 
 export function identifyFile(file: string) {
   const result = execSync(`identify "${file}"`, { encoding: 'utf-8' });

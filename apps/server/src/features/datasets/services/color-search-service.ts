@@ -50,7 +50,7 @@ export const createColorSearchService = (deps: { prisma: PrismaClient; dataSetId
       tonePoint,
       toneTolerance = 10,
       customColor,
-      similarityThreshold = 85,
+      similarityThreshold: _similarityThreshold = 85,
       additionalWhere,
     } = options;
 
@@ -196,7 +196,7 @@ export const createColorSearchService = (deps: { prisma: PrismaClient; dataSetId
     if (mediaType) where.mediaType = mediaType;
 
     // まず色相カテゴリで絞り込み、その後距離計算
-    const stacks = await prisma.$queryRaw<Array<any>>`
+    const stacks = await prisma.$queryRaw<Array<{ id: number; min_distance: number }>>`
       WITH filtered_stacks AS (
         SELECT DISTINCT s.*
         FROM "Stack" s
@@ -332,7 +332,7 @@ export const createColorSearchService = (deps: { prisma: PrismaClient; dataSetId
       OFFSET ${offset}
     `;
 
-    const stacks = await prisma.$queryRawUnsafe<Array<any>>(queryString);
+    const stacks = await prisma.$queryRawUnsafe<Array<{ id: number }>>(queryString);
 
     // 関連データを取得
     const stackIds = stacks.map((s) => s.id);
@@ -375,8 +375,8 @@ export const createColorSearchService = (deps: { prisma: PrismaClient; dataSetId
    */
   async function updateDatasetColors(forceRegenerate = false): Promise<number> {
     // データセット内の画像・動画を含むスタックを取得
-    const whereCondition: any = {
-      dataSetId: dataSetId,
+    const whereCondition: Prisma.StackWhereInput = {
+      dataSetId,
       assets: {
         some: {
           fileType: {

@@ -1,11 +1,11 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useParams } from '@tanstack/react-router';
+import { useAtom } from 'jotai';
+import * as LucideIcons from 'lucide-react';
+import { Grip, MoreVertical, Pencil, Plus, Trash2 } from 'lucide-react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Combobox } from '@/components/ui/combobox';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import {
   Dialog,
   DialogContent,
@@ -13,21 +13,21 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useDatasets } from '@/hooks/useDatasets';
+import { isScratchCollection, useScratch } from '@/hooks/useScratch';
 import { apiClient } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 import { currentDatasetAtom, sidebarOpenAtom } from '@/stores/ui';
 import type { AvailableIcon, Collection, MediaType, Pin, PinType } from '@/types';
 import { AVAILABLE_ICONS } from '@/types';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useParams } from '@tanstack/react-router';
-import { useAtom } from 'jotai';
-import { Grip, MoreVertical, Pencil, Plus, Trash2 } from 'lucide-react';
-import * as LucideIcons from 'lucide-react';
-import { useState } from 'react';
-import { useScratch, isScratchCollection } from '@/hooks/useScratch';
 
 interface DragItem {
   id: number;

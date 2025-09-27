@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { prisma } from '../di';
 
 export interface PaginationOptions {
@@ -48,7 +49,7 @@ export class AuthorService {
         dataSetId,
         name: {
           contains: key,
-          mode: 'insensitive' as any,
+          mode: Prisma.QueryMode.insensitive,
         },
       },
       take: 10,

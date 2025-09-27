@@ -1,1 +1,1 @@
-export { Section, SectionHeader, SectionBlock } from './Section';
+export { Section, SectionBlock, SectionHeader } from './Section';

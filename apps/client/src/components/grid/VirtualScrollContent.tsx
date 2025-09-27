@@ -1,5 +1,5 @@
-import type { MediaGridItem } from '@/types';
 import { Loader2 } from 'lucide-react';
+import type { MediaGridItem } from '@/types';
 import { DebugOverlay } from './DebugOverlay';
 import { GridItem } from './GridItem';
 

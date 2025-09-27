@@ -1,6 +1,6 @@
+import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import type { Stack } from '@/types';
-import { useQuery } from '@tanstack/react-query';
 
 interface UseAdjacentStacksOptions {
   datasetId: string;

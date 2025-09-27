@@ -1,5 +1,5 @@
+import { toPublicAssetPath, withPublicAssetArray } from '../../utils/assetPath';
 import { prisma } from '../di';
-import { withPublicAssetArray, toPublicAssetPath } from '../../utils/assetPath';
 
 export interface PaginationOptions {
   limit: number;
@@ -23,7 +23,7 @@ export class ActivityService {
       orderBy: { mediaType: 'asc' },
     });
 
-    const groupedResults: Record<string, any[]> = {};
+    const groupedResults: Record<string, Array<Record<string, unknown>>> = {};
 
     for (const { mediaType } of mediaTypesResult) {
       const stacks = await prisma.stack.findMany({
@@ -43,7 +43,7 @@ export class ActivityService {
       });
 
       groupedResults[mediaType] = stacks.map((stack) => {
-        const assets = withPublicAssetArray(stack.assets as any[], stack.dataSetId);
+        const assets = withPublicAssetArray(stack.assets, stack.dataSetId);
         const thumbnail = toPublicAssetPath(
           assets[0]?.thumbnail || stack.thumbnail,
           stack.dataSetId
@@ -97,7 +97,7 @@ export class ActivityService {
 
     // Transform the data to match expected format
     const transformedActivities = likeActivities.map((activity) => {
-      const assets = withPublicAssetArray(activity.stack.assets as any[], activity.stack.dataSetId);
+      const assets = withPublicAssetArray(activity.stack.assets, activity.stack.dataSetId);
       const thumbnail = toPublicAssetPath(
         assets[0]?.thumbnail || activity.stack.thumbnail,
         activity.stack.dataSetId
@@ -167,7 +167,7 @@ export class ActivityService {
 
     // If a free-word search is requested, filter liked stacks by unified search results
     let filteredActivities = likeActivities;
-    if (search && search.trim() && datasetId) {
+    if (search?.trim() && datasetId) {
       // Build a minimal unified search using the same dataset (no embeddings)
       const dataSetIdNum = Number(datasetId);
       const { createColorSearchService } = await import(
@@ -195,12 +195,12 @@ export class ActivityService {
         sort: { by: 'recommended', order: 'desc' },
         pagination: { limit: 1000, offset: 0 },
       });
-      const allow = new Set(result.stacks.map((s: any) => s.id));
+      const allow = new Set<number>(result.stacks.map((stack) => stack.id));
       filteredActivities = likeActivities.filter((a) => allow.has(a.stackId));
     }
 
     // Group by month
-    const groupedByMonth: Record<string, any[]> = {};
+    const groupedByMonth: Record<string, Array<Record<string, unknown>>> = {};
 
     for (const activity of filteredActivities) {
       const month = activity.createdAt.getMonth();
@@ -210,7 +210,7 @@ export class ActivityService {
         groupedByMonth[monthKey] = [];
       }
 
-      const assets = withPublicAssetArray(activity.stack.assets as any[], activity.stack.dataSetId);
+      const assets = withPublicAssetArray(activity.stack.assets, activity.stack.dataSetId);
       const thumbnail = toPublicAssetPath(
         assets[0]?.thumbnail || activity.stack.thumbnail,
         activity.stack.dataSetId

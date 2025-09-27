@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { useState } from 'react';
-import { LibrarySetupForm } from './index';
 import { DEFAULT_CARAMEL_COLOR } from '@/components/ui/LibraryCard';
+import { LibrarySetupForm } from './index';
 
 const meta: Meta<typeof LibrarySetupForm> = {
   title: 'Setup/LibrarySetupForm',

@@ -1,7 +1,7 @@
-import { apiClient } from '@/lib/api-client';
-import type { MediaGridItem, StackFilter } from '@/types';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { apiClient } from '@/lib/api-client';
+import type { MediaGridItem, StackFilter } from '@/types';
 
 interface SparseInfiniteScrollOptions {
   datasetId: string;

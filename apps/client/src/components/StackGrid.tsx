@@ -1,9 +1,16 @@
+import { useQueryClient } from '@tanstack/react-query';
+import { useAtomValue, useSetAtom } from 'jotai';
+import { Clapperboard, Info, Loader2, Pencil, RefreshCw, Trash2 } from 'lucide-react';
+import { useCallback, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { StackGridItem } from '@/components/grid/StackGridItem.tsx';
 import { DropZone } from '@/components/ui/DropZone';
 import { HeaderIconButton } from '@/components/ui/Header/HeaderIconButton';
 import { SelectionActionBar } from '@/components/ui/selection-action-bar';
 import { useStackGrid } from '@/hooks/features/useStackGrid';
+import { useScratch } from '@/hooks/useScratch';
 import { apiClient } from '@/lib/api-client';
+import { applyScrollbarCompensation, removeScrollbarCompensation } from '@/lib/scrollbar-utils';
 import { cn } from '@/lib/utils';
 import { currentFilterAtom, reorderModeAtom, selectionModeAtom } from '@/stores/ui';
 import {
@@ -13,13 +20,6 @@ import {
   uploadNotificationsAtom,
 } from '@/stores/upload';
 import type { Dataset, MediaGridItem } from '@/types';
-import { useQueryClient } from '@tanstack/react-query';
-import { useScratch } from '@/hooks/useScratch';
-import { useAtomValue, useSetAtom } from 'jotai';
-import { Clapperboard, Info, Loader2, Pencil, RefreshCw, Trash2 } from 'lucide-react';
-import { useCallback, useEffect, useRef } from 'react';
-import { createPortal } from 'react-dom';
-import { applyScrollbarCompensation, removeScrollbarCompensation } from '@/lib/scrollbar-utils';
 import BulkEditPanel from './BulkEditPanel.tsx';
 import InfoSidebar from './InfoSidebar';
 

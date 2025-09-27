@@ -1,34 +1,3 @@
-import BulkEditPanel from '@/components/BulkEditPanel.tsx';
-import FilterPanel from '@/components/FilterPanel';
-import InfoSidebar from '@/components/InfoSidebar';
-import { StackTile } from '@/components/ui/Stack';
-import { SmallSearchField, SmallSelect } from '@/components/ui/Controls';
-import { useStackTile } from '@/hooks/useStackTile';
-import AutoTagMappingModal from '@/components/modals/AutoTagMappingModal';
-import { StackContextMenu } from '@/components/modals/StackContextMenu';
-import { AutoTagDisplay } from '@/components/ui/autotag-display';
-import { Button } from '@/components/ui/button';
-import { HeaderIconButton } from '@/components/ui/Header/HeaderIconButton';
-import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { SelectionActionBar } from '@/components/ui/selection-action-bar';
-import { useKeyboardShortcuts } from '@/hooks/features/useKeyboardShortcuts';
-import { apiClient } from '@/lib/api-client';
-import { cn } from '@/lib/utils';
-import {
-  currentFilterAtom,
-  filterOpenAtom,
-  infoSidebarOpenAtom,
-  selectedItemIdAtom,
-  selectionModeAtom,
-} from '@/stores/ui';
-import type { StackFilter } from '@/types';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, Link, useLocation, useNavigate } from '@tanstack/react-router';
 import { useAtom } from 'jotai';
@@ -49,6 +18,37 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import BulkEditPanel from '@/components/BulkEditPanel.tsx';
+import FilterPanel from '@/components/FilterPanel';
+import InfoSidebar from '@/components/InfoSidebar';
+import AutoTagMappingModal from '@/components/modals/AutoTagMappingModal';
+import { StackContextMenu } from '@/components/modals/StackContextMenu';
+import { AutoTagDisplay } from '@/components/ui/autotag-display';
+import { Button } from '@/components/ui/button';
+import { SmallSearchField, SmallSelect } from '@/components/ui/Controls';
+import { HeaderIconButton } from '@/components/ui/Header/HeaderIconButton';
+import { Input } from '@/components/ui/input';
+import { StackTile } from '@/components/ui/Stack';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { SelectionActionBar } from '@/components/ui/selection-action-bar';
+import { useKeyboardShortcuts } from '@/hooks/features/useKeyboardShortcuts';
+import { useStackTile } from '@/hooks/useStackTile';
+import { apiClient } from '@/lib/api-client';
+import { cn } from '@/lib/utils';
+import {
+  currentFilterAtom,
+  filterOpenAtom,
+  infoSidebarOpenAtom,
+  selectedItemIdAtom,
+  selectionModeAtom,
+} from '@/stores/ui';
+import type { StackFilter } from '@/types';
 
 export const Route = createFileRoute('/library/$datasetId/autotag-config')({
   component: AutoTagConfigPage,

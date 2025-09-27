@@ -1,8 +1,9 @@
+import { useQuery } from '@tanstack/react-query';
+import { BookText, FolderPlus } from 'lucide-react';
+import { useState } from 'react';
 import { CreateCollectionModal } from '@/components/modals/CreateCollectionModal';
 import { CreateFolderModal } from '@/components/modals/CreateFolderModal';
 import { FolderTreeView } from '@/components/sidebar/FolderTreeView';
-import { SideMenuGroup } from '@/components/ui/SideMenu';
-import { SideMenuMessage } from '@/components/ui/SideMenu';
 import type { CollectionsSectionProps } from '@/components/sidebar/types';
 import {
   DropdownMenu,
@@ -10,10 +11,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { SideMenuGroup, SideMenuMessage } from '@/components/ui/SideMenu';
 import { apiClient } from '@/lib/api-client';
-import { useQuery } from '@tanstack/react-query';
-import { BookText, FolderPlus } from 'lucide-react';
-import { useState } from 'react';
 
 export function CollectionsSection({
   datasetId,

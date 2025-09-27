@@ -1,7 +1,7 @@
-import React from 'react';
-import { cn } from '@/lib/utils';
+import { Check, ChevronLeft, ChevronRight } from 'lucide-react';
+import type React from 'react';
 import { Button } from '@/components/ui/button';
-import { ChevronLeft, ChevronRight, Check } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 export interface SetupStep {
   id: string;

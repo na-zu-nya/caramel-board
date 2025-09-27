@@ -1,6 +1,6 @@
-import { headerActionsAtom } from '@/stores/ui';
 import { useSetAtom } from 'jotai';
 import { useEffect } from 'react';
+import { headerActionsAtom } from '@/stores/ui';
 
 export interface HeaderActionsConfig {
   showShuffle: boolean;

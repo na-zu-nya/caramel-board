@@ -1,25 +1,25 @@
-import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from '@/lib/api-client';
-import { StackGridItem } from '@/components/grid/StackGridItem';
-import type { MediaGridItem } from '@/types';
-import { cn } from '@/lib/utils';
+import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useAtom } from 'jotai';
+import { Clapperboard, Info, Pencil, RefreshCw, Trash2 } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import BulkEditPanel, { type EditUpdates } from '@/components/BulkEditPanel';
+import { StackGridItem } from '@/components/grid/StackGridItem';
+import InfoSidebar from '@/components/InfoSidebar';
+import { HeaderIconButton } from '@/components/ui/Header/HeaderIconButton';
+import { SelectionActionBar } from '@/components/ui/selection-action-bar';
+import { useHeaderActions } from '@/hooks/useHeaderActions';
+import { apiClient } from '@/lib/api-client';
+import { cn } from '@/lib/utils';
 import {
   currentFilterAtom,
   infoSidebarOpenAtom,
   selectedItemIdAtom,
   selectionModeAtom,
 } from '@/stores/ui';
-import { SelectionActionBar } from '@/components/ui/selection-action-bar';
-import BulkEditPanel, { type EditUpdates } from '@/components/BulkEditPanel';
-import { createPortal } from 'react-dom';
 import { genListToken, saveViewContext } from '@/stores/view-context';
-import { useHeaderActions } from '@/hooks/useHeaderActions';
-import { HeaderIconButton } from '@/components/ui/Header/HeaderIconButton';
-import { Clapperboard, Info, Pencil, RefreshCw, Trash2 } from 'lucide-react';
-import InfoSidebar from '@/components/InfoSidebar';
+import type { MediaGridItem } from '@/types';
 
 export const Route = createFileRoute('/library/$datasetId/stacks/$stackId/similar')({
   component: SimilarStacksRoute,

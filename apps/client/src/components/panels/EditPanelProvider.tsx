@@ -1,5 +1,5 @@
+import { createContext, type ReactNode, useContext } from 'react';
 import type { MediaGridItem } from '@/types';
-import { type ReactNode, createContext, useContext } from 'react';
 
 export interface EditUpdates {
   addTags?: string[];

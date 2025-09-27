@@ -239,9 +239,11 @@ export class CollectionFolderService {
     });
 
     // 再帰的に子フォルダを取得
-    const buildTree = async (folders: any[]): Promise<any[]> => {
+    type FolderNode = (typeof rootFolders)[number] & { children?: FolderNode[] };
+
+    const buildTree = async (folders: FolderNode[]): Promise<FolderNode[]> => {
       for (const folder of folders) {
-        const children = await this.prisma.collectionFolder.findMany({
+        const children = (await this.prisma.collectionFolder.findMany({
           where: {
             parentId: folder.id,
           },
@@ -266,7 +268,7 @@ export class CollectionFolderService {
             },
           },
           orderBy: { order: 'asc' },
-        });
+        })) as FolderNode[];
 
         if (children.length > 0) {
           folder.children = await buildTree(children);
@@ -277,7 +279,7 @@ export class CollectionFolderService {
       return folders;
     };
 
-    const tree = await buildTree(rootFolders);
+    const tree = await buildTree(rootFolders as FolderNode[]);
 
     // ルートレベルのコレクション（フォルダに属さない）も取得
     let rootCollections = [];
@@ -306,8 +308,8 @@ export class CollectionFolderService {
 
   // フォルダの順序を変更
   async reorderFolders(
-    dataSetId: number,
-    parentId: number | null,
+    _dataSetId: number,
+    _parentId: number | null,
     folderOrders: { folderId: number; order: number }[]
   ): Promise<void> {
     await this.prisma.$transaction(async (prisma) => {

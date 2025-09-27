@@ -1,22 +1,40 @@
-import path from 'path';
-import fs from 'fs';
-import type { Asset } from '@prisma/client';
+import fs from 'node:fs';
+import path from 'node:path';
+import type { Asset, Prisma } from '@prisma/client';
 import urlJoin from 'url-join';
+import { DuplicateAssetError } from '../errors/DuplicateAssetError';
+import { getAutoTagClient } from '../lib/AutoTagClient';
 import { DataStorage } from '../lib/DataStorage';
 import { getPrisma } from '../lib/Repository';
-import { getAutoTagClient } from '../lib/AutoTagClient';
 import { AutoTagService } from '../shared/services/AutoTagService';
-import { ColorExtractor } from '../utils/colorExtractor';
-import { getExtension, getFileType, getHash } from '../utils/functions';
-import { generateThumbnail } from '../utils/generateThumbnail';
 import { buildAssetKey, toPublicAssetPath } from '../utils/assetPath';
+import { ColorExtractor, type DominantColor } from '../utils/colorExtractor';
+import { getExtension, getFileType, getHash } from '../utils/functions';
 import { generateMediaPreview } from '../utils/generateMediaPreview';
+import { generateThumbnail } from '../utils/generateThumbnail';
 import { StackModel } from './StackModel';
-import { DuplicateAssetError } from '../errors/DuplicateAssetError';
 
 const prisma = getPrisma();
 const stacksAIClient = getAutoTagClient();
 const autoTagService = new AutoTagService(prisma);
+
+const hasErrorCode = (error: unknown): error is { code?: string } =>
+  typeof error === 'object' && error !== null && 'code' in error;
+
+const isDominantColor = (value: unknown): value is DominantColor => {
+  if (typeof value !== 'object' || value === null) return false;
+  const color = value as Record<string, unknown>;
+  return (
+    typeof color.r === 'number' &&
+    typeof color.g === 'number' &&
+    typeof color.b === 'number' &&
+    typeof color.hex === 'string' &&
+    typeof color.percentage === 'number'
+  );
+};
+
+const isDominantColorArray = (value: Prisma.JsonValue | null): value is DominantColor[] =>
+  Array.isArray(value) && value.every(isDominantColor);
 
 export class AssetModel {
   static async createWithFile(
@@ -309,10 +327,10 @@ export class AssetModel {
       });
 
       console.log(`Tags predicted for asset ${assetId}: ${prediction.tag_count} tags`);
-    } catch (error: any) {
-      if (error.code === 'ECONNREFUSED') {
+    } catch (error: unknown) {
+      if (hasErrorCode(error) && error.code === 'ECONNREFUSED') {
         console.log(`AI server not available for asset ${assetId}. Tags prediction skipped.`);
-      } else if (error?.code === 'P2002') {
+      } else if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
         // 一意制約違反（他プロセスが先に作成）。冪等のため情報ログのみ。
         console.log(`AutoTagPrediction already exists for asset ${assetId}; skipping create.`);
       } else {
@@ -331,9 +349,7 @@ export class AssetModel {
       });
 
       // 色情報がないアセットを除外
-      const assetColors = assets
-        .filter((asset) => asset.dominantColors !== null)
-        .map((asset) => asset.dominantColors as any);
+      const assetColors = assets.map((asset) => asset.dominantColors).filter(isDominantColorArray);
 
       if (assetColors.length === 0) {
         console.log(`No color data found for stack ${stackId}`);

@@ -1,7 +1,7 @@
-import { useIMEAwareKeyboard } from '@/hooks/useIMEAwareKeyboard';
-import { cn } from '@/lib/utils';
 import type React from 'react';
 import { forwardRef } from 'react';
+import { useIMEAwareKeyboard } from '@/hooks/useIMEAwareKeyboard';
+import { cn } from '@/lib/utils';
 
 export interface IMEInputProps
   extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onKeyDown'> {

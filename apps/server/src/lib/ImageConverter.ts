@@ -1,6 +1,6 @@
-import { execSync } from 'child_process';
-import { createStreamDigest } from '../utils/createDigest';
+import { execSync } from 'node:child_process';
 import { buildThumbnailKey } from '../utils/assetPath';
+import { createStreamDigest } from '../utils/createDigest';
 import { DataStorage } from './DataStorage';
 
 export interface ImageInfo {

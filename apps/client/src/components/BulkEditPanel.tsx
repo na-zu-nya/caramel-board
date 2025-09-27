@@ -1,3 +1,6 @@
+import { useParams } from '@tanstack/react-router';
+import { Calendar, Monitor, Save, Search, Tag, X } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import {
   Select,
@@ -10,9 +13,6 @@ import { SuggestInput } from '@/components/ui/suggest-input';
 import { useSwipeClose } from '@/hooks/features/useSwipeClose';
 import { apiClient } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
-import { useParams } from '@tanstack/react-router';
-import { Calendar, Monitor, Save, Search, Tag, X } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
 
 interface EditPanelProps {
   isOpen: boolean;
@@ -48,7 +48,7 @@ export default function BulkEditPanel({
   const [tagLoading, setTagLoading] = useState(false);
   const [authorLoading, setAuthorLoading] = useState(false);
   const debounceTimerRef = useRef<number | null>(null);
-  // @ts-ignore
+  // @ts-expect-error
   const params = useParams({ strict: false });
   const datasetId = (params as { datasetId?: string }).datasetId;
 

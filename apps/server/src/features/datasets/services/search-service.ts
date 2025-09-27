@@ -1,6 +1,6 @@
 import type { PrismaClient, Stack } from '@prisma/client';
 import { ensureSuperUser } from '../../../shared/services/UserService';
-import type { createColorSearchService } from './color-search-service';
+import type { ColorFilterOptions, createColorSearchService } from './color-search-service';
 import type { createTagStatsService } from './tag-stats-service';
 
 const DEFAULT_AUTO_STOP_TAGS = [
@@ -60,18 +60,25 @@ const extractAutoTagVector = (
   options: { limit: number; minScore: number; stopTags: Set<string> }
 ): AutoTagVector => {
   const { limit, minScore, stopTags } = options;
-  if (!raw || !Array.isArray(raw)) return new Map();
+  if (!Array.isArray(raw)) return new Map();
 
   const entries: Array<{ tag: string; score: number }> = [];
-  for (const item of raw as Array<any>) {
+  for (const item of raw) {
     if (!item || typeof item !== 'object') continue;
-    const tagValue = 'tag' in item ? item.tag : item.autoTagKey;
-    const scoreValue = 'score' in item ? item.score : (item.value ?? item.weight);
-    if (typeof tagValue !== 'string') continue;
-    const score = typeof scoreValue === 'number' ? scoreValue : Number(scoreValue);
+    const record = item as Record<string, unknown>;
+    const tagCandidate =
+      (typeof record.tag === 'string' ? record.tag : undefined) ??
+      (typeof record.autoTagKey === 'string' ? record.autoTagKey : undefined);
+    if (!tagCandidate) continue;
+
+    const scoreCandidate =
+      record.score ?? record.value ?? record.weight ?? record.scoreValue ?? record.scoreRatio;
+    const score = typeof scoreCandidate === 'number' ? scoreCandidate : Number(scoreCandidate);
     if (!Number.isFinite(score) || score < minScore) continue;
-    const normalized = normalizeTag(tagValue);
+
+    const normalized = normalizeTag(tagCandidate);
     if (!normalized || stopTags.has(normalized)) continue;
+
     entries.push({ tag: normalized, score });
   }
 
@@ -167,6 +174,12 @@ export interface ColorFilter {
     brightness?: { min?: number; max?: number };
     saturation?: { min?: number; max?: number };
   };
+  // advanced options aligned with ColorSearchService
+  hueCategories?: string[];
+  tonePoint?: { saturation: number; lightness: number };
+  toneTolerance?: number;
+  customColor?: string;
+  similarityThreshold?: number;
 }
 
 // ソートオプション
@@ -513,7 +526,7 @@ export const createSearchService = (deps: {
           break;
         }
 
-        case SearchMode.UNIFIED:
+        case SearchMode.UNIFIED: {
           // フリーワード検索
           if (!request.query) {
             throw new Error('query is required for unified search');
@@ -522,6 +535,7 @@ export const createSearchService = (deps: {
           stackIds = unified.map((r) => r.stackId);
           scores = new Map(unified.map((r) => [r.stackId, r.score]));
           break;
+        }
       }
 
       // 2. フィルタ適用
@@ -760,7 +774,7 @@ export const createSearchService = (deps: {
     },
 
     async filterByAuthor(stackIds: number[], filter: AuthorFilter): Promise<number[]> {
-      const conditions: any[] = [];
+      const conditions: Prisma.StackWhereInput[] = [];
 
       // AND条件
       if (filter.include?.length) {
@@ -927,16 +941,18 @@ export const createSearchService = (deps: {
     async filterByColor(stackIds: number[], filter: ColorFilter): Promise<number[]> {
       // 新方式（color-search-serviceオプション）のサポート
       const hasNewOptions =
-        (filter as any).hueCategories || (filter as any).tonePoint || (filter as any).customColor;
+        (filter.hueCategories && filter.hueCategories.length > 0) ||
+        filter.tonePoint !== undefined ||
+        typeof filter.customColor === 'string';
 
       if (hasNewOptions) {
         try {
-          const options: any = {
-            hueCategories: (filter as any).hueCategories,
-            tonePoint: (filter as any).tonePoint,
-            toneTolerance: (filter as any).toneTolerance,
-            customColor: (filter as any).customColor,
-            similarityThreshold: (filter as any).similarityThreshold,
+          const options: ColorFilterOptions = {
+            hueCategories: filter.hueCategories,
+            tonePoint: filter.tonePoint,
+            toneTolerance: filter.toneTolerance,
+            customColor: filter.customColor,
+            similarityThreshold: filter.similarityThreshold,
           };
           // まず色一致IDを取得
           const colorIds = await colorSearch.getColorMatchingStackIds(options);

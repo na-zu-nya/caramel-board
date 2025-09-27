@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { NavigationPinService } from '../shared/services/NavigationPinService';
 import { usePrisma } from '../shared/di';
+import { NavigationPinService } from '../shared/services/NavigationPinService';
 import { ensureSuperUser } from '../shared/services/UserService';
 
 // リクエストボディのスキーマ定義
@@ -47,7 +47,7 @@ navigationPinsRouter.get('/', (c) => {
 });
 
 navigationPinsRouter.get('/dataset/:dataSetId', async (c) => {
-  const dataSetId = Number.parseInt(c.req.param('dataSetId'));
+  const dataSetId = Number.parseInt(c.req.param('dataSetId'), 10);
   console.log('GET /navigation-pins/dataset/:dataSetId - dataSetId:', dataSetId);
 
   if (Number.isNaN(dataSetId)) {
@@ -108,7 +108,7 @@ navigationPinsRouter.put('/order', async (c) => {
 });
 
 navigationPinsRouter.put('/:id', async (c) => {
-  const id = Number.parseInt(c.req.param('id'));
+  const id = Number.parseInt(c.req.param('id'), 10);
 
   if (Number.isNaN(id)) {
     return c.json({ error: 'Invalid pin ID' }, 400);
@@ -133,7 +133,7 @@ navigationPinsRouter.put('/:id', async (c) => {
 });
 
 navigationPinsRouter.delete('/:id', async (c) => {
-  const id = Number.parseInt(c.req.param('id'));
+  const id = Number.parseInt(c.req.param('id'), 10);
 
   if (Number.isNaN(id)) {
     return c.json({ error: 'Invalid pin ID' }, 400);

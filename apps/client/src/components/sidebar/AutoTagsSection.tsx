@@ -1,10 +1,9 @@
-import { SideMenuListItem, SideMenuSearchField } from '@/components/ui/SideMenu';
-import { Link } from '@tanstack/react-router';
-import { apiClient } from '@/lib/api-client';
 import { useQuery } from '@tanstack/react-query';
+import { Link } from '@tanstack/react-router';
 import { Wand2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { SideMenuMessage } from '@/components/ui/SideMenu';
+import { SideMenuListItem, SideMenuMessage, SideMenuSearchField } from '@/components/ui/SideMenu';
+import { apiClient } from '@/lib/api-client';
 
 interface AutoTagsSectionProps {
   datasetId: string;

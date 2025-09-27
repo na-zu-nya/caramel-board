@@ -9,7 +9,7 @@ import { PrismaClient } from '@prisma/client';
 import type { Context } from 'hono';
 import { createFactory } from 'hono/factory';
 // ColorSearchService is now dataset-scoped - removed global import
-import { getAutoTagClient, type AutoTagClient } from '../lib/AutoTagClient';
+import { type AutoTagClient, getAutoTagClient } from '../lib/AutoTagClient';
 import { createDataStorageService, type DataStorageService } from './services/DataStorageService';
 
 /**

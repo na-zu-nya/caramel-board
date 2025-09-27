@@ -1,45 +1,5 @@
-import type { EditUpdates } from '@/components/BulkEditPanel';
-import BulkEditPanel from '@/components/BulkEditPanel';
-import InfoSidebar from '@/components/InfoSidebar';
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { StackTile } from '@/components/ui/Stack';
-import { useStackTile } from '@/hooks/useStackTile';
-import { Button } from '@/components/ui/button';
-import FilterPanel from '@/components/FilterPanel';
-import { Checkbox } from '@/components/ui/checkbox';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { HeaderIconButton } from '@/components/ui/Header/HeaderIconButton';
-import { SmallSearchField, SmallSelect, SmallButton, Toolbar } from '@/components/ui/Controls';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { SelectionActionBar } from '@/components/ui/selection-action-bar';
-import { apiClient } from '@/lib/api-client';
-import { cn } from '@/lib/utils';
-import {
-  infoSidebarOpenAtom,
-  selectedItemIdAtom,
-  selectionModeAtom,
-  currentFilterAtom,
-} from '@/stores/ui';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { createFileRoute, useLocation, useNavigate, Link } from '@tanstack/react-router';
-import { useHeaderActions } from '@/hooks/useHeaderActions';
-import MersenneTwister from 'mersenne-twister';
-import { genListToken, saveViewContext } from '@/stores/view-context';
+import { createFileRoute, Link, useLocation, useNavigate } from '@tanstack/react-router';
 import { useAtom } from 'jotai';
 import {
   Check,
@@ -55,8 +15,48 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
+import MersenneTwister from 'mersenne-twister';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 // moved React hooks import above; see lazy import note
 import { createPortal } from 'react-dom';
+import type { EditUpdates } from '@/components/BulkEditPanel';
+import BulkEditPanel from '@/components/BulkEditPanel';
+import FilterPanel from '@/components/FilterPanel';
+import InfoSidebar from '@/components/InfoSidebar';
+import { Button } from '@/components/ui/button';
+import { SmallButton, SmallSearchField, SmallSelect, Toolbar } from '@/components/ui/Controls';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { HeaderIconButton } from '@/components/ui/Header/HeaderIconButton';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { StackTile } from '@/components/ui/Stack';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { SelectionActionBar } from '@/components/ui/selection-action-bar';
+import { useHeaderActions } from '@/hooks/useHeaderActions';
+import { useStackTile } from '@/hooks/useStackTile';
+import { apiClient } from '@/lib/api-client';
+import { cn } from '@/lib/utils';
+import {
+  currentFilterAtom,
+  infoSidebarOpenAtom,
+  selectedItemIdAtom,
+  selectionModeAtom,
+} from '@/stores/ui';
+import { genListToken, saveViewContext } from '@/stores/view-context';
 
 export const Route = createFileRoute('/library/$datasetId/tags')({
   component: TagsPage,

@@ -160,7 +160,7 @@ app.post('/:dataSetId/stacks', async (c) => {
     });
 
     return c.json(stack, 201);
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (error instanceof DuplicateAssetError) {
       return c.json(
         {
@@ -189,8 +189,8 @@ app.put(
 
       const stack = await stackService.update(id, data);
       return c.json(stack);
-    } catch (error: any) {
-      if (error.message === 'Stack not found in this dataset') {
+    } catch (error: unknown) {
+      if (error instanceof Error && error.message === 'Stack not found in this dataset') {
         return c.json({ error: error.message }, 404);
       }
       console.error('Error updating stack:', error);
@@ -207,8 +207,8 @@ app.delete('/:dataSetId/stacks/:id', zValidator('param', IdParamSchema), async (
 
     await stackService.delete(id);
     return c.json({ success: true });
-  } catch (error: any) {
-    if (error.message === 'Stack not found in this dataset') {
+  } catch (error: unknown) {
+    if (error instanceof Error && error.message === 'Stack not found in this dataset') {
       return c.json({ error: error.message }, 404);
     }
     console.error('Error deleting stack:', error);

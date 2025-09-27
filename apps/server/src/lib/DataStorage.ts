@@ -1,6 +1,6 @@
-import * as fs from 'fs';
-import path from 'path';
-import type { Stream } from 'stream';
+import * as fs from 'node:fs';
+import path from 'node:path';
+import type { Stream } from 'node:stream';
 import fsExtra, { type Dirent, type WriteStream } from 'fs-extra';
 import { getHash } from '../utils/functions';
 
@@ -32,7 +32,6 @@ const resolveDataDirectory = () => {
 
 const getDataDirectory = () => resolveDataDirectory();
 
-// biome-ignore lint/complexity/noStaticOnlyClass: Utility class for data storage operations
 export class DataStorage {
   // データセットIDを含むパスを生成
   private static buildPath(key: string, dataSetId?: number): string {

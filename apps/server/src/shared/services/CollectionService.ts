@@ -1,19 +1,19 @@
 import { type Collection, Prisma, type PrismaClient } from '@prisma/client';
+import { createColorSearchService } from '../../features/datasets/services/color-search-service';
+import {
+  createSearchService,
+  type SearchFilters,
+  SearchMode,
+  type SortOptions,
+} from '../../features/datasets/services/search-service';
+import { createTagStatsService } from '../../features/datasets/services/tag-stats-service';
 import type {
   CollectionQuery,
   CreateCollectionInput,
   UpdateCollectionInput,
 } from '../../models/CollectionModel';
-import type { FilterConfig } from '../../utils/filterBuilder';
-import { createColorSearchService } from '../../features/datasets/services/color-search-service';
-import {
-  createSearchService,
-  SearchMode,
-  type SearchFilters,
-  type SortOptions,
-} from '../../features/datasets/services/search-service';
-import { createTagStatsService } from '../../features/datasets/services/tag-stats-service';
 import { toPublicAssetPath, withPublicAssetArray } from '../../utils/assetPath';
+import type { FilterConfig } from '../../utils/filterBuilder';
 
 export class CollectionService {
   private prisma: PrismaClient;
@@ -25,7 +25,7 @@ export class CollectionService {
   // Helper to resolve folder (for auth)
   // Optional method used by routes when query contains folderId but no datasetId
   async findFolderById(folderId: number) {
-    // @ts-ignore - access prisma through this.prisma
+    // @ts-expect-error - access prisma through this.prisma
     // eslint-disable-next-line @typescript-eslint/no-unsafe-return
     return this.prisma.collectionFolder.findUnique({ where: { id: folderId } });
   }
@@ -324,7 +324,7 @@ export class CollectionService {
     // Enrich: attach assetCount and ensure thumbnail path
     const ids = result.stacks.map((s: any) => s.id);
     let assetCountMap = new Map<number, number>();
-    let firstAssetMap = new Map<number, string | undefined>();
+    const firstAssetMap = new Map<number, string | undefined>();
     if (ids.length > 0) {
       const counts = await this.prisma.asset.groupBy({
         by: ['stackId'],

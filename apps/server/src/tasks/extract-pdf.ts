@@ -1,11 +1,11 @@
-import { execSync } from 'child_process';
-import path from 'path';
+import { execSync } from 'node:child_process';
 import dotenv from 'dotenv';
+import path from 'node:path';
 import 'source-map-support/register';
-import { identifyFile } from './utils/imageMagick';
+import type { ArgumentsCamelCase } from 'yargs';
 
 import yargs from 'yargs';
-import type { ArgumentsCamelCase } from 'yargs';
+import { identifyFile } from './utils/imageMagick';
 
 dotenv.config();
 

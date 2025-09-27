@@ -1,6 +1,6 @@
-import type { MediaGridItem } from '@/types';
 import { useNavigate, useRouter } from '@tanstack/react-router';
 import { useCallback, useMemo } from 'react';
+import type { MediaGridItem } from '@/types';
 
 interface UseStackNavigationProps {
   currentStackId: string | number;

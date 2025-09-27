@@ -1,6 +1,6 @@
-import { cn } from '@/lib/utils';
-import { cloneElement, isValidElement } from 'react';
 import type { ReactNode } from 'react';
+import { cloneElement, isValidElement } from 'react';
+import { cn } from '@/lib/utils';
 import { getThumbnailPath } from '@/utils/thumbnailPath';
 
 export interface EntityCardProps extends React.HTMLAttributes<HTMLDivElement> {

@@ -20,7 +20,7 @@ export function hexToOklch(hex: string): string {
   const b = Number.parseInt(hex.substring(4, 6), 16) / 255;
 
   // Convert RGB to linear RGB
-  const toLinear = (c: number) => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+  const toLinear = (c: number) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
   const lr = toLinear(r);
   const lg = toLinear(g);
   const lb = toLinear(b);

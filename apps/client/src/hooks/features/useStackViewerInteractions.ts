@@ -1,9 +1,9 @@
-import { apiClient } from '@/lib/api-client';
-import { useViewContext } from '@/hooks/useViewContext';
-import type { Asset, Stack } from '@/types';
-import { useNavigate } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from '@tanstack/react-router';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useViewContext } from '@/hooks/useViewContext';
+import { apiClient } from '@/lib/api-client';
+import type { Asset, Stack } from '@/types';
 
 export interface ImageCarouselBridge {
   updateTranslateX: (value: number) => void;

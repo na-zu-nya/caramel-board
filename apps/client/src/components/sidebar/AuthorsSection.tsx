@@ -1,10 +1,10 @@
-import { DroppableSideMenuItem } from '@/components/ui/DroppableSideMenuItem';
-import { SideMenuMessage, SideMenuSearchField } from '@/components/ui/SideMenu';
-import { apiClient } from '@/lib/api-client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { User } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { DroppableSideMenuItem } from '@/components/ui/DroppableSideMenuItem';
+import { SideMenuMessage, SideMenuSearchField } from '@/components/ui/SideMenu';
+import { apiClient } from '@/lib/api-client';
 
 interface AuthorsSectionProps {
   datasetId: string;

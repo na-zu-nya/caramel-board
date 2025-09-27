@@ -1,3 +1,5 @@
+import { useAtomValue, useSetAtom } from 'jotai';
+import { useEffect, useRef } from 'react';
 import { UploadService } from '@/lib/upload-service';
 import {
   addUploadNotificationAtom,
@@ -7,8 +9,6 @@ import {
   updateFileProgressAtom,
   uploadQueueAtom,
 } from '@/stores/upload';
-import { useAtomValue, useSetAtom } from 'jotai';
-import { useEffect, useRef } from 'react';
 
 export function useUploadQueue() {
   const currentBatch = useAtomValue(currentBatchAtom);

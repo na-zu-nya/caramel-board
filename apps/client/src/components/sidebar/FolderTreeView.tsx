@@ -1,24 +1,24 @@
-import { apiClient } from '@/lib/api-client';
-import { cn } from '@/lib/utils';
-import type { Collection, CollectionFolder, FolderTreeNode } from '@/types';
-import { isScratchCollection } from '@/hooks/useScratch';
 import type { DragEndEvent, DragOverEvent, DragStartEvent } from '@dnd-kit/core';
 import {
+  closestCenter,
   DndContext,
   DragOverlay,
   PointerSensor,
-  closestCenter,
+  useDraggable,
   useDroppable,
   useSensor,
   useSensors,
-  useDraggable,
 } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { ChevronDown, ChevronRight, Folder, FolderOpen } from 'lucide-react';
-import { CountBadge } from '@/components/ui/SideMenu/CountBadge';
 import { useEffect, useState } from 'react';
-import { CollectionDropItem } from './CollectionDropItem';
 import { SideMenuMessage } from '@/components/ui/SideMenu';
+import { CountBadge } from '@/components/ui/SideMenu/CountBadge';
+import { isScratchCollection } from '@/hooks/useScratch';
+import { apiClient } from '@/lib/api-client';
+import { cn } from '@/lib/utils';
+import type { Collection, CollectionFolder, FolderTreeNode } from '@/types';
+import { CollectionDropItem } from './CollectionDropItem';
 
 interface FolderTreeViewProps {
   folders: CollectionFolder[];

@@ -1,9 +1,9 @@
 import type { Stack } from '@prisma/client';
 import { DataStorage } from '../lib/DataStorage';
 import { getPrisma } from '../lib/Repository';
-import { ServerError } from '../utils/ServerError';
 import { getExtension } from '../utils/functions';
 import { generateThumbnail } from '../utils/generateThumbnail';
+import { ServerError } from '../utils/ServerError';
 
 // interface PictureStackModel {
 //   file: string,

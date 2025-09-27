@@ -1,7 +1,7 @@
-import { apiClient } from '@/lib/api-client';
-import type { MediaGridItem, StackFilter } from '@/types';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { apiClient } from '@/lib/api-client';
+import type { MediaGridItem, StackFilter } from '@/types';
 
 interface RangeBasedQueryOptions {
   datasetId: string;

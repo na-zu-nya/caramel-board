@@ -1,7 +1,7 @@
-import { cn } from '@/lib/utils';
-import type { MediaGridItem } from '@/types';
 import { Check, Heart, Star } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { cn } from '@/lib/utils';
+import type { MediaGridItem } from '@/types';
 
 interface GridItemProps {
   item?: MediaGridItem; // Made optional to handle undefined items

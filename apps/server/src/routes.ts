@@ -1,20 +1,19 @@
 import { Hono } from 'hono';
-
+import { activitiesRoute } from './routes/activities';
+import { assetsLiteRoute } from './routes/assets-lite';
+import { authorsRoute } from './routes/authors';
+import { autoTagsRoute } from './routes/autoTags';
+import { collectionFoldersRoute } from './routes/collectionFolders';
+import { collectionsRoute } from './routes/collections';
+import { colorsRoute } from './routes/colors';
+import { datasetAssetsRoute } from './routes/dataset-assets';
+import { datasetStacksRoute } from './routes/datasetStacks';
 // Mount legacy-stable routes consumed by the client
 import { datasetsLiteRoute } from './routes/datasets-lite';
-import { collectionsRoute } from './routes/collections';
-import { stacksRoute } from './routes/stacks';
-import { collectionFoldersRoute } from './routes/collectionFolders';
-import { colorsRoute } from './routes/colors';
-import { tagsRoute } from './routes/tags';
-import { authorsRoute } from './routes/authors';
-import { activitiesRoute } from './routes/activities';
 import { navigationPinsRouter } from './routes/navigationPins';
+import { stacksRoute } from './routes/stacks';
+import { tagsRoute } from './routes/tags';
 import { uploadRoute } from './routes/upload';
-import { datasetStacksRoute } from './routes/datasetStacks';
-import { assetsLiteRoute } from './routes/assets-lite';
-import { autoTagsRoute } from './routes/autoTags';
-import { datasetAssetsRoute } from './routes/dataset-assets';
 
 // If/when feature routes are fully migrated, they can be re-enabled here.
 // legacy feature routes removed

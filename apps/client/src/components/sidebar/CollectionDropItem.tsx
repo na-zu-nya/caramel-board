@@ -1,13 +1,13 @@
-import { CollectionContextMenu } from '@/components/modals/CollectionContextMenu';
-import { CountBadge } from '@/components/ui/SideMenu/CountBadge';
-import { useTouchDropZone } from '@/hooks/useTouchDragDrop';
-import { useSidebarDrop } from '@/hooks/useSidebarDrop';
-import { apiClient } from '@/lib/api-client';
-import { cn } from '@/lib/utils';
-import type { Collection } from '@/types';
 import { useLocation, useNavigate } from '@tanstack/react-router';
 import { BookText, Settings } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { CollectionContextMenu } from '@/components/modals/CollectionContextMenu';
+import { CountBadge } from '@/components/ui/SideMenu/CountBadge';
+import { useSidebarDrop } from '@/hooks/useSidebarDrop';
+import { useTouchDropZone } from '@/hooks/useTouchDragDrop';
+import { apiClient } from '@/lib/api-client';
+import { cn } from '@/lib/utils';
+import type { Collection } from '@/types';
 
 interface CollectionDropItemProps {
   collection: Collection;
@@ -35,7 +35,7 @@ export function CollectionDropItem({
   const location = useLocation();
 
   const getDatasetIdFromPath = useCallback(() => {
-    const pathMatch = location.pathname.match(/\/library\/([^\/]+)/);
+    const pathMatch = location.pathname.match(/\/library\/([^/]+)/);
     return pathMatch ? pathMatch[1] : '1';
   }, [location.pathname]);
 

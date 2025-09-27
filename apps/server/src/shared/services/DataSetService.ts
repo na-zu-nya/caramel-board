@@ -1,4 +1,4 @@
-import type { DataSet, PrismaClient } from '@prisma/client';
+import type { DataSet, Prisma, PrismaClient } from '@prisma/client';
 import { processStacksThumbnails } from '../../utils/stackHelpers';
 import { prisma } from '../di';
 
@@ -7,7 +7,7 @@ export interface CreateDataSetData {
   icon?: string;
   themeColor?: string;
   description?: string;
-  settings?: Record<string, any>;
+  settings?: Prisma.InputJsonValue;
 }
 
 export interface UpdateDataSetData {
@@ -15,7 +15,7 @@ export interface UpdateDataSetData {
   icon?: string;
   themeColor?: string;
   description?: string;
-  settings?: Record<string, any>;
+  settings?: Prisma.InputJsonValue;
 }
 
 interface RecentLikeRaw {

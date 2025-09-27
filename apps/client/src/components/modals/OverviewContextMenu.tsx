@@ -1,3 +1,6 @@
+import * as LucideIcons from 'lucide-react';
+import { Pin, PinOff } from 'lucide-react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   ContextMenu,
@@ -18,9 +21,6 @@ import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import type { AvailableIcon } from '@/types';
 import { AVAILABLE_ICONS } from '@/types';
-import { Pin, PinOff } from 'lucide-react';
-import * as LucideIcons from 'lucide-react';
-import { useState } from 'react';
 
 interface OverviewContextMenuProps {
   children: React.ReactNode;

@@ -1,5 +1,3 @@
-import { cn } from '@/lib/utils';
-import type { Asset } from '@/types';
 import {
   forwardRef,
   useCallback,
@@ -9,11 +7,12 @@ import {
   useRef,
   useState,
 } from 'react';
-import VideoSeekBar from '@/components/ui/SeekBar/VideoSeekBar';
-import type { VideoMarker } from '@/types';
 import { createPortal } from 'react-dom';
-import { cycleViewerFps, getViewerFps, getViewerMuted, setViewerMuted } from '@/lib/viewerSettings';
+import VideoSeekBar from '@/components/ui/SeekBar/VideoSeekBar';
 import { isVideoAsset } from '@/lib/media';
+import { cn } from '@/lib/utils';
+import { cycleViewerFps, getViewerFps, getViewerMuted, setViewerMuted } from '@/lib/viewerSettings';
+import type { Asset, VideoMarker } from '@/types';
 
 interface ImageCarouselProps {
   currentAsset?: Asset;

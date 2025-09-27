@@ -179,7 +179,7 @@ export const createStacksService = (deps: {
               },
             });
             results.push({ stackId, tagId: tag.id, success: true });
-          } catch (error) {
+          } catch (_error) {
             // 既に存在する場合はスキップ
             results.push({ stackId, tagId: tag.id, success: false, error: 'Already exists' });
           }

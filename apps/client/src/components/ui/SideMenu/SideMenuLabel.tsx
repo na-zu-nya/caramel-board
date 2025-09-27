@@ -1,6 +1,6 @@
-import { cn } from '@/lib/utils';
-import type { ReactNode } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
+import type { ReactNode } from 'react';
+import { cn } from '@/lib/utils';
 
 export interface SideMenuLabelProps {
   label: ReactNode;

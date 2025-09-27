@@ -1,3 +1,17 @@
+import { useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from '@tanstack/react-router';
+import { useAtom, useSetAtom } from 'jotai';
+import {
+  Book,
+  Check,
+  GalleryVerticalEnd,
+  Heart,
+  Info,
+  NotebookText,
+  Star,
+  Trash2,
+} from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -11,20 +25,6 @@ import { apiClient } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 import { currentFilterAtom, infoSidebarOpenAtom, selectedItemIdAtom } from '@/stores/ui';
 import type { MediaGridItem } from '@/types';
-import { useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from '@tanstack/react-router';
-import { useAtom, useSetAtom } from 'jotai';
-import {
-  Book,
-  Check,
-  GalleryVerticalEnd,
-  Heart,
-  NotebookText,
-  Star,
-  Trash2,
-  Info,
-} from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
 
 interface StackGridItemProps {
   item: MediaGridItem;

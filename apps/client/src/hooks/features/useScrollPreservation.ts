@@ -1,5 +1,5 @@
-import type { MediaGridItem } from '@/types';
 import { useCallback, useRef } from 'react';
+import type { MediaGridItem } from '@/types';
 
 interface AnchorItem {
   itemId: string | number;

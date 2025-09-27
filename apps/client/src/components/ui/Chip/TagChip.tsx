@@ -1,6 +1,6 @@
-import { cn } from '@/lib/utils';
-import { cloneElement, isValidElement } from 'react';
 import type * as React from 'react';
+import { cloneElement, isValidElement } from 'react';
+import { cn } from '@/lib/utils';
 
 export interface TagChipProps extends React.HTMLAttributes<HTMLSpanElement> {
   asChild?: boolean;

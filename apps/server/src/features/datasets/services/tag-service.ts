@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@prisma/client';
+import type { Prisma, PrismaClient } from '@prisma/client';
 import { processStacksThumbnails, STACK_LIST_WITH_TAGS_INCLUDE } from '../../../utils/stackHelpers';
 
 export interface CreateTagData {
@@ -21,15 +21,16 @@ export const createTagService = (deps: { prisma: PrismaClient; dataSetId: number
     const where = { dataSetId };
 
     // 順序設定の作成
-    let orderByClause: any = {};
+    const direction: Prisma.SortOrder = orderDirection === 'desc' ? 'desc' : 'asc';
+    let orderByClause: Prisma.TagOrderByWithRelationInput;
     if (orderBy === 'stackCount') {
       orderByClause = {
         stack: {
-          _count: orderDirection as 'asc' | 'desc',
+          _count: direction,
         },
       };
     } else {
-      orderByClause = { [orderBy]: orderDirection };
+      orderByClause = { [orderBy]: direction } as Prisma.TagOrderByWithRelationInput;
     }
 
     const [tags, total] = await Promise.all([
@@ -107,7 +108,7 @@ export const createTagService = (deps: { prisma: PrismaClient; dataSetId: number
 
   async function deleteTag(id: number) {
     // Find all stacks with this tag before deletion
-    const stacksWithTag = await prisma.tagsOnStack.findMany({
+    const _stacksWithTag = await prisma.tagsOnStack.findMany({
       where: { tagId: id },
       select: { stackId: true },
     });
@@ -131,7 +132,7 @@ export const createTagService = (deps: { prisma: PrismaClient; dataSetId: number
         dataSetId,
         title: {
           contains: key,
-          mode: 'insensitive' as any,
+          mode: Prisma.QueryMode.insensitive,
         },
       },
       take: 10,
@@ -148,7 +149,7 @@ export const createTagService = (deps: { prisma: PrismaClient; dataSetId: number
     });
 
     // Find all stacks with this tag and regenerate their embeddings
-    const stacksWithTag = await prisma.tagsOnStack.findMany({
+    const _stacksWithTag = await prisma.tagsOnStack.findMany({
       where: { tagId: id },
       select: { stackId: true },
     });

@@ -1,3 +1,6 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Loader2 } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -12,9 +15,6 @@ import { Label } from '@/components/ui/label';
 import { SuggestInput } from '@/components/ui/suggest-input';
 import { useIMEAwareKeyboard } from '@/hooks/useIMEAwareKeyboard';
 import { apiClient } from '@/lib/api-client';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Loader2 } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
 
 interface AutoTagMapping {
   id?: number;

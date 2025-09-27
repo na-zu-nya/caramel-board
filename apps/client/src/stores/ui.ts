@@ -1,5 +1,5 @@
-import type { StackFilter } from '@/types';
 import { atom } from 'jotai';
+import type { StackFilter } from '@/types';
 
 // Helper function for sessionStorage
 function loadFromSessionStorage(key: string, defaultValue: boolean): boolean {

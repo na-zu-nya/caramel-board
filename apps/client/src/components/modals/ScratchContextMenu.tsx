@@ -1,3 +1,6 @@
+import { useNavigate } from '@tanstack/react-router';
+import { Eraser, FolderPlus } from 'lucide-react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   ContextMenu,
@@ -16,9 +19,6 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useScratch } from '@/hooks/useScratch';
-import { useNavigate } from '@tanstack/react-router';
-import { Eraser, FolderPlus } from 'lucide-react';
-import { useState } from 'react';
 
 interface ScratchContextMenuProps {
   datasetId: string;

@@ -1,15 +1,15 @@
+import { createFileRoute, useNavigate } from '@tanstack/react-router';
+import { useAtom } from 'jotai';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import FilterPanel from '@/components/FilterPanel';
 import StackGrid from '@/components/StackGrid';
 import { useDataset } from '@/hooks/useDatasets';
 import { useHeaderActions } from '@/hooks/useHeaderActions';
 import { useRangeBasedQuery } from '@/hooks/useRangeBasedQuery';
-import { genListToken, saveViewContext } from '@/stores/view-context';
-import { currentFilterAtom } from '@/stores/ui';
-import type { MediaGridItem, StackFilter } from '@/types';
-import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { useAtom } from 'jotai';
-import { useCallback, useEffect, useMemo, useState } from 'react';
 import { navigationStateAtom } from '@/stores/navigation';
+import { currentFilterAtom } from '@/stores/ui';
+import { genListToken, saveViewContext } from '@/stores/view-context';
+import type { MediaGridItem, StackFilter } from '@/types';
 
 export const Route = createFileRoute('/library/$datasetId/author/$authorName')({
   component: AuthorDetailPage,

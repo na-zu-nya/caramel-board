@@ -1,16 +1,16 @@
+import { createFileRoute, useNavigate } from '@tanstack/react-router';
+import { useAtom } from 'jotai';
+import MersenneTwister from 'mersenne-twister';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import FilterPanel from '@/components/FilterPanel';
 import StackGrid from '@/components/StackGrid';
 import { useDataset } from '@/hooks/useDatasets';
 import { useHeaderActions } from '@/hooks/useHeaderActions';
-import MersenneTwister from 'mersenne-twister';
-import { genListToken, saveViewContext } from '@/stores/view-context';
 import { useRangeBasedQuery } from '@/hooks/useRangeBasedQuery';
-import { currentFilterAtom } from '@/stores/ui';
-import type { MediaGridItem, StackFilter } from '@/types';
-import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { useAtom } from 'jotai';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { navigationStateAtom } from '@/stores/navigation';
+import { currentFilterAtom } from '@/stores/ui';
+import { genListToken, saveViewContext } from '@/stores/view-context';
+import type { MediaGridItem, StackFilter } from '@/types';
 
 export const Route = createFileRoute('/library/$datasetId/favorites')({
   component: FavoritesPage,

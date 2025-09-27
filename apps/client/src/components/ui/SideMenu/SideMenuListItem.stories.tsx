@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { SideMenuListItem } from './index';
 import { Folder, Heart } from 'lucide-react';
+import { SideMenuListItem } from './index';
 
 const meta: Meta<typeof SideMenuListItem> = {
   title: 'SideMenu/ListItem',

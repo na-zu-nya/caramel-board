@@ -1,7 +1,7 @@
-import { useCallback } from 'react';
-import type { Pin } from '@/types';
-import { apiClient } from '@/lib/api-client';
 import { useQueryClient } from '@tanstack/react-query';
+import { useCallback } from 'react';
+import { apiClient } from '@/lib/api-client';
+import type { Pin } from '@/types';
 import { datasetKeys } from './useDatasets';
 
 type DefaultPinSpec = {

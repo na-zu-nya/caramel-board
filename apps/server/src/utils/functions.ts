@@ -1,5 +1,5 @@
-import crypto from 'crypto';
-import fs from 'fs';
+import crypto from 'node:crypto';
+import fs from 'node:fs';
 
 export function getExtension(sourcePath: string) {
   return sourcePath.substr(sourcePath.lastIndexOf('.') + 1) ?? '';

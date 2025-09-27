@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { SideMenuListItem } from './index';
 import { Home } from 'lucide-react';
 import { useState } from 'react';
+import { SideMenuListItem } from './index';
 
 const meta: Meta<typeof SideMenuListItem> = {
   title: 'SideMenu/ContextMenu',

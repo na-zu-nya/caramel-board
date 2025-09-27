@@ -1,10 +1,10 @@
-import { apiClient } from '@/lib/api-client';
-import { infoSidebarOpenAtom, selectedItemIdAtom } from '@/stores/ui';
-import type { Stack } from '@/types';
 import { useQuery } from '@tanstack/react-query';
 import { useLocation, useSearch } from '@tanstack/react-router';
 import { useSetAtom } from 'jotai';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { apiClient } from '@/lib/api-client';
+import { infoSidebarOpenAtom, selectedItemIdAtom } from '@/stores/ui';
+import type { Stack } from '@/types';
 
 interface UseStackViewerOptions {
   datasetId: string;

@@ -1,5 +1,5 @@
+import { createFileRoute, Outlet, useLocation } from '@tanstack/react-router';
 import StackViewer from '@/components/stack-viewer/StackViewer';
-import { Outlet, createFileRoute, useLocation } from '@tanstack/react-router';
 
 export const Route = createFileRoute('/library/$datasetId/stacks/$stackId')({
   component: StackViewerPage,

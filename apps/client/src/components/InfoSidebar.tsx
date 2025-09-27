@@ -1,3 +1,29 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useLocation, useNavigate, useParams } from '@tanstack/react-router';
+import { useAtom, useSetAtom } from 'jotai';
+import {
+  Calendar,
+  ChevronDown,
+  ChevronUp,
+  Clapperboard,
+  Copy,
+  Download,
+  FolderOpen,
+  GalleryVerticalEnd,
+  Hash,
+  Heart,
+  Image,
+  Loader2,
+  NotebookText,
+  Palette,
+  RefreshCw,
+  Star,
+  Tag,
+  Trash2,
+  Wand2,
+  X,
+} from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import { AutoTagDisplay } from '@/components/ui/autotag-display';
 import { Badge } from '@/components/ui/badge';
 import { ColorPalette } from '@/components/ui/color-ball';
@@ -11,7 +37,9 @@ import {
 } from '@/components/ui/select';
 import { SuggestInput } from '@/components/ui/suggest-input';
 import { useSwipeClose } from '@/hooks/features/useSwipeClose';
+import { useScratch } from '@/hooks/useScratch';
 import { apiClient } from '@/lib/api-client';
+import { copyText } from '@/lib/clipboard';
 import { cn, hexForCopy } from '@/lib/utils';
 import {
   currentFilterAtom,
@@ -19,36 +47,8 @@ import {
   infoSidebarOpenAtom,
   selectedItemIdAtom,
 } from '@/stores/ui';
-import type { Author, DominantColor } from '@/types';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate, useParams, useLocation } from '@tanstack/react-router';
-import { useAtom, useSetAtom } from 'jotai';
-import {
-  Calendar,
-  ChevronDown,
-  ChevronUp,
-  Clapperboard,
-  Download,
-  FolderOpen,
-  Hash,
-  Heart,
-  Image,
-  Loader2,
-  NotebookText,
-  Palette,
-  Copy,
-  RefreshCw,
-  Star,
-  Tag,
-  Trash2,
-  Wand2,
-  X,
-} from 'lucide-react';
-import { GalleryVerticalEnd } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
-import { useScratch } from '@/hooks/useScratch';
 import { addUploadNotificationAtom } from '@/stores/upload';
-import { copyText } from '@/lib/clipboard';
+import type { Author, DominantColor } from '@/types';
 
 interface InfoSidebarProps {
   hideThumbnails?: boolean;

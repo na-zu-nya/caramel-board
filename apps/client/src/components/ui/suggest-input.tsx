@@ -1,7 +1,7 @@
-import { useIMEAwareKeyboard } from '@/hooks/useIMEAwareKeyboard';
-import { cn } from '@/lib/utils';
 import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useIMEAwareKeyboard } from '@/hooks/useIMEAwareKeyboard';
+import { cn } from '@/lib/utils';
 
 interface SuggestInputProps {
   value: string;

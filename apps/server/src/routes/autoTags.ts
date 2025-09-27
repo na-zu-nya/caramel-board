@@ -1,4 +1,5 @@
 import { zValidator } from '@hono/zod-validator';
+import type { Context } from 'hono';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { prisma } from '../shared/di';
@@ -6,8 +7,25 @@ import { prisma } from '../shared/di';
 export const autoTagsRoute = new Hono();
 
 // Simple in-memory cache for statistics
-interface CacheEntry {
-  data: any;
+interface AutoTagStats {
+  autoTagKey: string;
+  predictionCount: number;
+  assetCount: number;
+}
+
+interface AutoTagStatisticsResult {
+  datasetId: number;
+  threshold: number;
+  totalTags: number;
+  totalPredictions?: number;
+  tags: AutoTagStats[];
+  method: 'sql' | 'aggregate';
+}
+
+type CacheValue = AutoTagStatisticsResult | AutoTagStats[];
+
+interface CacheEntry<TValue = CacheValue> {
+  data: TValue;
   timestamp: number;
 }
 
@@ -25,8 +43,8 @@ function getCacheKey(
   return `${datasetId}-${threshold}-${limit}-${q || ''}-${source || 'raw'}-${includeTotal ? 't' : 'f'}`;
 }
 
-function getCachedData(key: string): any | null {
-  const entry = statisticsCache.get(key);
+function getCachedData<TValue extends CacheValue>(key: string): TValue | null {
+  const entry = statisticsCache.get(key) as CacheEntry<TValue> | undefined;
   if (!entry) return null;
 
   const now = Date.now();
@@ -38,7 +56,7 @@ function getCachedData(key: string): any | null {
   return entry.data;
 }
 
-function setCachedData(key: string, data: any): void {
+function setCachedData<TValue extends CacheValue>(key: string, data: TValue): void {
   // キャッシュサイズ制限（最大100エントリ）
   if (statisticsCache.size >= 100) {
     const firstKey = statisticsCache.keys().next().value;
@@ -57,7 +75,7 @@ async function getAutoTagStatisticsOptimized(
   threshold: number,
   limit: number,
   searchQuery?: string
-) {
+): Promise<AutoTagStats[]> {
   // PostgreSQL の JSONB 関数を使用した効率的な集計クエリ
   const query = `
     WITH tag_scores AS (
@@ -95,19 +113,13 @@ async function getAutoTagStatisticsOptimized(
     LIMIT $3
   `;
 
-  const params: any[] = [datasetId, threshold, limit];
+  const params: Array<number | string> = [datasetId, threshold, limit];
   if (searchQuery) {
     params.push(`%${searchQuery}%`);
   }
 
   try {
-    const result = await prisma.$queryRawUnsafe<
-      Array<{
-        autoTagKey: string;
-        predictionCount: number;
-        assetCount: number;
-      }>
-    >(query, ...params);
+    const result = await prisma.$queryRawUnsafe<AutoTagStats[]>(query, ...params);
 
     return result;
   } catch (error) {
@@ -122,7 +134,7 @@ async function getAutoTagStatisticsFromAggregate(
   threshold: number,
   limit: number,
   searchQuery?: string
-) {
+): Promise<AutoTagStats[]> {
   // Count stacks that contain the tag in topTags over threshold.
   // Also sum assetCount of those stacks as an inexpensive proxy for assets.
   const query = `
@@ -148,22 +160,16 @@ async function getAutoTagStatisticsFromAggregate(
     LIMIT $3
   `;
 
-  const params: any[] = [datasetId, threshold, limit];
+  const params: Array<number | string> = [datasetId, threshold, limit];
   if (searchQuery) params.push(`%${searchQuery}%`);
 
-  const rows = await prisma.$queryRawUnsafe<
-    Array<{
-      autoTagKey: string;
-      predictionCount: number;
-      assetCount: number;
-    }>
-  >(query, ...params);
+  const rows = await prisma.$queryRawUnsafe<AutoTagStats[]>(query, ...params);
 
   return rows;
 }
 
 // Authorization middleware helper per request (datasetId from params or query)
-async function ensureAuth(c: any, datasetId: number) {
+async function ensureAuth(c: Context, datasetId: number): Promise<Response | null> {
   const { ensureDatasetAuthorized } = await import('../utils/dataset-protection');
   const resp = await ensureDatasetAuthorized(c, datasetId);
   if (resp) return resp;
@@ -171,9 +177,12 @@ async function ensureAuth(c: any, datasetId: number) {
 }
 
 // Optimized strict counts for a specific set of keys (exact match) from AutoTagPrediction
-async function getStrictCountsForKeys(datasetId: number, threshold: number, keys: string[]) {
-  if (keys.length === 0)
-    return [] as Array<{ autoTagKey: string; predictionCount: number; assetCount: number }>;
+async function getStrictCountsForKeys(
+  datasetId: number,
+  threshold: number,
+  keys: string[]
+): Promise<AutoTagStats[]> {
+  if (keys.length === 0) return [];
 
   // Lowercase once for matching
   const lowered = keys.map((k) => k.toLowerCase());
@@ -203,9 +212,13 @@ async function getStrictCountsForKeys(datasetId: number, threshold: number, keys
     LEFT JOIN agg a ON a.tag = k.key
   `;
 
-  const rows = await prisma.$queryRawUnsafe<
-    Array<{ autoTagKey: string; predictionCount: number; assetCount: number }>
-  >(query, datasetId, threshold, keys, lowered);
+  const rows = await prisma.$queryRawUnsafe<AutoTagStats[]>(
+    query,
+    datasetId,
+    threshold,
+    keys,
+    lowered
+  );
 
   // Return with original key casing if possible
   const mapOrig = new Map(lowered.map((l, i) => [l, keys[i]]));
@@ -250,7 +263,7 @@ autoTagsRoute.get(
     try {
       // キャッシュチェック
       const cacheKey = getCacheKey(datasetId, threshold, limit, q, source, includeTotal);
-      const cachedResult = getCachedData(cacheKey);
+      const cachedResult = getCachedData<AutoTagStatisticsResult>(cacheKey);
 
       if (cachedResult) {
         console.log(`Cache hit for AutoTag statistics (dataset: ${datasetId})`);
@@ -260,11 +273,7 @@ autoTagsRoute.get(
       const envPrefersRaw = process.env.AUTOTAG_USE_RAW_SQL !== 'false';
       const useRawSQL = source === 'raw' || (source !== 'aggregate' && envPrefersRaw);
 
-      let tags: Array<{
-        autoTagKey: string;
-        predictionCount: number;
-        assetCount: number;
-      }>;
+      let tags: AutoTagStats[];
       let totalPredictions: number | undefined;
 
       if (useRawSQL) {
@@ -359,7 +368,7 @@ autoTagsRoute.get(
         .map((k) => k.toLowerCase())
         .sort()
         .join('|')}`;
-      const cached = getCachedData(cacheKey);
+      const cached = getCachedData<AutoTagStats[]>(cacheKey);
       if (cached) {
         return c.json({
           datasetId,
@@ -412,7 +421,7 @@ autoTagsRoute.get(
 
     try {
       const auth = await ensureAuth(c, datasetId);
-      if (auth) return auth as any;
+      if (auth) return auth;
       const [mappings, total] = await Promise.all([
         prisma.autoTagMapping.findMany({
           where: { dataSetId: datasetId },

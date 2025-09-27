@@ -1,10 +1,10 @@
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
+import { createFileRoute } from '@tanstack/react-router';
+import EmojiPicker, { type EmojiClickData } from 'emoji-picker-react';
+import { useAtom } from 'jotai';
+import { Check, Loader2, Palette, Plus, RefreshCw, Wand2, X } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import {
-  LibraryCard,
-  type ColorStats,
-  PRESET_COLOR_GROUPS,
-  DEFAULT_CARAMEL_COLOR,
-} from '@/components/ui/LibraryCard';
 import {
   Dialog,
   DialogContent,
@@ -12,33 +12,31 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import {
   Dialog as UIDialog,
   DialogContent as UIDialogContent,
   DialogHeader as UIDialogHeader,
   DialogTitle as UIDialogTitle,
 } from '@/components/ui/dialog';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Input } from '@/components/ui/input';
+import {
+  type ColorStats,
+  DEFAULT_CARAMEL_COLOR,
+  LibraryCard,
+  PRESET_COLOR_GROUPS,
+} from '@/components/ui/LibraryCard';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { RadioGroup } from '@/components/ui/radio-group';
+import { useBootstrapNavigationPins } from '@/hooks/useBootstrapNavigationPins';
 import {
   useCreateDataset,
   useDatasets,
   useDeleteDataset,
   useUpdateDataset,
 } from '@/hooks/useDatasets';
-import { useBootstrapNavigationPins } from '@/hooks/useBootstrapNavigationPins';
 import { useHeaderActions } from '@/hooks/useHeaderActions';
 import { apiClient } from '@/lib/api-client';
 import { sidebarOpenAtom } from '@/stores/ui';
 import type { Dataset } from '@/types';
-import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
-import { createFileRoute } from '@tanstack/react-router';
-import { useAtom } from 'jotai';
-import { Loader2, Palette, Plus, RefreshCw, Wand2, X, Check } from 'lucide-react';
-import EmojiPicker, { type EmojiClickData } from 'emoji-picker-react';
-import { useMemo, useState } from 'react';
 
 export const Route = createFileRoute('/settings/libraries')({
   component: DatasetManagement,

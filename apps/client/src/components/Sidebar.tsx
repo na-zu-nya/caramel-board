@@ -1,3 +1,8 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useParams } from '@tanstack/react-router';
+import { useAtom } from 'jotai';
+import { X } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { CollectionsSection } from '@/components/sidebar/CollectionsSection';
 import { DatasetSection } from '@/components/sidebar/DatasetSection';
 import { LibrarySection } from '@/components/sidebar/LibrarySection';
@@ -7,11 +12,6 @@ import { useSwipeClose } from '@/hooks/features/useSwipeClose';
 import { apiClient } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 import { currentDatasetAtom, sidebarOpenAtom } from '@/stores/ui';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useParams } from '@tanstack/react-router';
-import { useAtom } from 'jotai';
-import { X } from 'lucide-react';
-import { useEffect, useState } from 'react';
 
 // LocalStorage keys for collapsed state
 const COLLAPSED_STATE_KEY = 'sidebar-collapsed-groups';
@@ -38,7 +38,7 @@ function saveCollapsedState(state: Record<string, boolean>) {
 export default function Sidebar() {
   const [isOpen, setIsOpen] = useAtom(sidebarOpenAtom);
   const [currentDataset] = useAtom(currentDatasetAtom);
-  // @ts-ignore
+  // @ts-expect-error
   const params = useParams({ strict: false });
   const datasetId = (params as { datasetId?: string }).datasetId || currentDataset || '1';
   const queryClient = useQueryClient();

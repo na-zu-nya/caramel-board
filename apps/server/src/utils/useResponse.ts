@@ -1,6 +1,6 @@
 import type { Context } from 'hono';
 
-export function useResponse(c: Context, data: any, status = 200) {
+export function useResponse<T>(c: Context, data: T, status = 200) {
   if (process.env.ENVIRONMENT !== 'production') {
     console.log('response:', status, data);
   }
@@ -14,7 +14,7 @@ export function useResponse(c: Context, data: any, status = 200) {
   return c.json({ error: getMessage(status, data) }, status);
 }
 
-function getMessage(status: number, data: any) {
+function getMessage(status: number, data: unknown) {
   switch (status) {
     case 500:
       return 'Internal Error';

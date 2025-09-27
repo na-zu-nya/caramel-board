@@ -1,30 +1,29 @@
-import { useDatasets } from '@/hooks/useDatasets';
-import { apiClient } from '@/lib/api-client';
-import { useThemeColor } from '@/hooks/useThemeColor';
-import { useKeyboardShortcuts as useGenericKeyboardShortcuts } from '@/hooks/utils/useKeyboardShortcut';
-import { cn } from '@/lib/utils';
-import { currentDatasetAtom, selectionModeAtom, sidebarOpenAtom } from '@/stores/ui';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   createRootRoute,
   Outlet,
-  useParams,
-  useNavigate,
   useLocation,
+  useNavigate,
+  useParams,
 } from '@tanstack/react-router';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useRef, useState } from 'react';
 import { TanStackRouterDevtools } from '@tanstack/react-router-devtools';
 import { useAtom } from 'jotai';
-
-import { UploadProgress } from '@/components/ui/upload-progress';
-import { useUploadQueue } from '@/hooks/useUploadQueue';
-import { DragProvider } from '@/contexts/DragContext';
-import Header from '@/containers/header-container';
-import Sidebar from '@/containers/sidebar-container';
-import InfoSidebar from '../components/InfoSidebar';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
+import { UploadProgress } from '@/components/ui/upload-progress';
+import Header from '@/containers/header-container';
+import Sidebar from '@/containers/sidebar-container';
+import { DragProvider } from '@/contexts/DragContext';
+import { useDatasets } from '@/hooks/useDatasets';
+import { useThemeColor } from '@/hooks/useThemeColor';
+import { useUploadQueue } from '@/hooks/useUploadQueue';
+import { useKeyboardShortcuts as useGenericKeyboardShortcuts } from '@/hooks/utils/useKeyboardShortcut';
+import { apiClient } from '@/lib/api-client';
+import { cn } from '@/lib/utils';
+import { currentDatasetAtom, selectionModeAtom, sidebarOpenAtom } from '@/stores/ui';
+import InfoSidebar from '../components/InfoSidebar';
 
 export const Route = createRootRoute({
   component: RootLayout,

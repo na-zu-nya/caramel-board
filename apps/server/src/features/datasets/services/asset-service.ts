@@ -1,10 +1,10 @@
-import type { PrismaClient } from '@prisma/client';
+import type { Prisma, PrismaClient } from '@prisma/client';
 import { AssetModel } from '../../../models/AssetModel';
 import type { DataStorageService } from '../../../shared/services/DataStorageService';
 import {
+  toPublicAssetPath,
   withPublicAssetArray,
   withPublicAssetPaths,
-  toPublicAssetPath,
 } from '../../../utils/assetPath';
 
 export interface PaginationOptions {
@@ -32,14 +32,26 @@ export const createAssetService = (deps: {
     });
   };
 
-  const mapAsset = <T extends { file?: string | null; thumbnail?: string | null; stack?: any }>(
+  type StackSummary = {
+    dataSetId?: number | null;
+    thumbnail?: string | null;
+  } & Record<string, unknown>;
+
+  const mapAsset = <
+    T extends {
+      file?: string | null;
+      thumbnail?: string | null;
+      stack?: StackSummary | null;
+    },
+  >(
     asset: T
   ) => {
     const mapped = withPublicAssetPaths(asset, dataSetId);
     if (mapped.stack) {
+      const stack = mapped.stack;
       mapped.stack = {
-        ...mapped.stack,
-        thumbnail: toPublicAssetPath(mapped.stack.thumbnail, mapped.stack.dataSetId ?? dataSetId),
+        ...stack,
+        thumbnail: toPublicAssetPath(stack.thumbnail, stack.dataSetId ?? dataSetId),
       };
     }
     return mapped;
@@ -191,13 +203,13 @@ export const createAssetService = (deps: {
       return this.getById(assetId);
     },
 
-    async updateMeta(id: number, meta: Record<string, unknown>) {
+    async updateMeta(id: number, meta: Prisma.InputJsonValue) {
       // Verify the asset belongs to this dataset
       await this.getById(id);
 
       const updated = await prisma.asset.update({
         where: { id },
-        data: { meta: meta as any }, // Prisma requires JsonValue type
+        data: { meta },
       });
 
       return mapAsset(updated);

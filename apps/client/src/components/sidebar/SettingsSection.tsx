@@ -1,7 +1,7 @@
-import { SideMenuGroup, SideMenuListItem } from '@/components/ui/SideMenu';
-import type { SettingsSectionProps } from '@/components/sidebar/types';
-import { Database, Pin as PinIcon, Tag, Wand2 } from 'lucide-react';
 import { Link } from '@tanstack/react-router';
+import { Database, Pin as PinIcon, Tag, Wand2 } from 'lucide-react';
+import type { SettingsSectionProps } from '@/components/sidebar/types';
+import { SideMenuGroup, SideMenuListItem } from '@/components/ui/SideMenu';
 
 export function SettingsSection({
   datasetId,

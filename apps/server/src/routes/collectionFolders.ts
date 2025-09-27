@@ -1,4 +1,5 @@
 import { zValidator } from '@hono/zod-validator';
+import type { Context } from 'hono';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { getPrisma } from '../lib/Repository.js';
@@ -14,15 +15,19 @@ import { useResponse } from '../utils/useResponse.js';
 const app = new Hono();
 const collectionFolderService = new CollectionFolderService(getPrisma());
 
+const ensureAuthorized = async (c: Context, dataSetId: number) => {
+  const { ensureDatasetAuthorized } = await import('../utils/dataset-protection');
+  return ensureDatasetAuthorized(c, dataSetId);
+};
+
 // フォルダ一覧取得
 app.get('/', zValidator('query', CollectionFolderQuerySchema), async (c) => {
   try {
     const query = c.req.valid('query');
     const ds = query.dataSetId ?? null;
     if (ds !== null) {
-      const { ensureDatasetAuthorized } = await import('../utils/dataset-protection');
-      const auth = await ensureDatasetAuthorized(c as any, ds);
-      if (auth) return auth as any;
+      const auth = await ensureAuthorized(c, ds);
+      if (auth) return auth;
     }
     const result = await collectionFolderService.findAll(query);
     return useResponse(c, result);
@@ -36,9 +41,8 @@ app.get('/', zValidator('query', CollectionFolderQuerySchema), async (c) => {
 app.get('/tree', zValidator('query', FolderTreeQuerySchema), async (c) => {
   try {
     const query = c.req.valid('query');
-    const { ensureDatasetAuthorized } = await import('../utils/dataset-protection');
-    const auth = await ensureDatasetAuthorized(c as any, query.dataSetId);
-    if (auth) return auth as any;
+    const auth = await ensureAuthorized(c, query.dataSetId);
+    if (auth) return auth;
     const result = await collectionFolderService.getFolderTree(query);
     return useResponse(c, result);
   } catch (error) {

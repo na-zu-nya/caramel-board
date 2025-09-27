@@ -1,4 +1,6 @@
-import { selectionModeAtom } from '@/stores/ui';
+import { useAtom } from 'jotai';
+import { ChevronDown, Trash2, X } from 'lucide-react';
+import { type ReactNode, useState } from 'react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -6,9 +8,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { useState, type ReactNode } from 'react';
-import { useAtom } from 'jotai';
-import { ChevronDown, Trash2, X } from 'lucide-react';
+import { selectionModeAtom } from '@/stores/ui';
 
 interface SelectionActionBarProps {
   selectedCount: number;

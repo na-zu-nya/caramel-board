@@ -1,5 +1,5 @@
-import { hexToOklch } from '@/lib/utils';
 import { useEffect } from 'react';
+import { hexToOklch } from '@/lib/utils';
 
 export function useThemeColor(themeColor?: string) {
   useEffect(() => {

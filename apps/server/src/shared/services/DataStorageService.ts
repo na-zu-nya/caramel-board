@@ -1,7 +1,7 @@
-import * as fs from 'fs';
-import path from 'path';
-import type { Stream } from 'stream';
+import * as fs from 'node:fs';
 import fsExtra, { type Dirent, type WriteStream } from 'fs-extra';
+import path from 'node:path';
+import type { Stream } from 'node:stream';
 import { getHash } from '../../utils/functions';
 
 const { mkdirp, mkdirpSync, rmdir } = fsExtra;

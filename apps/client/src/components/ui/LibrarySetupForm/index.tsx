@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
 import EmojiPicker, { type EmojiClickData } from 'emoji-picker-react';
+import { Palette, Smile } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { DEFAULT_CARAMEL_COLOR, PRESET_COLOR_GROUPS } from '@/components/ui/LibraryCard';
-import { Palette, Smile } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 
 export interface LibrarySetupFormProps {

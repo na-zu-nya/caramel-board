@@ -1,8 +1,8 @@
-import type { Asset, Author, Stack, Tag, TagsOnStack } from '@prisma/client';
+import type { Asset, Author, Prisma, Stack, Tag, TagsOnStack } from '@prisma/client';
 import { getPrisma } from '../lib/Repository';
+import { toPublicAssetPath } from '../utils/assetPath';
 import { ServerError } from '../utils/ServerError';
 import { AssetModel } from './AssetModel';
-import { toPublicAssetPath } from '../utils/assetPath';
 import { AuthorModel } from './AuthorModel';
 import { TagModel } from './TagModel';
 
@@ -78,7 +78,7 @@ export class StackModel {
     return StackModel.get(id).then((stack) => stack.meta ?? {});
   }
 
-  static async updateMeta(id: number, meta: any): Promise<boolean> {
+  static async updateMeta(id: number, meta: Prisma.InputJsonValue): Promise<boolean> {
     await prisma.stack.update({
       where: {
         id,

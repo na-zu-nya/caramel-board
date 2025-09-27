@@ -1,11 +1,11 @@
-import fs from 'fs';
-import path from 'path';
 import { zValidator } from '@hono/zod-validator';
-import type { Stack } from '@prisma/client';
+import type { Prisma, Stack } from '@prisma/client';
+import fs from 'node:fs';
 import { Hono } from 'hono';
+import path from 'node:path';
 import { z } from 'zod';
-import { SearchMode, createSearchService } from '../features/datasets/services/search-service.js';
 import { createColorSearchService } from '../features/datasets/services/color-search-service';
+import { createSearchService, SearchMode } from '../features/datasets/services/search-service.js';
 import { createStackService } from '../features/datasets/services/stack-service';
 import { createTagStatsService } from '../features/datasets/services/tag-stats-service';
 import { getPrisma } from '../lib/Repository.js';
@@ -18,12 +18,16 @@ import {
 import { SearchQuerySchema } from '../schemas/search-schema.js';
 import { AutoTagService } from '../shared/services/AutoTagService';
 import { DataSetService } from '../shared/services/DataSetService';
-import { withPublicAssetArray, toPublicAssetPath } from '../utils/assetPath';
+import { toPublicAssetPath, withPublicAssetArray } from '../utils/assetPath';
 
 const app = new Hono();
 const prisma = getPrisma();
 const _joytagService = new AutoTagService(prisma);
 const dataSetService = new DataSetService(prisma);
+
+type StackWithAssets = Stack & {
+  assets?: Array<{ file?: string | null; thumbnail?: string | null }>;
+};
 
 function buildStackService(dataSetId: number) {
   const colorSearch = createColorSearchService({ prisma, dataSetId });
@@ -32,7 +36,7 @@ function buildStackService(dataSetId: number) {
 
 // Middleware to validate dataset exists
 app.use('/:dataSetId/*', async (c, next) => {
-  const dataSetId = Number.parseInt(c.req.param('dataSetId'));
+  const dataSetId = Number.parseInt(c.req.param('dataSetId'), 10);
   const dataSet = await dataSetService.getById(dataSetId);
 
   if (!dataSet) {
@@ -95,11 +99,18 @@ app.get(
       // 検索実行
       const result = await searchService.search(searchRequest);
 
-      const stacks = result.stacks.map((stack: any) => ({
-        ...stack,
-        assets: withPublicAssetArray(stack.assets as any[], dataSetId),
-        thumbnail: toPublicAssetPath(stack.thumbnail, dataSetId),
-      }));
+      const stacks = result.stacks.map((stack) => {
+        const stackWithAssets = stack as StackWithAssets;
+        const assets = Array.isArray(stackWithAssets.assets)
+          ? withPublicAssetArray(stackWithAssets.assets, dataSetId)
+          : [];
+
+        return {
+          ...stack,
+          assets,
+          thumbnail: toPublicAssetPath(stack.thumbnail, dataSetId),
+        };
+      });
 
       return c.json({
         ...result,
@@ -155,7 +166,7 @@ app.get(
         pagination: { limit, offset },
       });
 
-      const ids = result.stacks.map((s: any) => s.id);
+      const ids = result.stacks.map((stack) => stack.id);
       let assetCountMap = new Map<number, number>();
       if (ids.length > 0) {
         const counts = await prisma.asset.groupBy({
@@ -163,15 +174,22 @@ app.get(
           where: { stackId: { in: ids } },
           _count: { stackId: true },
         });
-        assetCountMap = new Map(counts.map((c: any) => [c.stackId, c._count.stackId]));
+        assetCountMap = new Map(counts.map((c) => [c.stackId, c._count.stackId]));
       }
 
-      const stacks = result.stacks.map((s: any) => ({
-        ...s,
-        assets: withPublicAssetArray(s.assets as any[], dataSetId),
-        thumbnail: toPublicAssetPath(s.thumbnail, dataSetId),
-        assetCount: assetCountMap.get(s.id) ?? 0,
-      }));
+      const stacks = result.stacks.map((stack) => {
+        const stackWithAssets = stack as StackWithAssets;
+        const assets = Array.isArray(stackWithAssets.assets)
+          ? withPublicAssetArray(stackWithAssets.assets, dataSetId)
+          : [];
+
+        return {
+          ...stack,
+          assets,
+          thumbnail: toPublicAssetPath(stack.thumbnail, dataSetId),
+          assetCount: assetCountMap.get(stack.id) ?? 0,
+        };
+      });
 
       return c.json({ stacks, total: result.total, limit: result.limit, offset: result.offset });
     } catch (error) {
@@ -217,12 +235,15 @@ app.post(
       const { id } = c.req.valid('param');
       const stackService = buildStackService(dataSetId);
 
-      let body: any = {};
+      let parsed: unknown = {};
       try {
-        body = await c.req.json();
+        parsed = await c.req.json();
       } catch {}
 
-      const force = typeof body?.force === 'boolean' ? body.force : true;
+      const force =
+        typeof (parsed as { force?: boolean }).force === 'boolean'
+          ? (parsed as { force?: boolean }).force
+          : true;
 
       const result = await stackService.regeneratePreviews(id, { force });
       return c.json(result);
@@ -320,8 +341,8 @@ app.put(
       const stackService = buildStackService(dataSetId);
       const stack = await stackService.update(id, data);
       return c.json(stack);
-    } catch (error: any) {
-      if (error.message === 'Stack not found in this dataset') {
+    } catch (error: unknown) {
+      if (error instanceof Error && error.message === 'Stack not found in this dataset') {
         return c.json({ error: error.message }, 404);
       }
       console.error('Error updating stack:', error);
@@ -338,8 +359,8 @@ app.delete('/:dataSetId/stacks/:id', zValidator('param', IdParamSchema), async (
     const stackService = buildStackService(dataSetId);
     await stackService.deleteStack(id);
     return c.json({ success: true });
-  } catch (error: any) {
-    if (error.message === 'Stack not found in this dataset') {
+  } catch (error: unknown) {
+    if (error instanceof Error && error.message === 'Stack not found in this dataset') {
       return c.json({ error: error.message }, 404);
     }
     console.error('Error deleting stack:', error);
@@ -467,7 +488,10 @@ app.get('/:dataSetId/tags/search', async (c) => {
     const key = c.req.query('key') || '';
     if (!key) return c.json([]);
     const rows = await prisma.tag.findMany({
-      where: { dataSetId, title: { contains: key, mode: 'insensitive' as any } },
+      where: {
+        dataSetId,
+        title: { contains: key, mode: Prisma.QueryMode.insensitive },
+      },
       orderBy: { title: 'asc' },
       take: 10,
       select: { title: true },

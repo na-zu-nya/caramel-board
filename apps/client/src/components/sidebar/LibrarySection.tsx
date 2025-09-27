@@ -1,31 +1,32 @@
 // Removed MediaTypeContextMenu (pin/unpin) for Images/Comics/Videos per UX update
 // import {OverviewContextMenu} from '@/components/modals/OverviewContextMenu';
-import { DroppableSidebarItem } from '@/components/sidebar/DroppableSidebarItem';
-import { SideMenuGroup, SideMenuListItem } from '@/components/ui/SideMenu';
-import { cn } from '@/lib/utils';
-import { DroppableSideMenuItem } from '@/components/ui/DroppableSideMenuItem';
-import { TagsSection } from '@/components/sidebar/TagsSection';
-import { AutoTagsSection } from '@/components/sidebar/AutoTagsSection';
-import { AuthorsSection } from '@/components/sidebar/AuthorsSection';
-import type { LibrarySectionProps } from '@/components/sidebar/types';
-import { apiClient } from '@/lib/api-client';
+
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link, useLocation, useNavigate } from '@tanstack/react-router';
 import {
-  NotebookText,
   BookOpen,
+  ChevronRight,
   Film,
   Heart,
   Home,
   Image,
+  NotebookText,
   Star,
   Tag,
   User,
-  ChevronRight,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { useScratch } from '@/hooks/useScratch';
 import { ScratchContextMenu } from '@/components/modals/ScratchContextMenu';
-import { Link, useNavigate, useLocation } from '@tanstack/react-router';
+import { AuthorsSection } from '@/components/sidebar/AuthorsSection';
+import { AutoTagsSection } from '@/components/sidebar/AutoTagsSection';
+import { DroppableSidebarItem } from '@/components/sidebar/DroppableSidebarItem';
+import { TagsSection } from '@/components/sidebar/TagsSection';
+import type { LibrarySectionProps } from '@/components/sidebar/types';
+import { DroppableSideMenuItem } from '@/components/ui/DroppableSideMenuItem';
+import { SideMenuGroup, SideMenuListItem } from '@/components/ui/SideMenu';
+import { useScratch } from '@/hooks/useScratch';
+import { apiClient } from '@/lib/api-client';
+import { cn } from '@/lib/utils';
 
 export function LibrarySection({
   datasetId,

@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { SideMenuGroup, SideMenuListItem } from './index';
 import { Tag } from 'lucide-react';
+import { SideMenuGroup, SideMenuListItem } from './index';
 
 const meta: Meta<typeof SideMenuGroup> = {
   title: 'SideMenu/Group',

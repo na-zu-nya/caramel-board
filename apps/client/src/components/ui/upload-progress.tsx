@@ -1,8 +1,8 @@
+import { useAtomValue } from 'jotai';
+import { AlertCircle, CheckCircle } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 import { uploadNotificationsAtom, uploadProgressAtom } from '@/stores/upload';
-import { useAtomValue } from 'jotai';
-import { AlertCircle, CheckCircle } from 'lucide-react';
 
 export function UploadProgress() {
   const progress = useAtomValue(uploadProgressAtom);

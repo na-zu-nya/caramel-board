@@ -2,6 +2,8 @@ import fs from 'node:fs';
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { DuplicateAssetError } from '../../../errors/DuplicateAssetError';
 import { AssetModel } from '../../../models/AssetModel';
+import { ensureSuperUser } from '../../../shared/services/UserService';
+import { toPublicAssetPath, withPublicAssetArray } from '../../../utils/assetPath';
 import {
   buildUnifiedWhereClause,
   combineStackIdConstraints,
@@ -11,12 +13,10 @@ import {
   type UnifiedFilterOptions,
 } from '../../../utils/filterBuilder';
 import { getHash } from '../../../utils/functions';
-import { generateThumbnail } from '../../../utils/generateThumbnail';
 import { generateMediaPreview, shouldGeneratePreview } from '../../../utils/generateMediaPreview';
+import { generateThumbnail } from '../../../utils/generateThumbnail';
 import { formatStacksThumbnails } from '../../../utils/thumbnailPath';
-import { withPublicAssetArray, toPublicAssetPath } from '../../../utils/assetPath';
 import type { createColorSearchService } from './color-search-service';
-import { ensureSuperUser } from '../../../shared/services/UserService';
 
 export interface CreateStackData {
   name: string;

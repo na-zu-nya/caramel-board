@@ -1,6 +1,6 @@
-import { cn } from '@/lib/utils';
-import { useEffect, useRef } from 'react';
 import { Filter, X } from 'lucide-react';
+import { useEffect, useRef } from 'react';
+import { cn } from '@/lib/utils';
 
 export interface SideMenuSearchFieldProps {
   value: string;

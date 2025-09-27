@@ -1,9 +1,9 @@
+import { ChevronDown, ChevronUp, Wand2 } from 'lucide-react';
+import { useState } from 'react';
 import AutoTagMappingModal from '@/components/modals/AutoTagMappingModal';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import type { AutoTag } from '@/types';
-import { ChevronDown, ChevronUp, Wand2 } from 'lucide-react';
-import { useState } from 'react';
 
 interface AutoTagDisplayProps {
   autoTags: AutoTag[];

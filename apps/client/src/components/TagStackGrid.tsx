@@ -1,8 +1,8 @@
-import { cn } from '@/lib/utils';
-import type { MediaGridItem } from '@/types';
 import { Link } from '@tanstack/react-router';
 import { useEffect } from 'react';
 import { applyScrollbarCompensation, removeScrollbarCompensation } from '@/lib/scrollbar-utils';
+import { cn } from '@/lib/utils';
+import type { MediaGridItem } from '@/types';
 
 interface TagStackGridProps {
   items: MediaGridItem[];

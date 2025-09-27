@@ -1,18 +1,18 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Slider } from '@/components/ui/slider';
 import {
   Eraser,
-  Trash2,
-  Undo2,
-  Redo2,
-  X,
-  SlidersHorizontal,
-  PenTool,
   Eye,
   EyeOff,
   Layers,
+  PenTool,
+  Redo2,
+  SlidersHorizontal,
   Sun,
+  Trash2,
+  Undo2,
+  X,
 } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Slider } from '@/components/ui/slider';
 import { cn } from '@/lib/utils';
 
 // Stateless presentational helpers (no hooks)

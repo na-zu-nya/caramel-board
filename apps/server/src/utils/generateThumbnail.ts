@@ -1,7 +1,6 @@
-import { execFileSync } from 'child_process';
-import fs from 'fs';
-import path from 'path';
+import { execFileSync } from 'node:child_process';
 import { mkdirpSync } from 'fs-extra';
+import path from 'node:path';
 import sharp from 'sharp';
 import { DataStorage } from '../lib/DataStorage';
 import { buildThumbnailKey } from './assetPath';
@@ -90,7 +89,7 @@ export async function generateThumbnail(
           '-i',
           inputPath,
           '-vf',
-          'select=eq(n\,1)',
+          'select=eq(n,1)',
           '-frames:v',
           '1',
           DataStorage.getPath(frameKey),

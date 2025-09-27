@@ -1,11 +1,11 @@
-import { cn, hexForCopy } from '@/lib/utils';
-import type { DominantColor } from '@/types';
+import { useSetAtom } from 'jotai';
 import { Copy } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useSetAtom } from 'jotai';
-import { addUploadNotificationAtom } from '@/stores/upload';
 import { copyText } from '@/lib/clipboard';
+import { cn, hexForCopy } from '@/lib/utils';
+import { addUploadNotificationAtom } from '@/stores/upload';
+import type { DominantColor } from '@/types';
 
 interface ColorBallProps {
   color: DominantColor;

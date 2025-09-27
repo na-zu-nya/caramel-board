@@ -1,4 +1,5 @@
 import { zValidator } from '@hono/zod-validator';
+import type { Prisma } from '@prisma/client';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { getPrisma } from '../lib/Repository.js';
@@ -210,7 +211,7 @@ app.get(
       console.log(`Getting color stats for dataSetId: ${dataSetId}`);
 
       // 段階的にクエリを追加してテスト
-      const where: any = {};
+      const where: Prisma.StackWhereInput = {};
       if (dataSetId) {
         where.dataSetId = dataSetId;
       }
@@ -219,22 +220,21 @@ app.get(
       const totalStacks = await prisma.stack.count({ where });
 
       // 生のSQLクエリで色情報のカウントをテスト
-      const colorStats = dataSetId
-        ? await prisma.$queryRaw`
+      const statsRows = dataSetId
+        ? await prisma.$queryRaw<Array<{ with_colors: bigint; without_colors: bigint }>>`
           SELECT 
             COUNT(CASE WHEN "dominantColors" IS NOT NULL THEN 1 END) as with_colors,
             COUNT(CASE WHEN "dominantColors" IS NULL THEN 1 END) as without_colors
           FROM "Stack" 
           WHERE "dataSetId" = ${dataSetId}
         `
-        : await prisma.$queryRaw`
+        : await prisma.$queryRaw<Array<{ with_colors: bigint; without_colors: bigint }>>`
           SELECT 
             COUNT(CASE WHEN "dominantColors" IS NOT NULL THEN 1 END) as with_colors,
             COUNT(CASE WHEN "dominantColors" IS NULL THEN 1 END) as without_colors
           FROM "Stack"
         `;
-
-      const stats = (colorStats as any)[0];
+      const stats = statsRows[0] ?? { with_colors: 0n, without_colors: 0n };
       const totalWithColors = Number(stats.with_colors);
       const totalWithoutColors = Number(stats.without_colors);
       const colorCoverage = totalStacks > 0 ? (totalWithColors / totalStacks) * 100 : 0;

@@ -13,7 +13,7 @@
     "build-storybook": "storybook build",
     "test": "vitest run",
     "lint": "biome check src",
-    "format": "biome format --write src",
+    "format": "biome check --write src && biome format --write src",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist node_modules/.vite .vite *.tsbuildinfo"
   },

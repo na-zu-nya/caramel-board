@@ -1,12 +1,12 @@
 import { useAtom } from 'jotai';
 import { useCallback, useMemo } from 'react';
-import {
-  viewContextAtom,
-  type ViewContext,
-  saveViewContext,
-  loadViewContext,
-} from '@/stores/view-context';
 import { apiClient } from '@/lib/api-client';
+import {
+  loadViewContext,
+  saveViewContext,
+  type ViewContext,
+  viewContextAtom,
+} from '@/stores/view-context';
 
 export function useViewContext() {
   const [ctx, setCtx] = useAtom(viewContextAtom);

@@ -1,5 +1,5 @@
-import { cn } from '@/lib/utils';
 import type { HTMLAttributes } from 'react';
+import { cn } from '@/lib/utils';
 
 export interface SideMenuMessageProps extends HTMLAttributes<HTMLParagraphElement> {
   variant?: 'muted' | 'info' | 'warn' | 'error';

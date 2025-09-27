@@ -1,10 +1,10 @@
 import { Hono } from 'hono';
-import { getPrisma } from '../lib/Repository.js';
-import { DataSetService } from '../shared/services/DataSetService';
-import { useDataStorage } from '../shared/di';
-import { createFileService } from '../features/datasets/services/file-service';
 import { createColorSearchService } from '../features/datasets/services/color-search-service';
+import { createFileService } from '../features/datasets/services/file-service';
+import { getPrisma } from '../lib/Repository.js';
+import { useDataStorage } from '../shared/di';
 import { AutoTagService } from '../shared/services/AutoTagService';
+import { DataSetService } from '../shared/services/DataSetService';
 import {
   ensureDatasetAuthorized,
   hashPassword,
@@ -17,6 +17,15 @@ import {
 const app = new Hono();
 const dataSetService = new DataSetService(getPrisma());
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const getErrorCode = (error: unknown): string | undefined => {
+  if (typeof error !== 'object' || error === null) return undefined;
+  const record = error as Record<string, unknown>;
+  return typeof record.code === 'string' ? record.code : undefined;
+};
+
 // List datasets
 app.get('/', async (c) => {
   const dataSets = await dataSetService.getAll();
@@ -25,7 +34,7 @@ app.get('/', async (c) => {
 
 // Get dataset by id (optionally include pins via ?includePins=true)
 app.get('/:id', async (c) => {
-  const id = Number.parseInt(c.req.param('id'));
+  const id = Number.parseInt(c.req.param('id'), 10);
   const includePins = c.req.query('includePins') === 'true';
   const ds = await dataSetService.getById(id, includePins);
   if (!ds) return c.json({ error: 'DataSet not found' }, 404);
@@ -36,7 +45,7 @@ app.get('/:id', async (c) => {
 
 // Overview data
 app.get('/:id/overview', async (c) => {
-  const id = Number.parseInt(c.req.param('id'));
+  const id = Number.parseInt(c.req.param('id'), 10);
   const auth = await ensureDatasetAuthorized(c, id);
   if (auth) return auth;
   const overview = await dataSetService.getOverview(id);
@@ -45,9 +54,10 @@ app.get('/:id/overview', async (c) => {
 
 // Authentication: verify password and set session cookie
 app.post('/:id/auth', async (c) => {
-  const id = Number.parseInt(c.req.param('id'));
-  const body = await c.req.json().catch(() => ({}) as any);
-  const password = String(body?.password || '');
+  const id = Number.parseInt(c.req.param('id'), 10);
+  const body = await c.req.json().catch(() => ({}));
+  const data = isRecord(body) ? body : {};
+  const password = typeof data.password === 'string' ? data.password : '';
   if (!password) return c.json({ error: 'Password required' }, 400);
   const ds = await dataSetService.getById(id);
   if (!ds) return c.json({ error: 'DataSet not found' }, 404);
@@ -62,11 +72,12 @@ app.post('/:id/auth', async (c) => {
 
 // Enable/disable protection
 app.post('/:id/protection', async (c) => {
-  const id = Number.parseInt(c.req.param('id'));
-  const body = await c.req.json().catch(() => ({}) as any);
-  const enable = Boolean(body?.enable);
-  const password = String(body?.password || '');
-  const currentPassword = String(body?.currentPassword || '');
+  const id = Number.parseInt(c.req.param('id'), 10);
+  const body = await c.req.json().catch(() => ({}));
+  const data = isRecord(body) ? body : {};
+  const enable = Boolean(data.enable);
+  const password = typeof data.password === 'string' ? data.password : '';
+  const currentPassword = typeof data.currentPassword === 'string' ? data.currentPassword : '';
 
   const prisma = getPrisma();
   const ds = await prisma.dataSet.findUnique({
@@ -104,7 +115,7 @@ app.post('/:id/protection', async (c) => {
 
 // Protection status for client gating
 app.get('/:id/protection-status', async (c) => {
-  const id = Number.parseInt(c.req.param('id'));
+  const id = Number.parseInt(c.req.param('id'), 10);
   const ds = await dataSetService.getById(id);
   if (!ds) return c.json({ error: 'DataSet not found' }, 404);
   const authorized = await isDatasetAuthorized(c, id);
@@ -113,53 +124,61 @@ app.get('/:id/protection-status', async (c) => {
 
 // Set default dataset
 app.post('/:id/set-default', async (c) => {
-  const id = Number.parseInt(c.req.param('id'));
+  const id = Number.parseInt(c.req.param('id'), 10);
   try {
     await dataSetService.setDefault(id);
     return c.json({ success: true });
-  } catch (error: any) {
-    return c.json({ error: error?.message || 'Failed to set default dataset' }, 500);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to set default dataset';
+    return c.json({ error: message }, 500);
   }
 });
 
 export { app as datasetsLiteRoute };
 // Create dataset (minimal)
 app.post('/', async (c) => {
-  const body = await c.req.json().catch(() => ({}) as any);
-  if (!body?.name) return c.json({ error: 'Name is required' }, 400);
+  const body = await c.req.json().catch(() => ({}));
+  if (!isRecord(body) || typeof body.name !== 'string' || body.name.trim() === '') {
+    return c.json({ error: 'Name is required' }, 400);
+  }
   try {
     const ds = await dataSetService.create({
       name: body.name,
-      icon: body.icon,
-      themeColor: body.themeColor,
-      description: body.description,
-      settings: body.settings,
+      icon: typeof body.icon === 'string' ? body.icon : undefined,
+      themeColor: typeof body.themeColor === 'string' ? body.themeColor : undefined,
+      description: typeof body.description === 'string' ? body.description : undefined,
+      settings: isRecord(body.settings) ? body.settings : undefined,
     });
     return c.json(ds, 201);
-  } catch (e: any) {
-    return c.json({ error: e?.message || 'Failed to create dataset' }, 500);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to create dataset';
+    return c.json({ error: message }, 500);
   }
 });
 
 // Update dataset
 app.put('/:id', async (c) => {
-  const id = Number.parseInt(c.req.param('id'));
-  const body = await c.req.json().catch(() => ({}) as any);
+  const id = Number.parseInt(c.req.param('id'), 10);
+  const body = await c.req.json().catch(() => ({}));
+  if (!isRecord(body)) {
+    return c.json({ error: 'Invalid payload' }, 400);
+  }
 
   try {
     const updated = await dataSetService.update(id, {
-      name: body.name,
-      icon: body.icon,
-      themeColor: body.themeColor,
-      description: body.description,
-      settings: body.settings,
+      name: typeof body.name === 'string' ? body.name : undefined,
+      icon: typeof body.icon === 'string' ? body.icon : undefined,
+      themeColor: typeof body.themeColor === 'string' ? body.themeColor : undefined,
+      description: typeof body.description === 'string' ? body.description : undefined,
+      settings: isRecord(body.settings) ? body.settings : undefined,
     });
     return c.json(updated);
-  } catch (error: any) {
-    if (error?.code === 'P2025') {
+  } catch (error: unknown) {
+    if (getErrorCode(error) === 'P2025') {
       return c.json({ error: 'DataSet not found' }, 404);
     }
-    return c.json({ error: error?.message || 'Failed to update dataset' }, 500);
+    const message = error instanceof Error ? error.message : 'Failed to update dataset';
+    return c.json({ error: message }, 500);
   }
 });
 
@@ -190,10 +209,8 @@ async function runWithConcurrency<T>(
 
 // Full dataset refresh: thumbnails + colors + autotags (embeddings removed)
 app.post('/:id/refresh-all', async (c) => {
-  const id = Number.parseInt(c.req.param('id'));
+  const id = Number.parseInt(c.req.param('id'), 10);
   const forceRegenerate = c.req.query('forceRegenerate') === 'true';
-  const batchSize = Number.parseInt(c.req.query('batchSize') || '20');
-
   try {
     const prisma = getPrisma();
     const dataStorage = useDataStorage(c);
@@ -241,7 +258,7 @@ app.post('/:id/refresh-all', async (c) => {
         embeddings: 0,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Failed to run dataset refresh-all:', error);
     return c.json({ error: 'Failed to run dataset refresh-all' }, 500);
   }

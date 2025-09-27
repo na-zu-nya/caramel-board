@@ -1,3 +1,5 @@
+import { Book, GalleryVerticalEnd, Heart, Info, NotebookText, Star } from 'lucide-react';
+import { cloneElement, isValidElement } from 'react';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -7,8 +9,6 @@ import {
 } from '@/components/ui/context-menu';
 import { cn } from '@/lib/utils';
 import { getThumbnailPath } from '@/utils/thumbnailPath';
-import { Book, GalleryVerticalEnd, Heart, NotebookText, Star, Info } from 'lucide-react';
-import { cloneElement, isValidElement } from 'react';
 
 export interface StackTileProps extends React.HTMLAttributes<HTMLDivElement> {
   asChild?: boolean;

@@ -1,12 +1,12 @@
-import { Badge } from '@/components/ui/badge';
-import type { Stack } from '@/types';
+import { Link } from '@tanstack/react-router';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import { useEffect } from 'react';
-import { Link } from '@tanstack/react-router';
+import { Badge } from '@/components/ui/badge';
 import { StackTile } from '@/components/ui/Stack';
 import { useStackTile } from '@/hooks/useStackTile';
 import { applyScrollbarCompensation, removeScrollbarCompensation } from '@/lib/scrollbar-utils';
+import type { Stack } from '@/types';
 
 export interface GroupedStack {
   id: string | number;

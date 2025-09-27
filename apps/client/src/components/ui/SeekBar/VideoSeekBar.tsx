@@ -1,9 +1,9 @@
+import { SquareStack, Volume2, VolumeX } from 'lucide-react';
+import { useCallback, useRef, useState } from 'react';
+import { Marker } from '@/components/ui/Marker';
 import TimeBadge from '@/components/ui/TimeBadge/TimeBadge';
 import { cn } from '@/lib/utils';
 import type { VideoMarker } from '@/types';
-import { Marker } from '@/components/ui/Marker';
-import { SquareStack, Volume2, VolumeX } from 'lucide-react';
-import { useCallback, useRef, useState } from 'react';
 
 interface VideoSeekBarProps {
   currentTime: number;

@@ -1,12 +1,19 @@
-import { AppHeader } from '@/components/ui/Header/AppHeader';
-import { HeaderIconButton } from '@/components/ui/Header/HeaderIconButton';
+import { useQuery } from '@tanstack/react-query';
+import { useLocation, useNavigate, useParams } from '@tanstack/react-router';
+import { useAtom } from 'jotai';
+import * as LucideIcons from 'lucide-react';
+import { ArrowUpDown, Check, ChevronDown, Filter, Menu, Shuffle } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { AppHeader } from '@/components/ui/Header/AppHeader';
+import { HeaderIconButton } from '@/components/ui/Header/HeaderIconButton';
 import { useDatasets } from '@/hooks/useDatasets';
+import { isScratchCollection } from '@/hooks/useScratch';
 import { apiClient } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 import {
@@ -19,13 +26,6 @@ import {
   selectionModeAtom,
   sidebarOpenAtom,
 } from '@/stores/ui';
-import { useQuery } from '@tanstack/react-query';
-import { useLocation, useNavigate, useParams } from '@tanstack/react-router';
-import { useAtom } from 'jotai';
-import { ArrowUpDown, Check, ChevronDown, Filter, Menu, Shuffle } from 'lucide-react';
-import * as LucideIcons from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
-import { isScratchCollection } from '@/hooks/useScratch';
 
 export default function HeaderContainer() {
   const [withSidebar, setSidebarOpen] = useAtom(sidebarOpenAtom);

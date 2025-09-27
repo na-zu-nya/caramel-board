@@ -1,9 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { Provider, useSetAtom } from 'jotai';
-import { useEffect } from 'react';
-import { SelectionActionBar } from '../selection-action-bar';
-import { selectionModeAtom } from '@/stores/ui';
 import { Clapperboard, Pencil, RefreshCw, Trash2 } from 'lucide-react';
+import { useEffect } from 'react';
+import { selectionModeAtom } from '@/stores/ui';
+import { SelectionActionBar } from '../selection-action-bar';
 
 const meta: Meta<typeof SelectionActionBar> = {
   title: 'UI/SelectionActionBar',

@@ -1,3 +1,6 @@
+import * as LucideIcons from 'lucide-react';
+import { Pencil, Pin, PinOff, Trash2 } from 'lucide-react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   ContextMenu,
@@ -16,11 +19,8 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { apiClient } from '@/lib/api-client';
-import { AVAILABLE_ICONS } from '@/types';
 import type { AvailableIcon, Collection } from '@/types';
-import { Pencil, Pin, PinOff, Trash2 } from 'lucide-react';
-import * as LucideIcons from 'lucide-react';
-import { useState } from 'react';
+import { AVAILABLE_ICONS } from '@/types';
 
 interface CollectionContextMenuProps {
   children: React.ReactNode;

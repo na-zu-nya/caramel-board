@@ -1,3 +1,6 @@
+import { useParams } from '@tanstack/react-router';
+import { useAtomValue } from 'jotai';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -12,9 +15,6 @@ import {
 import { apiClient } from '@/lib/api-client';
 import { currentDatasetAtom } from '@/stores/ui';
 import type { CollectionFolder, CollectionType } from '@/types';
-import { useParams } from '@tanstack/react-router';
-import { useAtomValue } from 'jotai';
-import { useEffect, useState } from 'react';
 
 interface CreateCollectionModalProps {
   open: boolean;

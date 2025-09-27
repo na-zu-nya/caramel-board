@@ -1,5 +1,5 @@
-import { filterOpenAtom, infoSidebarOpenAtom, selectionModeAtom } from '@/stores/ui';
 import { useAtom } from 'jotai';
+import { filterOpenAtom, infoSidebarOpenAtom, selectionModeAtom } from '@/stores/ui';
 import { useKeyboardShortcuts as useGenericKeyboardShortcuts } from '../utils/useKeyboardShortcut';
 
 interface UseStackGridKeyboardShortcutsProps {

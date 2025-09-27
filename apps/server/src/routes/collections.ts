@@ -1,4 +1,5 @@
 import { zValidator } from '@hono/zod-validator';
+import type { Context } from 'hono';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { getPrisma } from '../lib/Repository.js';
@@ -13,20 +14,24 @@ import { useResponse } from '../utils/useResponse.js';
 const app = new Hono();
 const collectionService = new CollectionService(getPrisma());
 
+const ensureAuthorized = async (c: Context, dataSetId: number) => {
+  const { ensureDatasetAuthorized } = await import('../utils/dataset-protection');
+  return ensureDatasetAuthorized(c, dataSetId);
+};
+
 // コレクション一覧取得
 app.get('/', zValidator('query', CollectionQuerySchema), async (c) => {
   try {
     const query = c.req.valid('query');
-    const { ensureDatasetAuthorized } = await import('../utils/dataset-protection');
     if (query.dataSetId) {
-      const auth = await ensureDatasetAuthorized(c as any, query.dataSetId);
-      if (auth) return useResponse(c, auth as any);
+      const auth = await ensureAuthorized(c, query.dataSetId);
+      if (auth) return auth;
     } else if (query.folderId !== undefined) {
       // Resolve dataset from folder
       const folder = await collectionService.findFolderById?.(query.folderId as number);
       if (folder?.dataSetId) {
-        const auth = await ensureDatasetAuthorized(c as any, folder.dataSetId);
-        if (auth) return useResponse(c, auth as any);
+        const auth = await ensureAuthorized(c, folder.dataSetId);
+        if (auth) return auth;
       }
     }
     const result = await collectionService.findAll(query);
@@ -47,9 +52,8 @@ app.get('/:id', zValidator('param', z.object({ id: z.coerce.number() })), async 
       return useResponse(c, { error: 'コレクションが見つかりません' }, 404);
     }
 
-    const { ensureDatasetAuthorized } = await import('../utils/dataset-protection');
-    const auth = await ensureDatasetAuthorized(c as any, collection.dataSetId);
-    if (auth) return useResponse(c, auth as any);
+    const auth = await ensureAuthorized(c, collection.dataSetId);
+    if (auth) return auth;
 
     return useResponse(c, collection);
   } catch (error) {
@@ -195,9 +199,8 @@ app.get(
       const { limit, offset } = c.req.valid('query');
       const col = await collectionService.findById(id);
       if (!col) return useResponse(c, { error: 'コレクションが見つかりません' }, 404);
-      const { ensureDatasetAuthorized } = await import('../utils/dataset-protection');
-      const auth = await ensureDatasetAuthorized(c as any, col.dataSetId);
-      if (auth) return useResponse(c, auth as any);
+      const auth = await ensureAuthorized(c, col.dataSetId);
+      if (auth) return auth;
       const result = await collectionService.getCollectionStacks(id, limit, offset);
       return useResponse(c, result);
     } catch (error) {
