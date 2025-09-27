@@ -30,6 +30,17 @@ t() {
         joytag_not_found) echo "[start] JoyTag は見つかりませんでした（externals/joytag）。スキップします。" ;;
         joytag_models_missing) echo "[start] JoyTag のモデルが見つかりません。スキップします。" ;;
         joytag_started) echo "[start] JoyTag を起動しました。" ;;
+        joytag_stopping) echo "[start] JoyTag を停止しています…" ;;
+        joytag_stopped) echo "[start] JoyTag を停止しました。" ;;
+        joytag_stop_missing) echo "[start] JoyTag の PID が見つからなかったため、停止をスキップします。" ;;
+        joytag_not_running) printf "[start] JoyTag (PID %s) は既に停止しています。PID ファイルを削除します。\n" "$2" ;;
+        joytag_stop_failed) printf "[start] 警告: JoyTag (PID %s) を停止できませんでした。手動で確認してください。\n" "$2" ;;
+        joytag_stop_port_tool_missing) echo "[start] lsof が見つからないため JoyTag ポートの確認をスキップします。" ;;
+        joytag_stop_port_scan) echo "[start] JoyTag ポート (5001) の残存プロセスを確認します…" ;;
+        joytag_stop_port_kill) printf "[start] JoyTag ポート (5001) のプロセス (PID %s) を停止します。\n" "$2" ;;
+        joytag_stop_port_sigkill) printf "[start] JoyTag PID %s に SIGKILL を送信します。\n" "$2" ;;
+        joytag_stop_port_failed) printf "[start] 警告: JoyTag PID %s を停止できませんでした。\n" "$2" ;;
+        joytag_stop_port_cleared) echo "[start] JoyTag ポートは解放されました。" ;;
         git_check_start) echo "[git] リモートの更新を確認しています…" ;;
         git_check_missing) echo "[git] git コマンドが見つからないため、更新チェックをスキップします。" ;;
         git_check_not_repo) echo "[git] .git ディレクトリがないため、更新チェックをスキップします。" ;;
@@ -56,6 +67,17 @@ t() {
         joytag_not_found) echo "[start] JoyTag not found at externals/joytag. Skipping." ;;
         joytag_models_missing) echo "[start] JoyTag models not found. Skipping." ;;
         joytag_started) echo "[start] JoyTag started." ;;
+        joytag_stopping) echo "[start] Stopping JoyTag…" ;;
+        joytag_stopped) echo "[start] JoyTag stopped." ;;
+        joytag_stop_missing) echo "[start] JoyTag PID not found; skipping stop." ;;
+        joytag_not_running) printf "[start] JoyTag (PID %s) already stopped. Cleaning up PID file.\n" "$2" ;;
+        joytag_stop_failed) printf "[start] WARN: Unable to stop JoyTag (PID %s). Check manually.\n" "$2" ;;
+        joytag_stop_port_tool_missing) echo "[start] lsof not found; skipping JoyTag port check." ;;
+        joytag_stop_port_scan) echo "[start] Checking port 5001 for leftover JoyTag processes…" ;;
+        joytag_stop_port_kill) printf "[start] Force stopping JoyTag process on port 5001 (PID %s).\n" "$2" ;;
+        joytag_stop_port_sigkill) printf "[start] Sending SIGKILL to JoyTag PID %s.\n" "$2" ;;
+        joytag_stop_port_failed) printf "[start] WARN: Failed to stop JoyTag PID %s.\n" "$2" ;;
+        joytag_stop_port_cleared) echo "[start] JoyTag port is now clear." ;;
         git_check_start) echo "[git] Checking for remote updates…" ;;
         git_check_missing) echo "[git] git command not found; skipping update check." ;;
         git_check_not_repo) echo "[git] .git directory not found; skipping update check." ;;
@@ -153,6 +175,119 @@ start_joytag() {
   fi
 }
 
+clear_joytag_port() {
+  if ! have lsof; then
+    echo "$(t joytag_stop_port_tool_missing)"
+    return 0
+  fi
+
+  local pids=()
+  while IFS= read -r pid; do
+    if [ -n "$pid" ]; then
+      pids+=("$pid")
+    fi
+  done < <(lsof -ti tcp:5001 2>/dev/null | sort -u)
+
+  if [ "${#pids[@]}" -eq 0 ]; then
+    return 0
+  fi
+
+  echo "$(t joytag_stop_port_scan)"
+  local cleared=0
+
+  for pid in "${pids[@]}"; do
+    echo "$(t joytag_stop_port_kill "$pid")"
+    if kill "$pid" >/dev/null 2>&1; then
+      cleared=1
+      sleep 0.5
+      if kill -0 "$pid" >/dev/null 2>&1; then
+        echo "$(t joytag_stop_port_sigkill "$pid")"
+        kill -9 "$pid" >/dev/null 2>&1 || true
+        sleep 0.2
+      fi
+    else
+      echo "$(t joytag_stop_port_failed "$pid")"
+    fi
+  done
+
+  sleep 0.5
+  local still_up
+  still_up=$(lsof -ti tcp:5001 2>/dev/null | head -n1 || true)
+  if [ -n "$still_up" ]; then
+    echo "$(t joytag_stop_port_failed "$still_up")"
+    return 1
+  fi
+
+  if [ "$cleared" -eq 1 ]; then
+    echo "$(t joytag_stop_port_cleared)"
+  fi
+
+  return 0
+}
+
+stop_joytag() {
+  local LOG_DIR="$ROOT_DIR/logs"
+  local PID_FILE="$LOG_DIR/joytag.pid"
+
+  if [ ! -f "$PID_FILE" ]; then
+    echo "$(t joytag_stop_missing)"
+    if ! clear_joytag_port; then
+      return 1
+    fi
+    return 0
+  fi
+
+  local PID
+  PID=$(cat "$PID_FILE" 2>/dev/null || true)
+
+  if [ -z "$PID" ]; then
+    echo "$(t joytag_stop_missing)"
+    rm -f "$PID_FILE"
+    if ! clear_joytag_port; then
+      return 1
+    fi
+    return 0
+  fi
+
+  if kill -0 "$PID" >/dev/null 2>&1; then
+    echo "$(t joytag_stopping)"
+    if ! kill "$PID" >/dev/null 2>&1; then
+      echo "$(t joytag_stop_failed "$PID")"
+      return 1
+    fi
+
+    for _ in {1..10}; do
+      if kill -0 "$PID" >/dev/null 2>&1; then
+        sleep 0.5
+      else
+        break
+      fi
+    done
+
+    if kill -0 "$PID" >/dev/null 2>&1; then
+      echo "[start] WARN: JoyTag process $PID still running; sending SIGKILL."
+      kill -9 "$PID" >/dev/null 2>&1 || true
+      sleep 0.5
+      if kill -0 "$PID" >/dev/null 2>&1; then
+        echo "$(t joytag_stop_failed "$PID")"
+        rm -f "$PID_FILE"
+        return 1
+      fi
+    fi
+
+    echo "$(t joytag_stopped)"
+  else
+    echo "$(t joytag_not_running "$PID")"
+  fi
+
+  rm -f "$PID_FILE"
+  if ! clear_joytag_port; then
+    return 1
+  fi
+
+  return 0
+}
+
 git_check_updates() {
   if ! have git; then
     echo "$(t git_check_missing)"
@@ -226,12 +361,14 @@ case "$MODE" in
   prod)
     echo "$(t starting_prod)"
     git_check_updates
+    start_joytag
     dc up -d
     echo "$(t tail_logs)"
     dc logs -f app
     ;;
   stop)
     echo "$(t stopping)"
+    stop_joytag
     dc down
     ;;
   migrate)
