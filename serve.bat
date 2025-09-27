@@ -8,5 +8,5 @@ IF %ERRORLEVEL% NEQ 0 (
   exit /B 1
 )
 
-wsl.exe bash -lc "cd \"$(wslpath -u '%cd%')\" && ./serve.sh %*"
+wsl.exe bash -lc "cd \"$(wslpath -u '%cd%')\" && dos2unix ./serve.sh && ./serve.sh %*"
 exit /B %ERRORLEVEL%

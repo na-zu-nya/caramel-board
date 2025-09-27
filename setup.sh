@@ -668,7 +668,7 @@ dc up -d postgres
 MIGR_DIR="apps/server/prisma/migrations"
 echo "[setup] Applying database schema…"
 if [ -d "$MIGR_DIR" ] && [ "$(ls -A "$MIGR_DIR" 2>/dev/null | wc -l | tr -d ' ')" -gt 0 ]; then
-  if ! dc run --rm app npm run prisma:migrate:deploy; then
+  if ! dc run --rm app npm run db:migrate:prod; then
     # Silent fallback for user simplicity
     dc run --rm app npm run db:push
   fi
