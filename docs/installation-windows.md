@@ -71,17 +71,17 @@ wsl
 
 ### アプリのダウンロード
 
-- Windows Terminalを開いて、インストールしたいフォルダに移動します。
+- アプリを置きたいフォルダに移動します
+  - 後にそのフォルダの中にcaramel-boardフォルダが作成されます
+  - 場所はどこでもいいので、最初から外部SSDとかに設置するのもありです
+- フォルダの空白を右クリックして、 Windows Terminal を開きます
 - gitコマンドでCaramelBoardをクローンします。
 
-例: 自分のフォルダ直下に app フォルダを作ってインストールする場合
-- appフォルダを作成して移動
-- 右クリックして Windows Terminal を開くと便利です
 ```powershell
 git clone https://github.com/na-zu-nya/caramel-board.git caramel-board
 ```
 
-- appフォルダにcaramel-boardフォルダが作成されていれば成功です
+フォルダにcaramel-boardフォルダが作成されていれば成功です
 
 ### セットアップ
 
