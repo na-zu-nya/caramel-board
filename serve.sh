@@ -51,6 +51,9 @@ t() {
         git_check_failed) echo "[git] git fetch に失敗したため、更新チェックをスキップしました。" ;;
         update_git_missing) echo "git が利用できないため更新処理をスキップします。" ;;
         update_git_not_repo) echo ".git ディレクトリがないため更新処理をスキップします。" ;;
+        git_check_updates_notice) echo "[git] 更新が存在します。3秒待機してから続行します。" ;;
+        update_shutdown) echo "[update] 更新が完了しました。サービスを停止します…" ;;
+        update_shutdown_done) echo "[update] サービスを停止しました。必要に応じて ./serve.sh prod などで再起動してください。" ;;
         *) echo "$key" ;;
       esac
       ;;
@@ -88,6 +91,9 @@ t() {
         git_check_failed) echo "[git] Failed to check for updates (git fetch error)." ;;
         update_git_missing) echo "Skipping update because git is not available." ;;
         update_git_not_repo) echo "Skipping update because this directory is not a git repository." ;;
+        git_check_updates_notice) echo "[git] Updates detected. Continuing in 3 seconds." ;;
+        update_shutdown) echo "[update] Update finished. Shutting down services…" ;;
+        update_shutdown_done) echo "[update] Services stopped. Restart with ./serve.sh prod or dev when ready." ;;
         *) echo "$key" ;;
       esac
       ;;
@@ -99,6 +105,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT_DIR"
 
 have() { command -v "$1" >/dev/null 2>&1; }
+
+GIT_BEHIND_COUNT=0
 
 # Resolve docker compose command
 if command -v docker compose >/dev/null 2>&1; then
@@ -289,6 +297,7 @@ stop_joytag() {
 }
 
 git_check_updates() {
+  GIT_BEHIND_COUNT=0
   if ! have git; then
     echo "$(t git_check_missing)"
     return 0
@@ -314,6 +323,8 @@ git_check_updates() {
   local behind ahead
   behind=$(git rev-list --count HEAD.."$upstream" 2>/dev/null || echo "0")
   ahead=$(git rev-list --count "$upstream"..HEAD 2>/dev/null || echo "0")
+
+  GIT_BEHIND_COUNT="${behind:-0}"
 
   if [ "${behind:-0}" -gt 0 ]; then
     t git_check_updates "$upstream" "$behind"
@@ -361,6 +372,10 @@ case "$MODE" in
   prod)
     echo "$(t starting_prod)"
     git_check_updates
+    if [ "${GIT_BEHIND_COUNT:-0}" -gt 0 ]; then
+      printf '\033[1m%s\033[0m\n' "$(t git_check_updates_notice)"
+      sleep 3
+    fi
     start_joytag
     dc up -d
     echo "$(t tail_logs)"
@@ -404,10 +419,12 @@ case "$MODE" in
     dc build --pull app
     # Run migrations using the freshly built image
     dc run --rm app npm run db:migrate:prod
-    # Restart app
+    # Restart app to ensure the new image boots successfully
     dc up -d app
-    echo "[update] Update completed. Tailing logs (Ctrl+C to quit)..."
-    dc logs -f app
+    echo "$(t update_shutdown)"
+    dc down
+    stop_joytag
+    echo "$(t update_shutdown_done)"
     ;;
   *)
     echo "Usage: $0 [dev|prod|migrate|build|update]"
