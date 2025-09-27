@@ -1,28 +1,24 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
   "files": {
-    "ignore": [
-      "dist/**",
-      "node_modules/**",
-      ".turbo/**",
-      "apps/client-v1/**",
-      "apps/client-react-v1/**",
-      "lib/JoyTagTool/**",
-      "externals/**",
-      ".claude/**",
-      ".vscode/**",
-      "__tests__/**"
-    ]
-  },
-  "organizeImports": {
-    "enabled": true
+    "includes": [
+      "**",
+      "!dist",
+      "!node_modules",
+      "!.turbo",
+      "!apps/client-v1",
+      "!apps/client-react-v1",
+      "!lib/JoyTagTool",
+      "!externals",
+      "!.claude",
+      "!.vscode",
+      "!__tests__"
+    ],
+    "ignoreUnknown": true
   },
   "linter": {
     "enabled": true,
     "rules": {
-      "a11y": {
-        "all": false
-      },
       "recommended": true,
       "suspicious": {
         "noExplicitAny": "warn"
