@@ -1,3 +1,4 @@
+import type { LucideIcon } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { Pin, PinOff } from 'lucide-react';
 import { useState } from 'react';
@@ -24,7 +25,6 @@ import { AVAILABLE_ICONS } from '@/types';
 
 interface OverviewContextMenuProps {
   children: React.ReactNode;
-  datasetId: string;
   isPinned: boolean;
   onPin: (iconName: string, name: string) => void;
   onUnpin: () => void;
@@ -32,7 +32,6 @@ interface OverviewContextMenuProps {
 
 export function OverviewContextMenu({
   children,
-  datasetId,
   isPinned,
   onPin,
   onUnpin,
@@ -43,7 +42,10 @@ export function OverviewContextMenu({
 
   // Helper function to render Lucide icons dynamically
   const renderIcon = (iconName: string, size = 16) => {
-    const IconComponent = (LucideIcons as any)[iconName];
+    /* biome-ignore lint/performance/noDynamicNamespaceImportAccess: dynamic icon lookup for configurable icons */
+    const IconComponent = LucideIcons[iconName as keyof typeof LucideIcons] as
+      | LucideIcon
+      | undefined;
     if (IconComponent) {
       return <IconComponent size={size} />;
     }

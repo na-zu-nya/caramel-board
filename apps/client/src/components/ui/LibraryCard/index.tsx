@@ -79,11 +79,11 @@ export function LibraryCard({
 
   useEffect(() => {
     setNameValue(dataset.name ?? '');
-  }, [dataset.name, dataset.id]);
+  }, [dataset.name]);
 
   useEffect(() => {
     setColorValue(dataset.themeColor ?? '');
-  }, [dataset.themeColor, dataset.id]);
+  }, [dataset.themeColor]);
 
   useEffect(() => {
     if (isEditingName && nameInputRef.current) {

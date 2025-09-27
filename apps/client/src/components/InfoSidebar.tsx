@@ -7,8 +7,6 @@ import {
   ChevronUp,
   Clapperboard,
   Copy,
-  Download,
-  FolderOpen,
   GalleryVerticalEnd,
   Hash,
   Heart,
@@ -20,7 +18,6 @@ import {
   Star,
   Tag,
   Trash2,
-  Wand2,
   X,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
@@ -78,7 +75,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
       } catch {}
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.pathname]);
+  }, [location.pathname, setIsOpen]);
 
   // Fetch selected item data
   const { data: selectedItem, isLoading } = useQuery({
@@ -141,7 +138,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
   });
 
   // Save actions expanded state to sessionStorage
-  const toggleActionsExpanded = () => {
+  const _toggleActionsExpanded = () => {
     const newState = !actionsExpanded;
     setActionsExpanded(newState);
     try {
@@ -304,7 +301,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
     }
   };
 
-  const handleCopyTag = async (tag: string) => {
+  const _handleCopyTag = async (tag: string) => {
     const ok = await copyText(tag);
     if (ok) {
       addNotification({ type: 'success', message: `Copied tag: ${tag}` });
@@ -385,7 +382,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
     },
   });
 
-  const handleUpdateColors = () => {
+  const _handleUpdateColors = () => {
     if (selectedItem) {
       updateColorsMutation.mutate({ stackId: Number(selectedItem.id) });
     }
@@ -429,7 +426,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
     },
   });
 
-  const handleUpdateAutoTags = () => {
+  const _handleUpdateAutoTags = () => {
     if (selectedItem) {
       updateAutoTagsMutation.mutate({ stackId: Number(selectedItem.id) });
     }

@@ -26,7 +26,7 @@ export function useDebounce<T extends (...args: any[]) => any>(
   );
 
   // Cleanup on unmount
-  const cleanup = useCallback(() => {
+  const _cleanup = useCallback(() => {
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
     }

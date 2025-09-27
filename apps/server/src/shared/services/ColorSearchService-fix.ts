@@ -1,4 +1,5 @@
 import { Prisma, type PrismaClient } from '@prisma/client';
+import type { DominantColor } from '../../utils/colorExtractor';
 import { ColorExtractor } from '../../utils/colorExtractor';
 
 export interface ColorSearchOptions {
@@ -22,6 +23,19 @@ export interface ColorFilterOptions {
   offset?: number;
 }
 
+type StackRow = { id: number } & Record<string, unknown>;
+
+const isDominantColor = (value: unknown): value is DominantColor => {
+  if (typeof value !== 'object' || value === null) return false;
+  const candidate = value as Partial<DominantColor>;
+  return (
+    typeof candidate.r === 'number' &&
+    typeof candidate.g === 'number' &&
+    typeof candidate.b === 'number' &&
+    typeof candidate.hex === 'string'
+  );
+};
+
 export class ColorSearchService {
   private prisma: PrismaClient;
 
@@ -43,8 +57,11 @@ export class ColorSearchService {
     });
 
     const colorSets = assetColors
-      .map((a) => a.dominantColors as any)
-      .filter((c) => Array.isArray(c) && c.length > 0);
+      .map((asset) => asset.dominantColors)
+      .filter(
+        (colors): colors is DominantColor[] =>
+          Array.isArray(colors) && colors.every(isDominantColor)
+      );
 
     if (colorSets.length === 0) {
       // 色情報が無い場合は null を保存（もしくはそのまま）
@@ -97,7 +114,7 @@ export class ColorSearchService {
     if (mediaType) where.mediaType = mediaType;
 
     // まず色相カテゴリで絞り込み、その後距離計算
-    const stacks = await this.prisma.$queryRaw<Array<any>>`
+    const stacks = await this.prisma.$queryRaw<StackRow[]>`
       WITH filtered_stacks AS (
         SELECT DISTINCT s.*
         FROM "Stack" s
@@ -151,8 +168,10 @@ export class ColorSearchService {
     });
 
     // 元の順序を保持
-    const idToStack = new Map(stacksWithRelations.map((s) => [s.id, s]));
-    const orderedStacks = stacks.map((s) => idToStack.get(s.id)).filter((s) => s);
+    const idToStack = new Map(stacksWithRelations.map((stack) => [stack.id, stack]));
+    const orderedStacks = stacks
+      .map((stack) => idToStack.get(stack.id))
+      .filter((stack): stack is (typeof stacksWithRelations)[number] => Boolean(stack));
 
     return {
       stacks: orderedStacks,
@@ -233,7 +252,7 @@ export class ColorSearchService {
       OFFSET ${offset}
     `;
 
-    const stacks = await this.prisma.$queryRawUnsafe<Array<any>>(queryString);
+    const stacks = await this.prisma.$queryRawUnsafe<StackRow[]>(queryString);
 
     // 関連データを取得
     const stackIds = stacks.map((s) => s.id);
@@ -257,8 +276,10 @@ export class ColorSearchService {
     });
 
     // 元の順序を保持
-    const idToStack = new Map(stacksWithRelations.map((s) => [s.id, s]));
-    const orderedStacks = stacks.map((s) => idToStack.get(s.id)).filter((s) => s);
+    const idToStack = new Map(stacksWithRelations.map((stack) => [stack.id, stack]));
+    const orderedStacks = stacks
+      .map((stack) => idToStack.get(stack.id))
+      .filter((stack): stack is (typeof stacksWithRelations)[number] => Boolean(stack));
 
     return {
       stacks: orderedStacks,

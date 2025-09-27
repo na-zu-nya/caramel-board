@@ -77,10 +77,10 @@ function AutoTagStacksPage() {
     loadingRangesRef.current.clear();
     // Keep currentFilter with datasetId context for other UI parts
     setCurrentFilter({ datasetId });
-  }, [datasetId, decodedKey, setCurrentFilter]);
+  }, [datasetId, setCurrentFilter]);
 
   // Stable key for filters (only fields supported by the endpoint)
-  const filterKey = useMemo(() => {
+  const _filterKey = useMemo(() => {
     const f = currentFilter || ({} as any);
     const key = {
       mediaType: f.mediaType ?? undefined,
@@ -214,7 +214,7 @@ function AutoTagStacksPage() {
     itemsRef.current = [];
     setTotal(0);
     void loadRange(0, 49);
-  }, [filterKey, decodedKey, datasetId]);
+  }, [loadRange]);
 
   const handleItemClick = (item: MediaGridItem) => {
     setNavigationState({
@@ -232,10 +232,7 @@ function AutoTagStacksPage() {
     const ids = loadedIdsLtr.slice().reverse();
     const clickedId =
       typeof item.id === 'string' ? Number.parseInt(item.id as string, 10) : (item.id as number);
-    const currentIndex = Math.max(
-      0,
-      ids.findIndex((id) => id === clickedId)
-    );
+    const currentIndex = Math.max(0, ids.indexOf(clickedId));
 
     const mediaType = (item as any).mediaType as string | undefined;
     const token = genListToken({ datasetId, mediaType });

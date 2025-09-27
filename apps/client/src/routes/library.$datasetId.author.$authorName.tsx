@@ -160,10 +160,7 @@ function AuthorDetailPage() {
     const ids = loadedIdsLtr.slice().reverse();
     const clickedId =
       typeof item.id === 'string' ? Number.parseInt(item.id as string, 10) : (item.id as number);
-    const currentIndex = Math.max(
-      0,
-      ids.findIndex((id) => id === clickedId)
-    );
+    const currentIndex = Math.max(0, ids.indexOf(clickedId));
 
     const mediaType = (item as any).mediaType as string | undefined;
     const token = genListToken({ datasetId, mediaType, filters: authorFilter });

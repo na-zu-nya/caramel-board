@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Slider } from '@/components/ui/slider';
-import { cn } from '@/lib/utils';
+import { cn } from '@/lib/utils'; // Stateless presentational helpers (no hooks)
 
 // Stateless presentational helpers (no hooks)
 function ToolButton({
@@ -119,7 +119,6 @@ export default function PenOverlay({
   leftInset,
   rightInset,
   topInset = 56,
-  docKey,
   onExit,
   getImageEl,
 }: PenOverlayProps) {
@@ -151,11 +150,75 @@ export default function PenOverlay({
     height: number;
   } | null>(null);
 
-  // Clear strokes when page key changes
+  // Track image rect for background fade (image-only overlay)
   useEffect(() => {
-    clearAll();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [docKey]);
+    const updateRect = () => {
+      if (!getImageEl) {
+        setBgRect(null);
+        return;
+      }
+      const img = getImageEl();
+      const container = containerRef.current;
+      if (!img || !container) {
+        setBgRect(null);
+        return;
+      }
+      const ir = img.getBoundingClientRect();
+      const cr = container.getBoundingClientRect();
+      setBgRect({
+        left: Math.max(0, ir.left - cr.left),
+        top: Math.max(0, ir.top - cr.top),
+        width: ir.width,
+        height: ir.height,
+      });
+    };
+    updateRect();
+    const onScroll = () => updateRect();
+    window.addEventListener('resize', updateRect);
+    window.addEventListener('scroll', onScroll, { capture: true, passive: true } as any);
+    const iv = setInterval(updateRect, 250); // guard for subtle layout shifts
+    return () => {
+      window.removeEventListener('resize', updateRect);
+      window.removeEventListener('scroll', onScroll, { capture: true } as any);
+      clearInterval(iv);
+    };
+  }, [getImageEl]);
+
+  const drawStrokePath = useCallback(
+    (ctx: CanvasRenderingContext2D, s: Stroke, alphaFactor = 1) => {
+      const n = s.points.length;
+      if (n < 2) return;
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, Math.min(1, s.opacity * alphaFactor));
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.lineWidth = s.size;
+      ctx.globalCompositeOperation = s.mode === 'erase' ? 'destination-out' : 'source-over';
+      ctx.strokeStyle = s.mode === 'erase' ? 'rgba(0,0,0,1)' : s.color;
+      ctx.beginPath();
+      ctx.moveTo(s.points[0].x, s.points[0].y);
+      for (let i = 1; i < n; i++) ctx.lineTo(s.points[i].x, s.points[i].y);
+      ctx.stroke();
+      ctx.restore();
+    },
+    []
+  );
+
+  const [activeStroke, setActiveStroke] = useState<Stroke | null>(null);
+  const activePointerRef = useRef<number | null>(null);
+
+  const toLocal = useCallback((e: PointerEvent | React.PointerEvent) => {
+    const rect = canvasRef.current!.getBoundingClientRect();
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  }, []);
+
+  const redrawAll = useCallback(
+    (ctx: CanvasRenderingContext2D, all: Stroke[], w: number, h: number, alphaFactor = 1) => {
+      ctx.clearRect(0, 0, w, h);
+      for (const s of all) drawStrokePath(ctx, s, alphaFactor);
+    },
+    [drawStrokePath]
+  );
 
   const ensureCanvas = useCallback(() => {
     const canvas = canvasRef.current;
@@ -196,7 +259,12 @@ export default function PenOverlay({
         pctx.clearRect(0, 0, cssW, cssH);
       }
     }
-  }, [strokes]);
+  }, [
+    strokes,
+    layerOpacity,
+    layerVisible, // redraw existing strokes (e.g., on resize)
+    redrawAll,
+  ]);
 
   useEffect(() => {
     ensureCanvas();
@@ -209,76 +277,6 @@ export default function PenOverlay({
       ro?.disconnect();
     };
   }, [ensureCanvas]);
-
-  // Track image rect for background fade (image-only overlay)
-  useEffect(() => {
-    const updateRect = () => {
-      if (!getImageEl) {
-        setBgRect(null);
-        return;
-      }
-      const img = getImageEl();
-      const container = containerRef.current;
-      if (!img || !container) {
-        setBgRect(null);
-        return;
-      }
-      const ir = img.getBoundingClientRect();
-      const cr = container.getBoundingClientRect();
-      setBgRect({
-        left: Math.max(0, ir.left - cr.left),
-        top: Math.max(0, ir.top - cr.top),
-        width: ir.width,
-        height: ir.height,
-      });
-    };
-    updateRect();
-    const onScroll = () => updateRect();
-    window.addEventListener('resize', updateRect);
-    window.addEventListener('scroll', onScroll, { capture: true, passive: true } as any);
-    const iv = setInterval(updateRect, 250); // guard for subtle layout shifts
-    return () => {
-      window.removeEventListener('resize', updateRect);
-      window.removeEventListener('scroll', onScroll, { capture: true } as any);
-      clearInterval(iv);
-    };
-  }, [getImageEl, docKey, leftInset, rightInset, topInset]);
-
-  const drawStrokePath = useCallback(
-    (ctx: CanvasRenderingContext2D, s: Stroke, alphaFactor = 1) => {
-      const n = s.points.length;
-      if (n < 2) return;
-      ctx.save();
-      ctx.globalAlpha = Math.max(0, Math.min(1, s.opacity * alphaFactor));
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.lineWidth = s.size;
-      ctx.globalCompositeOperation = s.mode === 'erase' ? 'destination-out' : 'source-over';
-      ctx.strokeStyle = s.mode === 'erase' ? 'rgba(0,0,0,1)' : s.color;
-      ctx.beginPath();
-      ctx.moveTo(s.points[0].x, s.points[0].y);
-      for (let i = 1; i < n; i++) ctx.lineTo(s.points[i].x, s.points[i].y);
-      ctx.stroke();
-      ctx.restore();
-    },
-    []
-  );
-
-  const redrawAll = useCallback(
-    (ctx: CanvasRenderingContext2D, all: Stroke[], w: number, h: number, alphaFactor = 1) => {
-      ctx.clearRect(0, 0, w, h);
-      for (const s of all) drawStrokePath(ctx, s, alphaFactor);
-    },
-    [drawStrokePath]
-  );
-
-  const [activeStroke, setActiveStroke] = useState<Stroke | null>(null);
-  const activePointerRef = useRef<number | null>(null);
-
-  const toLocal = useCallback((e: PointerEvent | React.PointerEvent) => {
-    const rect = canvasRef.current!.getBoundingClientRect();
-    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
-  }, []);
 
   const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (e.button !== 0) return; // primary only
@@ -352,7 +350,7 @@ export default function PenOverlay({
     }
   };
 
-  const undo = () => {
+  const undo = useCallback(() => {
     const canvas = canvasRef.current;
     const ctx = ctxRef.current;
     if (!canvas || !ctx) return;
@@ -365,9 +363,9 @@ export default function PenOverlay({
     setStrokes(next);
     setRedoStack((r) => [...r, popped]);
     redrawAll(ctx, next, w, h, layerVisible ? layerOpacity : 0);
-  };
+  }, [layerOpacity, layerVisible, redrawAll, strokes.length, strokes.slice]);
 
-  const redo = () => {
+  const redo = useCallback(() => {
     const canvas = canvasRef.current;
     const ctx = ctxRef.current;
     if (!canvas || !ctx) return;
@@ -381,9 +379,9 @@ export default function PenOverlay({
     setRedoStack(nextRedo);
     setStrokes(nextStrokes);
     redrawAll(ctx, nextStrokes, w, h, layerVisible ? layerOpacity : 0);
-  };
+  }, [layerOpacity, layerVisible, redoStack.length, redoStack.slice, redrawAll, strokes]);
 
-  const clearAll = () => {
+  const clearAll = useCallback(() => {
     const canvas = canvasRef.current;
     const ctx = ctxRef.current;
     if (!canvas || !ctx) {
@@ -398,7 +396,13 @@ export default function PenOverlay({
     if (pctx) pctx.clearRect(0, 0, w, h);
     setStrokes([]);
     setRedoStack([]);
-  };
+  }, []);
+
+  // Clear strokes when page key changes
+  useEffect(() => {
+    clearAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clearAll]);
 
   // layer opacity / visibility changes ⇒ repaint
   useEffect(() => {
@@ -464,8 +468,8 @@ export default function PenOverlay({
         <div
           className="absolute rounded-full bg-gray-800"
           style={{
-            width: Math.max(2, Math.min(14, size)) + 'px',
-            height: Math.max(2, Math.min(14, size)) + 'px',
+            width: `${Math.max(2, Math.min(14, size))}px`,
+            height: `${Math.max(2, Math.min(14, size))}px`,
             left: '50%',
             top: '50%',
             transform: 'translate(-50%, -50%)',
@@ -500,8 +504,8 @@ export default function PenOverlay({
           <div
             className="absolute rounded-full"
             style={{
-              width: Math.max(2, Math.min(32, size)) + 'px',
-              height: Math.max(2, Math.min(32, size)) + 'px',
+              width: `${Math.max(2, Math.min(32, size))}px`,
+              height: `${Math.max(2, Math.min(32, size))}px`,
               left: '50%',
               top: '50%',
               transform: 'translate(-50%, -50%)',
@@ -511,8 +515,8 @@ export default function PenOverlay({
           <div
             className="absolute rounded-full ring-1 ring-black/30"
             style={{
-              width: Math.max(2, Math.min(32, size)) + 'px',
-              height: Math.max(2, Math.min(32, size)) + 'px',
+              width: `${Math.max(2, Math.min(32, size))}px`,
+              height: `${Math.max(2, Math.min(32, size))}px`,
               left: '50%',
               top: '50%',
               transform: 'translate(-50%, -50%)',
@@ -523,7 +527,7 @@ export default function PenOverlay({
           <div
             className="h-full"
             style={{
-              width: Math.max(2, Math.min(100, size * 3)) + 'px',
+              width: `${Math.max(2, Math.min(100, size * 3))}px`,
               background: rgba(color, opacity),
             }}
           />
@@ -541,8 +545,8 @@ export default function PenOverlay({
           <div
             className="rounded-full ring-1 ring-black/30"
             style={{
-              width: Math.max(2, Math.min(32, size)) + 'px',
-              height: Math.max(2, Math.min(32, size)) + 'px',
+              width: `${Math.max(2, Math.min(32, size))}px`,
+              height: `${Math.max(2, Math.min(32, size))}px`,
               background: rgba(color, opacity),
             }}
           />
@@ -768,6 +772,10 @@ export default function PenOverlay({
     layerVisible,
     bgFade,
     onExit,
+    clearAll,
+    isAdjusting,
+    redo,
+    undo,
   ]);
 
   return (

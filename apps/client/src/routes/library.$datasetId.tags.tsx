@@ -10,7 +10,6 @@ import {
   Loader2,
   Pencil,
   RefreshCw,
-  Search,
   Tag,
   Trash2,
   X,
@@ -24,7 +23,7 @@ import BulkEditPanel from '@/components/BulkEditPanel';
 import FilterPanel from '@/components/FilterPanel';
 import InfoSidebar from '@/components/InfoSidebar';
 import { Button } from '@/components/ui/button';
-import { SmallButton, SmallSearchField, SmallSelect, Toolbar } from '@/components/ui/Controls';
+import { SmallSearchField, SmallSelect } from '@/components/ui/Controls';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
@@ -376,7 +375,21 @@ function TagsPage() {
       search: { page: 0, mediaType: item.mediaType, listToken: token },
       replace: true,
     });
-  }, [selectedTag, stacksData, navigate]);
+  }, [
+    selectedTag,
+    stacksData,
+    navigate,
+    currentFilter.authors,
+    currentFilter.colorFilter,
+    currentFilter.hasNoAuthor,
+    currentFilter.hasNoTags,
+    currentFilter.isFavorite,
+    currentFilter.isLiked,
+    currentFilter.mediaType,
+    currentFilter.search,
+    currentFilter.tags,
+    datasetId,
+  ]);
 
   useHeaderActions({
     showShuffle: true,
@@ -405,7 +418,7 @@ function TagsPage() {
 
     observer.observe(el);
     return () => observer.disconnect();
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage, allStacks.length, selectedTag?.id]);
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   // Mutations
   const renameMutation = useMutation({
@@ -557,7 +570,7 @@ function TagsPage() {
   }, [location.search, tagsData]);
 
   // Click handler with Cmd/Ctrl and Shift support
-  const handleStackClick = useCallback(
+  const _handleStackClick = useCallback(
     (stack: StackItem, event: React.MouseEvent) => {
       const idx = (allStacks || []).findIndex((s) => s?.id === stack.id);
 
@@ -604,10 +617,7 @@ function TagsPage() {
         typeof stack.id === 'string'
           ? Number.parseInt(stack.id as string, 10)
           : (stack.id as number);
-      const currentIndex = Math.max(
-        0,
-        ids.findIndex((id) => id === clickedId)
-      );
+      const currentIndex = Math.max(0, ids.indexOf(clickedId));
 
       const mediaType = (stack as any).mediaType as string | undefined;
       const token = genListToken({
@@ -637,7 +647,6 @@ function TagsPage() {
       datasetId,
       selectedTag,
       selectedStackItems,
-      setSelectedStackItems,
       handleStackItemSelect,
       navigate,
       setSelectionMode,
@@ -1031,7 +1040,6 @@ function TagsPage() {
                           onToggleFavorite,
                           onLike,
                           dragProps,
-                          onInfo,
                         } = actions;
                         return infoSidebarOpen ? (
                           <StackTile
@@ -1255,7 +1263,7 @@ function TagsPage() {
               <Label htmlFor="merge-target">Target Tag</Label>
               <Select
                 value={mergeTargetId?.toString() || ''}
-                onValueChange={(value) => setMergeTargetId(Number.parseInt(value))}
+                onValueChange={(value) => setMergeTargetId(Number.parseInt(value, 10))}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select target tag" />

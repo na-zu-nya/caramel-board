@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useAtom } from 'jotai';
 import MersenneTwister from 'mersenne-twister';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import FilterPanel from '@/components/FilterPanel';
 import StackGrid from '@/components/StackGrid';
 import { useDataset } from '@/hooks/useDatasets';
@@ -119,7 +119,7 @@ function MediaTypeList() {
       // Unbiased integer in [0, total)
       const MAX = 0x100000000;
       const bound = MAX - (MAX % total);
-      let r;
+      let r = 0;
       do {
         r = rng.random_int();
       } while (r >= bound);
@@ -142,10 +142,7 @@ function MediaTypeList() {
       });
       const clickedId =
         typeof item.id === 'string' ? Number.parseInt(item.id, 10) : (item.id as number);
-      const currentIndex = Math.max(
-        0,
-        ids.findIndex((id) => id === clickedId)
-      );
+      const currentIndex = Math.max(0, ids.indexOf(clickedId));
       saveViewContext({
         token,
         datasetId,
@@ -243,7 +240,6 @@ function MediaTypeList() {
     setCurrentFilter,
     setNavigationState,
     restoreScrollSafely,
-    setCurrentSort,
     loadRange,
     total,
   ]);
@@ -371,10 +367,7 @@ function MediaTypeList() {
       const loadedIds = loadedIdsLtr.slice().reverse();
       const clickedId =
         typeof item.id === 'string' ? Number.parseInt(item.id, 10) : (item.id as number);
-      const currentIndex = Math.max(
-        0,
-        loadedIds.findIndex((id) => id === clickedId)
-      );
+      const currentIndex = Math.max(0, loadedIds.indexOf(clickedId));
 
       // Create a listToken and persist ViewContext
       const token = genListToken({

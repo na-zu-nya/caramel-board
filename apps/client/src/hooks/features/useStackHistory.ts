@@ -24,7 +24,7 @@ export function useStackHistory({
       const pathParts = currentPath.split('/');
 
       // Find and update stack ID in path
-      const stackIndex = pathParts.findIndex((part) => part === 'stacks');
+      const stackIndex = pathParts.indexOf('stacks');
       if (stackIndex !== -1 && stackIndex + 1 < pathParts.length) {
         pathParts[stackIndex + 1] = newStackId;
       }

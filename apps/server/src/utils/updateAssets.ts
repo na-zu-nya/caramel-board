@@ -1,13 +1,13 @@
 import { DataStorage } from '../lib/DataStorage';
 import { ImageConverter } from '../lib/ImageConverter';
 import { getPrisma } from '../lib/Repository';
-import type { valueOf } from '../types/typeUtils';
+import type { valueOf as ValueOf } from '../types/typeUtils';
 
 const prisma = getPrisma();
 
 export async function updateAssets(
   directory: string,
-  _mediaType: valueOf<{ image: 'image'; comic: 'comic'; video: 'video' }> | string,
+  _mediaType: ValueOf<{ image: 'image'; comic: 'comic'; video: 'video' }> | string,
   updateThumbnail = false
 ) {
   const files = (await DataStorage.list(directory)).map((entry) => `${directory}/${entry.name}`);

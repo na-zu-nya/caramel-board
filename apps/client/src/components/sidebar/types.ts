@@ -1,4 +1,4 @@
-import type { MediaType, Pin } from '@/types';
+import type { MediaType } from '@/types';
 
 // Common props for all sidebar sections
 export interface SidebarSectionProps {

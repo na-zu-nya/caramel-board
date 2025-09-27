@@ -17,6 +17,35 @@ import { generateMediaPreview, shouldGeneratePreview } from '../../../utils/gene
 import { generateThumbnail } from '../../../utils/generateThumbnail';
 import { formatStacksThumbnails } from '../../../utils/thumbnailPath';
 import type { createColorSearchService } from './color-search-service';
+import type { ColorFilter as SearchColorFilter } from './search-service';
+
+type StackAsset = {
+  file?: string | null;
+  thumbnail?: string | null;
+};
+
+const normalizeAssets = (assets: unknown, dataSetId: number | undefined) => {
+  if (!Array.isArray(assets)) return [] as StackAsset[];
+  const filtered = assets.filter((asset): asset is StackAsset => {
+    if (!asset || typeof asset !== 'object') return false;
+    return true;
+  });
+  return withPublicAssetArray(filtered, dataSetId);
+};
+
+type AutoTagAggregateEntry = {
+  tag?: string;
+  score?: number;
+};
+
+const extractAutoTagEntries = (
+  value: Prisma.JsonValue | null | undefined
+): AutoTagAggregateEntry[] => {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => (typeof entry === 'object' && entry !== null ? entry : null))
+    .filter((entry): entry is AutoTagAggregateEntry => entry !== null);
+};
 
 export interface CreateStackData {
   name: string;
@@ -40,7 +69,7 @@ export interface CreateStackWithFileData {
 export interface UpdateStackData {
   name?: string;
   thumbnail?: string;
-  meta?: Record<string, any>;
+  meta?: Record<string, unknown>;
 }
 
 export interface StackOptions {
@@ -64,7 +93,7 @@ interface SearchWithRankingOptions {
     author?: string;
     collection?: number;
     autoTag?: string | string[];
-    colorFilter?: any;
+    colorFilter?: SearchColorFilter;
   };
 }
 
@@ -166,7 +195,7 @@ export const createStackService = (deps: {
     ]);
 
     const stacks = stacksRaw.map((stack) => {
-      const publicAssets = withPublicAssetArray(stack.assets as any[], stack.dataSetId);
+      const publicAssets = normalizeAssets(stack.assets, stack.dataSetId);
       return {
         ...stack,
         assets: publicAssets,
@@ -412,7 +441,7 @@ export const createStackService = (deps: {
     const where = buildUnifiedWhereClause(unifiedOptions, userId);
 
     // 7. ソート順の決定 - 検索時はデータ取得後にJavaScriptでソート
-    let orderBy: any = { createdAt: 'desc' }; // default
+    let orderBy: Prisma.StackOrderByWithRelationInput = { createdAt: 'desc' };
     let searchRankedIds: number[] = [];
 
     if (effectiveSort === 'recommended' && search) {
@@ -432,9 +461,26 @@ export const createStackService = (deps: {
       // 普通のorderByを使用（後でJavaScriptで並び替え）
       orderBy = { createdAt: 'desc' };
     } else if (effectiveSort !== 'recommended') {
-      const sortField = effectiveSort === 'updateAt' ? 'updatedAt' : effectiveSort;
-      const sortOrder = order || 'desc';
-      orderBy = { [sortField]: sortOrder };
+      const sortOrder: Prisma.SortOrder = order === 'asc' ? 'asc' : 'desc';
+      switch (effectiveSort) {
+        case 'updateAt':
+          orderBy = { updateAt: sortOrder };
+          break;
+        case 'name':
+          orderBy = { name: sortOrder };
+          break;
+        case 'liked':
+          orderBy = { liked: sortOrder };
+          break;
+        case 'id':
+          orderBy = { id: sortOrder };
+          break;
+        case 'createdAt':
+          orderBy = { createdAt: sortOrder };
+          break;
+        default:
+          orderBy = { createdAt: 'desc' };
+      }
     }
 
     // 8. データ取得
@@ -483,7 +529,7 @@ export const createStackService = (deps: {
 
     const stacks = stacksRaw.map((stack) => ({
       ...stack,
-      assets: withPublicAssetArray(stack.assets as any[], stack.dataSetId),
+      assets: normalizeAssets(stack.assets, stack.dataSetId),
       thumbnail: toPublicAssetPath(stack.thumbnail, stack.dataSetId),
     }));
 
@@ -603,32 +649,31 @@ export const createStackService = (deps: {
       },
     });
 
-    console.log('Stack found:', stack ? `id=${stack.id}, assets=${stack.assets?.length}` : 'null');
-    console.log(
-      stack.assets.map((asset) => ({
-        id: asset.id,
-        order: asset.orderInStack,
-      }))
-    );
-
     if (!stack) {
       return null;
     }
 
     // Transform tags to match existing format
-    if (tags) {
-      stack.tags = stack.tags.map((t) => t?.tag.title);
-    }
+    const normalizedAssetsList = normalizeAssets(stack.assets, stack.dataSetId);
 
-    // Add autoTags from aggregate with mappings
-    if (stack.autoTagAggregate && stack.autoTagAggregate.topTags) {
-      // Fetch AutoTag mappings for this dataset
-      const autoTagKeys = (stack.autoTagAggregate.topTags as any[])
-        .map((t) => t.tag)
-        .filter(Boolean);
+    let autoTags:
+      | Array<{
+          autoTagKey: string;
+          displayName: string;
+          mappedTag: { id: number; title: string } | null;
+          score?: number;
+        }>
+      | undefined;
+
+    const autoTagEntries = extractAutoTagEntries(stack.autoTagAggregate?.topTags);
+    const autoTagKeys = autoTagEntries
+      .map((entry) => entry.tag)
+      .filter((tag): tag is string => typeof tag === 'string' && tag.length > 0);
+
+    if (autoTagKeys.length > 0) {
       const mappings = await prisma.autoTagMapping.findMany({
         where: {
-          dataSetId: dataSetId,
+          dataSetId,
           autoTagKey: { in: autoTagKeys },
           isActive: true,
         },
@@ -637,38 +682,42 @@ export const createStackService = (deps: {
         },
       });
 
-      // Create a map for quick lookup
-      const mappingMap = new Map(mappings.map((m) => [m.autoTagKey, m]));
+      const mappingMap = new Map(mappings.map((mapping) => [mapping.autoTagKey, mapping]));
 
-      // Transform autoTags with mapping info
-      (stack as any).autoTags = (stack.autoTagAggregate.topTags as any[])
-        .map((t) => {
-          const mapping = mappingMap.get(t.tag);
+      const mappedEntries = autoTagEntries
+        .map((entry) => {
+          if (!entry.tag) return null;
+          const mapping = mappingMap.get(entry.tag);
           return {
-            autoTagKey: t.tag,
-            displayName: mapping?.displayName || t.tag,
+            autoTagKey: entry.tag,
+            displayName: mapping?.displayName ?? entry.tag,
             mappedTag: mapping?.tag ? { id: mapping.tag.id, title: mapping.tag.title } : null,
-            score: t.score,
+            score: entry.score,
           };
         })
-        .filter((tag) => tag.autoTagKey); // Filter out null/undefined tags
+        .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+
+      if (mappedEntries.length > 0) {
+        autoTags = mappedEntries;
+      }
     }
 
-    // Transform assets to add /files prefix
-    if (assets && stack.assets) {
-      stack.assets = withPublicAssetArray(stack.assets as any[], stack.dataSetId);
-    }
+    const thumbnailSource = normalizedAssetsList[0]?.thumbnail || stack.thumbnail || '';
+    const thumbnail = toPublicAssetPath(thumbnailSource, stack.dataSetId);
 
-    stack.thumbnail = toPublicAssetPath(stack.thumbnail, stack.dataSetId);
+    const transformedStack = {
+      ...stack,
+      ...(tags
+        ? {
+            tags: stack.tags.map((relation) => relation?.tag.title),
+          }
+        : {}),
+      ...(assets ? { assets: normalizedAssetsList } : {}),
+      ...(autoTags ? { autoTags } : {}),
+      thumbnail,
+    };
 
-    // Set stack thumbnail from first asset if not set
-    if (stack.assets && stack.assets.length > 0 && !stack.thumbnail) {
-      stack.thumbnail = stack.assets[0].thumbnail;
-    }
-
-    // Embedding status removed
-
-    const [annotatedStack] = await annotateFavorites([stack]);
+    const [annotatedStack] = await annotateFavorites([transformedStack]);
     return annotatedStack;
   }
 
@@ -764,7 +813,7 @@ export const createStackService = (deps: {
       dataSetId,
       baseWhere,
     });
-    const [nameMatches, tagSearchResults, autoTagMappings] = await Promise.all([
+    const [nameMatches, tagSearchResults, _autoTagMappings] = await Promise.all([
       // スタック名での検索
       query &&
         prisma.stack.findMany({
@@ -874,7 +923,7 @@ export const createStackService = (deps: {
     });
 
     // Build base where clause for filters
-    const baseWhere: any = {
+    const baseWhere: Prisma.StackWhereInput = {
       dataSetId,
     };
 
@@ -943,7 +992,7 @@ export const createStackService = (deps: {
 
       if (colorFilterOptions) {
         const colorResults = await colorSearch.searchByColorFilter(colorFilterOptions);
-        colorFilteredStackIds = colorResults.stacks.map((s: any) => s.id);
+        colorFilteredStackIds = colorResults.stacks.map((stack) => stack.id);
 
         // Add color filter to base where clause
         if (colorFilteredStackIds.length > 0) {
@@ -1046,7 +1095,7 @@ export const createStackService = (deps: {
 
     // Process AutoTagMapping results to find stacks
     const autoTagMatchStackIds: number[] = [];
-    const mappedAutoTagKeys = autoTagMappings.map((m) => m.autoTagKey);
+    const mappedAutoTagKeys = autoTagMappings.map((mapping) => mapping.autoTagKey);
 
     if (mappedAutoTagKeys.length > 0) {
       // Find stacks that have these auto tags
@@ -1067,9 +1116,12 @@ export const createStackService = (deps: {
 
       // Filter stacks that have matching auto tags
       for (const aggregate of autoTagMatches) {
-        const topTags = aggregate.topTags as any[];
+        const topTags = extractAutoTagEntries(aggregate.topTags);
         const hasMatchingTag = topTags.some(
-          (t) => mappedAutoTagKeys.includes(t.tag) && t.score >= 0.4
+          (entry) =>
+            entry.tag !== undefined &&
+            mappedAutoTagKeys.includes(entry.tag) &&
+            (entry.score ?? 0) >= 0.4
         );
         if (hasMatchingTag) {
           autoTagMatchStackIds.push(aggregate.stackId);
@@ -1212,11 +1264,11 @@ export const createStackService = (deps: {
 
       // Direct auto tag matching (when query matches auto tag directly)
       if (stack.autoTagAggregate?.topTags) {
-        const autoTags = stack.autoTagAggregate.topTags as any[];
-        const matchingAutoTag = autoTags.find(
-          (t) => t.tag?.toLowerCase() === query.toLowerCase() && t.score >= 0.4
+        const autoTagEntries = extractAutoTagEntries(stack.autoTagAggregate.topTags);
+        const matchingAutoTag = autoTagEntries.find(
+          (entry) => entry.tag?.toLowerCase() === query.toLowerCase() && (entry.score ?? 0) >= 0.4
         );
-        if (matchingAutoTag) {
+        if (matchingAutoTag && matchingAutoTag.score !== undefined) {
           keywordScore += 4 * matchingAutoTag.score;
         }
       }
@@ -1256,6 +1308,26 @@ export const createStackService = (deps: {
       const sortField = effectiveSort === 'updateAt' ? 'updateAt' : effectiveSort;
       const sortOrder = order || 'desc';
 
+      const getSortValue = (
+        stack: (typeof combinedScoredStacks)[number],
+        field: string
+      ): string | number | Date | undefined => {
+        switch (field) {
+          case 'name':
+            return stack.name ?? '';
+          case 'id':
+            return stack.id;
+          case 'liked':
+            return stack.liked;
+          case 'createdAt':
+            return stack.createdAt;
+          case 'updateAt':
+            return stack.updateAt;
+          default:
+            return undefined;
+        }
+      };
+
       combinedScoredStacks.sort((a, b) => {
         // Primary sort by search score (for relevance)
         const scoreDiff = b.searchScore - a.searchScore;
@@ -1265,11 +1337,13 @@ export const createStackService = (deps: {
         }
 
         // Secondary sort by specified field
-        const aVal = (a as any)[sortField];
-        const bVal = (b as any)[sortField];
+        const aVal = getSortValue(a, sortField);
+        const bVal = getSortValue(b, sortField);
 
         if (sortField === 'name') {
-          return sortOrder === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+          const aName = String(aVal ?? '');
+          const bName = String(bVal ?? '');
+          return sortOrder === 'asc' ? aName.localeCompare(bName) : bName.localeCompare(aName);
         }
         if (typeof aVal === 'number' && typeof bVal === 'number') {
           return sortOrder === 'asc' ? aVal - bVal : bVal - aVal;

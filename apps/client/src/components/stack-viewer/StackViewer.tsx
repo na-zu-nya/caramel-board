@@ -88,7 +88,6 @@ export default function StackViewer({
   const {
     imageCarouselRef,
     dragOffset,
-    setDragOffset,
     currentAsset,
     nextAsset,
     prevAsset,
@@ -183,7 +182,7 @@ export default function StackViewer({
       const rng = mtRef.current!;
       const MAX = 0x100000000;
       const bound = MAX - (MAX % totalCount);
-      let r;
+      let r: number = 0;
       do {
         r = rng.random_int();
       } while (r >= bound);
@@ -296,21 +295,29 @@ export default function StackViewer({
     time: number;
     color: string;
   } | null>(null);
-  const openMarkerEditor = useCallback((marker: TVideoMarker, index: number) => {
-    // Capture current playback at moment of open (after any seek move)
-    const refAny = imageCarouselRef.current as any;
-    if (refAny?.isCurrentVideo?.()) {
-      markerDialogPlaybackRef.current = {
-        time: Number(refAny?.getCurrentTime?.() ?? 0) || 0,
-        wasPlaying: !!refAny?.getIsPlaying?.(),
-      };
-      // Ensure the player keeps its state (robust to reflows)
-      refAny?.requestRestorePlayback?.(markerDialogPlaybackRef.current);
-    } else {
-      markerDialogPlaybackRef.current = null;
-    }
-    setMarkerEditor({ open: true, index, time: marker.time, color: marker.color || 'bright-blue' });
-  }, []);
+  const openMarkerEditor = useCallback(
+    (marker: TVideoMarker, index: number) => {
+      // Capture current playback at moment of open (after any seek move)
+      const refAny = imageCarouselRef.current as any;
+      if (refAny?.isCurrentVideo?.()) {
+        markerDialogPlaybackRef.current = {
+          time: Number(refAny?.getCurrentTime?.() ?? 0) || 0,
+          wasPlaying: !!refAny?.getIsPlaying?.(),
+        };
+        // Ensure the player keeps its state (robust to reflows)
+        refAny?.requestRestorePlayback?.(markerDialogPlaybackRef.current);
+      } else {
+        markerDialogPlaybackRef.current = null;
+      }
+      setMarkerEditor({
+        open: true,
+        index,
+        time: marker.time,
+        color: marker.color || 'bright-blue',
+      });
+    },
+    [imageCarouselRef.current]
+  );
   const closeMarkerEditor = useCallback(
     () => setMarkerEditor((p) => (p ? { ...p, open: false } : p)),
     []
@@ -319,14 +326,14 @@ export default function StackViewer({
   // Always enable gesture mode when stack changes
   useEffect(() => {
     setIsListMode(false);
-  }, [stackId, setIsListMode]);
+  }, [setIsListMode]);
 
   // Keep InfoSidebar open state across cross-stack navigation and update its target
   useEffect(() => {
     if (isInfoSidebarOpen && stack) {
       setSelectedItemId(stack.id);
     }
-  }, [isInfoSidebarOpen, stack?.id, setSelectedItemId]);
+  }, [isInfoSidebarOpen, stack?.id, setSelectedItemId, stack]);
 
   // Track viewport zoom (iOS pinch-zoom)
   useEffect(() => {
@@ -360,7 +367,7 @@ export default function StackViewer({
     if (Date.now() - saved.ts > 1500) return;
     // Restore over multiple frames to fight reflow
     restoreVisualViewport(12);
-  }, [currentPage, stackId, isZoomed, restoreVisualViewport]);
+  }, [isZoomed, restoreVisualViewport]);
 
   // Expose shuffle button in header
   useHeaderActions({
@@ -610,6 +617,7 @@ export default function StackViewer({
     stackId,
     refetch,
     getMarkersFor,
+    openMarkerEditor,
   ]);
 
   // pointerup はオーバーレイ側でコピー処理を実行するため、ここでは扱わない

@@ -10,32 +10,23 @@ import {
   Loader2,
   Pencil,
   Plus,
-  Search,
   SquarePen,
   Tag,
   Trash2,
   X,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import BulkEditPanel from '@/components/BulkEditPanel.tsx';
+import BulkEditPanel, { type EditUpdates } from '@/components/BulkEditPanel';
 import FilterPanel from '@/components/FilterPanel';
 import InfoSidebar from '@/components/InfoSidebar';
 import AutoTagMappingModal from '@/components/modals/AutoTagMappingModal';
-import { StackContextMenu } from '@/components/modals/StackContextMenu';
 import { AutoTagDisplay } from '@/components/ui/autotag-display';
 import { Button } from '@/components/ui/button';
 import { SmallSearchField, SmallSelect } from '@/components/ui/Controls';
 import { HeaderIconButton } from '@/components/ui/Header/HeaderIconButton';
-import { Input } from '@/components/ui/input';
 import { StackTile } from '@/components/ui/Stack';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { SelectItem } from '@/components/ui/select';
 import { SelectionActionBar } from '@/components/ui/selection-action-bar';
 import { useKeyboardShortcuts } from '@/hooks/features/useKeyboardShortcuts';
 import { useStackTile } from '@/hooks/useStackTile';
@@ -45,10 +36,9 @@ import {
   currentFilterAtom,
   filterOpenAtom,
   infoSidebarOpenAtom,
-  selectedItemIdAtom,
   selectionModeAtom,
 } from '@/stores/ui';
-import type { StackFilter } from '@/types';
+import type { Stack, StackFilter } from '@/types';
 
 export const Route = createFileRoute('/library/$datasetId/autotag-config')({
   component: AutoTagConfigPage,
@@ -67,15 +57,6 @@ interface AutoTagStatisticsResponse {
   totalPredictions?: number;
   method?: 'sql' | 'aggregate' | 'batch';
   tags: AutoTagStatistic[];
-}
-
-interface AutoTagWithMapping {
-  autoTagKey: string;
-  mappedTag?: {
-    id: number;
-    title: string;
-  };
-  displayName?: string;
 }
 
 interface AutoTagMapping {
@@ -101,17 +82,25 @@ interface AutoTagMappingsResponse {
   offset: number;
 }
 
-interface Tag {
-  id: number;
-  title: string;
-  dataSetId: number;
+type AutoTagStack = Stack & {
+  _count?: {
+    assets?: number;
+  };
+};
+
+interface AutoTagStackPage {
+  stacks: AutoTagStack[];
+  total: number;
+  limit: number;
+  offset: number;
 }
 
 function AutoTagConfigPage() {
   const { datasetId } = Route.useParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const actions = useStackTile(datasetId);
+  const { onOpen, onFindSimilar, onAddToScratch, onToggleFavorite, onLike, onInfo, dragProps } =
+    useStackTile(datasetId);
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
@@ -123,14 +112,13 @@ function AutoTagConfigPage() {
     'count-desc'
   );
   const [infoSidebarOpen, setInfoSidebarOpen] = useAtom(infoSidebarOpenAtom);
-  const [, setSelectedItemId] = useAtom(selectedItemIdAtom);
   const [selectionMode, setSelectionMode] = useAtom(selectionModeAtom);
   const [selectedItems, setSelectedItems] = useState<Set<string | number>>(new Set());
   const [isEditPanelOpen, setIsEditPanelOpen] = useState(false);
   const lastClickedIndexRef = useRef<number | null>(null);
   const debounceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [filterOpen, setFilterOpen] = useAtom(filterOpenAtom);
-  const [currentFilter, setCurrentFilter] = useAtom(currentFilterAtom);
+  const [_currentFilter, setCurrentFilter] = useAtom(currentFilterAtom);
   const [localFilter, setLocalFilter] = useState<StackFilter>({});
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const loadMoreTriggerRef = useRef<HTMLDivElement>(null);
@@ -209,7 +197,8 @@ function AutoTagConfigPage() {
   useEffect(() => {
     setStrictCounts({});
     requestedStrictKeysRef.current = new Set();
-  }, [datasetId, debouncedSearchQuery]);
+    pendingVisibleKeysRef.current = new Set();
+  }, []);
 
   // Lazily fetch strict counts for currently listed tags (top N)
   useEffect(() => {
@@ -226,13 +215,17 @@ function AutoTagConfigPage() {
     if (missing.length === 0) return;
 
     // Mark as requested to avoid duplicate calls
-    missing.forEach((k) => requestedStrictKeysRef.current.add(k));
+    for (const k of missing) {
+      requestedStrictKeysRef.current.add(k);
+    }
 
     const run = async () => {
       for (let i = 0; i < missing.length; i += BATCH) {
         const batch = missing.slice(i, i + BATCH);
         const params = new URLSearchParams({ threshold: '0.4' });
-        batch.forEach((k) => params.append('keys', k));
+        for (const k of batch) {
+          params.append('keys', k);
+        }
         try {
           const res = await apiClient.get(
             `/api/v1/auto-tags/statistics/${datasetId}/strict?${params.toString()}`
@@ -262,7 +255,7 @@ function AutoTagConfigPage() {
     };
 
     run();
-  }, [datasetId, filteredStatistics, statisticsData?.method]);
+  }, [datasetId, filteredStatistics, statisticsData?.method, statisticsData?.tags, strictCounts]);
 
   // Observe visible rows and request strict counts for them in small batches
   useEffect(() => {
@@ -291,9 +284,13 @@ function AutoTagConfigPage() {
             const BATCH = 25;
             for (let i = 0; i < keys.length; i += BATCH) {
               const batch = keys.slice(i, i + BATCH);
-              batch.forEach((k) => requestedStrictKeysRef.current.add(k));
+              for (const k of batch) {
+                requestedStrictKeysRef.current.add(k);
+              }
               const params = new URLSearchParams({ threshold: '0.4' });
-              batch.forEach((k) => params.append('keys', k));
+              for (const k of batch) {
+                params.append('keys', k);
+              }
               try {
                 const res = await apiClient.get(
                   `/api/v1/auto-tags/statistics/${datasetId}/strict?${params.toString()}`
@@ -335,14 +332,10 @@ function AutoTagConfigPage() {
       if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
       observer.disconnect();
     };
-  }, [filteredStatistics, statisticsData?.method, strictCounts, datasetId]);
+  }, [filteredStatistics, statisticsData?.method, strictCounts, datasetId, statisticsData?.tags]);
 
   // Fetch AutoTag mappings
-  const {
-    data: mappingsData,
-    isLoading: mappingsLoading,
-    error: mappingsError,
-  } = useQuery<AutoTagMappingsResponse>({
+  const { data: mappingsData } = useQuery<AutoTagMappingsResponse>({
     queryKey: ['autotag-mappings', datasetId],
     queryFn: async () => {
       const response = await apiClient.get(
@@ -352,42 +345,6 @@ function AutoTagConfigPage() {
     },
   });
 
-  // Build query parameters with filter
-  const buildQueryParams = () => {
-    const params = new URLSearchParams({
-      autoTag: selectedAutoTag || '',
-      dataSetId: datasetId,
-      limit: '50',
-      offset: '0',
-    });
-
-    // Add filter parameters
-    if (localFilter.hasNoTags) {
-      params.append('hasNoTags', 'true');
-    }
-    if (localFilter.hasNoAuthor) {
-      params.append('hasNoAuthor', 'true');
-    }
-    if (localFilter.tags && localFilter.tags.length > 0) {
-      for (const tag of localFilter.tags) {
-        params.append('tags', tag);
-      }
-    }
-    if (localFilter.authors && localFilter.authors.length > 0) {
-      for (const author of localFilter.authors) {
-        params.append('authors', author);
-      }
-    }
-    if (localFilter.isFavorite !== undefined) {
-      params.append('isFavorite', localFilter.isFavorite.toString());
-    }
-    if (localFilter.search) {
-      params.append('search', localFilter.search);
-    }
-
-    return params.toString();
-  };
-
   // Fetch stacks with selected AutoTag using infinite query
   const {
     data: autoTagStacksData,
@@ -395,53 +352,52 @@ function AutoTagConfigPage() {
     hasNextPage,
     isFetchingNextPage,
     isLoading: stacksLoading,
-  } = useInfiniteQuery({
+  } = useInfiniteQuery<AutoTagStackPage>({
     queryKey: ['autotag-stacks', datasetId, selectedAutoTag, localFilter],
     queryFn: async ({ pageParam = 0 }) => {
-      if (!selectedAutoTag) return { stacks: [], total: 0, limit: 50, offset: 0 };
+      if (!selectedAutoTag) {
+        return { stacks: [], total: 0, limit: 50, offset: 0 } satisfies AutoTagStackPage;
+      }
 
+      const numericOffset = typeof pageParam === 'number' ? pageParam : Number(pageParam) || 0;
       const params = new URLSearchParams({
         autoTag: selectedAutoTag,
         dataSetId: datasetId,
         limit: '50',
-        offset: pageParam.toString(),
+        offset: numericOffset.toString(),
       });
+      appendFilterParams(params, localFilter);
 
-      // Add filter parameters
-      if (localFilter.hasNoTags) {
-        params.append('hasNoTags', 'true');
-      }
-      if (localFilter.hasNoAuthor) {
-        params.append('hasNoAuthor', 'true');
-      }
-      if (localFilter.tags && localFilter.tags.length > 0) {
-        localFilter.tags.forEach((tag) => params.append('tags', tag));
-      }
-      if (localFilter.authors && localFilter.authors.length > 0) {
-        localFilter.authors.forEach((author) => params.append('authors', author));
-      }
-      if (localFilter.isFavorite !== undefined) {
-        params.append('isFavorite', localFilter.isFavorite.toString());
-      }
-      if (localFilter.search) {
-        params.append('search', localFilter.search);
-      }
-
-      const response = await apiClient.get(`/api/v1/stacks/search/autotag?${params.toString()}`);
+      const response = await apiClient.get<AutoTagStackPage>(
+        `/api/v1/stacks/search/autotag?${params.toString()}`
+      );
       return response.data;
     },
     getNextPageParam: (lastPage) => {
       const nextOffset = lastPage.offset + lastPage.limit;
       return nextOffset < lastPage.total ? nextOffset : undefined;
     },
-    enabled: !!selectedAutoTag,
+    enabled: Boolean(selectedAutoTag),
     initialPageParam: 0,
   });
 
   // Flatten all stacks from pages
-  const allStacks = useMemo(() => {
-    return autoTagStacksData?.pages.flatMap((page) => page.stacks) || [];
+  const allStacks = useMemo<AutoTagStack[]>(() => {
+    if (!autoTagStacksData?.pages) return [];
+    return autoTagStacksData.pages.flatMap((page) => page.stacks);
   }, [autoTagStacksData]);
+
+  const selectedStackSummaries = useMemo(
+    () =>
+      allStacks
+        .filter((stack) => selectedItems.has(stack.id))
+        .map((stack) => ({
+          id: stack.id,
+          tags: normalizeStackTags(stack.tags),
+          author: getStackAuthor(stack.author),
+        })),
+    [allStacks, selectedItems]
+  );
 
   // Restore selectedAutoTag from URL when navigation changes
   useEffect(() => {
@@ -476,7 +432,7 @@ function AutoTagConfigPage() {
 
     observer.observe(el);
     return () => observer.disconnect();
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage, allStacks.length, selectedAutoTag]);
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   // Delete mapping mutation
   const deleteMappingMutation = useMutation({
@@ -516,10 +472,11 @@ function AutoTagConfigPage() {
     try {
       const sp = new URLSearchParams(location.search);
       sp.set('autoTag', encodeURIComponent(autoTagKey));
+      const nextSearch = searchParamsToObject(sp);
       navigate({
         to: '/library/$datasetId/autotag-config',
         params: { datasetId },
-        search: () => Object.fromEntries(sp.entries()) as any,
+        search: () => nextSearch,
       });
     } catch {}
   };
@@ -532,13 +489,13 @@ function AutoTagConfigPage() {
   // Selection mode handlers
   const handleItemSelect = useCallback((itemId: string | number) => {
     setSelectedItems((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(itemId)) {
-        newSet.delete(itemId);
+      const next = new Set(prev);
+      if (next.has(itemId)) {
+        next.delete(itemId);
       } else {
-        newSet.add(itemId);
+        next.add(itemId);
       }
-      return newSet;
+      return next;
     });
   }, []);
 
@@ -566,88 +523,92 @@ function AutoTagConfigPage() {
     setIsEditPanelOpen(false);
   }, []);
 
-  const handleStackClick = useCallback(
-    (stack: any, event: React.MouseEvent) => {
-      const idx = allStacks.findIndex((s: any) => s?.id === stack.id);
+  const handleTileClick = useCallback(
+    (stack: AutoTagStack, event: MouseEvent<HTMLDivElement>) => {
+      const stackIndex = allStacks.findIndex((candidate) => candidate?.id === stack.id);
+
+      const recordLastClicked = () => {
+        if (stackIndex >= 0) {
+          lastClickedIndexRef.current = stackIndex;
+        }
+      };
 
       if (event.metaKey || event.ctrlKey) {
         event.preventDefault();
-        if (!selectionMode) setSelectionMode(true);
+        if (!selectionMode) {
+          setSelectionMode(true);
+        }
         handleItemSelect(stack.id);
-        if (idx >= 0) lastClickedIndexRef.current = idx;
+        recordLastClicked();
         return;
       }
 
       if (event.shiftKey) {
         event.preventDefault();
-        if (!selectionMode) setSelectionMode(true);
-        const last = lastClickedIndexRef.current ?? idx;
-        if (last >= 0 && idx >= 0) {
-          const [start, end] = last < idx ? [last, idx] : [idx, last];
-          const next = new Set(selectedItems);
-          for (let i = start; i <= end; i++) {
-            const it = allStacks[i];
-            if (it) next.add(it.id);
-          }
-          setSelectedItems(next);
+        if (!selectionMode) {
+          setSelectionMode(true);
+        }
+
+        const lastIndex = lastClickedIndexRef.current ?? stackIndex;
+        if (lastIndex !== null && stackIndex >= 0 && lastIndex >= 0) {
+          const [start, end] =
+            lastIndex < stackIndex ? [lastIndex, stackIndex] : [stackIndex, lastIndex];
+          setSelectedItems((prev) => {
+            const next = new Set(prev);
+            for (let i = start; i <= end; i++) {
+              const candidate = allStacks[i];
+              if (candidate) {
+                next.add(candidate.id);
+              }
+            }
+            return next;
+          });
         } else {
           handleItemSelect(stack.id);
         }
-        if (idx >= 0) lastClickedIndexRef.current = idx;
+        recordLastClicked();
         return;
       }
 
       if (selectionMode) {
         event.preventDefault();
         handleItemSelect(stack.id);
-        if (idx >= 0) lastClickedIndexRef.current = idx;
+        recordLastClicked();
         return;
       }
 
-      setSelectedItemId(stack.id);
-      setInfoSidebarOpen(true);
+      if (infoSidebarOpen) {
+        event.preventDefault();
+        onInfo(stack.id);
+        recordLastClicked();
+      }
     },
-    [
-      selectionMode,
-      allStacks,
-      selectedItems,
-      setSelectedItems,
-      handleItemSelect,
-      setSelectedItemId,
-      setInfoSidebarOpen,
-      setSelectionMode,
-    ]
+    [allStacks, selectionMode, infoSidebarOpen, setSelectionMode, handleItemSelect, onInfo]
   );
 
   const applyEditUpdates = useCallback(
-    async (updates: any) => {
-      // Apply bulk updates to selected items
+    async (updates: EditUpdates) => {
       if (selectedItems.size === 0) return;
 
-      try {
-        const stackIds = Array.from(selectedItems).map((id) => Number(id));
+      const stackIds = Array.from(selectedItems)
+        .map((id) => toNumericId(id))
+        .filter((id): id is number => id !== null);
 
-        // Apply tags
-        if (updates.addTags && updates.addTags.length > 0) {
+      if (stackIds.length === 0) return;
+
+      try {
+        if (updates.addTags?.length) {
           await apiClient.bulkAddTags(stackIds, updates.addTags);
         }
 
-        // Apply author
-        if (updates.author) {
-          await apiClient.bulkSetAuthor(stackIds, updates.author);
+        if (updates.setAuthor) {
+          await apiClient.bulkSetAuthor(stackIds, updates.setAuthor);
         }
 
-        // Apply media type
-        if (updates.mediaType) {
-          await apiClient.bulkSetMediaType(stackIds, updates.mediaType);
+        if (updates.setMediaType) {
+          await apiClient.bulkSetMediaType(stackIds, updates.setMediaType);
         }
 
-        // Apply favorite
-        if (updates.favorite !== undefined) {
-          await apiClient.bulkSetFavorite(stackIds, updates.favorite);
-        }
-
-        // Refresh data
         queryClient.invalidateQueries({
           queryKey: ['autotag-stacks', datasetId, selectedAutoTag, localFilter],
         });
@@ -657,7 +618,7 @@ function AutoTagConfigPage() {
         console.error('Error applying bulk updates:', error);
       }
     },
-    [selectedItems, queryClient, datasetId, selectedAutoTag, exitSelectionMode]
+    [selectedItems, queryClient, datasetId, selectedAutoTag, exitSelectionMode, localFilter]
   );
 
   // Handle filter change
@@ -859,10 +820,11 @@ function AutoTagConfigPage() {
                     try {
                       const sp = new URLSearchParams(location.search);
                       sp.delete('autoTag');
+                      const nextSearch = searchParamsToObject(sp);
                       navigate({
                         to: '/library/$datasetId/autotag-config',
                         params: { datasetId },
-                        search: () => Object.fromEntries(sp.entries()) as any,
+                        search: () => nextSearch,
                       });
                     } catch {}
                   }}
@@ -932,57 +894,45 @@ function AutoTagConfigPage() {
               ) : (
                 <>
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                    {allStacks.map((stack: any) => {
-                      const {
-                        onOpen,
-                        onFindSimilar,
-                        onAddToScratch,
-                        onToggleFavorite,
-                        onLike,
-                        dragProps,
-                        onInfo,
-                      } = actions;
-                      const thumb = stack.thumbnail || stack.thumbnailUrl || '/no-image.png';
+                    {allStacks.map((stack) => {
+                      const thumbnail = stack.thumbnail ?? stack.thumbnailUrl ?? '/no-image.png';
                       const likeCount = Number(stack.likeCount ?? stack.liked ?? 0);
                       const pageCount =
-                        stack.assetCount || stack._count?.assets || stack.assetsCount || 0;
-                      const isFav = stack.favorited || stack.isFavorite || false;
-                      return infoSidebarOpen ? (
+                        stack.assetCount ?? stack._count?.assets ?? stack.assetsCount ?? 0;
+                      const favorited = Boolean(stack.favorited ?? stack.isFavorite);
+
+                      if (infoSidebarOpen) {
+                        return (
+                          <StackTile
+                            key={stack.id}
+                            thumbnailUrl={thumbnail}
+                            pageCount={pageCount}
+                            favorited={favorited}
+                            likeCount={likeCount}
+                            onClick={(event) => handleTileClick(stack, event)}
+                            onInfo={() => onInfo(stack.id)}
+                            onFindSimilar={() => onFindSimilar(stack.id)}
+                            onAddToScratch={() => onAddToScratch(stack.id)}
+                            onToggleFavorite={() => onToggleFavorite(stack.id, favorited)}
+                            onLike={() => onLike(stack.id)}
+                            dragHandlers={dragProps(stack.id)}
+                          />
+                        );
+                      }
+
+                      return (
                         <StackTile
                           key={stack.id}
-                          thumbnailUrl={thumb}
+                          thumbnailUrl={thumbnail}
                           pageCount={pageCount}
-                          favorited={isFav}
+                          favorited={favorited}
                           likeCount={likeCount}
-                          onClick={() => {
-                            setSelectedItemId(stack.id);
-                            setInfoSidebarOpen(true);
-                          }}
-                          onInfo={() => {
-                            setSelectedItemId(stack.id);
-                            setInfoSidebarOpen(true);
-                          }}
-                          onFindSimilar={() => onFindSimilar(stack.id)}
-                          onAddToScratch={() => onAddToScratch(stack.id)}
-                          onToggleFavorite={() => onToggleFavorite(stack.id, isFav)}
-                          onLike={() => onLike(stack.id)}
-                          dragHandlers={dragProps(stack.id)}
-                        />
-                      ) : (
-                        <StackTile
-                          key={stack.id}
-                          thumbnailUrl={thumb}
-                          pageCount={pageCount}
-                          favorited={isFav}
-                          likeCount={likeCount}
+                          onClick={(event) => handleTileClick(stack, event)}
                           onOpen={() => onOpen(stack.id)}
-                          onInfo={() => {
-                            setSelectedItemId(stack.id);
-                            setInfoSidebarOpen(true);
-                          }}
+                          onInfo={() => onInfo(stack.id)}
                           onFindSimilar={() => onFindSimilar(stack.id)}
                           onAddToScratch={() => onAddToScratch(stack.id)}
-                          onToggleFavorite={() => onToggleFavorite(stack.id, isFav)}
+                          onToggleFavorite={() => onToggleFavorite(stack.id, favorited)}
                           onLike={() => onLike(stack.id)}
                           dragHandlers={dragProps(stack.id)}
                           asChild
@@ -1020,7 +970,7 @@ function AutoTagConfigPage() {
             {(() => {
               // Get first stack with autoTags to demonstrate the component
               const stackWithAutoTags = allStacks.find(
-                (stack: any) => stack.autoTags && stack.autoTags.length > 0
+                (stack) => Array.isArray(stack.autoTags) && stack.autoTags.length > 0
               );
 
               if (stackWithAutoTags) {
@@ -1072,7 +1022,7 @@ function AutoTagConfigPage() {
         datasetId={datasetId}
         autoTagKey={mappingAutoTagKey}
         existingMapping={editingMapping}
-        onSuccess={(mapping) => {
+        onSuccess={(_mapping) => {
           queryClient.invalidateQueries({ queryKey: ['autotag-mappings', datasetId] });
           queryClient.invalidateQueries({ queryKey: ['tags', datasetId] });
           setMappingDialogOpen(false);
@@ -1092,7 +1042,7 @@ function AutoTagConfigPage() {
             selectedItems={selectedItems}
             onClose={closeEditPanel}
             onSave={applyEditUpdates}
-            items={allStacks.filter((s: any) => selectedItems.has(s.id))}
+            items={selectedStackSummaries}
           />,
           document.body
         )}
@@ -1173,4 +1123,62 @@ function AutoTagConfigPage() {
       <FilterPanel currentFilter={localFilter} onFilterChange={handleFilterChange} />
     </div>
   );
+}
+
+function appendFilterParams(target: URLSearchParams, filter: StackFilter) {
+  if (filter.hasNoTags) {
+    target.append('hasNoTags', 'true');
+  }
+  if (filter.hasNoAuthor) {
+    target.append('hasNoAuthor', 'true');
+  }
+  if (Array.isArray(filter.tags)) {
+    for (const tag of filter.tags) {
+      target.append('tags', tag);
+    }
+  }
+  if (Array.isArray(filter.authors)) {
+    for (const author of filter.authors) {
+      target.append('authors', author);
+    }
+  }
+  if (filter.isFavorite !== undefined) {
+    target.append('isFavorite', filter.isFavorite.toString());
+  }
+  if (filter.search) {
+    target.append('search', filter.search);
+  }
+}
+
+function searchParamsToObject(params: URLSearchParams): Record<string, string> {
+  const entries = Array.from(params.entries());
+  return entries.reduce<Record<string, string>>((acc, [key, value]) => {
+    acc[key] = value;
+    return acc;
+  }, {});
+}
+
+function normalizeStackTags(tags?: Stack['tags']): string[] {
+  if (!tags) return [];
+  if (tags.every((tag) => typeof tag === 'string')) {
+    return (tags as string[]).filter((tag) => tag.length > 0);
+  }
+
+  return (tags as Array<{ name?: string; title?: string; displayName?: string }>)
+    .map((tag) => tag.name ?? tag.title ?? tag.displayName ?? '')
+    .filter((tag): tag is string => tag.length > 0);
+}
+
+function getStackAuthor(author: Stack['author']): string | undefined {
+  if (!author) return undefined;
+  return typeof author === 'string' ? author : (author.name ?? undefined);
+}
+
+function toNumericId(value: string | number): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : null;
 }

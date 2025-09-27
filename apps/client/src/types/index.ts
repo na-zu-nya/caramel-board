@@ -144,7 +144,7 @@ export interface Collection {
   folderId?: number; // 所属するフォルダID（ルートの場合はnull）
   createdAt: string;
   updatedAt: string;
-  filterConfig?: Record<string, any>;
+  filterConfig?: Record<string, unknown>;
   // kind はクライアント側の便宜的な識別（サーバは filterConfig.kind を返す想定）。
   // 'scratch' の場合は一時収集用の特別なコレクションとして扱う。
   kind?: 'collection' | 'scratch';
@@ -280,6 +280,8 @@ export const AVAILABLE_ICONS = [
   'Shield',
   'Diamond',
   'Gem',
+  'NotebookText',
+  'Home',
 ] as const;
 
 export type AvailableIcon = (typeof AVAILABLE_ICONS)[number];

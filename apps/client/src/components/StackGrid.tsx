@@ -21,7 +21,6 @@ import {
 } from '@/stores/upload';
 import type { Dataset, MediaGridItem } from '@/types';
 import BulkEditPanel from './BulkEditPanel.tsx';
-import InfoSidebar from './InfoSidebar';
 
 interface StackGridProps {
   // Option 1: Legacy mode with pre-loaded items array
@@ -60,7 +59,6 @@ export default function StackGrid({
   error = null,
   onLoadRange,
   onRefreshAll: legacyOnRefreshAll,
-  onReorderStacks,
   containerRef: externalContainerRef,
 
   // Common props
@@ -146,15 +144,18 @@ export default function StackGrid({
   // Wrap handleItemClick with onItemClick parameter
   const lastClickedIndexRef = useRef<number | null>(null);
 
-  const findIndexById = (id: string | number) => {
-    for (let i = 0; i < actualItems.length; i++) {
-      const it = actualItems[i];
-      if (!it) continue;
-      const itId = typeof it.id === 'string' ? it.id : String(it.id);
-      if (itId === (typeof id === 'string' ? id : String(id))) return i;
-    }
-    return -1;
-  };
+  const findIndexById = useCallback(
+    (id: string | number) => {
+      for (let i = 0; i < actualItems.length; i++) {
+        const it = actualItems[i];
+        if (!it) continue;
+        const itId = typeof it.id === 'string' ? it.id : String(it.id);
+        if (itId === (typeof id === 'string' ? id : String(id))) return i;
+      }
+      return -1;
+    },
+    [actualItems]
+  );
 
   const onTileClick = useCallback(
     (item: MediaGridItem, e?: React.MouseEvent) => {
@@ -171,7 +172,7 @@ export default function StackGrid({
       }
 
       // Shift + Click → range select from last clicked
-      if (e && e.shiftKey) {
+      if (e?.shiftKey) {
         e.preventDefault();
         setSelectionMode(true);
         const last = lastClickedIndexRef.current ?? idx;
@@ -202,6 +203,7 @@ export default function StackGrid({
       handleToggleSelection,
       handleItemClick,
       onItemClick,
+      findIndexById,
     ]
   );
 
@@ -245,7 +247,9 @@ export default function StackGrid({
 
     if (successNotifications.length > 0) {
       // Mark these notifications as processed
-      successNotifications.forEach((n) => processedNotificationIds.current.add(n.id));
+      for (const n of successNotifications) {
+        processedNotificationIds.current.add(n.id);
+      }
 
       console.log(
         `🔄 Upload completed (${successNotifications.length} files), scheduling refresh...`
@@ -298,16 +302,7 @@ export default function StackGrid({
         }
       }, 500); // Wait 500ms to batch multiple uploads
     }
-  }, [
-    uploadNotifications,
-    queryClient,
-    onLoadRange,
-    onRefreshAll,
-    rangeStart,
-    actualTotal,
-    containerRef,
-    dsId,
-  ]);
+  }, [uploadNotifications, queryClient, onLoadRange, onRefreshAll, rangeStart, actualTotal, dsId]);
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -480,8 +475,8 @@ export default function StackGrid({
   };
 
   // Check if we're in a collection view
-  const isCollectionView = window.location.pathname.includes('/collections/');
-  const isScratchView = window.location.pathname.includes('/scratch/');
+  const _isCollectionView = window.location.pathname.includes('/collections/');
+  const _isScratchView = window.location.pathname.includes('/scratch/');
 
   // Handle file drops for new stack creation
   const handleFileDrop = useCallback(
@@ -693,12 +688,9 @@ export default function StackGrid({
                   isFavoritePending={favoriteStates.has(item.id)}
                   overrideFavorited={favoriteOverrides.get(item.id)}
                   selectedItems={selectedItems}
-                  allItems={actualItems.filter((it): it is MediaGridItem => it !== undefined)}
                   onItemClick={onTileClick}
                   onToggleSelection={handleToggleSelection}
                   onToggleFavorite={handleToggleFavorite}
-                  itemIndex={reorderMode ? actualIndex : undefined}
-                  onReorderDrop={reorderMode ? onReorderStacks : undefined}
                   allowRemoveFromCollection={allowRemoveFromCollection}
                   onRemoveFromCollection={
                     allowRemoveFromCollection ? (id) => handleRemoveFromCollection([id]) : undefined

@@ -51,7 +51,7 @@ export function SetupGuide({
     setDragOffset(0);
     dragStartXRef.current = null;
     dragDeltaRef.current = 0;
-  }, [activeIndex]);
+  }, []);
 
   const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     if (event.pointerType === 'mouse' && event.button !== 0) return;
@@ -208,7 +208,6 @@ export function SetupGuide({
           'relative overflow-hidden rounded-xl border border-gray-200 bg-white shadow-[0_12px_48px_rgba(15,23,42,0.08)] focus:outline-none',
           'transition-shadow duration-200 ease-out focus:ring-2 focus:ring-amber-400 focus:ring-offset-2'
         )}
-        tabIndex={0}
         role="group"
         aria-roledescription="carousel"
         aria-label="ライブラリセットアップガイド"

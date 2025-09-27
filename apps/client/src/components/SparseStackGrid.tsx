@@ -1,5 +1,4 @@
-import { useQueryClient } from '@tanstack/react-query';
-import { useAtom, useAtomValue, useSetAtom } from 'jotai';
+import { useAtomValue, useSetAtom } from 'jotai';
 import { Info, Loader2, Pencil } from 'lucide-react';
 import { useCallback, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
@@ -12,22 +11,21 @@ import { useSparseInfiniteScroll } from '@/hooks/useSparseInfiniteScroll';
 import { apiClient } from '@/lib/api-client';
 import { applyScrollbarCompensation, removeScrollbarCompensation } from '@/lib/scrollbar-utils';
 import { cn } from '@/lib/utils';
-import { currentFilterAtom, reorderModeAtom, selectionModeAtom } from '@/stores/ui';
+import { reorderModeAtom, selectionModeAtom } from '@/stores/ui';
 import {
   addFilesToQueueAtom,
   addUploadNotificationAtom,
   uploadDefaultsAtom,
   uploadNotificationsAtom,
 } from '@/stores/upload';
-import type { Dataset, MediaGridItem, StackFilter } from '@/types';
+import type { Dataset, MediaGridItem, SortOption, StackFilter } from '@/types';
 import BulkEditPanel from './BulkEditPanel.tsx';
-import InfoSidebar from './InfoSidebar';
 
 interface SparseStackGridProps {
   datasetId: string;
   mediaType?: string;
   filter: StackFilter;
-  sort: any;
+  sort?: SortOption;
   dataset?: Dataset;
   emptyState?: {
     icon: string;
@@ -48,8 +46,6 @@ export default function SparseStackGrid({
   onItemClick,
   className,
 }: SparseStackGridProps) {
-  const queryClient = useQueryClient();
-  const [currentFilter, setCurrentFilter] = useAtom(currentFilterAtom);
   const setSelectionMode = useSetAtom(selectionModeAtom);
   const reorderMode = useAtomValue(reorderModeAtom);
   const addFilesToQueue = useSetAtom(addFilesToQueueAtom);
@@ -87,7 +83,6 @@ export default function SparseStackGrid({
 
   const {
     containerRef,
-    sidebarOpen,
     infoSidebarOpen,
     setInfoSidebarOpen,
     isSelectionMode,
@@ -96,7 +91,6 @@ export default function SparseStackGrid({
     setSelectedItems,
     isEditPanelOpen,
     setIsEditPanelOpen,
-    scrollPosition,
     itemsPerRow,
     itemSize,
     favoriteStates,
@@ -104,9 +98,7 @@ export default function SparseStackGrid({
     handleItemClick,
     handleToggleSelection,
     handleToggleFavorite,
-    handleSelectAll,
     handleDeselectAll,
-    handleInfoSidebarOpen,
     applyEditUpdates,
     closeEditPanel,
     isSidebarAnimating,
@@ -121,7 +113,6 @@ export default function SparseStackGrid({
   });
 
   // Cmd/Ctrl + Click and Shift + Click selection support
-  const setSelectionMode = useSetAtom(selectionModeAtom);
   const lastClickedIndexRef = useRef<number | null>(null);
 
   const onTileClick = useCallback(
@@ -137,7 +128,7 @@ export default function SparseStackGrid({
         return;
       }
 
-      if (e && e.shiftKey) {
+      if (e?.shiftKey) {
         e.preventDefault();
         setSelectionMode(true);
         const last = lastClickedIndexRef.current ?? idx;
@@ -223,7 +214,7 @@ export default function SparseStackGrid({
 
     container.addEventListener('scroll', handleScroll);
     return () => container.removeEventListener('scroll', handleScroll);
-  }, [handleScroll]);
+  }, [containerRef, handleScroll]);
 
   // Initial load
   useEffect(() => {
@@ -384,7 +375,7 @@ export default function SparseStackGrid({
 
             return (
               <div
-                key={index}
+                key={item ? `stack-${item.id}` : `placeholder-${index}`}
                 className="absolute"
                 style={{
                   top: `${top}px`,

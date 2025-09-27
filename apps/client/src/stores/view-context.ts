@@ -20,7 +20,7 @@ export const viewContextAtom = atom<ViewContext | null>(null);
 export function saveViewContext(ctx: ViewContext) {
   try {
     sessionStorage.setItem(STORAGE_KEY_PREFIX + ctx.token, JSON.stringify(ctx));
-  } catch (e) {
+  } catch (_e) {
     // ignore persistence failures
   }
 }
@@ -30,7 +30,7 @@ export function loadViewContext(token: string): ViewContext | null {
     const raw = sessionStorage.getItem(STORAGE_KEY_PREFIX + token);
     if (!raw) return null;
     return JSON.parse(raw) as ViewContext;
-  } catch (e) {
+  } catch (_e) {
     return null;
   }
 }
@@ -56,5 +56,5 @@ export function genListToken(input: {
     h ^= seed.charCodeAt(i);
     h += (h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24);
   }
-  return 'vc_' + (h >>> 0).toString(36);
+  return `vc_${(h >>> 0).toString(36)}`;
 }

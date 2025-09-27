@@ -24,7 +24,7 @@ const isInputElement = (element: Element): boolean => {
   }
 
   // Check if element is inside an input or contenteditable
-  return element.closest(inputTags.join(',') + ',' + contentEditableTags.join(',')) !== null;
+  return element.closest(`${inputTags.join(',')},${contentEditableTags.join(',')}`) !== null;
 };
 
 export function useDisableTextSelection() {

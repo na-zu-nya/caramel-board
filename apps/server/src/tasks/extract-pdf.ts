@@ -1,6 +1,6 @@
 import { execSync } from 'node:child_process';
-import dotenv from 'dotenv';
 import path from 'node:path';
+import dotenv from 'dotenv';
 import 'source-map-support/register';
 import type { ArgumentsCamelCase } from 'yargs';
 

@@ -58,7 +58,7 @@ export function useScratch(datasetId: string | number) {
       }
       return ids.length;
     },
-    onSuccess: async (removedCount) => {
+    onSuccess: async (_removedCount) => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['stacks'] }),
         queryClient.invalidateQueries({ queryKey: ['collection'] }),
@@ -68,16 +68,12 @@ export function useScratch(datasetId: string | number) {
     },
   });
 
-  const convertMutation = useMutation({
-    mutationFn: async ({
-      collectionId,
-      dataSetId,
-      name,
-    }: {
-      collectionId: number;
-      dataSetId: string | number;
-      name: string;
-    }) => {
+  const convertMutation = useMutation<
+    { newCol: Collection; moved: number },
+    Error,
+    { collectionId: number; dataSetId: string | number; name: string }
+  >({
+    mutationFn: async ({ collectionId, dataSetId, name }) => {
       const ids = await listStackIdsInCollection(collectionId);
       // 新しいコレクションを作成
       const newCol = await apiClient.createCollection({
@@ -93,9 +89,9 @@ export function useScratch(datasetId: string | number) {
       for (const id of ids) {
         await apiClient.removeStackFromCollection(collectionId, id);
       }
-      return { newCol, moved: ids.length } as { newCol: Collection; moved: number };
+      return { newCol, moved: ids.length };
     },
-    onSuccess: async (result) => {
+    onSuccess: async (_result) => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['stacks'] }),
         queryClient.invalidateQueries({ queryKey: ['collection'] }),

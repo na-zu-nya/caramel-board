@@ -22,6 +22,7 @@ export function useHeaderActions(config: HeaderActionsConfig) {
     config.showSelection,
     config.showReorder,
     config.onShuffle,
+    config,
   ]);
 
   // Clean up only when component actually unmounts

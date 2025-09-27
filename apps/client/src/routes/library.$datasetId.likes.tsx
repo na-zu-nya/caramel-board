@@ -5,7 +5,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { GroupedLikesList } from '@/components/GroupedLikesList';
 import InfoSidebar from '@/components/InfoSidebar';
 import { YearPagination } from '@/components/YearPagination';
-import { useDataset } from '@/hooks/useDatasets';
 import { useHeaderActions } from '@/hooks/useHeaderActions';
 import { apiClient } from '@/lib/api-client';
 import { navigationStateAtom } from '@/stores/navigation';
@@ -70,7 +69,7 @@ function LikesPage() {
   // Reset accumulated data when year changes
   useEffect(() => {
     setAccumulatedData({});
-  }, [currentYear]);
+  }, []);
 
   // Merge new data with accumulated data
   useEffect(() => {

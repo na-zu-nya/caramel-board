@@ -1,5 +1,5 @@
 import path from 'node:path';
-import type { PrismaClient } from '@prisma/client';
+import type { Prisma, PrismaClient } from '@prisma/client';
 import { getAutoTagClient } from '../../lib/AutoTagClient';
 import { toPublicAssetPath, withPublicAssetArray } from '../../utils/assetPath';
 
@@ -8,6 +8,35 @@ interface WeightedJaccardSimilarity {
   similarity: number;
   commonTags: string[];
 }
+
+type PublicAsset = {
+  id?: number;
+  file?: string | null;
+  thumbnail?: string | null;
+  preview?: string | null;
+  [key: string]: unknown;
+};
+
+interface SimilarStackPayload extends WeightedJaccardSimilarity {
+  stack: {
+    assets: PublicAsset[];
+    thumbnail: string;
+    [key: string]: unknown;
+  };
+}
+
+const getErrorMessage = (error: unknown): string => {
+  if (error instanceof Error) return error.message;
+  return String(error);
+};
+
+const getErrorCode = (error: unknown): string | undefined => {
+  if (typeof error === 'object' && error !== null && 'code' in error) {
+    const code = (error as { code?: unknown }).code;
+    if (typeof code === 'string') return code;
+  }
+  return undefined;
+};
 
 export class AutoTagService {
   private stacksAIClient = getAutoTagClient();
@@ -53,7 +82,7 @@ export class AutoTagService {
     try {
       await this.stacksAIClient.healthCheck();
       aiAvailable = true;
-    } catch (e) {
+    } catch (_error) {
       console.warn(
         'AutoTagService: AI server not available, will reuse existing predictions if any'
       );
@@ -115,11 +144,12 @@ export class AutoTagService {
                   tagCount: result.tag_count || result.predicted_tags?.length || 0,
                 },
               });
-            } catch (fileKeyError: any) {
+            } catch (fileKeyError: unknown) {
               console.warn(
                 `Key-based tagging failed for asset ${asset.id}:`,
-                fileKeyError?.message || fileKeyError
+                getErrorMessage(fileKeyError)
               );
+              console.warn(`Asset file key was: ${fileKey}`);
               // Fallback: try absolute file path upload
               try {
                 const base = process.env.FILES_STORAGE || './data';
@@ -142,12 +172,13 @@ export class AutoTagService {
                     tagCount: result.tag_count || result.predicted_tags?.length || 0,
                   },
                 });
-              } catch (fileUploadError: any) {
-                const msg =
-                  fileUploadError?.code === 'P2002'
+              } catch (fileUploadError: unknown) {
+                const errorCode = getErrorCode(fileUploadError);
+                const message =
+                  errorCode === 'P2002'
                     ? `AutoTagPrediction already exists for asset ${asset.id}; treat as success.`
                     : `Skipping asset ${asset.id} (stack ${stackId}) due to file error:`;
-                console.warn(msg, fileUploadError?.message || fileUploadError);
+                console.warn(message, getErrorMessage(fileUploadError));
                 console.warn(`Asset file key was: ${fileKey}`);
                 skippedAssets++;
                 continue;
@@ -339,15 +370,15 @@ export class AutoTagService {
     });
 
     const targetTags = targetAggregate.aggregatedTags as Record<string, number>;
-    const similarities: Array<WeightedJaccardSimilarity & { stack: any }> = [];
+    const similarities: SimilarStackPayload[] = [];
 
     for (const aggregate of allAggregates) {
       const compareTags = aggregate.aggregatedTags as Record<string, number>;
       const similarity = this.calculateWeightedJaccardSimilarity(targetTags, compareTags);
 
       if (similarity.similarity >= threshold) {
-        const assets = withPublicAssetArray(
-          aggregate.stack.assets as any[],
+        const assets = withPublicAssetArray<PublicAsset>(
+          aggregate.stack.assets as PublicAsset[] | undefined,
           aggregate.stack.dataSetId
         );
         const stackThumbnail = toPublicAssetPath(
@@ -393,7 +424,7 @@ export class AutoTagService {
     const { threshold = 0.4, batchSize = 5, forceRegenerate = false } = options;
 
     // データセット内のアセットを取得
-    const whereCondition: any = {
+    const whereCondition: Prisma.AssetWhereInput = {
       stack: {
         dataSetId: datasetId,
       },

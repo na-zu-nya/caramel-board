@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useLocation, useNavigate, useParams } from '@tanstack/react-router';
 import { useAtom } from 'jotai';
+import type { LucideIcon } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { ArrowUpDown, Check, ChevronDown, Filter, Menu, Shuffle } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -25,6 +26,7 @@ import {
   selectionModeAtom,
   sidebarOpenAtom,
 } from '@/stores/ui';
+import type { Pin } from '@/types';
 
 export default function Header() {
   const [sidebarOpen, setSidebarOpen] = useAtom(sidebarOpenAtom);
@@ -39,13 +41,13 @@ export default function Header() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const params = useParams({ strict: false });
-  const datasetId = (params as any).datasetId || currentDataset || '1';
+  const params = useParams({ strict: false }) as Record<string, string | undefined>;
+  const datasetId = params.datasetId ?? currentDataset ?? '1';
   const selectedDataset = datasets.find((d) => String(d.id) === String(datasetId));
 
   // Fetch stack pins for current dataset
   // Fetch navigation pins for current dataset
-  const { data: navigationPins = [] } = useQuery({
+  const { data: navigationPins = [] } = useQuery<Pin[]>({
     queryKey: ['navigation-pins', datasetId],
     queryFn: async () => {
       return apiClient.getNavigationPinsByDataset(datasetId);
@@ -54,7 +56,10 @@ export default function Header() {
 
   // Helper function to render Lucide icons dynamically
   const renderIcon = (iconName: string) => {
-    const IconComponent = (LucideIcons as any)[iconName];
+    /* biome-ignore lint/performance/noDynamicNamespaceImportAccess: dynamic icon lookup is required for user-configured icon names */
+    const IconComponent = LucideIcons[iconName as keyof typeof LucideIcons] as
+      | LucideIcon
+      | undefined;
     if (IconComponent) {
       return <IconComponent size={18} />;
     }
@@ -62,7 +67,7 @@ export default function Header() {
   };
 
   // Check if a navigation pin is active
-  const isNavigationPinActive = (pin: any) => {
+  const isNavigationPinActive = (pin: Pin) => {
     const path = location.pathname;
     if (pin.type === 'COLLECTION' && pin.collectionId) {
       const scratch =
@@ -83,7 +88,7 @@ export default function Header() {
   };
 
   // Handle navigation pin navigation
-  const handleNavigationPinClick = (pin: any) => {
+  const handleNavigationPinClick = (pin: Pin) => {
     if (pin.type === 'COLLECTION' && pin.collectionId) {
       // Scratch pins are stored as COLLECTION type; detect and route to scratch page
       const isScratch =
@@ -170,7 +175,10 @@ export default function Header() {
             /* Compact mode - Dropdown menu */
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium hover:bg-white/10 transition-colors">
+                <button
+                  type="button"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium hover:bg-white/10 transition-colors"
+                >
                   <span>Pins</span>
                   <ChevronDown size={14} />
                 </button>

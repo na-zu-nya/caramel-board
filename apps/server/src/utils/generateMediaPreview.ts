@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
-import { mkdirpSync } from 'fs-extra';
 import path from 'node:path';
+import { mkdirpSync } from 'fs-extra';
 import { DataStorage } from '../lib/DataStorage';
 import { buildPreviewKey } from './assetPath';
 import { getFFMPEGPath, probeHasAudioStream } from './ffmpeg';

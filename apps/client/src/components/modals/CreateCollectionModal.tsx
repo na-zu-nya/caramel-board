@@ -1,6 +1,6 @@
 import { useParams } from '@tanstack/react-router';
 import { useAtomValue } from 'jotai';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -39,24 +39,11 @@ export function CreateCollectionModal({
   const [folders, setFolders] = useState<CollectionFolder[]>([]);
   const [loadingFolders, setLoadingFolders] = useState(false);
 
-  useEffect(() => {
-    if (type) {
-      setCollectionType(type);
-    }
-  }, [type]);
-
-  // Load folders when modal opens
-  useEffect(() => {
-    if (open && datasetId) {
-      loadFolders();
-    }
-  }, [open, datasetId]);
-
-  const loadFolders = async () => {
+  const loadFolders = useCallback(async () => {
     setLoadingFolders(true);
     try {
       const response = await apiClient.getCollectionFolders({
-        dataSetId: Number.parseInt(datasetId),
+        dataSetId: Number.parseInt(datasetId, 10),
         includeCollections: false,
         limit: 100,
       });
@@ -66,7 +53,7 @@ export function CreateCollectionModal({
     } finally {
       setLoadingFolders(false);
     }
-  };
+  }, [datasetId]);
 
   // Create a flat list of folders for the select dropdown
   const flattenFolders = (
@@ -85,6 +72,19 @@ export function CreateCollectionModal({
     return result;
   };
 
+  useEffect(() => {
+    if (type) {
+      setCollectionType(type);
+    }
+  }, [type]);
+
+  // Load folders when modal opens
+  useEffect(() => {
+    if (open && datasetId) {
+      loadFolders();
+    }
+  }, [open, datasetId, loadFolders]);
+
   const flatFolders = flattenFolders(folders);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -96,7 +96,7 @@ export function CreateCollectionModal({
       await apiClient.createCollection({
         name: name.trim(),
         type: collectionType,
-        dataSetId: Number.parseInt(datasetId),
+        dataSetId: Number.parseInt(datasetId, 10),
         folderId: selectedFolderId,
       });
 
@@ -178,7 +178,7 @@ export function CreateCollectionModal({
             <Select
               value={selectedFolderId ? String(selectedFolderId) : 'root'}
               onValueChange={(value) =>
-                setSelectedFolderId(value === 'root' ? undefined : Number.parseInt(value))
+                setSelectedFolderId(value === 'root' ? undefined : Number.parseInt(value, 10))
               }
             >
               <SelectTrigger>

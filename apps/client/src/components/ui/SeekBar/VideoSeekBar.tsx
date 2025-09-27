@@ -50,7 +50,7 @@ export default function VideoSeekBar({
 
   const NUDGE_PX = 8; // 近接ナッジのしきい値（px）
   const TRACK_HEIGHT_PX = 4; // h-1 = 0.25rem = 4px（seekトラックの高さ）
-  const ICON_HEIGHT_PX = 12; // MarkerIcon の実表示高さ（height=12）
+  const _ICON_HEIGHT_PX = 12; // MarkerIcon の実表示高さ（height=12）
   const HIT_HEIGHT_PX = 16; // ヒットエリアの高さ（アイコンより少し高め）
   // バー下端(50%+2px)から余白2pxの位置を基準（APEX）として、
   // アイコン/ヒットエリアの「底辺」をそこに揃える。
@@ -60,7 +60,7 @@ export default function VideoSeekBar({
   // マーカーの top を APEX に合わせる（= 上端がバー直下）。
   const iconTop = `${APEX_CSS}`;
   // ヒットエリアはアイコンの上端に揃えつつ高さぶん上方向へ拡張
-  const hitTop = `calc(${APEX_CSS} - ${HIT_HEIGHT_PX}px)`; // = calc(50% + 4px - 16px)
+  const _hitTop = `calc(${APEX_CSS} - ${HIT_HEIGHT_PX}px)`; // = calc(50% + 4px - 16px)
 
   // Calculate progress percentage
   const progress = duration > 0 ? (isDragging ? dragTime : currentTime) / duration : 0;
@@ -122,7 +122,7 @@ export default function VideoSeekBar({
       document.addEventListener('mousemove', handleMouseMove);
       document.addEventListener('mouseup', handleMouseUp);
     },
-    [getSnappedTimeFromClientX, dragTime, onSeek]
+    [getSnappedTimeFromClientX, onSeek, onScrubEnd, onScrubStart]
   );
 
   // Handle touch events
@@ -160,7 +160,7 @@ export default function VideoSeekBar({
       document.addEventListener('touchmove', handleTouchMove);
       document.addEventListener('touchend', handleTouchEnd);
     },
-    [getSnappedTimeFromClientX, dragTime, onSeek]
+    [getSnappedTimeFromClientX, onSeek, onScrubEnd, onScrubStart]
   );
 
   return (
@@ -206,6 +206,7 @@ export default function VideoSeekBar({
               {markers.map((m, idx) => {
                 const pct = Math.min(Math.max((m.time / duration) * 100, 0), 100);
                 return (
+                  // biome-ignore lint/suspicious/noArrayIndexKey: Idx is acceptable here
                   <div key={idx} className="absolute" style={{ left: `${pct}%` }}>
                     {/* Marker group: make hover affect icon while preserving hit area */}
                     <div

@@ -34,7 +34,7 @@ export default function StackPageIndicator({
         timeoutRef.current = null;
       }
     };
-  }, [currentPage, totalPages]);
+  }, [totalPages]);
 
   if (totalPages <= 1) return null;
 

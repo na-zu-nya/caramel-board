@@ -61,8 +61,19 @@ export function StackGridItem({
 }: StackGridItemProps) {
   const currentFavorited = overrideFavorited ?? item.favorited ?? item.isFavorite ?? false;
   const thumbnailUrl = item.thumbnail || item.thumbnailUrl || '/no-image.png';
-  const likeCount = Number((item as any).likeCount ?? (item as any).liked ?? 0);
-  const pageCount = (item as any).assetCount ?? (item as any)._count?.assets ?? 0;
+  const toNumber = (value: unknown): number | null => {
+    if (typeof value === 'number') return value;
+    if (typeof value === 'string') {
+      const parsed = Number.parseInt(value, 10);
+      return Number.isNaN(parsed) ? null : parsed;
+    }
+    return null;
+  };
+
+  const likeCount = toNumber(item.likeCount) ?? toNumber(item.liked) ?? toNumber(item.likes) ?? 0;
+  const assetCount = toNumber(item.assetCount);
+  const countAssets = toNumber((item._count as { assets?: unknown } | undefined)?.assets);
+  const pageCount = assetCount ?? countAssets ?? 0;
   const [isDragging, setIsDragging] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const { setIsDragging: setGlobalDragging } = useDrag();
@@ -139,7 +150,7 @@ export function StackGridItem({
             setGlobalDragging(true);
 
             // Check if this item is part of a selection
-            if (isSelectionMode && selectedItems.size > 0) {
+            if (isSelectionMode && selectedItems && selectedItems.size > 0) {
               // If the dragged item is selected, drag all selected items
               if (selectedItems.has(item.id)) {
                 const selectedIds = Array.from(selectedItems);
@@ -216,10 +227,12 @@ export function StackGridItem({
                 .then((resp) => {
                   console.log('✅ Merge completed', { targetId, sourceIds });
                   // Optimistically update any loaded pages to remove sources and update target
-                  const pages = queryClient.getQueriesData<any>(['stacks', 'page']);
+                  const pages = queryClient.getQueriesData(['stacks', 'page']);
                   for (const [key, data] of pages) {
-                    if (!data?.stacks) continue;
-                    const stacks = data.stacks as any[];
+                    if (!data || typeof data !== 'object') continue;
+                    const typedData = data as { stacks?: MediaGridItem[] };
+                    if (!Array.isArray(typedData.stacks)) continue;
+                    const stacks = typedData.stacks;
                     const filtered = stacks.filter(
                       (s) =>
                         !sourceIds.includes(
@@ -233,15 +246,17 @@ export function StackGridItem({
                     if (targetIdx >= 0 && resp?.stack) {
                       filtered[targetIdx] = { ...filtered[targetIdx], ...resp.stack };
                     }
-                    queryClient.setQueryData(key as any, { ...data, stacks: filtered });
+                    queryClient.setQueryData(key, { ...typedData, stacks: filtered });
                   }
                   // Also update count cache down by number of removed sources
-                  const counts = queryClient.getQueriesData<any>(['stacks', 'count']);
+                  const counts = queryClient.getQueriesData(['stacks', 'count']);
                   for (const [key, data] of counts) {
-                    if (!data?.total) continue;
-                    queryClient.setQueryData(key as any, {
-                      ...data,
-                      total: Math.max(0, (data.total as number) - sourceIds.length),
+                    if (!data || typeof data !== 'object') continue;
+                    const typedData = data as { total?: number };
+                    if (typeof typedData.total !== 'number') continue;
+                    queryClient.setQueryData(key, {
+                      ...typedData,
+                      total: Math.max(0, typedData.total - sourceIds.length),
                     });
                   }
 

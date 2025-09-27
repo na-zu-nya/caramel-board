@@ -100,7 +100,7 @@ export default function Sidebar() {
   const isPinned: NavigationPinHandlers['isPinned'] = (type, id, mediaType) => {
     return navigationPins.some(
       (pin) =>
-        pin.dataSetId === Number.parseInt(datasetId) &&
+        pin.dataSetId === Number.parseInt(datasetId, 10) &&
         pin.type === type &&
         (type === 'COLLECTION'
           ? pin.collectionId === id
@@ -119,7 +119,7 @@ export default function Sidebar() {
 
     const newPin = {
       type: 'COLLECTION' as const,
-      dataSetId: Number.parseInt(datasetId),
+      dataSetId: Number.parseInt(datasetId, 10),
       name,
       icon: iconName,
       order: navigationPins.length,
@@ -137,7 +137,7 @@ export default function Sidebar() {
       (pin) =>
         pin.type === 'COLLECTION' &&
         pin.collectionId === collection.id &&
-        pin.dataSetId === Number.parseInt(datasetId)
+        pin.dataSetId === Number.parseInt(datasetId, 10)
     );
 
     if (pinToDelete) {
@@ -154,7 +154,7 @@ export default function Sidebar() {
 
     const newPin = {
       type: 'MEDIA_TYPE' as const,
-      dataSetId: Number.parseInt(datasetId),
+      dataSetId: Number.parseInt(datasetId, 10),
       name,
       icon: iconName,
       order: navigationPins.length,
@@ -172,7 +172,7 @@ export default function Sidebar() {
       (pin) =>
         pin.type === 'MEDIA_TYPE' &&
         pin.mediaType === mediaType &&
-        pin.dataSetId === Number.parseInt(datasetId)
+        pin.dataSetId === Number.parseInt(datasetId, 10)
     );
 
     if (pinToDelete) {
@@ -185,7 +185,7 @@ export default function Sidebar() {
 
     const newPin = {
       type: 'OVERVIEW' as const,
-      dataSetId: Number.parseInt(datasetId),
+      dataSetId: Number.parseInt(datasetId, 10),
       name,
       icon: iconName,
       order: navigationPins.length,
@@ -199,7 +199,7 @@ export default function Sidebar() {
 
     // Find the pin to delete
     const pinToDelete = navigationPins.find(
-      (pin) => pin.type === 'OVERVIEW' && pin.dataSetId === Number.parseInt(datasetId)
+      (pin) => pin.type === 'OVERVIEW' && pin.dataSetId === Number.parseInt(datasetId, 10)
     );
 
     if (pinToDelete) {

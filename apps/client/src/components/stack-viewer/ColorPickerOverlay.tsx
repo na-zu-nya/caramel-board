@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { copyText } from '@/lib/clipboard';
 import { cn, hexForCopy } from '@/lib/utils';
 
@@ -115,7 +115,7 @@ export default function ColorPickerOverlay({
     sampleAt(e.clientX, e.clientY);
   };
 
-  const copyAndExit = async () => {
+  const copyAndExit = useCallback(async () => {
     if (copiedRef.current) return;
     copiedRef.current = true;
     if (!hex) return;
@@ -133,7 +133,7 @@ export default function ColorPickerOverlay({
       console.error('copy failed', e);
       copiedRef.current = false;
     }
-  };
+  }, [hex, onCancel, onCopied]);
   // クリックでコピー
   const onClick = async () => {
     await copyAndExit();
@@ -171,7 +171,7 @@ export default function ColorPickerOverlay({
     };
     window.addEventListener('keyup', onKeyUp, { capture: true });
     return () => window.removeEventListener('keyup', onKeyUp, { capture: true } as any);
-  }, [altMode, visible]);
+  }, [altMode, visible, copyAndExit]);
 
   const lensPos = useMemo(() => {
     const size = 80; // smaller lens

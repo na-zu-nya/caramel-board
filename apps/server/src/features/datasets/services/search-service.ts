@@ -1,4 +1,4 @@
-import type { PrismaClient, Stack } from '@prisma/client';
+import type { Prisma, PrismaClient, Stack } from '@prisma/client';
 import { ensureSuperUser } from '../../../shared/services/UserService';
 import type { ColorFilterOptions, createColorSearchService } from './color-search-service';
 import type { createTagStatsService } from './tag-stats-service';
@@ -94,7 +94,7 @@ const extractAutoTagVector = (
   return map;
 };
 
-const filterManualTags = (
+const _filterManualTags = (
   tags: Iterable<string>,
   options: { stopTags: Set<string>; limit: number }
 ): ManualTagSet => {
@@ -990,32 +990,36 @@ export const createSearchService = (deps: {
 
       if (filter.tones) {
         // トーンによる検索
-        const conditions: any = {};
-        if (filter.tones.brightness) {
-          // brightness は StackColor の lightness に相当
-          conditions.lightness = {
-            gte: filter.tones.brightness.min,
-            lte: filter.tones.brightness.max,
-          };
-        }
-        if (filter.tones.saturation) {
-          conditions.saturation = {
-            gte: filter.tones.saturation.min,
-            lte: filter.tones.saturation.max,
+        const toneConditions: Prisma.StackColorWhereInput = {};
+        const { brightness, saturation } = filter.tones;
+
+        if (brightness && (brightness.min !== undefined || brightness.max !== undefined)) {
+          toneConditions.lightness = {
+            ...(brightness.min !== undefined ? { gte: brightness.min } : {}),
+            ...(brightness.max !== undefined ? { lte: brightness.max } : {}),
           };
         }
 
-        const toneFiltered = await prisma.stack.findMany({
-          where: {
-            id: { in: stackIds },
-            dataSetId,
-            colors: {
-              some: conditions,
+        if (saturation && (saturation.min !== undefined || saturation.max !== undefined)) {
+          toneConditions.saturation = {
+            ...(saturation.min !== undefined ? { gte: saturation.min } : {}),
+            ...(saturation.max !== undefined ? { lte: saturation.max } : {}),
+          };
+        }
+
+        if (Object.keys(toneConditions).length > 0) {
+          const toneFiltered = await prisma.stack.findMany({
+            where: {
+              id: { in: stackIds },
+              dataSetId,
+              colors: {
+                some: toneConditions,
+              },
             },
-          },
-          select: { id: true },
-        });
-        return toneFiltered.map((s) => s.id);
+            select: { id: true },
+          });
+          return toneFiltered.map((s) => s.id);
+        }
       }
 
       return stackIds;
@@ -1063,22 +1067,22 @@ export const createSearchService = (deps: {
       }
 
       // その他のソート
-      const orderBy: any = {};
+      let orderBy: Prisma.StackOrderByWithRelationInput;
       switch (sort.by) {
         case 'dateAdded':
-          orderBy.createdAt = sort.order;
+          orderBy = { createdAt: sort.order };
           break;
         case 'name':
-          orderBy.name = sort.order;
+          orderBy = { name: sort.order };
           break;
         case 'likes':
-          orderBy.likes = sort.order;
+          orderBy = { likes: sort.order };
           break;
         case 'updated':
-          orderBy.updatedAt = sort.order;
+          orderBy = { updatedAt: sort.order };
           break;
         default:
-          orderBy.createdAt = 'desc';
+          orderBy = { createdAt: 'desc' };
       }
 
       const sorted = await prisma.stack.findMany({

@@ -9,7 +9,7 @@ import { useRangeBasedQuery } from '@/hooks/useRangeBasedQuery';
 import { navigationStateAtom } from '@/stores/navigation';
 import { currentFilterAtom } from '@/stores/ui';
 import { genListToken, saveViewContext } from '@/stores/view-context';
-import type { MediaGridItem, StackFilter } from '@/types';
+import type { MediaGridItem, MediaType, StackFilter } from '@/types';
 
 export const Route = createFileRoute('/library/$datasetId/tag/$tagName')({
   component: TagDetailPage,
@@ -84,16 +84,7 @@ function TagDetailPage() {
   );
 
   // Range-based query for virtual scrolling
-  const {
-    total,
-    allItems,
-    loadRange,
-    getItemsInRange,
-    isRangeLoaded,
-    isLoading,
-    loadedPages,
-    refreshAll,
-  } = useRangeBasedQuery({
+  const { total, allItems, loadRange, isLoading, loadedPages, refreshAll } = useRangeBasedQuery({
     datasetId,
     filter: effectiveFilter,
     sort: currentSort,
@@ -132,10 +123,10 @@ function TagDetailPage() {
   ]);
 
   // Memoize loaded items to prevent unnecessary recalculations
-  const stableLoadedItems = useMemo(() => {
-    const items = allItems.filter((item) => item !== undefined) as MediaGridItem[];
-    return items;
-  }, [allItems]);
+  const stableLoadedItems = useMemo(
+    () => allItems.filter((item): item is MediaGridItem => item !== undefined),
+    [allItems]
+  );
 
   // Handle filter changes - preserve tag filter
   const handleFilterChange = useCallback(
@@ -154,9 +145,10 @@ function TagDetailPage() {
   // Load specific range of items
   const handleLoadRange = useCallback(
     (startIndex: number, endIndex: number) => {
-      if (startIndex < total && endIndex < total) {
-        void loadRange(startIndex, endIndex);
-      }
+      if (total === 0) return;
+      const clampedStart = Math.max(0, Math.min(startIndex, total - 1));
+      const clampedEnd = Math.max(clampedStart, Math.min(endIndex, total - 1));
+      void loadRange(clampedStart, clampedEnd);
     },
     [total, loadRange]
   );
@@ -173,23 +165,17 @@ function TagDetailPage() {
     // Build ordered ids (right-to-left) from loaded items
     const loadedIdsLtr = (allItems || [])
       .filter((it): it is MediaGridItem => !!it)
-      .map((it) =>
-        typeof it.id === 'string' ? Number.parseInt(it.id as string, 10) : (it.id as number)
-      );
+      .map((it) => toNumericId(it.id));
     const ids = loadedIdsLtr.slice().reverse();
-    const clickedId =
-      typeof item.id === 'string' ? Number.parseInt(item.id as string, 10) : (item.id as number);
-    const currentIndex = Math.max(
-      0,
-      ids.findIndex((id) => id === clickedId)
-    );
+    const clickedId = toNumericId(item.id);
+    const currentIndex = Math.max(0, ids.indexOf(clickedId));
 
-    const mediaType = (item as any).mediaType as string | undefined;
+    const mediaType = isMediaType(item.mediaType) ? item.mediaType : undefined;
     const token = genListToken({ datasetId, mediaType, filters: effectiveFilter });
     saveViewContext({
       token,
       datasetId,
-      mediaType: mediaType as any,
+      mediaType,
       filters: effectiveFilter,
       ids,
       currentIndex,
@@ -229,4 +215,12 @@ function TagDetailPage() {
       />
     </>
   );
+}
+
+function toNumericId(value: string | number): number {
+  return typeof value === 'number' ? value : Number.parseInt(value, 10);
+}
+
+function isMediaType(value: unknown): value is MediaType {
+  return value === 'image' || value === 'comic' || value === 'video';
 }

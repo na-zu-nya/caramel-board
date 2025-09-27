@@ -104,10 +104,7 @@ function CollectionView() {
       .reverse();
     const clickedId =
       typeof item.id === 'string' ? Number.parseInt(item.id as string, 10) : (item.id as number);
-    const currentIndex = Math.max(
-      0,
-      ids.findIndex((id) => id === clickedId)
-    );
+    const currentIndex = Math.max(0, ids.indexOf(clickedId));
     const token = genListToken({
       datasetId,
       mediaType: (item as any).mediaType,
@@ -289,7 +286,7 @@ function CollectionView() {
 
         // Fallback: use unified API with explicit sort/order for non-recommended or SMART(modified)
         const filterParams: any = {
-          dataSetId: Number.parseInt(datasetId),
+          dataSetId: Number.parseInt(datasetId, 10),
           limit: 100,
           offset: 0,
           sort: currentSort.field,
@@ -297,7 +294,7 @@ function CollectionView() {
         };
 
         if (collection.type === 'MANUAL') {
-          filterParams.collection = Number.parseInt(collectionId);
+          filterParams.collection = Number.parseInt(collectionId, 10);
         }
         if (currentFilter.mediaType) filterParams.mediaType = currentFilter.mediaType;
         if (currentFilter.tags && currentFilter.tags.length > 0)
@@ -406,10 +403,7 @@ function CollectionView() {
     const loadedIds = loadedIdsLtr.slice().reverse();
     const clickedId =
       typeof item.id === 'string' ? Number.parseInt(item.id, 10) : (item.id as number);
-    const currentIndex = Math.max(
-      0,
-      loadedIds.findIndex((id) => id === clickedId)
-    );
+    const currentIndex = Math.max(0, loadedIds.indexOf(clickedId));
 
     const token = genListToken({
       datasetId,
@@ -437,7 +431,7 @@ function CollectionView() {
       search: {
         page: 0,
         from: 'collection',
-        collectionId: Number.parseInt(collectionId),
+        collectionId: Number.parseInt(collectionId, 10),
         listToken: token,
       },
     });

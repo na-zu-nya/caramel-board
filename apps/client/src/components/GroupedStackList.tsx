@@ -53,7 +53,7 @@ export function GroupedStackList({
     }
   } else {
     // If not grouping by month, put all items in a single group
-    groupedByMonth['all'] = items;
+    groupedByMonth.all = items;
   }
 
   // Sort months in descending order
@@ -124,11 +124,12 @@ export function GroupedStackList({
                     {/* Horizontal list of items for this date */}
                     <div className="flex gap-2">
                       {dateItems.map((item) => {
-                        const s: any = item.stack as any;
-                        const thumb = s.thumbnail || s.thumbnailUrl || '/no-image.png';
-                        const likeCount = Number(s.likeCount ?? s.liked ?? 0);
-                        const pageCount = s.assetCount || s._count?.assets || s.assetsCount || 0;
-                        const isFav = s.favorited || s.isFavorite || false;
+                        const stack = item.stack;
+                        const thumb = stack.thumbnail || stack.thumbnailUrl || '/no-image.png';
+                        const likeCount = Number(stack.likeCount ?? stack.liked ?? 0);
+                        const pageCount =
+                          stack.assetCount || stack._count?.assets || stack.assetsCount || 0;
+                        const isFav = stack.favorited || stack.isFavorite || false;
                         const {
                           onOpen,
                           onFindSimilar,
@@ -145,18 +146,18 @@ export function GroupedStackList({
                               pageCount={pageCount}
                               favorited={isFav}
                               likeCount={likeCount}
-                              onOpen={() => onOpen(s.id)}
-                              onInfo={() => onInfo(s.id)}
-                              onFindSimilar={() => onFindSimilar(s.id)}
-                              onAddToScratch={() => onAddToScratch(s.id)}
-                              onToggleFavorite={() => onToggleFavorite(s.id, isFav)}
-                              onLike={() => onLike(s.id)}
-                              dragHandlers={dragProps(s.id)}
+                              onOpen={() => onOpen(stack.id)}
+                              onInfo={() => onInfo(stack.id)}
+                              onFindSimilar={() => onFindSimilar(stack.id)}
+                              onAddToScratch={() => onAddToScratch(stack.id)}
+                              onToggleFavorite={() => onToggleFavorite(stack.id, isFav)}
+                              onLike={() => onLike(stack.id)}
+                              dragHandlers={dragProps(stack.id)}
                               asChild
                             >
                               <Link
                                 to="/library/$datasetId/stacks/$stackId"
-                                params={{ datasetId, stackId: String(s.id) }}
+                                params={{ datasetId, stackId: String(stack.id) }}
                               />
                             </StackTile>
                           </div>

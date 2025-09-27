@@ -120,7 +120,7 @@ export function AutoTagDisplay({
         )}
       >
         <div className="flex flex-wrap gap-1.5 pt-2">
-          {autoTags.map((tag, index) => {
+          {autoTags.map((tag) => {
             const isString = typeof tag === 'string';
             const autoTagKey = isString ? tag : tag.autoTagKey;
             const displayName = isString ? tag : tag.mappedTag?.title || tag.displayName;
@@ -128,7 +128,7 @@ export function AutoTagDisplay({
 
             return (
               <Badge
-                key={`autotag-${index}`}
+                key={`autotag-${tag.autoTagKey}`}
                 variant="secondary"
                 className={badgeClassName}
                 onClick={() => handleBadgeClick(tag)}

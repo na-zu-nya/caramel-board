@@ -31,7 +31,7 @@ export function CreateFolderModal({ open, onOpenChange, onSuccess }: CreateFolde
       await apiClient.createCollectionFolder({
         name: name.trim(),
         icon: defaultFolderIcon,
-        dataSetId: Number.parseInt(datasetId),
+        dataSetId: Number.parseInt(datasetId, 10),
       });
 
       onSuccess?.();

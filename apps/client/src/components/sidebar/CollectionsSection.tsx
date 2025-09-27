@@ -34,7 +34,7 @@ export function CollectionsSection({
     queryFn: async () => {
       if (!datasetId) return { folders: [], rootCollections: [] };
       return apiClient.getCollectionFolderTree({
-        dataSetId: Number.parseInt(datasetId),
+        dataSetId: Number.parseInt(datasetId, 10),
         includeCollections: true,
       });
     },

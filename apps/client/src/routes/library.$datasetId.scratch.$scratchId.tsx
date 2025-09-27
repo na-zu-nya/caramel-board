@@ -10,7 +10,7 @@ import { useHeaderActions } from '@/hooks/useHeaderActions';
 import { apiClient } from '@/lib/api-client';
 import { currentFilterAtom } from '@/stores/ui';
 import { genListToken, saveViewContext } from '@/stores/view-context';
-import type { MediaGridItem, StackFilter } from '@/types';
+import type { MediaGridItem } from '@/types';
 
 export const Route = createFileRoute('/library/$datasetId/scratch/$scratchId')({
   component: ScratchView,
@@ -167,7 +167,7 @@ function ScratchView() {
   }, [collectionId, refetchStacks]);
 
   // Shuffle action (same as collection)
-  const handleShuffle = useCallback(async () => {
+  const _handleShuffle = useCallback(async () => {
     const countResp = await apiClient.getStacks({
       datasetId,
       filter: { datasetId, collectionId },
@@ -204,10 +204,7 @@ function ScratchView() {
       .reverse();
     const clickedId =
       typeof item.id === 'string' ? Number.parseInt(item.id as string, 10) : (item.id as number);
-    const currentIndex = Math.max(
-      0,
-      ids.findIndex((id) => id === clickedId)
-    );
+    const currentIndex = Math.max(0, ids.indexOf(clickedId));
     const token = genListToken({
       datasetId,
       mediaType: (item as any).mediaType,
@@ -253,10 +250,7 @@ function ScratchView() {
       const loadedIds = loadedIdsLtr.slice().reverse();
       const clickedId =
         typeof item.id === 'string' ? Number.parseInt(item.id as string, 10) : (item.id as number);
-      const currentIndex = Math.max(
-        0,
-        loadedIds.findIndex((id) => id === clickedId)
-      );
+      const currentIndex = Math.max(0, loadedIds.indexOf(clickedId));
       const token = genListToken({
         datasetId,
         mediaType: (item as any).mediaType,

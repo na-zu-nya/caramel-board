@@ -14,10 +14,6 @@ interface UseStackKeyboardShortcutsOptions {
 }
 
 export function useStackKeyboardShortcuts({
-  currentPage,
-  totalPages,
-  isInfoSidebarOpen,
-  onPageChange,
   onListModeToggle,
   onInfoSidebarToggle,
   onSwipeLeft,
@@ -63,10 +59,6 @@ export function useStackKeyboardShortcuts({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [
-    currentPage,
-    totalPages,
-    isInfoSidebarOpen,
-    onPageChange,
     onListModeToggle,
     onInfoSidebarToggle,
     onSwipeLeft,

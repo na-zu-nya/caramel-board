@@ -19,7 +19,6 @@ import { useEffect, useRef, useState } from 'react';
 import { ScratchContextMenu } from '@/components/modals/ScratchContextMenu';
 import { AuthorsSection } from '@/components/sidebar/AuthorsSection';
 import { AutoTagsSection } from '@/components/sidebar/AutoTagsSection';
-import { DroppableSidebarItem } from '@/components/sidebar/DroppableSidebarItem';
 import { TagsSection } from '@/components/sidebar/TagsSection';
 import type { LibrarySectionProps } from '@/components/sidebar/types';
 import { DroppableSideMenuItem } from '@/components/ui/DroppableSideMenuItem';
@@ -114,7 +113,7 @@ export function LibrarySection({
     prevTagsCollapsed.current = tagsCollapsed;
     prevAutoTagsCollapsed.current = autoTagsCollapsed;
     prevAuthorsCollapsed.current = authorsCollapsed;
-  }, []);
+  }, [authorsCollapsed, autoTagsCollapsed, tagsCollapsed]);
   useEffect(() => {
     prevTagsCollapsed.current = tagsCollapsed;
   }, [tagsCollapsed]);

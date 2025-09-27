@@ -34,7 +34,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Slider } from '@/components/ui/slider';
 import { SuggestInput } from '@/components/ui/suggest-input';
 import { useSwipeClose } from '@/hooks/features/useSwipeClose';
 import { useDebounce } from '@/hooks/utils/useDebounce';
@@ -93,7 +92,7 @@ export default function FilterPanel({
   const queryClient = useQueryClient();
 
   // カラー類似度閾値状態
-  const [colorSimilarityThreshold, setColorSimilarityThreshold] = useState(
+  const [_colorSimilarityThreshold, setColorSimilarityThreshold] = useState(
     localFilter.colorFilter?.similarityThreshold || 85
   );
 
@@ -121,7 +120,7 @@ export default function FilterPanel({
   );
 
   // デバウンスされた類似度閾値更新
-  const debouncedSimilarityUpdate = useDebounce((threshold: number) => {
+  const _debouncedSimilarityUpdate = useDebounce((threshold: number) => {
     updateFilter(
       {
         colorFilter: {
@@ -139,6 +138,23 @@ export default function FilterPanel({
     setColorSimilarityThreshold(currentFilter.colorFilter?.similarityThreshold || 85);
   }, [currentFilter]);
 
+  // Convert filter to config format
+  const convertFilterToConfig = useCallback((filter: StackFilter): Record<string, any> => {
+    const config: any = {};
+
+    if (filter.search) config.search = filter.search;
+    if (filter.isFavorite !== undefined) config.favorited = filter.isFavorite;
+    if (filter.isLiked !== undefined) config.liked = filter.isLiked;
+    if (filter.tags) config.tagIds = filter.tags;
+    if (filter.authors) config.authorNames = filter.authors;
+    if (filter.hasNoTags) config.hasNoTags = filter.hasNoTags;
+    if (filter.hasNoAuthor) config.hasNoAuthor = filter.hasNoAuthor;
+    if (filter.mediaType) config.mediaType = filter.mediaType;
+    if (filter.colorFilter) config.colorFilter = filter.colorFilter;
+
+    return config;
+  }, []);
+
   // Check for filter changes in smart collection
   useEffect(() => {
     if (isSmartCollection && originalFilterConfig) {
@@ -146,7 +162,7 @@ export default function FilterPanel({
       const hasChanges = JSON.stringify(currentConfig) !== JSON.stringify(originalFilterConfig);
       setHasFilterChanges(hasChanges);
     }
-  }, [localFilter, isSmartCollection, originalFilterConfig]);
+  }, [localFilter, isSmartCollection, originalFilterConfig, convertFilterToConfig]);
 
   // Close filter panel when selection mode is enabled
   useEffect(() => {
@@ -245,23 +261,6 @@ export default function FilterPanel({
           (key) =>
             key !== 'datasetId' && key !== 'mediaType' && localFilter[key as keyof StackFilter]
         );
-
-  // Convert filter to config format
-  const convertFilterToConfig = (filter: StackFilter): Record<string, any> => {
-    const config: any = {};
-
-    if (filter.search) config.search = filter.search;
-    if (filter.isFavorite !== undefined) config.favorited = filter.isFavorite;
-    if (filter.isLiked !== undefined) config.liked = filter.isLiked;
-    if (filter.tags) config.tagIds = filter.tags;
-    if (filter.authors) config.authorNames = filter.authors;
-    if (filter.hasNoTags) config.hasNoTags = filter.hasNoTags;
-    if (filter.hasNoAuthor) config.hasNoAuthor = filter.hasNoAuthor;
-    if (filter.mediaType) config.mediaType = filter.mediaType;
-    if (filter.colorFilter) config.colorFilter = filter.colorFilter;
-
-    return config;
-  };
 
   // Handle smart collection update
   const handleUpdateSmartCollection = async () => {

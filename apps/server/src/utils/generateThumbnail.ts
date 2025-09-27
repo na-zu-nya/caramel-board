@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirpSync } from 'fs-extra';
 import path from 'node:path';
+import { mkdirpSync } from 'fs-extra';
 import sharp from 'sharp';
 import { DataStorage } from '../lib/DataStorage';
 import { buildThumbnailKey } from './assetPath';
@@ -111,7 +111,7 @@ export async function generateThumbnail(
     console.log(ff, args.join(' '));
     try {
       execFileSync(ff, args, { stdio: 'ignore' });
-    } catch (e) {
+    } catch (_error) {
       // 失敗時に候補パスでもう一度だけ試行
       const candidates = ['/usr/bin/ffmpeg', '/usr/local/bin/ffmpeg'];
       for (const c of candidates) {

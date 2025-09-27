@@ -52,7 +52,7 @@ export function ScratchContextMenu({ datasetId, scratchId, children }: ScratchCo
     });
     setShowConvertDialog(false);
     // 変換後のコレクションへ遷移
-    const newId = (result as any)?.newCol?.id ?? (result as any)?.id;
+    const newId = result?.newCol.id;
     if (newId) {
       navigate({
         to: '/library/$datasetId/collections/$collectionId',

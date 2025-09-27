@@ -1,4 +1,4 @@
-import type { HTMLAttributes, ReactNode } from 'react';
+import type { HTMLAttributes } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../select';
 
 export interface SideMenuSelectItemProps extends HTMLAttributes<HTMLDivElement> {

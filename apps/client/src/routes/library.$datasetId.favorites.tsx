@@ -46,22 +46,13 @@ function FavoritesPage() {
   }, [datasetId, setCurrentFilter]);
 
   // Range-based query for virtual scrolling
-  const {
-    total,
-    allItems,
-    loadPage,
-    loadRange,
-    getItemsInRange,
-    isRangeLoaded,
-    isLoading,
-    loadedPages,
-    refreshAll,
-  } = useRangeBasedQuery({
-    datasetId,
-    filter: { ...currentFilter, datasetId, isFavorite: true },
-    sort: currentSort,
-    pageSize: 50,
-  });
+  const { total, allItems, loadPage, loadRange, isLoading, loadedPages, refreshAll } =
+    useRangeBasedQuery({
+      datasetId,
+      filter: { ...currentFilter, datasetId, isFavorite: true },
+      sort: currentSort,
+      pageSize: 50,
+    });
 
   // RNG for shuffle（useRangeBasedQuery 後に定義）
   const mtRef = useRef<MersenneTwister | null>(null);
@@ -91,10 +82,7 @@ function FavoritesPage() {
       .reverse();
     const clickedId =
       typeof item.id === 'string' ? Number.parseInt(item.id as string, 10) : (item.id as number);
-    const currentIndex = Math.max(
-      0,
-      ids.findIndex((id) => id === clickedId)
-    );
+    const currentIndex = Math.max(0, ids.indexOf(clickedId));
     const token = genListToken({
       datasetId,
       mediaType: (item as any).mediaType,
@@ -164,7 +152,14 @@ function FavoritesPage() {
         void loadRange(0, Math.min(49, total - 1));
       }
     }
-  }, [total, loadedPages.size, loadRange]);
+  }, [
+    total,
+    loadedPages.size,
+    loadRange,
+    navigationState,
+    restoreScrollSafely,
+    setNavigationState,
+  ]);
 
   // Memoize loaded items to prevent unnecessary recalculations
   const stableLoadedItems = useMemo(() => {
@@ -214,10 +209,7 @@ function FavoritesPage() {
     const ids = loadedIdsLtr.slice().reverse();
     const clickedId =
       typeof item.id === 'string' ? Number.parseInt(item.id as string, 10) : (item.id as number);
-    const currentIndex = Math.max(
-      0,
-      ids.findIndex((id) => id === clickedId)
-    );
+    const currentIndex = Math.max(0, ids.indexOf(clickedId));
 
     // ViewContext を保存（お気に入りフィルタ固定）
     const mediaType = (item as any).mediaType as string | undefined;

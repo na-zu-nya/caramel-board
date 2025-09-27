@@ -9,7 +9,6 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import { CSS } from '@dnd-kit/utilities';
 import { ChevronDown, ChevronRight, Folder, FolderOpen } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { SideMenuMessage } from '@/components/ui/SideMenu';
@@ -106,11 +105,11 @@ export function FolderTreeView({
 
     let item: CollectionFolder | Collection | undefined;
     if (type === 'folder') {
-      item = findFolderById(folders, Number.parseInt(id));
+      item = findFolderById(folders, Number.parseInt(id, 10));
     } else {
       item =
-        rootCollections.find((c) => c.id === Number.parseInt(id)) ||
-        findCollectionInFolders(folders, Number.parseInt(id));
+        rootCollections.find((c) => c.id === Number.parseInt(id, 10)) ||
+        findCollectionInFolders(folders, Number.parseInt(id, 10));
     }
 
     if (item) {
@@ -131,7 +130,7 @@ export function FolderTreeView({
     // Auto-expand folders when dragging over them
     const [overType, overId] = (over.id as string).split('-');
     if (overType === 'folder') {
-      const folderId = Number.parseInt(overId);
+      const folderId = Number.parseInt(overId, 10);
       if (!expandedFolders[folderId]) {
         setExpandedFolders((prev) => ({ ...prev, [folderId]: true }));
       }
@@ -158,18 +157,18 @@ export function FolderTreeView({
         const newFolderId = isRootDrop
           ? null
           : overType === 'folder'
-            ? Number.parseInt(overId)
+            ? Number.parseInt(overId, 10)
             : null;
-        await apiClient.updateCollection(Number.parseInt(activeId), { folderId: newFolderId });
+        await apiClient.updateCollection(Number.parseInt(activeId, 10), { folderId: newFolderId });
       } else if (activeType === 'folder') {
-        const sourceFolderId = Number.parseInt(activeId);
+        const sourceFolderId = Number.parseInt(activeId, 10);
         const isRootDrop =
           overType === 'root' || overIdStr === 'root-edge-top' || overIdStr === 'root-edge-bottom';
         const targetIsFolder = overType === 'folder';
         const newParentId = isRootDrop
           ? undefined
           : targetIsFolder
-            ? Number.parseInt(overId)
+            ? Number.parseInt(overId, 10)
             : undefined; // folder or root
 
         // Prevent moving folder into itself or its children

@@ -83,6 +83,16 @@ export class AutoTagClient {
     return response.data;
   }
 
+  /**
+   * Backward-compatible wrapper used by legacy services expecting predictFromFile
+   */
+  async predictFromFile(fileKey: string | null, threshold = 0.4): Promise<TagPrediction> {
+    if (!fileKey) {
+      throw new Error('fileKey is required for AutoTag prediction');
+    }
+    return this.generateTags(fileKey, threshold);
+  }
+
   // All embedding/CLIP methods removed. Only AutoTag endpoints remain.
 }
 

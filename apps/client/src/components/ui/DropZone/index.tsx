@@ -144,11 +144,12 @@ function extractUrlsFromDataTransfer(dataTransfer: DataTransfer | null): string[
   const rawUrls: string[] = [];
   const uriList = dataTransfer.getData('text/uri-list');
   if (uriList) {
-    uriList
+    for (const line1 of uriList
       .split('\n')
       .map((line) => line.trim())
-      .filter((line) => line.length > 0 && !line.startsWith('#'))
-      .forEach((line) => rawUrls.push(line));
+      .filter((line) => line.length > 0 && !line.startsWith('#'))) {
+      rawUrls.push(line1);
+    }
   }
 
   if (rawUrls.length === 0) {

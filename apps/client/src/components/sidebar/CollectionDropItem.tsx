@@ -9,6 +9,61 @@ import { apiClient } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 import type { Collection } from '@/types';
 
+const toPositiveInteger = (value: unknown): number | null => {
+  if (typeof value === 'number') {
+    return Number.isInteger(value) && value > 0 ? value : null;
+  }
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number.parseInt(value.trim(), 10);
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+  }
+  return null;
+};
+
+const hasStackId = (value: unknown): value is { stackId?: unknown } =>
+  typeof value === 'object' && value !== null && 'stackId' in value;
+
+const extractStackIdsFromDragData = (dragData: unknown): number[] => {
+  if (!dragData) return [];
+
+  if (typeof dragData === 'number' || typeof dragData === 'string') {
+    const id = toPositiveInteger(dragData);
+    return id ? [id] : [];
+  }
+
+  if (Array.isArray(dragData)) {
+    return dragData
+      .map((value) => (hasStackId(value) ? value.stackId : value))
+      .map(toPositiveInteger)
+      .filter((id): id is number => id !== null);
+  }
+
+  if (typeof dragData === 'object') {
+    const payload = dragData as {
+      stackIds?: Array<unknown>;
+      items?: Array<unknown>;
+      stackId?: unknown;
+    };
+
+    if (Array.isArray(payload.stackIds)) {
+      return payload.stackIds.map(toPositiveInteger).filter((id): id is number => id !== null);
+    }
+
+    if (Array.isArray(payload.items)) {
+      return payload.items
+        .map((item) => toPositiveInteger(hasStackId(item) ? item.stackId : item))
+        .filter((id): id is number => id !== null);
+    }
+
+    if (typeof payload.stackId !== 'undefined') {
+      const id = toPositiveInteger(payload.stackId);
+      return id ? [id] : [];
+    }
+  }
+
+  return [];
+};
+
 interface CollectionDropItemProps {
   collection: Collection;
   isPinned: boolean;
@@ -38,38 +93,6 @@ export function CollectionDropItem({
     const pathMatch = location.pathname.match(/\/library\/([^/]+)/);
     return pathMatch ? pathMatch[1] : '1';
   }, [location.pathname]);
-
-  const extractStackIdsFromDragData = useCallback((dragData: any): number[] => {
-    if (!dragData) return [];
-
-    if (Array.isArray(dragData.stackIds)) {
-      return dragData.stackIds
-        .map((id: any) => Number(id))
-        .filter((id) => Number.isInteger(id) && id > 0);
-    }
-
-    if (Array.isArray(dragData.items)) {
-      return dragData.items
-        .map((item: any) => Number(item?.stackId ?? item))
-        .filter((id) => Number.isInteger(id) && id > 0);
-    }
-
-    if (typeof dragData.stackId !== 'undefined') {
-      const id = Number(dragData.stackId);
-      return Number.isInteger(id) && id > 0 ? [id] : [];
-    }
-
-    if (typeof dragData === 'number') {
-      return Number.isInteger(dragData) && dragData > 0 ? [dragData] : [];
-    }
-
-    if (typeof dragData === 'string') {
-      const parsed = Number(dragData);
-      return Number.isInteger(parsed) && parsed > 0 ? [parsed] : [];
-    }
-
-    return [];
-  }, []);
 
   const addStacksToCollection = useCallback(
     async (stackIds: number[]) => {
@@ -125,16 +148,16 @@ export function CollectionDropItem({
         console.error('❌ Failed to add stack(s) to collection:', error);
       }
     },
-    [collection.id, collection.type, onStackAdded]
+    [collection.id, collection.name, collection.type, onStackAdded]
   );
 
   const handleDropLogic = useCallback(
-    async (dragData: any) => {
+    async (dragData: unknown) => {
       console.log('🟢 handleDropLogic called with data:', dragData);
       const stackIds = extractStackIdsFromDragData(dragData);
       await addStacksToCollection(stackIds);
     },
-    [extractStackIdsFromDragData, addStacksToCollection]
+    [addStacksToCollection]
   );
 
   const { containerProps, showDropIndicator } = useSidebarDrop({

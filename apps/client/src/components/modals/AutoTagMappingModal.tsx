@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useId, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -15,6 +15,29 @@ import { Label } from '@/components/ui/label';
 import { SuggestInput } from '@/components/ui/suggest-input';
 import { useIMEAwareKeyboard } from '@/hooks/useIMEAwareKeyboard';
 import { apiClient } from '@/lib/api-client';
+
+type NormalizedTag = {
+  id: number;
+  title: string;
+};
+
+const toNormalizedTags = (tags: unknown[]): NormalizedTag[] => {
+  const normalized: NormalizedTag[] = [];
+  for (const tag of tags) {
+    if (typeof tag === 'string') {
+      normalized.push({ id: -1, title: tag });
+      continue;
+    }
+
+    if (typeof tag === 'object' && tag !== null) {
+      const maybeTag = tag as { id?: unknown; title?: unknown };
+      if (typeof maybeTag.id === 'number' && typeof maybeTag.title === 'string') {
+        normalized.push({ id: maybeTag.id, title: maybeTag.title });
+      }
+    }
+  }
+  return normalized;
+};
 
 interface AutoTagMapping {
   id?: number;
@@ -48,6 +71,7 @@ export default function AutoTagMappingModal({
 }: AutoTagMappingModalProps) {
   const queryClient = useQueryClient();
   const { createKeyDownHandler } = useIMEAwareKeyboard();
+  const autoTagKeyInputId = useId();
 
   // Form state
   const [formData, setFormData] = useState({
@@ -91,10 +115,9 @@ export default function AutoTagMappingModal({
   // Fetch available tags for selection
   const { data: availableTags } = useQuery({
     queryKey: ['tags', datasetId],
-    queryFn: async () => {
+    queryFn: async (): Promise<NormalizedTag[]> => {
       const tags = await apiClient.searchTags('', datasetId);
-      // Normalize to objects { id, title }
-      return (tags as any[]).map((t) => (typeof t === 'string' ? { id: -1, title: t } : t));
+      return toNormalizedTags(tags as unknown[]);
     },
   });
 
@@ -120,14 +143,14 @@ export default function AutoTagMappingModal({
 
       const payload = {
         autoTagKey: data.autoTagKey,
-        tagId: finalTagId ? Number.parseInt(finalTagId) : undefined,
+        tagId: finalTagId ? Number.parseInt(finalTagId, 10) : undefined,
         displayName: data.displayName,
         isActive: data.isActive,
       };
 
       if (existingMapping?.id) {
         // For updates, don't send autoTagKey as it can't be changed
-        const { autoTagKey, ...updatePayload } = payload;
+        const { autoTagKey: _autoTagKey, ...updatePayload } = payload;
         const response = await apiClient.put(
           `/api/v1/auto-tags/mappings/${datasetId}/${existingMapping.id}`,
           updatePayload
@@ -169,13 +192,12 @@ export default function AutoTagMappingModal({
     resetForm();
   };
 
+  const escapeKey = 'Escape';
+
   // Keyboard handlers with IME support
-  const handleKeyDown = createKeyDownHandler(
-    () => handleSave(), // Enter key
-    {
-      Escape: () => handleCancel(),
-    }
-  );
+  const handleKeyDown = createKeyDownHandler(() => handleSave(), {
+    [escapeKey]: () => handleCancel(),
+  });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -190,9 +212,9 @@ export default function AutoTagMappingModal({
         </DialogHeader>
         <div className="grid gap-4 py-4">
           <div className="grid gap-2">
-            <Label htmlFor="autoTagKey">AutoTag Key</Label>
+            <Label htmlFor={autoTagKeyInputId}>AutoTag Key</Label>
             <Input
-              id="autoTagKey"
+              id={autoTagKeyInputId}
               value={formData.autoTagKey}
               onChange={(e) => setFormData({ ...formData, autoTagKey: e.target.value })}
               placeholder="e.g., 1girl, blonde hair"
@@ -243,9 +265,10 @@ export default function AutoTagMappingModal({
                   // If query is empty, show popular tags
                   const searchQuery = query || '';
                   const tags = await apiClient.searchTags(searchQuery, datasetId);
-                  const suggestions = (tags as any[])
-                    .map((tag) => (typeof tag === 'string' ? tag : tag?.title))
-                    .filter((t): t is string => Boolean(t) && typeof t === 'string');
+                  const normalized = toNormalizedTags(tags as unknown[]);
+                  const suggestions = normalized
+                    .map((tag) => tag.title)
+                    .filter((title): title is string => Boolean(title));
                   console.log('Tag suggestions received:', suggestions);
                   setTagSuggestions(suggestions);
                 } catch (error) {

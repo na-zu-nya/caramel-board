@@ -33,10 +33,10 @@ export function useSwipeClose<T extends HTMLElement>({
   const startPointRef = useRef<Point | null>(null);
   const isHorizontalSwipeRef = useRef(false);
   const preparedRef = useRef(false);
-  const offsetRef = useRef(0);
-  const rafRef = useRef<number>();
-  const fallbackTimerRef = useRef<number>();
-  const cleanupRafRef = useRef<number>();
+  const offsetRef = useRef<number | undefined>(undefined);
+  const rafRef = useRef<number | undefined>(undefined);
+  const fallbackTimerRef = useRef<number | undefined>(undefined);
+  const cleanupRafRef = useRef<number | undefined>(undefined);
   const originalTransformRef = useRef<string>('');
   const originalTransitionRef = useRef<string>('');
   const closingRef = useRef(false);
@@ -71,21 +71,21 @@ export function useSwipeClose<T extends HTMLElement>({
     return 80;
   }, [threshold]);
 
-  const clearAnimationFrame = () => {
+  const clearAnimationFrame = useCallback(() => {
     if (rafRef.current) {
       cancelAnimationFrame(rafRef.current);
       rafRef.current = undefined;
     }
-  };
+  }, []);
 
-  const clearTimers = () => {
+  const clearTimers = useCallback(() => {
     if (fallbackTimerRef.current) {
       window.clearTimeout(fallbackTimerRef.current);
       fallbackTimerRef.current = undefined;
     }
-  };
+  }, []);
 
-  const prepareElement = () => {
+  const prepareElement = useCallback(() => {
     if (preparedRef.current) return;
     const element = elementRef.current;
     if (!element) return;
@@ -94,20 +94,23 @@ export function useSwipeClose<T extends HTMLElement>({
     originalTransitionRef.current = element.style.transition;
     element.style.transition = 'none';
     element.style.willChange = 'transform';
-  };
+  }, []);
 
-  const applyOffset = (offset: number) => {
-    const element = elementRef.current;
-    if (!element) return;
-    clearAnimationFrame();
-    rafRef.current = window.requestAnimationFrame(() => {
-      const currentElement = elementRef.current;
-      if (!currentElement) return;
-      currentElement.style.transform = `translate3d(${offset}px, 0, 0)`;
-    });
-  };
+  const applyOffset = useCallback(
+    (offset: number) => {
+      const element = elementRef.current;
+      if (!element) return;
+      clearAnimationFrame();
+      rafRef.current = window.requestAnimationFrame(() => {
+        const currentElement = elementRef.current;
+        if (!currentElement) return;
+        currentElement.style.transform = `translate3d(${offset}px, 0, 0)`;
+      });
+    },
+    [clearAnimationFrame]
+  );
 
-  const resetElementStyles = () => {
+  const resetElementStyles = useCallback(() => {
     const element = elementRef.current;
     preparedRef.current = false;
     clearAnimationFrame();
@@ -121,31 +124,34 @@ export function useSwipeClose<T extends HTMLElement>({
     element.style.willChange = '';
     originalTransitionRef.current = '';
     originalTransformRef.current = '';
-  };
+  }, [clearAnimationFrame]);
 
-  const animateTo = (target: number, duration: number, easing: string, onComplete?: () => void) => {
-    const element = elementRef.current;
-    if (!element) {
-      onComplete?.();
-      return;
-    }
+  const animateTo = useCallback(
+    (target: number, duration: number, easing: string, onComplete?: () => void) => {
+      const element = elementRef.current;
+      if (!element) {
+        onComplete?.();
+        return;
+      }
 
-    clearTimers();
-    clearAnimationFrame();
-    element.style.transition = `transform ${duration}ms ${easing}`;
-    element.style.transform = `translate3d(${target}px, 0, 0)`;
-
-    const finish = () => {
-      element.removeEventListener('transitionend', finish);
       clearTimers();
-      onComplete?.();
-    };
+      clearAnimationFrame();
+      element.style.transition = `transform ${duration}ms ${easing}`;
+      element.style.transform = `translate3d(${target}px, 0, 0)`;
 
-    element.addEventListener('transitionend', finish, { once: true });
-    fallbackTimerRef.current = window.setTimeout(finish, duration + 80);
-  };
+      const finish = () => {
+        element.removeEventListener('transitionend', finish);
+        clearTimers();
+        onComplete?.();
+      };
 
-  const releasePointerCapture = () => {
+      element.addEventListener('transitionend', finish, { once: true });
+      fallbackTimerRef.current = window.setTimeout(finish, duration + 80);
+    },
+    [clearAnimationFrame, clearTimers]
+  );
+
+  const releasePointerCapture = useCallback(() => {
     const element = elementRef.current;
     const pointerId = pointerIdRef.current;
     if (!element || pointerId === null) return;
@@ -156,26 +162,29 @@ export function useSwipeClose<T extends HTMLElement>({
         // Safari などで throw するケースを無視
       }
     }
-  };
+  }, []);
 
-  const resetGestureState = () => {
+  const resetGestureState = useCallback(() => {
     pointerIdRef.current = null;
     startPointRef.current = null;
     isHorizontalSwipeRef.current = false;
     offsetRef.current = 0;
-  };
+  }, []);
 
-  const handleCancel = (animateBack: boolean) => {
-    if (animateBack && preparedRef.current) {
-      animateTo(0, 220, 'cubic-bezier(0.18, 0.89, 0.32, 1.28)', () => {
+  const handleCancel = useCallback(
+    (animateBack: boolean) => {
+      if (animateBack && preparedRef.current) {
+        animateTo(0, 220, 'cubic-bezier(0.18, 0.89, 0.32, 1.28)', () => {
+          resetElementStyles();
+        });
+      } else {
         resetElementStyles();
-      });
-    } else {
-      resetElementStyles();
-    }
-    releasePointerCapture();
-    resetGestureState();
-  };
+      }
+      releasePointerCapture();
+      resetGestureState();
+    },
+    [animateTo, releasePointerCapture, resetElementStyles, resetGestureState]
+  );
 
   useEffect(() => {
     const element = elementRef.current;
@@ -241,8 +250,9 @@ export function useSwipeClose<T extends HTMLElement>({
 
       const offset = offsetRef.current;
       const shouldClose =
-        (direction === 'left' && offset <= -resolvedThreshold) ||
-        (direction === 'right' && offset >= resolvedThreshold);
+        offset &&
+        ((direction === 'left' && offset <= -resolvedThreshold) ||
+          (direction === 'right' && offset >= resolvedThreshold));
 
       if (shouldClose) {
         closingRef.current = true;
@@ -294,7 +304,21 @@ export function useSwipeClose<T extends HTMLElement>({
       }
       resetGestureState();
     };
-  }, [allowedPointerTypes, direction, isActive, onClose, resolvedThreshold]);
+  }, [
+    allowedPointerTypes,
+    direction,
+    isActive,
+    onClose,
+    resolvedThreshold,
+    animateTo,
+    applyOffset,
+    clearTimers,
+    handleCancel,
+    prepareElement,
+    releasePointerCapture,
+    resetElementStyles,
+    resetGestureState,
+  ]);
 
   useEffect(() => {
     if (!isActive) {
@@ -315,7 +339,7 @@ export function useSwipeClose<T extends HTMLElement>({
       }
       resetElementStyles();
     };
-  }, [isActive]);
+  }, [isActive, clearTimers, resetElementStyles]);
 
   return setRef;
 }

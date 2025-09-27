@@ -4,11 +4,9 @@ import {
   ArrowRight,
   BookOpen,
   Grid3x3,
-  Heart,
   Keyboard,
   Layers,
   MousePointer,
-  Palette,
   Search,
   SidebarOpen,
   Sparkles,
@@ -79,7 +77,16 @@ export function SetupPageContainer({ preview = false }: SetupPageContainerProps)
       setError('ライブラリの作成に失敗しました。時間をおいて再試行してください。');
       setActiveIndex(createStepIndexRef.current);
     }
-  }, [name, icon, color, createDataset, isFirstLibrary, bootstrapNavigationPins, navigate]);
+  }, [
+    name,
+    icon,
+    color,
+    createDataset,
+    isFirstLibrary,
+    bootstrapNavigationPins,
+    navigate,
+    preview,
+  ]);
 
   useEffect(() => {
     if (!preview && !isLoading && !isFirstLibrary) {

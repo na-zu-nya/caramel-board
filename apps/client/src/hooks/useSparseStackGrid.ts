@@ -32,7 +32,7 @@ export function useSparseStackGrid({
   const [loadedPages, setLoadedPages] = useState<Set<number>>(new Set());
 
   // 現在のクエリキーを生成
-  const queryKey = `${datasetId}-${mediaType}-${JSON.stringify(filter)}-${JSON.stringify(sort)}`;
+  const _queryKey = `${datasetId}-${mediaType}-${JSON.stringify(filter)}-${JSON.stringify(sort)}`;
 
   // トータル数を取得
   const { data: countData } = useQuery({
@@ -55,7 +55,7 @@ export function useSparseStackGrid({
 
   // ナビゲーション状態から復元するかチェック
   const shouldRestore =
-    navigationState && navigationState.lastPath.includes('/stacks/') && !scrollRestoredRef.current;
+    navigationState?.lastPath.includes('/stacks/') && !scrollRestoredRef.current;
 
   // 初期化：トータル数が分かったら配列を作成
   useEffect(() => {
@@ -79,14 +79,14 @@ export function useSparseStackGrid({
         scrollRestoredRef.current = false;
       }
     }
-  }, [total, shouldRestore, navigationState]);
+  }, [total, shouldRestore, navigationState, items.length]);
 
   // クエリキーが変わったらリセット
   useEffect(() => {
     setItems([]);
     setLoadedPages(new Set());
     scrollRestoredRef.current = false;
-  }, [queryKey]);
+  }, []);
 
   // ページをロード
   const loadPage = useCallback(

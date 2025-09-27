@@ -1,3 +1,4 @@
+import type { LucideIcon } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { Pin, PinOff } from 'lucide-react';
 import { useState } from 'react';
@@ -79,7 +80,10 @@ export function MediaTypeContextMenu({
 
   // Helper function to render Lucide icons dynamically
   const renderIcon = (iconName: string) => {
-    const IconComponent = (LucideIcons as any)[iconName];
+    /* biome-ignore lint/performance/noDynamicNamespaceImportAccess: dynamic icon lookup for media type pins */
+    const IconComponent = LucideIcons[iconName as keyof typeof LucideIcons] as
+      | LucideIcon
+      | undefined;
     if (IconComponent) {
       return <IconComponent size={16} />;
     }

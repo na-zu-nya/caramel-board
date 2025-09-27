@@ -76,7 +76,7 @@ export function useStackViewer({
   useEffect(() => {
     const nextPage = Number(searchParams.page) || 0;
     setCurrentPage(nextPage);
-  }, [stackId, searchParams.page]);
+  }, [searchParams.page]);
 
   // Clamp current page after stack data loads to avoid out-of-range pages
   useEffect(() => {

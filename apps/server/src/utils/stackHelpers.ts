@@ -11,7 +11,7 @@ export interface StackWithAssets {
     id: number;
     thumbnail?: string | null;
   }>;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 /**
@@ -21,7 +21,9 @@ export interface StackWithAssets {
 export function processStackThumbnail<T extends StackWithAssets>(
   stack: T
 ): T & { thumbnail: string } {
-  const assets = withPublicAssetArray(stack.assets as any[], stack.dataSetId);
+  const assets = Array.isArray(stack.assets)
+    ? withPublicAssetArray(stack.assets, stack.dataSetId)
+    : [];
   const thumbnail = toPublicAssetPath(assets[0]?.thumbnail || stack.thumbnail, stack.dataSetId);
 
   return {

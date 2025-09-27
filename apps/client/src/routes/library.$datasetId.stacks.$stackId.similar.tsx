@@ -31,7 +31,7 @@ function SimilarStacksRoute() {
   const queryClient = useQueryClient();
   const [limit] = useState(50);
   const [selectionMode, setSelectionMode] = useAtom(selectionModeAtom);
-  const [currentFilter, setCurrentFilter] = useAtom(currentFilterAtom);
+  const [_currentFilter, setCurrentFilter] = useAtom(currentFilterAtom);
   const [infoSidebarOpen, setInfoSidebarOpen] = useAtom(infoSidebarOpenAtom);
   const [selectedItemId, setSelectedItemId] = useAtom(selectedItemIdAtom);
   const [selectedItems, setSelectedItems] = useState<Set<string | number>>(new Set());
@@ -97,7 +97,7 @@ function SimilarStacksRoute() {
         return;
       }
 
-      if (event && event.shiftKey) {
+      if (event?.shiftKey) {
         event.preventDefault();
         if (!selectionMode) setSelectionMode(true);
         const last = lastClickedIndexRef.current ?? idx;
@@ -136,10 +136,7 @@ function SimilarStacksRoute() {
       const ids = loadedIdsLtr.slice().reverse();
       const clickedId =
         typeof item.id === 'string' ? Number.parseInt(item.id as string, 10) : (item.id as number);
-      const currentIndex = Math.max(
-        0,
-        ids.findIndex((id) => id === clickedId)
-      );
+      const currentIndex = Math.max(0, ids.indexOf(clickedId));
 
       const mediaType = (item as any).mediaType as string | undefined;
       const token = genListToken({

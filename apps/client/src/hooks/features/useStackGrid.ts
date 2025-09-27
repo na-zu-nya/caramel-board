@@ -215,8 +215,8 @@ export function useStackGrid({
     itemSize,
     isCurrentlyAnimating,
     throttledLoadRange,
-    columnsPerRow,
     useWindowScroll,
+    containerRef.current,
   ]);
 
   // Handle animation state changes

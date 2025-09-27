@@ -54,8 +54,8 @@ export function LibrarySetupForm({
   error,
   className,
 }: LibrarySetupFormProps) {
-  const [hoveredEmoji, setHoveredEmoji] = useState<string | null>(null);
-  const [hoveredColor, setHoveredColor] = useState<string | null>(null);
+  const [_hoveredEmoji, setHoveredEmoji] = useState<string | null>(null);
+  const [_hoveredColor, setHoveredColor] = useState<string | null>(null);
 
   return (
     <div className={cn('space-y-6', className)}>

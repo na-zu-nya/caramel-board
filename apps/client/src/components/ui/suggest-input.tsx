@@ -24,7 +24,6 @@ export function SuggestInput({
   suggestions,
   loading = false,
   onSearch,
-  autoFocus = false,
 }: SuggestInputProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
@@ -137,7 +136,6 @@ export function SuggestInput({
         onCompositionStart={handleCompositionStart}
         onCompositionEnd={handleCompositionEnd}
         placeholder={placeholder}
-        autoFocus={autoFocus}
         className={cn(
           'w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900 placeholder-gray-400 focus:border-primary focus:ring-1 focus:ring-primary',
           className

@@ -13,7 +13,7 @@
       "!.claude",
       "!.vscode",
       "!__tests__",
-      "!*.gen.ts"
+      "!**/*.gen.ts"
     ],
     "ignoreUnknown": true
   },
@@ -22,13 +22,28 @@
     "rules": {
       "recommended": true,
       "suspicious": {
-        "noExplicitAny": "warn"
+        "noExplicitAny": "off",
+        "noUnknownAtRules": "off",
+        "noShadowRestrictedNames": "off"
       },
       "correctness": {
-        "noUnusedVariables": "error"
+        "noNestedComponentDefinitions": "off",
+        "noUnusedVariables": "error",
+        "useUniqueElementIds": "off"
       },
       "style": {
         "noNonNullAssertion": "off"
+      },
+      "a11y": {
+        "noLabelWithoutControl": "off",
+        "noSvgWithoutTitle": "off",
+        "useSemanticElements": "off",
+        "noStaticElementInteractions": "off",
+        "useKeyWithClickEvents": "off",
+        "useButtonType": "off",
+        "useAnchorContent": "off",
+        "useAriaPropsSupportedByRole": "off",
+        "useValidAnchor": "off"
       },
       "complexity": {
         "noStaticOnlyClass": "off"

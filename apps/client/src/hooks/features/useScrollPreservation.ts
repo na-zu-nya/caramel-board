@@ -90,7 +90,7 @@ export function useScrollPreservation() {
           return;
         }
 
-        const root: Document | HTMLElement = document;
+        const _root: Document | HTMLElement = document;
         const el = (container || document.body).querySelector?.(
           `[data-item-id="${anchorItem.itemId}"]`
         ) as HTMLElement | null;

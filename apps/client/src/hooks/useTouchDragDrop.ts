@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 
 // Global variable to store touch drag data (more reliable than sessionStorage)
-const globalTouchDragData: any = null;
+const _globalTouchDragData: any = null;
 
 interface TouchDragDropOptions {
   onDragStart?: (data: any) => void;
@@ -185,7 +185,7 @@ export function useTouchDropZone(options: TouchDropZoneOptions) {
       const touch = e.touches[0];
       const element = document.elementFromPoint(touch.clientX, touch.clientY);
 
-      if (dropZoneRef.current && dropZoneRef.current.contains(element as Node)) {
+      if (dropZoneRef.current?.contains(element as Node)) {
         if (!isDragOver) {
           console.log('🟦 Touch drag enter drop zone');
           setIsDragOver(true);

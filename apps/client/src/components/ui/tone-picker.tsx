@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { useCallback, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 
 interface TonePickerProps {
@@ -28,35 +29,41 @@ export function TonePicker({
     updatePosition(e);
   };
 
-  const handleMouseMove = (e: MouseEvent) => {
-    if (!isDragging || disabled) return;
-    e.preventDefault(); // テキスト選択を防ぐ
-    updatePosition(e);
-  };
-
-  const handleMouseUp = () => {
+  const handleMouseUp = useCallback(() => {
     setIsDragging(false);
-  };
+  }, []);
 
-  const updatePosition = (e: React.MouseEvent | MouseEvent) => {
-    if (!containerRef.current || disabled) return;
+  const updatePosition = useCallback(
+    (e: React.MouseEvent | MouseEvent) => {
+      if (!containerRef.current || disabled) return;
 
-    const rect = containerRef.current.getBoundingClientRect();
-    // 枠外でもクランプして継続
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+      const rect = containerRef.current.getBoundingClientRect();
+      // 枠外でもクランプして継続
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
 
-    // 0-100の範囲にクランプ
-    const clampedX = Math.max(0, Math.min(rect.width, x));
-    const clampedY = Math.max(0, Math.min(rect.height, y));
+      // 0-100の範囲にクランプ
+      const clampedX = Math.max(0, Math.min(rect.width, x));
+      const clampedY = Math.max(0, Math.min(rect.height, y));
 
-    const saturation = Math.round((clampedX / rect.width) * 100);
-    const lightness = Math.round((1 - clampedY / rect.height) * 100);
+      const saturation = Math.round((clampedX / rect.width) * 100);
+      const lightness = Math.round((1 - clampedY / rect.height) * 100);
 
-    onChange?.({ saturation, lightness });
-  };
+      onChange?.({ saturation, lightness });
+    },
+    [disabled, onChange]
+  );
 
-  React.useEffect(() => {
+  const handleMouseMove = useCallback(
+    (e: MouseEvent) => {
+      if (!isDragging || disabled) return;
+      e.preventDefault(); // テキスト選択を防ぐ
+      updatePosition(e);
+    },
+    [disabled, isDragging, updatePosition]
+  );
+
+  useEffect(() => {
     if (isDragging) {
       // ドラッグ中はbodyのカーソルも変更
       document.body.style.cursor = 'grabbing';
@@ -71,7 +78,7 @@ export function TonePicker({
         document.body.style.userSelect = '';
       };
     }
-  }, [isDragging]);
+  }, [isDragging, handleMouseMove, handleMouseUp]);
 
   // Calculate position from value
   const dotX = (value.saturation / 100) * 100;

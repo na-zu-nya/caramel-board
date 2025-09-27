@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import {
   forwardRef,
   useCallback,
@@ -79,6 +80,10 @@ interface VideoState {
   muted: boolean;
 }
 
+type DragImageStyle = CSSProperties & {
+  WebkitUserDrag?: 'none' | 'auto' | 'element';
+};
+
 const stripUrlParams = (src: string): string => {
   const q = src.indexOf('?');
   const h = src.indexOf('#');
@@ -112,7 +117,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
       muted: getViewerMuted(),
     });
     const [fps, setFps] = useState<number>(getViewerFps());
-    const [isScrubbing, setIsScrubbing] = useState(false);
+    const [_isScrubbing, setIsScrubbing] = useState(false);
     const wasPlayingBeforeScrubRef = useRef<boolean>(false);
     const containerRef = useRef<HTMLDivElement>(null);
     const backgroundRef = containerRef; // Use container as background ref
@@ -131,10 +136,12 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
     const currentVerticalTransformRef = useRef({ translateY: 0, scale: 1, opacity: 1 });
     // const [activePointers, setActivePointers] = useState<Set<number>>(new Set());
 
-    const getVideoSource = (asset?: Asset | null) =>
-      asset?.preview || asset?.file || asset?.url || '';
+    const getVideoSource = useCallback(
+      (asset?: Asset | null) => asset?.preview || asset?.file || asset?.url || '',
+      []
+    );
 
-    const getPreloadTarget = (asset?: Asset | null) => {
+    const getPreloadTarget = useCallback((asset?: Asset | null) => {
       if (!asset) return null;
       if (isVideoAsset(asset)) {
         return (
@@ -142,7 +149,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
         );
       }
       return asset.file || asset.url || null;
-    };
+    }, []);
 
     // Direct DOM update function for high performance
     const updateDOMTransforms = useCallback(
@@ -194,6 +201,31 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
       },
       [gestureTransform]
     );
+
+    // Handle video play/pause toggle (mute stateは変更しない)
+    const handleVideoToggle = useCallback((video: HTMLVideoElement, _assetFile: string) => {
+      // デバッグログ
+      console.log('Video toggled:', {
+        paused: video.paused,
+        muted: video.muted,
+        src: video.src,
+      });
+      // mute自動変更は行わない（UIのスピーカーボタンで操作）
+
+      if (video.paused) {
+        video
+          .play()
+          .then(() => {
+            console.log('Video playing');
+          })
+          .catch((err) => {
+            console.error('Video play failed:', err);
+          });
+      } else {
+        video.pause();
+        console.log('Video paused');
+      }
+    }, []);
 
     // Expose imperative methods to parent
     // 動画フレームステップは設定FPSに従う
@@ -328,38 +360,17 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
           }
         },
       }),
-      [updateDOMTransforms, videoState.duration, fps]
+      [
+        updateDOMTransforms,
+        videoState.duration,
+        fps,
+        backgroundRef.current,
+        currentAsset?.file,
+        handleVideoToggle,
+        videoState.currentTime,
+        videoState.isPlaying,
+      ]
     );
-
-    // ★ COMMENTED OUT: Single-finger pointer events - allowing only native browser zoom
-    // const handlePointerDown = useCallback((e: React.PointerEvent) => {
-    //   // Only handle single-finger touches for custom gestures
-    //   if (activePointers.size === 0) {
-    //     setActivePointers(new Set([e.pointerId]));
-    //     // Single finger - allow custom gesture handling
-    //     // This will be handled by useGestureControls hook in parent
-    //   } else {
-    //     // Multi-finger - let browser handle native zoom/pan
-    //     e.preventDefault = () => {}; // Disable our preventDefault to allow native behavior
-    //   }
-    // }, [activePointers.size]);
-
-    // const handlePointerMove = useCallback((e: React.PointerEvent) => {
-    //   // Only handle if this is the single tracked pointer
-    //   if (activePointers.has(e.pointerId) && activePointers.size === 1) {
-    //     // Single finger movement - custom gesture handling
-    //     // This will be handled by useGestureControls hook in parent
-    //   }
-    //   // Multi-finger movements are ignored (native browser zoom/pan)
-    // }, [activePointers]);
-
-    // const handlePointerUp = useCallback((e: React.PointerEvent) => {
-    //   setActivePointers(prev => {
-    //     const newSet = new Set(prev);
-    //     newSet.delete(e.pointerId);
-    //     return newSet;
-    //   });
-    // }, []);
 
     // Preload images
     useEffect(() => {
@@ -376,7 +387,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
           img.src = src;
         }
       }
-    }, [currentAsset, nextAsset, prevAsset, loadedImages]);
+    }, [currentAsset, nextAsset, prevAsset, loadedImages, getPreloadTarget]);
 
     // Handle click for navigation
     const handleContainerClick = useCallback(
@@ -433,39 +444,14 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
         // Give browser time to render the video element
         setTimeout(() => {
           const videoElement = currentAssetRef.current?.querySelector('video');
-          if (videoElement && videoElement.paused) {
+          if (videoElement?.paused) {
             videoElement.play().catch((err) => {
               console.log('Video autoplay failed:', err);
             });
           }
         }, 100);
       }
-    }, [currentAsset?.id, currentAsset?.file, currentAsset?.preview]);
-
-    // Handle video play/pause toggle (mute stateは変更しない)
-    const handleVideoToggle = useCallback((video: HTMLVideoElement, assetFile: string) => {
-      // デバッグログ
-      console.log('Video toggled:', {
-        paused: video.paused,
-        muted: video.muted,
-        src: video.src,
-      });
-      // mute自動変更は行わない（UIのスピーカーボタンで操作）
-
-      if (video.paused) {
-        video
-          .play()
-          .then(() => {
-            console.log('Video playing');
-          })
-          .catch((err) => {
-            console.error('Video play failed:', err);
-          });
-      } else {
-        video.pause();
-        console.log('Video paused');
-      }
-    }, []);
+    }, [currentAsset?.id, currentAsset?.file, currentAsset?.preview, currentAsset]);
 
     // ミュート切り替え（video要素の再生成を避ける）
     const handleToggleMute = useCallback(() => {
@@ -515,7 +501,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
       return () => cancelAnimationFrame(rafId);
     }, []);
 
-    const tryApplyRestore = useCallback(() => {
+    const _tryApplyRestore = useCallback(() => {
       const payload = pendingRestoreRef.current;
       const v = currentVideoRef.current;
       if (!payload || !v) return false;
@@ -532,7 +518,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
       else v.pause();
       pendingRestoreRef.current = null;
       return true;
-    }, []);
+    }, [videoState.duration]);
 
     // 追加のrAF起動管理は不要（常時1本のループで更新）
 
@@ -601,6 +587,12 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
       const style = getImageStyle(position);
       const isVideo = isVideoAsset(asset);
       const source = getVideoSource(asset);
+      const dragStyle: DragImageStyle | undefined = !isVideo
+        ? {
+            cursor: nativeDragEnabled ? 'grab' : 'default',
+            WebkitUserDrag: nativeDragEnabled ? 'element' : 'none',
+          }
+        : undefined;
 
       // Get the appropriate ref for this position
       const getRef = () => {
@@ -652,10 +644,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
               alt={asset.preview || asset.file || asset.url || ''}
               className="max-w-full max-h-full w-full h-full object-contain select-none"
               draggable={nativeDragEnabled}
-              style={{
-                cursor: nativeDragEnabled ? 'grab' : 'default',
-                WebkitUserDrag: nativeDragEnabled ? ('element' as any) : ('none' as any),
-              }}
+              style={dragStyle}
             />
           )}
         </div>
@@ -667,15 +656,22 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
     const shouldShowLoader = Boolean(
       currentAsset && currentPreloadKey && !loadedImages.has(currentPreloadKey)
     );
-    const currentAssetIdKey = useMemo(
+    const _currentAssetIdKey = useMemo(
       () => (currentAsset ? String(currentAsset.id) : null),
-      [currentAsset?.id]
+      [currentAsset?.id, currentAsset]
     );
-    const currentVideoBaseSrc = useMemo(() => {
+    const _currentVideoBaseSrc = useMemo(() => {
       if (!isCurrentVideo || !currentAsset) return null;
       const src = getVideoSource(currentAsset);
       return src ? stripUrlParams(src) : null;
-    }, [isCurrentVideo, currentAsset?.preview, currentAsset?.file, currentAsset?.url]);
+    }, [
+      isCurrentVideo,
+      currentAsset?.preview,
+      currentAsset?.file,
+      currentAsset?.url,
+      currentAsset,
+      getVideoSource,
+    ]);
 
     const currentVideoSrcRef = useRef<string | null>(null);
 
@@ -840,7 +836,13 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
         v.removeEventListener('touchend', onTouchEnd);
       };
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [currentAssetIdKey, currentVideoBaseSrc]);
+    }, [
+      currentAsset,
+      getVideoSource,
+      handleVideoLoadedMetadata,
+      handleVideoToggle,
+      videoState.duration,
+    ]);
 
     return (
       <div
@@ -869,7 +871,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
                 top: uiInsets.top,
                 left: uiInsets.left,
                 right: uiInsets.right,
-                touchAction: 'none' as any,
+                touchAction: 'none',
               }}
             >
               <VideoSeekBar

@@ -204,7 +204,9 @@ class ApiClient {
 
           if (paramValue !== undefined) {
             if (Array.isArray(paramValue)) {
-              paramValue.forEach((v) => queryParams.append(paramKey, v));
+              for (const v of paramValue) {
+                queryParams.append(paramKey, v);
+              }
             } else {
               queryParams.append(paramKey, String(paramValue));
             }
@@ -258,7 +260,9 @@ class ApiClient {
     for (const [key, value] of Object.entries(cleanParams)) {
       if (value !== undefined && value !== null) {
         if (Array.isArray(value)) {
-          value.forEach((v) => queryParams.append(key, String(v)));
+          for (const v of value) {
+            queryParams.append(key, String(v));
+          }
         } else {
           queryParams.append(key, String(value));
         }
@@ -328,43 +332,6 @@ class ApiClient {
     });
   }
 
-  private normalizeStackResponse(response: StackPaginatedResponse): StackPaginatedResponse {
-    return {
-      ...response,
-      stacks: Array.isArray(response.stacks)
-        ? response.stacks.map((stack) => this.normalizeStack(stack))
-        : response.stacks,
-    };
-  }
-
-  private normalizeStack(stack: Stack): Stack {
-    const likedRaw = (stack as any).liked ?? (stack as any).likeCount ?? 0;
-    const liked = typeof likedRaw === 'number' ? likedRaw : Number(likedRaw) || 0;
-
-    const likeCountRaw = (stack as any).likeCount ?? liked;
-    const likeCount = typeof likeCountRaw === 'number' ? likeCountRaw : Number(likeCountRaw) || 0;
-
-    const favoritedRaw = (stack as any).favorited ?? (stack as any).isFavorite ?? false;
-    const favorited = Boolean(favoritedRaw);
-
-    const assetCountRaw =
-      (stack as any).assetCount ??
-      (stack as any).assetsCount ??
-      (Array.isArray((stack as any).assets) ? (stack as any).assets.length : undefined);
-    const assetCount =
-      typeof assetCountRaw === 'number' ? assetCountRaw : Number(assetCountRaw) || 0;
-
-    return {
-      ...stack,
-      liked,
-      likeCount,
-      favorited,
-      isFavorite: favorited,
-      assetCount,
-      assetsCount: assetCount,
-    };
-  }
-
   async updateAssetOrder(assetId: string | number, order: number): Promise<{ success: boolean }> {
     return this.fetch<{ success: boolean }>(`/api/v1/assets/${assetId}/order`, {
       method: 'PUT',
@@ -389,7 +356,7 @@ class ApiClient {
           body: JSON.stringify(meta || {}),
         }
       );
-    } catch (e) {
+    } catch (_e) {
       try {
         // Fallback (legacy): /api/v1/assets/:assetId/meta
         return await this.fetch(`/api/v1/assets/${assetId}/meta`, {
@@ -688,7 +655,7 @@ class ApiClient {
     const queryParams = new URLSearchParams();
     queryParams.append('year', String(params.year));
     if (params.datasetId) queryParams.append('datasetId', params.datasetId);
-    if (params.search && params.search.trim()) queryParams.append('search', params.search.trim());
+    if (params.search?.trim()) queryParams.append('search', params.search.trim());
     return this.fetch<{
       year: number;
       groupedByMonth: Record<
@@ -974,7 +941,7 @@ class ApiClient {
     const queryParams = new URLSearchParams();
     if (limit !== undefined) queryParams.append('limit', String(limit));
     if (threshold !== undefined) queryParams.append('threshold', String(threshold));
-    if (query && query.trim()) queryParams.append('q', query.trim());
+    if (query?.trim()) queryParams.append('q', query.trim());
     if (source) queryParams.append('source', source);
     if (includeTotal !== undefined) queryParams.append('includeTotal', String(includeTotal));
     return this.fetch(`/api/v1/auto-tags/statistics/${datasetId}?${queryParams.toString()}`);
@@ -991,10 +958,12 @@ class ApiClient {
     const query = new URLSearchParams();
     query.append('dataSetId', String(params.datasetId));
     const tags = Array.isArray(params.autoTag) ? params.autoTag : [params.autoTag];
-    tags.forEach((t) => query.append('autoTag', t));
+    for (const t of tags) {
+      query.append('autoTag', t);
+    }
     if (params.limit !== undefined) query.append('limit', String(params.limit));
     if (params.offset !== undefined) query.append('offset', String(params.offset));
-    if (params.search && params.search.trim()) query.append('search', params.search.trim());
+    if (params.search?.trim()) query.append('search', params.search.trim());
     // Map additional filters
     const f = params.filter;
     if (f) {
@@ -1005,8 +974,14 @@ class ApiClient {
       if (f.isLiked === false) query.append('liked', '0');
       if (f.hasNoTags !== undefined) query.append('hasNoTags', String(f.hasNoTags));
       if (f.hasNoAuthor !== undefined) query.append('hasNoAuthor', String(f.hasNoAuthor));
-      if (Array.isArray(f.authors)) f.authors.forEach((a) => query.append('author', a));
-      if (Array.isArray(f.tags)) f.tags.forEach((t) => query.append('tag', t));
+      if (Array.isArray(f.authors))
+        for (const a of f.authors) {
+          query.append('author', a);
+        }
+      if (Array.isArray(f.tags))
+        for (const t of f.tags) {
+          query.append('tag', t);
+        }
       // Note: colorFilter not supported on this endpoint (server ignores it)
     }
     return this.fetch(`/api/v1/stacks/search/autotag?${query.toString()}`);
@@ -1031,7 +1006,9 @@ class ApiClient {
     if (options?.mediaType) formData.append('mediaType', options.mediaType);
     if (options?.author) formData.append('author', options.author);
     if (options?.tags) {
-      options.tags.forEach((tag) => formData.append('tags[]', tag));
+      for (const tag of options.tags) {
+        formData.append('tags[]', tag);
+      }
     }
 
     // Auto-detect mediaType from file type if not provided
@@ -1199,6 +1176,123 @@ class ApiClient {
     });
   }
 
+  // Search and Embedding methods
+  async generateAllEmbeddings(params: {
+    datasetId: number;
+    type?: 'text' | 'clip' | 'all';
+    batchSize?: number;
+    forceRegenerate?: boolean;
+  }): Promise<{
+    message: string;
+    datasetId: number;
+    totalCount: number;
+    queued: number;
+    type: string;
+    batchSize: number;
+    forceRegenerate: boolean;
+  }> {
+    return this.fetch('/api/v1/search/generate-all-embeddings', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    });
+  }
+
+  async getEmbeddingQueueStatus(): Promise<{
+    queue: {
+      waiting: number;
+      active: number;
+      completed: number;
+      failed: number;
+    };
+    workerEnabled: boolean;
+    workerConcurrency: number;
+  }> {
+    return this.fetch('/api/v1/search/queue-status');
+  }
+
+  async runDatasetAIAnalysis(
+    datasetId: string,
+    params: {
+      forceRegenerate?: boolean;
+      batchSize?: number;
+    }
+  ): Promise<{ totalCount: number; queued: number; message: string }> {
+    const queryParams = new URLSearchParams();
+    if (params.forceRegenerate)
+      queryParams.append('forceRegenerate', String(params.forceRegenerate));
+    if (params.batchSize) queryParams.append('batchSize', String(params.batchSize));
+
+    const query = queryParams.toString();
+    const response = await this.fetch<{ totalCount: number; queued: number; message: string }>(
+      `/api/v1/datasets/${datasetId}/ai-analysis${query ? `?${query}` : ''}`,
+      {
+        method: 'POST',
+      }
+    );
+    return response;
+  }
+
+  async runDatasetRefreshAll(
+    datasetId: string,
+    params: {
+      forceRegenerate?: boolean;
+      batchSize?: number;
+    }
+  ): Promise<{
+    message: string;
+    datasetId: number;
+    totalStacks: number;
+    scheduled: { thumbnails: number; colors: number; autotags: number; embeddings: number };
+    totals: { embeddings: number };
+  }> {
+    const queryParams = new URLSearchParams();
+    if (params.forceRegenerate)
+      queryParams.append('forceRegenerate', String(params.forceRegenerate));
+    if (params.batchSize) queryParams.append('batchSize', String(params.batchSize));
+
+    const query = queryParams.toString();
+    return this.fetch(`/api/v1/datasets/${datasetId}/refresh-all${query ? `?${query}` : ''}`, {
+      method: 'POST',
+    });
+  }
+
+  private normalizeStackResponse(response: StackPaginatedResponse): StackPaginatedResponse {
+    return {
+      ...response,
+      stacks: Array.isArray(response.stacks)
+        ? response.stacks.map((stack) => this.normalizeStack(stack))
+        : response.stacks,
+    };
+  }
+
+  private normalizeStack(stack: Stack): Stack {
+    const likedRaw = (stack as any).liked ?? (stack as any).likeCount ?? 0;
+    const liked = typeof likedRaw === 'number' ? likedRaw : Number(likedRaw) || 0;
+
+    const likeCountRaw = (stack as any).likeCount ?? liked;
+    const likeCount = typeof likeCountRaw === 'number' ? likeCountRaw : Number(likeCountRaw) || 0;
+
+    const favoritedRaw = (stack as any).favorited ?? (stack as any).isFavorite ?? false;
+    const favorited = Boolean(favoritedRaw);
+
+    const assetCountRaw =
+      (stack as any).assetCount ??
+      (stack as any).assetsCount ??
+      (Array.isArray((stack as any).assets) ? (stack as any).assets.length : undefined);
+    const assetCount =
+      typeof assetCountRaw === 'number' ? assetCountRaw : Number(assetCountRaw) || 0;
+
+    return {
+      ...stack,
+      liked,
+      likeCount,
+      favorited,
+      isFavorite: favorited,
+      assetCount,
+      assetsCount: assetCount,
+    };
+  }
+
   private async uploadFile<T>(
     path: string,
     formData: FormData,
@@ -1283,86 +1377,6 @@ class ApiClient {
     }
 
     return response.json();
-  }
-
-  // Search and Embedding methods
-  async generateAllEmbeddings(params: {
-    datasetId: number;
-    type?: 'text' | 'clip' | 'all';
-    batchSize?: number;
-    forceRegenerate?: boolean;
-  }): Promise<{
-    message: string;
-    datasetId: number;
-    totalCount: number;
-    queued: number;
-    type: string;
-    batchSize: number;
-    forceRegenerate: boolean;
-  }> {
-    return this.fetch('/api/v1/search/generate-all-embeddings', {
-      method: 'POST',
-      body: JSON.stringify(params),
-    });
-  }
-
-  async getEmbeddingQueueStatus(): Promise<{
-    queue: {
-      waiting: number;
-      active: number;
-      completed: number;
-      failed: number;
-    };
-    workerEnabled: boolean;
-    workerConcurrency: number;
-  }> {
-    return this.fetch('/api/v1/search/queue-status');
-  }
-
-  async runDatasetAIAnalysis(
-    datasetId: string,
-    params: {
-      forceRegenerate?: boolean;
-      batchSize?: number;
-    }
-  ): Promise<{ totalCount: number; queued: number; message: string }> {
-    const queryParams = new URLSearchParams();
-    if (params.forceRegenerate)
-      queryParams.append('forceRegenerate', String(params.forceRegenerate));
-    if (params.batchSize) queryParams.append('batchSize', String(params.batchSize));
-
-    const query = queryParams.toString();
-    const response = await this.fetch<{ totalCount: number; queued: number; message: string }>(
-      `/api/v1/datasets/${datasetId}/ai-analysis${query ? `?${query}` : ''}`,
-      {
-        method: 'POST',
-      }
-    );
-    return response;
-  }
-
-  async runDatasetRefreshAll(
-    datasetId: string,
-    params: {
-      forceRegenerate?: boolean;
-      batchSize?: number;
-    }
-  ): Promise<{
-    message: string;
-    datasetId: number;
-    totalStacks: number;
-    scheduled: { thumbnails: number; colors: number; autotags: number; embeddings: number };
-    totals: { embeddings: number };
-  }> {
-    const queryParams = new URLSearchParams();
-    if (params.forceRegenerate)
-      queryParams.append('forceRegenerate', String(params.forceRegenerate));
-    if (params.batchSize) queryParams.append('batchSize', String(params.batchSize));
-
-    const query = queryParams.toString();
-    return this.fetch(`/api/v1/datasets/${datasetId}/refresh-all${query ? `?${query}` : ''}`, {
-      method: 'POST',
-    });
   }
 }
 

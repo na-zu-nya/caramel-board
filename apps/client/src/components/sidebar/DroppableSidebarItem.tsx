@@ -1,4 +1,5 @@
 import { useAtom } from 'jotai';
+import type { HTMLAttributes } from 'react';
 import { useSidebarDrop } from '@/hooks/useSidebarDrop';
 import { cn } from '@/lib/utils';
 import { selectionModeAtom } from '@/stores/ui';
@@ -9,16 +10,15 @@ interface DroppableSidebarItemProps {
   acceptDrop?: boolean;
 }
 
-type CombinedProps = DroppableSidebarItemProps & SidebarItemProps;
+type CombinedProps = DroppableSidebarItemProps & SidebarItemProps & HTMLAttributes<HTMLDivElement>;
 
 export function DroppableSidebarItem({ onDrop, acceptDrop = true, ...props }: CombinedProps) {
-  const [selectionMode] = useAtom(selectionModeAtom);
+  const [_selectionMode] = useAtom(selectionModeAtom);
   const { containerProps, showDropIndicator } = useSidebarDrop({ acceptDrop, onDrop });
 
   // Radix ContextMenuTrigger(asChild) から渡されるイベント/属性を外側のdivへ伝播させるため、
   // SidebarItem用プロップとラッパー用プロップを分離する
   const {
-    // SidebarItemProps
     type: itemType,
     to,
     params,
@@ -28,13 +28,13 @@ export function DroppableSidebarItem({ onDrop, acceptDrop = true, ...props }: Co
     icon,
     iconSize,
     label,
+    count,
     indent,
     isActive,
     children,
     className,
-    // その他はTrigger用（onContextMenu等）として外側divへ渡す
     ...triggerProps
-  } = props as any;
+  } = props as SidebarItemProps & HTMLAttributes<HTMLDivElement>;
 
   return (
     <div
@@ -46,24 +46,22 @@ export function DroppableSidebarItem({ onDrop, acceptDrop = true, ...props }: Co
       {...(triggerProps as React.HTMLAttributes<HTMLDivElement>)}
     >
       <SidebarItem
-        // 再構築した SidebarItemProps を渡す
-        {...({
-          type: itemType,
-          to,
-          params,
-          search,
-          activeOptions,
-          onClick,
-          icon,
-          iconSize,
-          label,
-          count: (props as any).count,
-          indent,
-          isActive,
-          children,
-        } as SidebarItemProps)}
+        type={itemType}
+        to={to}
+        params={params}
+        search={search}
+        activeOptions={activeOptions}
+        onClick={onClick}
+        icon={icon}
+        iconSize={iconSize}
+        label={label}
+        count={count}
+        indent={indent}
+        isActive={isActive}
         className={cn(className, showDropIndicator && 'bg-transparent')}
-      />
+      >
+        {children}
+      </SidebarItem>
     </div>
   );
 }

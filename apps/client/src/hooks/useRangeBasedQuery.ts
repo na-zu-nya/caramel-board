@@ -144,7 +144,18 @@ export function useRangeBasedQuery({
         return null;
       }
     },
-    [queryClient, datasetId, mediaType, filter, sort, pageSize, total, loadedPages]
+    [
+      queryClient,
+      datasetId,
+      mediaType,
+      filter,
+      sort,
+      pageSize,
+      total,
+      loadedPages,
+      filterKey,
+      sortKey,
+    ]
   );
 
   // Load specific range of items
@@ -200,7 +211,7 @@ export function useRangeBasedQuery({
         }
       }
     },
-    [loadPage, pageSize, loadedPages]
+    [loadPage, pageSize, loadedPages, total]
   );
 
   // Get all loaded items as a sparse array
@@ -230,7 +241,7 @@ export function useRangeBasedQuery({
     }
 
     return items;
-  }, [queryClient, datasetId, mediaType, filter, sort, loadedPages, pageSize, total]);
+  }, [queryClient, datasetId, mediaType, loadedPages, pageSize, total, filterKey, sortKey]);
 
   // Check if a specific range is loaded
   const isRangeLoaded = useCallback(
@@ -279,7 +290,7 @@ export function useRangeBasedQuery({
 
     // Clear loaded pages to force reload
     setLoadedPages(new Set());
-  }, [queryClient, datasetId, mediaType, filter, sort, loadedPages]);
+  }, [queryClient, datasetId, mediaType, loadedPages, filterKey, sortKey]);
 
   return {
     total,

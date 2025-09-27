@@ -1,4 +1,4 @@
-import { type Collection, Prisma, type PrismaClient } from '@prisma/client';
+import { type Collection, Prisma, type PrismaClient, type Stack } from '@prisma/client';
 import { createColorSearchService } from '../../features/datasets/services/color-search-service';
 import {
   createSearchService,
@@ -131,12 +131,12 @@ export class CollectionService {
     // Build update payload conditionally to avoid passing undefined properties
     const updateData: Prisma.CollectionUpdateInput = {
       updatedAt: new Date(),
-    } as Prisma.CollectionUpdateInput;
+    };
 
     if (data.name !== undefined) updateData.name = data.name;
     if (data.icon !== undefined) updateData.icon = data.icon;
     if (data.description !== undefined) updateData.description = data.description;
-    if (data.type !== undefined) updateData.type = data.type as any;
+    if (data.type !== undefined) updateData.type = data.type;
     // Allow null to move to root
     if (data.folderId !== undefined) updateData.folderId = data.folderId as number | null;
     if (data.filterConfig !== undefined)
@@ -244,18 +244,18 @@ export class CollectionService {
       throw new Error('無効なスマートコレクションです');
     }
 
-    const filterConfig = collection.filterConfig as FilterConfig & {
-      // extend: client may store names rather than IDs
+    type SmartCollectionFilter = FilterConfig & {
       search?: string;
       authorNames?: string[];
       tagIds?: string[];
       hasNoTags?: boolean;
       hasNoAuthor?: boolean;
-      colorFilter?: any;
       mediaType?: 'image' | 'comic' | 'video';
       favorited?: boolean;
       liked?: boolean;
     };
+
+    const filterConfig = (collection.filterConfig ?? {}) as SmartCollectionFilter;
 
     // Create dataset-scoped services
     const colorSearch = createColorSearchService({
@@ -295,16 +295,26 @@ export class CollectionService {
       filters.author = { ...(filters.author || {}), includeNotSet: true };
     }
     if (filterConfig.colorFilter) {
-      const cf = filterConfig.colorFilter as any;
-      const color: any = {};
-      if (cf.hueCategories?.length) color.hueCategories = cf.hueCategories;
+      const cf = filterConfig.colorFilter;
+      const color: SearchFilters['color'] = {};
+      if (cf.hueCategories && cf.hueCategories.length > 0) {
+        color.hueCategories = cf.hueCategories;
+      }
       if (cf.toneSaturation !== undefined && cf.toneLightness !== undefined) {
         color.tonePoint = { saturation: cf.toneSaturation, lightness: cf.toneLightness };
       }
-      if (cf.toneTolerance !== undefined) color.toneTolerance = cf.toneTolerance;
-      if (cf.similarityThreshold !== undefined) color.similarityThreshold = cf.similarityThreshold;
-      if (cf.customColor) color.customColor = cf.customColor;
-      if (Object.keys(color).length > 0) filters.color = color as any;
+      if (cf.toneTolerance !== undefined) {
+        color.toneTolerance = cf.toneTolerance;
+      }
+      if (cf.similarityThreshold !== undefined) {
+        color.similarityThreshold = cf.similarityThreshold;
+      }
+      if (cf.customColor) {
+        color.customColor = cf.customColor;
+      }
+      if (Object.keys(color).length > 0) {
+        filters.color = color;
+      }
     }
 
     const sort: SortOptions = { by: 'recommended', order: 'desc' };
@@ -322,7 +332,7 @@ export class CollectionService {
     });
 
     // Enrich: attach assetCount and ensure thumbnail path
-    const ids = result.stacks.map((s: any) => s.id);
+    const ids = result.stacks.map((stack) => stack.id);
     let assetCountMap = new Map<number, number>();
     const firstAssetMap = new Map<number, string | undefined>();
     if (ids.length > 0) {
@@ -331,7 +341,7 @@ export class CollectionService {
         where: { stackId: { in: ids } },
         _count: { stackId: true },
       });
-      assetCountMap = new Map(counts.map((c: any) => [c.stackId, c._count.stackId]));
+      assetCountMap = new Map(counts.map((count) => [count.stackId, count._count.stackId]));
 
       const firstAssets = await this.prisma.asset.findMany({
         where: { stackId: { in: ids } },
@@ -345,26 +355,26 @@ export class CollectionService {
       }
     }
 
-    const stacks = result.stacks.map((s: any) => {
-      const dataSetId = s.dataSetId ?? collection.dataSetId;
-      const assets = Array.isArray(s.assets)
-        ? withPublicAssetArray(s.assets as any[], dataSetId)
+    type StackWithAssets = Stack & {
+      assets?: Array<{ file?: string | null; thumbnail?: string | null }>;
+    };
+
+    const stacks = result.stacks.map((stack) => {
+      const dataSetId = stack.dataSetId ?? collection.dataSetId;
+      const stackWithAssets = stack as StackWithAssets;
+      const assets = Array.isArray(stackWithAssets.assets)
+        ? withPublicAssetArray(stackWithAssets.assets, dataSetId)
         : undefined;
 
-      const thumbnailSource = (() => {
-        if (assets && assets.length > 0) {
-          return assets[0]?.thumbnail ?? null;
-        }
-        return firstAssetMap.get(s.id) || s.thumbnail || '';
-      })();
-
+      const thumbnailSource =
+        assets?.[0]?.thumbnail ?? firstAssetMap.get(stack.id) ?? stack.thumbnail ?? '';
       const thumbnail = toPublicAssetPath(thumbnailSource, dataSetId);
 
       return {
-        ...s,
+        ...stack,
         ...(assets ? { assets } : {}),
         thumbnail,
-        assetCount: assetCountMap.get(s.id) ?? 0,
+        assetCount: assetCountMap.get(stack.id) ?? 0,
       };
     });
 

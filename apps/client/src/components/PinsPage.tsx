@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
 import { useAtom } from 'jotai';
+import type { LucideIcon } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { Grip, MoreVertical, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
@@ -21,7 +22,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useDatasets } from '@/hooks/useDatasets';
 import { isScratchCollection, useScratch } from '@/hooks/useScratch';
 import { apiClient } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
@@ -54,7 +54,6 @@ export default function PinsPage() {
   const [currentDataset] = useAtom(currentDatasetAtom);
   const datasetId = (params as { datasetId?: string }).datasetId || currentDataset || '1';
   const [sidebarOpen] = useAtom(sidebarOpenAtom);
-  const { data: datasets = [] } = useDatasets();
 
   // const selectedDataset = datasets.find((d) => String(d.id) === String(datasetId))
 
@@ -96,7 +95,7 @@ export default function PinsPage() {
     setLoadingCollections(true);
     try {
       const response = await apiClient.getCollections({
-        dataSetId: Number.parseInt(datasetId),
+        dataSetId: Number.parseInt(datasetId, 10),
         limit: 100,
       });
       const availableCollections = response.collections
@@ -121,7 +120,10 @@ export default function PinsPage() {
 
   // Helper function to render Lucide icons dynamically
   const renderIcon = (iconName: string, size = 24) => {
-    const IconComponent = (LucideIcons as any)[iconName];
+    /* biome-ignore lint/performance/noDynamicNamespaceImportAccess: user-configurable pin icon lookup */
+    const IconComponent = LucideIcons[iconName as keyof typeof LucideIcons] as
+      | LucideIcon
+      | undefined;
     if (IconComponent) {
       return <IconComponent size={size} />;
     }
@@ -184,7 +186,7 @@ export default function PinsPage() {
       console.log('Creating navigation pin via API:', newPin);
       return apiClient.createNavigationPin({
         ...newPin,
-        dataSetId: Number.parseInt(datasetId),
+        dataSetId: Number.parseInt(datasetId, 10),
       });
     },
     onSuccess: () => {
@@ -236,7 +238,7 @@ export default function PinsPage() {
     if (selectedType === 'MEDIA_TYPE') {
       const newPin = {
         type: 'MEDIA_TYPE' as PinType,
-        dataSetId: Number.parseInt(datasetId),
+        dataSetId: Number.parseInt(datasetId, 10),
         name: capitalizeLabel(selectedMediaType),
         icon: MEDIA_TYPE_ICON_MAP[selectedMediaType],
         order: currentDatasetPins.length,
@@ -248,7 +250,7 @@ export default function PinsPage() {
       if (selectedCollection) {
         const newPin = {
           type: 'COLLECTION' as PinType,
-          dataSetId: Number.parseInt(datasetId),
+          dataSetId: Number.parseInt(datasetId, 10),
           name: selectedCollection.name,
           icon: selectedIcon,
           order: currentDatasetPins.length,
@@ -259,7 +261,7 @@ export default function PinsPage() {
     } else if (selectedType === 'OVERVIEW') {
       const newPin = {
         type: 'OVERVIEW' as PinType,
-        dataSetId: Number.parseInt(datasetId),
+        dataSetId: Number.parseInt(datasetId, 10),
         name: 'Overview',
         icon: FIXED_TYPE_ICONS.OVERVIEW,
         order: currentDatasetPins.length,
@@ -268,7 +270,7 @@ export default function PinsPage() {
     } else if (selectedType === 'FAVORITES') {
       const newPin = {
         type: 'FAVORITES' as PinType,
-        dataSetId: Number.parseInt(datasetId),
+        dataSetId: Number.parseInt(datasetId, 10),
         name: 'Favorites',
         icon: FIXED_TYPE_ICONS.FAVORITES,
         order: currentDatasetPins.length,
@@ -277,7 +279,7 @@ export default function PinsPage() {
     } else if (selectedType === 'LIKES') {
       const newPin = {
         type: 'LIKES' as PinType,
-        dataSetId: Number.parseInt(datasetId),
+        dataSetId: Number.parseInt(datasetId, 10),
         name: 'Likes',
         icon: FIXED_TYPE_ICONS.LIKES,
         order: currentDatasetPins.length,
@@ -289,7 +291,7 @@ export default function PinsPage() {
         const sc = await ensureScratch();
         const newPin = {
           type: 'COLLECTION' as PinType,
-          dataSetId: Number.parseInt(datasetId),
+          dataSetId: Number.parseInt(datasetId, 10),
           name: 'Scratch',
           icon: FIXED_TYPE_ICONS.SCRATCH,
           order: currentDatasetPins.length,

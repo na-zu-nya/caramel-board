@@ -23,7 +23,6 @@ interface AssetGridProps {
 
 export default function AssetGrid({
   assets,
-  currentPage,
   onSelectPage,
   onRemoveAsset,
   onReorderAssets,
@@ -113,8 +112,6 @@ export default function AssetGrid({
     return () => window.removeEventListener('resize', onResize);
   }, [recomputeColumns]);
 
-  const list = assets;
-
   return (
     <div ref={containerRef} className={cn('p-4 overflow-auto h-full bg-gray-900', className)}>
       {reorderBanner?.show && (
@@ -154,7 +151,7 @@ export default function AssetGrid({
           rowGap: `${rowGap}px`,
         }}
       >
-        {list.map((asset, index) => {
+        {assets.map((asset, index) => {
           const isVideo = isVideoAsset(asset);
           const videoSrc = asset.preview || asset.file || asset.url;
           const thumbnailSrc = asset.thumbnail || asset.thumbnailUrl || videoSrc || asset.file;

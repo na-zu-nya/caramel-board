@@ -96,7 +96,7 @@ export function useStackViewerInteractions(params: {
     setDragOffset(0);
     currentVerticalOffsetRef.current = 0;
     imageCarouselRef.current?.updateVerticalTransform(0, 1, 1, 0);
-  }, [stackId]);
+  }, []);
 
   // Helpers
   const lerp = useCallback((c: number, t: number, f: number) => c + (t - c) * f, []);

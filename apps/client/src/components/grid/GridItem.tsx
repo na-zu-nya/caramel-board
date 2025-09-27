@@ -26,19 +26,6 @@ export function GridItem({
   onToggleSelection,
   onToggleFavorite,
 }: GridItemProps) {
-  // Handle undefined items (skeleton state)
-  if (!item) {
-    return (
-      <div className="relative aspect-square bg-gray-100 dark:bg-gray-800 rounded-lg animate-pulse">
-        <div className="absolute inset-2 bg-gray-200 dark:bg-gray-700 rounded-md" />
-      </div>
-    );
-  }
-
-  const currentFavorited = item.favorited ?? item.isFavorite ?? false;
-  const thumbnailUrl = item.thumbnail || item.thumbnailUrl || '/no-image.png';
-  const likeCount = Number((item as any).likeCount ?? (item as any).liked ?? 0);
-
   // Fade-in animation state
   const [isVisible, setIsVisible] = useState(false);
   const [hasBeenSeen, setHasBeenSeen] = useState(false);
@@ -71,6 +58,32 @@ export function GridItem({
       observer.disconnect();
     };
   }, [hasBeenSeen]);
+
+  // Handle undefined items (skeleton state)
+  if (!item) {
+    return (
+      <div className="relative aspect-square bg-gray-100 dark:bg-gray-800 rounded-lg animate-pulse">
+        <div className="absolute inset-2 bg-gray-200 dark:bg-gray-700 rounded-md" />
+      </div>
+    );
+  }
+
+  const resolveBoolean = (value: unknown, fallback = false) =>
+    typeof value === 'boolean' ? value : fallback;
+
+  const resolveNumeric = (value: unknown) => {
+    if (typeof value === 'number') return value;
+    if (typeof value === 'string') {
+      const parsed = Number.parseInt(value, 10);
+      return Number.isNaN(parsed) ? null : parsed;
+    }
+    return null;
+  };
+
+  const currentFavorited = resolveBoolean(item.favorited ?? item.isFavorite, false);
+  const thumbnailUrl = item.thumbnail || item.thumbnailUrl || '/no-image.png';
+  const likeCount =
+    resolveNumeric(item.likeCount) ?? resolveNumeric(item.liked) ?? resolveNumeric(item.likes) ?? 0;
 
   // Debug log for anchor item
   if (isAnchorItem) {

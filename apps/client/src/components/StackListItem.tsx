@@ -150,10 +150,9 @@ export function StackListItem({
       };
 
   const queryClient = useQueryClient();
-  const inCollectionPath =
-    typeof window !== 'undefined' && window.location.pathname.includes('/collections/');
-  const inScratchPath =
-    typeof window !== 'undefined' && window.location.pathname.includes('/scratch/');
+  const pathname = typeof window !== 'undefined' ? window.location.pathname : '';
+  const inCollectionPath = pathname.includes('/collections/');
+  const inScratchPath = pathname.includes('/scratch/');
   const isManualCollection =
     typeof document !== 'undefined' && document.body.dataset.collectionType === 'MANUAL';
   const navigate = useNavigate();
