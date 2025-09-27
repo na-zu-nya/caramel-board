@@ -200,6 +200,7 @@ t(){ local k="$1"; case "$CB_LANG" in ja)
     hf_download_skip) echo "スキップ (あとで手動ダウンロード)";; \
     hf_download_skip_msg) echo "モデルの自動ダウンロードをスキップしました。後で externals/joytag/models に配置してください。";; \
     hf_download_failed) echo "モデルのダウンロードに失敗しました。huggingface-cli で手動ダウンロードしてください。";; \
+    prisma_p3005_notice) echo "既存のデータベーススキーマが見つかったため、migrate をスキップして schema push に切り替えました (データは維持されます)。";; \
     channel_usage) echo "./setup.sh channel <dev|stable|main> を実行してください";; \
     channel_invalid) echo "指定されたチャンネル '%s' はサポートされていません";; \
     channel_git_missing) echo "git コマンドが見つかりません。インストールしてから再実行してください。";; \
@@ -261,6 +262,7 @@ t(){ local k="$1"; case "$CB_LANG" in ja)
     hf_download_skip) echo "Skip (download later)";; \
     hf_download_skip_msg) echo "Skipped automatic model download. Place files under externals/joytag/models later.";; \
     hf_download_failed) echo "Model download failed. Please run huggingface-cli manually.";; \
+    prisma_p3005_notice) echo "Existing database schema detected. Falling back to schema push (data preserved).";; \
     channel_usage) echo "Usage: ./setup.sh channel <dev|stable|main>";; \
     channel_invalid) echo "Channel '%s' is not supported.";; \
     channel_git_missing) echo "git command not found. Please install git and retry.";; \
@@ -668,10 +670,18 @@ dc up -d postgres
 MIGR_DIR="apps/server/prisma/migrations"
 echo "[setup] Applying database schema…"
 if [ -d "$MIGR_DIR" ] && [ "$(ls -A "$MIGR_DIR" 2>/dev/null | wc -l | tr -d ' ')" -gt 0 ]; then
-  if ! dc run --rm app npm run db:migrate:prod; then
-    # Silent fallback for user simplicity
+  TMP_MIGR_LOG=$(mktemp -t cb-migrate.XXXXXX)
+  set +e
+  dc run --rm app npm run db:migrate:prod 2>&1 | tee "$TMP_MIGR_LOG"
+  MIGR_EXIT=${PIPESTATUS[0]}
+  set -e
+  if [ ${MIGR_EXIT:-1} -ne 0 ]; then
+    if grep -q "P3005" "$TMP_MIGR_LOG"; then
+      say "[setup] $(t prisma_p3005_notice)"
+    fi
     dc run --rm app npm run db:push
   fi
+  rm -f "$TMP_MIGR_LOG"
 else
   dc run --rm app npm run db:push
 fi
