@@ -73,6 +73,50 @@ write_env() { # key val
 
 have() { command -v "$1" >/dev/null 2>&1; }
 
+ensure_huggingface_cli() {
+  local target_dir="$1"
+  local hf_bin=""
+  if command -v huggingface-cli >/dev/null 2>&1; then
+    hf_bin="$(command -v huggingface-cli)"
+  elif [ -x "$target_dir/venv/bin/huggingface-cli" ]; then
+    hf_bin="$target_dir/venv/bin/huggingface-cli"
+  fi
+  if [ -z "$hf_bin" ]; then
+    say "[setup] $(t hf_install_start)"
+    set +e
+    if [ -x "$target_dir/venv/bin/python" ]; then
+      # shellcheck disable=SC1091
+      source "$target_dir/venv/bin/activate" 2>/dev/null
+      python -m pip install --upgrade pip >/dev/null 2>&1
+      python -m pip install --upgrade huggingface_hub
+      INSTALL_HF=$?
+      deactivate 2>/dev/null || true
+    else
+      python3 -m pip install --user --upgrade pip >/dev/null 2>&1
+      python3 -m pip install --user --upgrade huggingface_hub
+      INSTALL_HF=$?
+    fi
+    set -e
+    if [ ${INSTALL_HF:-1} -eq 0 ]; then
+      if [ -x "$target_dir/venv/bin/huggingface-cli" ]; then
+        hf_bin="$target_dir/venv/bin/huggingface-cli"
+      elif command -v huggingface-cli >/dev/null 2>&1; then
+        hf_bin="$(command -v huggingface-cli)"
+      fi
+      if [ -n "$hf_bin" ]; then
+        say "[setup] $(t hf_install_success)"
+      else
+        say "[setup] $(t hf_install_failed)" >&2
+      fi
+    else
+      say "[setup] $(t hf_install_failed)" >&2
+    fi
+  fi
+  HUGGINGFACE_BIN="$hf_bin"
+}
+
+HUGGINGFACE_BIN=""
+
 # Read prior prefs
 CB_LANG=${CB_LANG:-}
 [ -f .env ] && CB_LANG=$(awk -F= '$1=="CB_LANG"{print substr($0,index($0,$2))}' .env | tail -n1 | tr -d '"' || true)
@@ -115,13 +159,13 @@ fi
 t(){ local k="$1"; case "$CB_LANG" in ja)
   case "$k" in \
     storage_title) echo "ストレージの設定:";; \
-    storage_l1) echo "- アセットやデータベースのデータ保存先を指定します";; \
-    storage_l2) echo "- 外部ストレージなど、このフォルダ以外の場所に保存する場合は指定をしてください";; \
-    storage_use_defaults) echo "既定 (./data)";; \
-    storage_custom) echo "データ保存先を指定";; \
+    storage_l1) echo "- アセットの保存先を指定します (Postgres データは Docker のボリュームに保存されます)";; \
+    storage_l2) echo "- 外部ストレージなど、このフォルダ以外の場所に保存する場合は指定してください";; \
+    storage_use_defaults) echo "既定 (./data/assets)";; \
+    storage_custom) echo "アセットの保存先を指定";; \
     storage_skip) echo "スキップ";; \
     dir_missing_title) echo "指定したパスにフォルダが存在しません";; \
-    dir_create) echo "そのパスにフォルダを作成する";; \
+    dir_create) echo "そのパスに assets フォルダを作成する";; \
     dir_reenter) echo "パスを再入力する";; \
     jt_title) echo "自動タグ付け (JoyTag) を有効化しますか？";; \
     jt_l1) echo "- 有効化するとJoyTagをダウンロードします。これはローカルで動作する、画像のタグの確率を計算するAIモデルです";; \
@@ -138,7 +182,18 @@ t(){ local k="$1"; case "$CB_LANG" in ja)
     stop_services) echo "セットアップ終了のため、コンテナを停止します（起動は ./serve.sh を使用）";; \
     done) echo "セットアップ完了。 次は ./serve.sh で起動/運用できます。";; \
     py_hint) echo "※自動タグ付けを有効化するには Python3 が必要です。";; \
+    py_install_start) echo "Python3 が見つからないため、apt-get でインストールします（pyenv 推奨ですが自動インストールを試みます）。";; \
+    py_install_success) echo "Python3 のインストールが完了しました。";; \
+    py_install_failed) echo "Python3 のインストールに失敗しました。手動で pyenv などを使用してセットアップしてください。";; \
     py_required) echo "自動タグ付けを有効化するには Python3 が必要です。インストール後にもう一度実行してください。";; \
+    hf_install_start) echo "huggingface-cli が見つからないため、pip でインストールします。";; \
+    hf_install_success) echo "huggingface-cli をインストールしました。";; \
+    hf_install_failed) echo "huggingface-cli のインストールに失敗しました。pip で手動インストールしてください。";; \
+    hf_download_prompt) echo "JoyTag モデルをダウンロードしますか?";; \
+    hf_download_now) echo "今すぐダウンロード";; \
+    hf_download_skip) echo "スキップ (あとで手動ダウンロード)";; \
+    hf_download_skip_msg) echo "モデルの自動ダウンロードをスキップしました。後で externals/joytag/models に配置してください。";; \
+    hf_download_failed) echo "モデルのダウンロードに失敗しました。huggingface-cli で手動ダウンロードしてください。";; \
     channel_usage) echo "./setup.sh channel <dev|stable|main> を実行してください";; \
     channel_invalid) echo "指定されたチャンネル '%s' はサポートされていません";; \
     channel_git_missing) echo "git コマンドが見つかりません。インストールしてから再実行してください。";; \
@@ -162,13 +217,13 @@ t(){ local k="$1"; case "$CB_LANG" in ja)
   ;; * ) 
   case "$k" in \
     storage_title) echo "Storage configuration:";; \
-    storage_l1) echo "- Specify the storage location for assets and database data";; \
-    storage_l2) echo "- Please specify if you want to save to a location outside this folder, such as external storage";; \
-    storage_use_defaults) echo "Recommended defaults: use ./data as base (will create assets/ and postgres/)";; \
-    storage_custom) echo "Enter a single data root (assets/ and postgres/ will be created/used)";; \
+    storage_l1) echo "- Specify where to store assets (Postgres data stays inside Docker)";; \
+    storage_l2) echo "- Point to external storage if you want assets outside this folder";; \
+    storage_use_defaults) echo "Recommended defaults: use ./data/assets";; \
+    storage_custom) echo "Enter an assets directory (mapped to /app/data)";; \
     storage_skip) echo "Skip (do not create local override)";; \
     dir_missing_title) echo "Path does not exist. What would you like to do?";; \
-    dir_create) echo "Create it (assets/ and postgres/)";; \
+    dir_create) echo "Create it (assets/)";; \
     dir_reenter) echo "Re-enter path";; \
     jt_title) echo "Enable auto-tagging?";; \
     jt_l1) echo "- Enabling will download JoyTag. This is a machine learning library that runs locally and calculates image tag probabilities";; \
@@ -185,7 +240,18 @@ t(){ local k="$1"; case "$CB_LANG" in ja)
     stop_services) echo "Stopping containers so you can use ./serve.sh to run.";; \
     done) echo "Setup complete. You can now start/operate with ./serve.sh";; \
     py_hint) echo "※Python3 is required to enable auto-tagging.";; \
+    py_install_start) echo "Python3 not found. Attempting apt-get install (pyenv recommended for advanced usage).";; \
+    py_install_success) echo "Python3 installation completed.";; \
+    py_install_failed) echo "Failed to install Python3. Please install it manually (pyenv recommended).";; \
     py_required) echo "Python3 is required to enable auto-tagging. Please install it and run again.";; \
+    hf_install_start) echo "huggingface-cli not found. Installing via pip.";; \
+    hf_install_success) echo "huggingface-cli installed.";; \
+    hf_install_failed) echo "Failed to install huggingface-cli. Install via pip manually.";; \
+    hf_download_prompt) echo "Download JoyTag models now?";; \
+    hf_download_now) echo "Download now";; \
+    hf_download_skip) echo "Skip (download later)";; \
+    hf_download_skip_msg) echo "Skipped automatic model download. Place files under externals/joytag/models later.";; \
+    hf_download_failed) echo "Model download failed. Please run huggingface-cli manually.";; \
     channel_usage) echo "Usage: ./setup.sh channel <dev|stable|main>";; \
     channel_invalid) echo "Channel '%s' is not supported.";; \
     channel_git_missing) echo "git command not found. Please install git and retry.";; \
@@ -304,21 +370,41 @@ fi
 # 1.5) Dependency notes (Python hint for JoyTag)
 python_ok=false; if have python3; then python_ok=true; fi
 if ! $python_ok; then
+  say "[setup] $(t py_install_start)"
+  INSTALL_STATUS=1
+  if have apt-get; then
+    set +e
+    if have sudo; then
+      sudo apt-get update && sudo apt-get install -y python3 python3-venv python3-pip
+      INSTALL_STATUS=$?
+    else
+      apt-get update && apt-get install -y python3 python3-venv python3-pip
+      INSTALL_STATUS=$?
+    fi
+    set -e
+    if [ ${INSTALL_STATUS:-1} -eq 0 ] && have python3; then
+      python_ok=true
+      say "[setup] $(t py_install_success)"
+    else
+      say "[setup] $(t py_install_failed)" >&2
+    fi
+  else
+    say "[setup] $(t py_install_failed)" >&2
+  fi
+fi
+if ! $python_ok; then
   say "[setup] $(t py_hint)"
   echo ""
 fi
 
 # 2) Ensure default directories
 ASSETS_DEFAULT="$ROOT_DIR/data/assets"
-PG_DEFAULT="$ROOT_DIR/data/postgres"
-mkdir -p "$ASSETS_DEFAULT" "$PG_DEFAULT" "$ROOT_DIR/data" || true
+mkdir -p "$ASSETS_DEFAULT" "$ROOT_DIR/data" || true
 [ -f "$ROOT_DIR/data/.gitkeep" ] || : > "$ROOT_DIR/data/.gitkeep"
 [ -f "$ASSETS_DEFAULT/.gitkeep" ] || : > "$ASSETS_DEFAULT/.gitkeep"
-# NOTE: Do NOT create any files under the Postgres data directory before init.
-# Creating .gitkeep here breaks initdb (directory must be empty)
 
 # 4) Storage setup → generate docker-compose.local.yml as needed
-assets_path="$ASSETS_DEFAULT"; pg_path="$PG_DEFAULT"
+assets_path="$ASSETS_DEFAULT"
 if $INTERACTIVE; then
   begin_question "$(t storage_title)"
   say "$(t storage_l1)"; say "$(t storage_l2)"; hr
@@ -338,15 +424,14 @@ if [ "$storage_sel" != "3" ]; then
       begin_question "$(t dir_missing_title)"
       choice=$(menu_ask "" 1 "$(t dir_create)" "$(t dir_reenter)")
       if [ "$choice" = "1" ]; then
-        mkdir -p "$data_root/assets" "$data_root/postgres" || true
+        mkdir -p "$data_root/assets" || true
         break
       fi
       # Otherwise loop to re-enter
     done
     assets_path="$data_root/assets"
-    pg_path="$data_root/postgres"
   fi
-  mkdir -p "$assets_path" "$pg_path" || true
+  mkdir -p "$assets_path" || true
 
   # Detect Docker server platform (os/arch) and normalize to compose 'platform'
   DETECTED_PLATFORM=""
@@ -372,7 +457,8 @@ if [ "$storage_sel" != "3" ]; then
   fi
   PLATFORM_LINE=""; if [ -n "$DOCKER_PLATFORM" ]; then PLATFORM_LINE="platform: $DOCKER_PLATFORM"; fi
 
-  cat > docker-compose.local.yml <<YAML
+  if [ -n "$PLATFORM_LINE" ]; then
+    cat > docker-compose.local.yml <<YAML
 services:
   app:
     ${PLATFORM_LINE}
@@ -382,9 +468,17 @@ services:
       - ${assets_path}:/app/data
   postgres:
     ${PLATFORM_LINE}
-    volumes:
-      - ${pg_path}:/var/lib/postgresql/data
 YAML
+  else
+    cat > docker-compose.local.yml <<YAML
+services:
+  app:
+    environment:
+      - FILES_STORAGE=/app/data
+    volumes:
+      - ${assets_path}:/app/data
+YAML
+  fi
 fi
 # Re-evaluate compose set if local override created
 COMPOSE_FILES=(-f docker-compose.yml)
@@ -464,58 +558,40 @@ if $INTERACTIVE; then
     if [ -d "$JOYTAG_EXT_DIR" ]; then
       hr; menu_print "Preparing Python venv and installing requirements…"
       python3 -m venv "$JOYTAG_EXT_DIR/venv" 2>/dev/null || true
-      if [ -f "$JOYTAG_EXT_DIR/requirements-server.txt" ]; then
-        set +e
+      set +e
+      if [ -x "$JOYTAG_EXT_DIR/venv/bin/python" ]; then
         # shellcheck disable=SC1091
         source "$JOYTAG_EXT_DIR/venv/bin/activate" 2>/dev/null
         python -m pip install --upgrade pip >/dev/null 2>&1
-        pip install -r "$JOYTAG_EXT_DIR/requirements-server.txt"
+        if [ -f "$JOYTAG_EXT_DIR/requirements-server.txt" ]; then
+          pip install -r "$JOYTAG_EXT_DIR/requirements-server.txt"
+        fi
         deactivate 2>/dev/null || true
-        set -e
       fi
+      set -e
     fi
+
+    ensure_huggingface_cli "$JOYTAG_EXT_DIR"
 
     # Models: prompt if missing
     if [ ! -d "$JOYTAG_EXT_DIR/models" ] || [ -z "$(ls -A "$JOYTAG_EXT_DIR/models" 2>/dev/null)" ]; then
-      sel_models=$(menu_ask "Select a method to prepare models" 4 \
-        "huggingface-cli download (fancyfeast/joytag)" \
-        "git lfs clone (huggingface.co/fancyfeast/joytag)" \
-        "use existing local path" \
-        "skip")
-      case "$sel_models" in
-        1)
-          # Try ensure huggingface-cli
+      sel_models=$(menu_ask "$(t hf_download_prompt)" 1 "$(t hf_download_now)" "$(t hf_download_skip)")
+      if [ "$sel_models" = "1" ]; then
+        if [ -z "$HUGGINGFACE_BIN" ]; then
+          menu_print "[setup] $(t hf_install_failed)"
+        else
+          mkdir -p "$JOYTAG_EXT_DIR/models"
           set +e
-          if ! command -v huggingface-cli >/dev/null 2>&1; then
-            # shellcheck disable=SC1091
-            source "$JOYTAG_EXT_DIR/venv/bin/activate" 2>/dev/null || true
-            python -m pip install -U huggingface_hub >/dev/null 2>&1
-            deactivate 2>/dev/null || true
-          fi
-          if command -v huggingface-cli >/dev/null 2>&1; then
-            huggingface-cli download fancyfeast/joytag --local-dir "$JOYTAG_EXT_DIR/models" --local-dir-use-symlinks False || menu_print "[setup] huggingface-cli download failed."
-          else
-            menu_print "[setup] huggingface-cli not found. Install with: pip install -U huggingface_hub"
-          fi
+          "$HUGGINGFACE_BIN" download fancyfeast/joytag --local-dir "$JOYTAG_EXT_DIR/models" --local-dir-use-symlinks False
+          DL_STATUS=$?
           set -e
-          ;;
-        2)
-          if command -v git >/dev/null 2>&1 && command -v git-lfs >/dev/null 2>&1; then
-            (cd "$JOYTAG_EXT_DIR" && git lfs install && git clone https://huggingface.co/fancyfeast/joytag models)
-          else
-            menu_print "[setup] git / git-lfs not found; cannot clone models."
+          if [ ${DL_STATUS:-1} -ne 0 ]; then
+            menu_print "[setup] $(t hf_download_failed)"
           fi
-          ;;
-        3)
-          model_src=$(prompt "[setup] Enter existing models directory path" "")
-          if [ -n "$model_src" ] && [ -d "$model_src" ]; then
-            mkdir -p "$JOYTAG_EXT_DIR/models" && cp -R "$model_src"/* "$JOYTAG_EXT_DIR/models/" 2>/dev/null || true
-          else
-            menu_print "[setup] Invalid path. Skipping."
-          fi
-          ;;
-        *) : ;;
-      esac
+        fi
+      else
+        say "[setup] $(t hf_download_skip_msg)"
+      fi
     fi
   elif [ "$sel" = "2" ]; then
     CB_ENABLE_JOYTAG=false
@@ -540,12 +616,12 @@ dc up -d postgres
 MIGR_DIR="apps/server/prisma/migrations"
 echo "[setup] Applying database schema…"
 if [ -d "$MIGR_DIR" ] && [ "$(ls -A "$MIGR_DIR" 2>/dev/null | wc -l | tr -d ' ')" -gt 0 ]; then
-  if ! dc run --rm app npm run db:migrate:prod; then
+  if ! dc run --rm app npm run prisma:migrate:deploy; then
     # Silent fallback for user simplicity
-    dc run --rm app npx prisma db push
+    dc run --rm app npm run db:push
   fi
 else
-  dc run --rm app npx prisma db push
+  dc run --rm app npm run db:push
 fi
 echo "[setup] Database ready."
 
@@ -556,5 +632,6 @@ dc down
 say "[setup] $(t done)"
 echo "- Language: $CB_LANG"
 echo "- JoyTag enabled: $CB_ENABLE_JOYTAG (info: $JOYTAG_INFO_URL)"
-echo "- Assets: ${assets_path:-$ASSETS_DEFAULT}  Postgres: ${pg_path:-$PG_DEFAULT}"
+echo "- Assets: ${assets_path:-$ASSETS_DEFAULT}"
+echo "- Postgres: Docker volume (/var/lib/postgresql/data)"
 echo "- Next: ./serve.sh   or   ./serve.sh update"

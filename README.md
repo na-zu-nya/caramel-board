@@ -87,7 +87,7 @@ CaramelBoardは、画像・動画などのアセットをローカルで収集�
   - お好きなフォルダに配置して利用できます
 - Gitを使う場合: gitが使用できる場合は、アップデートが簡単になるのでこちらがおすすめです
   - Windows Terminalを開いて、インストールしたいフォルダに移動
-  - `git clone https://github.com/na-zu-nya/caramel-board.git caramel-board && cd caramel-board`
+  - `git clone https://github.com/na-zu-nya/caramel-board.git caramel-board`
   - gitが使用できる場合は、アップデートが簡単になるのでこちらがおすすめです
 
 
