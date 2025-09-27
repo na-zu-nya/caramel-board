@@ -51,7 +51,7 @@ t() {
         git_check_failed) echo "[git] git fetch に失敗したため、更新チェックをスキップしました。" ;;
         update_git_missing) echo "git が利用できないため更新処理をスキップします。" ;;
         update_git_not_repo) echo ".git ディレクトリがないため更新処理をスキップします。" ;;
-        git_check_updates_notice) echo "[git] 更新が存在します。3秒待機してから続行します。" ;;
+        git_check_updates_notice) echo "[git] 更新が存在します。 update.bat または ./serve.sh update で更新できます" ;;
         update_shutdown) echo "[update] 更新が完了しました。サービスを停止します…" ;;
         update_shutdown_done) echo "[update] サービスを停止しました。必要に応じて ./serve.sh prod などで再起動してください。" ;;
         *) echo "$key" ;;
@@ -91,7 +91,7 @@ t() {
         git_check_failed) echo "[git] Failed to check for updates (git fetch error)." ;;
         update_git_missing) echo "Skipping update because git is not available." ;;
         update_git_not_repo) echo "Skipping update because this directory is not a git repository." ;;
-        git_check_updates_notice) echo "[git] Updates detected. Continuing in 3 seconds." ;;
+        git_check_updates_notice) echo "[git] Updates detected. You can update with update.bat or ./serve.sh update" ;;
         update_shutdown) echo "[update] Update finished. Shutting down services…" ;;
         update_shutdown_done) echo "[update] Services stopped. Restart with ./serve.sh prod or dev when ready." ;;
         *) echo "$key" ;;
