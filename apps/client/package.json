@@ -12,6 +12,8 @@
     "dev:storybook": "storybook dev -p 6006 --no-open",
     "build-storybook": "storybook build",
     "test": "vitest run",
+    "lint": "biome check src",
+    "format": "biome format --write src",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist node_modules/.vite .vite *.tsbuildinfo"
   },
@@ -48,6 +50,7 @@
     "tailwindcss-animate": "^1.0.7"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.2.4",
     "@storybook/addon-a11y": "^9.1.0",
     "@storybook/addon-links": "^9.1.0",
     "@storybook/react-vite": "^9.1.5",
