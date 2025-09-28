@@ -13,6 +13,10 @@ const YearlyLikesSchema = z.object({
   search: z.string().optional(),
 });
 
+const LikeActivityParamSchema = z.object({
+  id: z.coerce.number().int().positive(),
+});
+
 // Get activities grouped by mediaType
 activitiesRoute.get('/', zValidator('query', PaginationSchema), async (c) => {
   try {
@@ -46,5 +50,22 @@ activitiesRoute.get('/likes/yearly', zValidator('query', YearlyLikesSchema), asy
   } catch (error) {
     console.error('Error getting yearly like activities:', error);
     return c.json({ error: 'Failed to get yearly like activities' }, 500);
+  }
+});
+
+// Remove like activity
+activitiesRoute.delete('/likes/:id', zValidator('param', LikeActivityParamSchema), async (c) => {
+  try {
+    const { id } = c.req.valid('param');
+    const result = await activityService.removeLikeActivity(id);
+
+    if (!result) {
+      return c.json({ error: 'Like activity not found' }, 404);
+    }
+
+    return c.json(result);
+  } catch (error) {
+    console.error('Error removing like activity:', error);
+    return c.json({ error: 'Failed to remove like activity' }, 500);
   }
 });

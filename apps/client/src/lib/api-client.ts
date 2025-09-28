@@ -321,6 +321,17 @@ class ApiClient {
     });
   }
 
+  async removeLikeActivity(
+    activityId: string | number
+  ): Promise<{ success: boolean; stackId: number; liked: number }> {
+    return this.fetch<{ success: boolean; stackId: number; liked: number }>(
+      `/api/v1/activities/likes/${activityId}`,
+      {
+        method: 'DELETE',
+      }
+    );
+  }
+
   // Asset APIs
   async getAssets(datasetId: string, stackId: string): Promise<Asset[]> {
     return this.fetch<Asset[]>(`/api/v1/datasets/${datasetId}/stacks/${stackId}/assets`);

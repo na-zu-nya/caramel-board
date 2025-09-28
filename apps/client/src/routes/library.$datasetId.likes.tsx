@@ -73,21 +73,26 @@ function LikesPage() {
 
   // Merge new data with accumulated data
   useEffect(() => {
-    if (data?.groupedByMonth) {
-      setAccumulatedData((prev) => {
-        const merged = { ...prev };
-        for (const [month, items] of Object.entries(data.groupedByMonth)) {
-          if (!merged[month]) {
-            merged[month] = [];
-          }
-          // Add new items that don't already exist
-          const existingIds = new Set(merged[month].map((item) => item.id));
-          const newItems = items.filter((item) => !existingIds.has(item.id));
-          merged[month] = [...merged[month], ...newItems];
-        }
-        return merged;
-      });
+    if (!data?.groupedByMonth) {
+      setAccumulatedData({});
+      return;
     }
+
+    setAccumulatedData((prev) => {
+      const next: Record<string, any[]> = {};
+      const incomingMonths = Object.entries(data.groupedByMonth);
+
+      for (const [month, items] of incomingMonths) {
+        const existing = prev[month] ?? [];
+        const existingMap = new Map(existing.map((item) => [String(item.id), item]));
+        next[month] = items.map((item) => {
+          const key = String(item.id);
+          return existingMap.get(key) ?? item;
+        });
+      }
+
+      return next;
+    });
   }, [data]);
 
   // Handle year change
