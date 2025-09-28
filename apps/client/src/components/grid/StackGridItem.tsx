@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
-import { useAtom, useSetAtom } from 'jotai';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import {
   Book,
   Check,
@@ -11,7 +11,7 @@ import {
   Star,
   Trash2,
 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -22,6 +22,7 @@ import {
 import { useDrag } from '@/contexts/DragContext';
 import { useScratch } from '@/hooks/useScratch';
 import { apiClient } from '@/lib/api-client';
+import { removeStackFromCache } from '@/lib/stack-cache';
 import { cn } from '@/lib/utils';
 import { currentFilterAtom, infoSidebarOpenAtom, selectedItemIdAtom } from '@/stores/ui';
 import type { MediaGridItem } from '@/types';
@@ -61,14 +62,14 @@ export function StackGridItem({
 }: StackGridItemProps) {
   const currentFavorited = overrideFavorited ?? item.favorited ?? item.isFavorite ?? false;
   const thumbnailUrl = item.thumbnail || item.thumbnailUrl || '/no-image.png';
-  const toNumber = (value: unknown): number | null => {
+  const toNumber = useCallback((value: unknown): number | null => {
     if (typeof value === 'number') return value;
     if (typeof value === 'string') {
       const parsed = Number.parseInt(value, 10);
       return Number.isNaN(parsed) ? null : parsed;
     }
     return null;
-  };
+  }, []);
 
   const likeCount = toNumber(item.likeCount) ?? toNumber(item.liked) ?? toNumber(item.likes) ?? 0;
   const assetCount = toNumber(item.assetCount);
@@ -83,12 +84,25 @@ export function StackGridItem({
   const navigate = useNavigate();
   const setInfoOpen = useSetAtom(infoSidebarOpenAtom);
   const setSelectedItemId = useSetAtom(selectedItemIdAtom);
+  const selectedInfoId = useAtomValue(selectedItemIdAtom);
+  const queryClient = useQueryClient();
+  const invalidateStackData = useCallback(() => {
+    void Promise.allSettled([
+      queryClient.invalidateQueries({ queryKey: ['stack'] }),
+      queryClient.invalidateQueries({ queryKey: ['stacks'] }),
+      queryClient.invalidateQueries({ queryKey: ['tag-stacks'] }),
+      queryClient.invalidateQueries({ queryKey: ['autotag-stacks'] }),
+      queryClient.invalidateQueries({ queryKey: ['library-counts', datasetId] }),
+      queryClient.invalidateQueries({ queryKey: ['tags', datasetId] }),
+      queryClient.invalidateQueries({ queryKey: ['likes', 'yearly'] }),
+      queryClient.invalidateQueries({ queryKey: ['dataset-overview', datasetId] }),
+    ]);
+  }, [datasetId, queryClient]);
 
   // Fade-in animation state
   const [isVisible, setIsVisible] = useState(false);
   const [hasBeenSeen, setHasBeenSeen] = useState(false);
   const itemRef = useRef<HTMLDivElement>(null);
-  const queryClient = useQueryClient();
 
   // Intersection Observer for fade-in animation
   useEffect(() => {
@@ -117,6 +131,44 @@ export function StackGridItem({
       observer.disconnect();
     };
   }, [hasBeenSeen]);
+
+  const handleRemoveStack = useCallback(async () => {
+    const label = item.title || (item as any).name || 'Untitled';
+    const confirmed = window.confirm(
+      `Are you sure you want to remove the stack "${label}"? This action cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    const numericId = toNumber(item.id);
+    if (numericId === null) {
+      console.error('Invalid stack id for removal:', item.id);
+      return;
+    }
+
+    try {
+      await apiClient.removeStack(numericId);
+      removeStackFromCache(queryClient, numericId);
+
+      if (selectedInfoId && String(selectedInfoId) === String(item.id)) {
+        setSelectedItemId(null);
+        setInfoOpen(false);
+      }
+
+      invalidateStackData();
+      console.log('✅ Stack removed from grid');
+    } catch (error) {
+      console.error('❌ Failed to remove stack:', error);
+      alert('Failed to remove stack. Please try again.');
+    }
+  }, [
+    invalidateStackData,
+    item,
+    queryClient,
+    selectedInfoId,
+    setInfoOpen,
+    setSelectedItemId,
+    toNumber,
+  ]);
 
   return (
     <ContextMenu>
@@ -443,6 +495,11 @@ export function StackGridItem({
             Remove from Scratch
           </ContextMenuItem>
         )}
+        <ContextMenuSeparator />
+        <ContextMenuItem className="text-red-600 focus:text-red-700" onClick={handleRemoveStack}>
+          <Trash2 className="w-4 h-4 mr-2" />
+          Remove Stack
+        </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
   );

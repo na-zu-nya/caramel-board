@@ -246,6 +246,20 @@ export default function StackViewer({
     }
   }, [ctx, datasetId, mediaType, listToken, update, navigate, setIsListMode]);
 
+  const handleSeparateAsset = useCallback(
+    async (assetId: string | number) => {
+      try {
+        await apiClient.separateAsset(assetId);
+        await refetch();
+        await queryClient.invalidateQueries({ queryKey: ['stacks'] });
+        await queryClient.invalidateQueries({ queryKey: ['library-counts', datasetId] });
+      } catch (error) {
+        console.error('Failed to separate asset:', error);
+      }
+    },
+    [datasetId, queryClient, refetch]
+  );
+
   const handleDeleteCurrentStack = useCallback(async () => {
     if (!stack) return;
     const stackIdValue =
@@ -965,9 +979,10 @@ export default function StackViewer({
               }}
               // Reorder mode decoupled from Info panel; we allow reordering only in explicit mode
               isEditMode={isReorderMode}
+              onSeparateAsset={!isReorderMode ? handleSeparateAsset : undefined}
               // Disable removal while reordering for clarity
               onRemoveAsset={
-                isInfoSidebarOpen && !isReorderMode
+                !isReorderMode
                   ? async (assetId) => {
                       try {
                         await apiClient.removeAsset(assetId);

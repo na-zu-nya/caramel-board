@@ -15,5 +15,13 @@ export const Basic: Story = {
     pageCount: 12,
     favorited: false,
     likeCount: 3,
+    onRemoveLike: () => {
+      // Storybook用のダミー動作
+      console.log('unlike stack');
+    },
+    onRemoveStack: () => {
+      // Storybook用のダミー動作
+      console.log('remove stack');
+    },
   },
 };

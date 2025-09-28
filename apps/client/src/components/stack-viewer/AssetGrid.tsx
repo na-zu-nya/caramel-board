@@ -1,5 +1,12 @@
-import { X } from 'lucide-react';
+import { SplitSquareHorizontal, Trash2, X } from 'lucide-react';
 import React, { useCallback, useState } from 'react';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu';
 import { isVideoAsset } from '@/lib/media';
 import { cn } from '@/lib/utils';
 import type { Asset } from '@/types';
@@ -9,6 +16,7 @@ interface AssetGridProps {
   currentPage: number;
   onSelectPage: (page: number) => void;
   onRemoveAsset?: (assetId: string | number) => void;
+  onSeparateAsset?: (assetId: string | number) => void;
   onReorderAssets?: (assets: Asset[]) => void;
   isEditMode?: boolean;
   className?: string;
@@ -25,6 +33,7 @@ export default function AssetGrid({
   assets,
   onSelectPage,
   onRemoveAsset,
+  onSeparateAsset,
   onReorderAssets,
   isEditMode = false,
   className,
@@ -165,7 +174,7 @@ export default function AssetGrid({
             if (index === hoverDividerIndex) translateX = 6; // right of divider
           }
 
-          return (
+          const content = (
             <div
               className={cn(
                 'relative overflow-hidden rounded-lg cursor-pointer group aspect-square',
@@ -181,7 +190,6 @@ export default function AssetGrid({
               draggable={isEditMode}
               onDragStart={(e) => handleDragStart(e, index)}
               onDragEnd={handleDragEnd}
-              key={asset.id}
             >
               {isEditMode && (
                 <>
@@ -242,6 +250,40 @@ export default function AssetGrid({
               {/* Hover overlay */}
               <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-10 transition-opacity pointer-events-none" />
             </div>
+          );
+
+          if (isEditMode) {
+            return <React.Fragment key={asset.id}>{content}</React.Fragment>;
+          }
+
+          return (
+            <ContextMenu key={asset.id}>
+              <ContextMenuTrigger asChild>{content}</ContextMenuTrigger>
+              <ContextMenuContent className="w-40">
+                <ContextMenuItem
+                  onClick={(event) => {
+                    event.preventDefault();
+                    onSeparateAsset?.(asset.id);
+                  }}
+                  disabled={!onSeparateAsset}
+                >
+                  <SplitSquareHorizontal className="w-4 h-4 mr-2" />
+                  Separate
+                </ContextMenuItem>
+                <ContextMenuSeparator />
+                <ContextMenuItem
+                  className="text-red-600 focus:text-red-600 hover:text-red-600"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    onRemoveAsset?.(asset.id);
+                  }}
+                  disabled={!onRemoveAsset}
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Remove
+                </ContextMenuItem>
+              </ContextMenuContent>
+            </ContextMenu>
           );
         })}
       </div>

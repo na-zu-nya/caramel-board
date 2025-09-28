@@ -343,6 +343,17 @@ class ApiClient {
     });
   }
 
+  async separateAsset(
+    assetId: string | number
+  ): Promise<{ success: boolean; stack: Stack | null }> {
+    return this.fetch<{ success: boolean; stack: Stack | null }>(
+      `/api/v1/assets/${assetId}/separate`,
+      {
+        method: 'POST',
+      }
+    );
+  }
+
   async updateAssetOrder(assetId: string | number, order: number): Promise<{ success: boolean }> {
     return this.fetch<{ success: boolean }>(`/api/v1/assets/${assetId}/order`, {
       method: 'PUT',

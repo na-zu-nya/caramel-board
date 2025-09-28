@@ -1,4 +1,13 @@
-import { Book, GalleryVerticalEnd, Heart, Info, NotebookText, Star } from 'lucide-react';
+import {
+  Book,
+  GalleryVerticalEnd,
+  Heart,
+  HeartOff,
+  Info,
+  NotebookText,
+  Star,
+  Trash2,
+} from 'lucide-react';
 import { cloneElement, isValidElement } from 'react';
 import {
   ContextMenu,
@@ -25,6 +34,8 @@ export interface StackTileProps extends React.HTMLAttributes<HTMLDivElement> {
   onAddToScratch?: () => void;
   onToggleFavorite?: () => void;
   onLike?: () => void;
+  onRemoveLike?: () => void;
+  onRemoveStack?: () => void;
   // Drag source props (from hook)
   dragHandlers?: {
     draggable: true;
@@ -46,6 +57,8 @@ export function StackTile({
   onAddToScratch,
   onToggleFavorite,
   onLike,
+  onRemoveLike,
+  onRemoveStack,
   dragHandlers,
   className,
   children,
@@ -144,6 +157,26 @@ export function StackTile({
           <NotebookText className="w-4 h-4 mr-2" />
           Add to Scratch
         </ContextMenuItem>
+        {onRemoveLike || onRemoveStack ? <ContextMenuSeparator /> : null}
+        {onRemoveLike ? (
+          <ContextMenuItem
+            onClick={() => onRemoveLike?.()}
+            className="text-red-600 focus:text-red-700"
+          >
+            <HeartOff className="w-4 h-4 mr-2" />
+            Unlike
+          </ContextMenuItem>
+        ) : null}
+        {onRemoveLike && onRemoveStack ? <ContextMenuSeparator /> : null}
+        {onRemoveStack ? (
+          <ContextMenuItem
+            onClick={() => onRemoveStack?.()}
+            className="text-red-600 focus:text-red-700"
+          >
+            <Trash2 className="w-4 h-4 mr-2" />
+            Remove Stack
+          </ContextMenuItem>
+        ) : null}
       </ContextMenuContent>
     </ContextMenu>
   );

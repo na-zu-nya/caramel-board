@@ -248,4 +248,54 @@ export class ActivityService {
       availableYears: Array.from(availableYears).sort((a, b) => b - a),
     };
   }
+
+  async removeLikeActivity(id: number) {
+    const result = await prisma.$transaction(async (tx) => {
+      const activity = await tx.likeActivity.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          stackId: true,
+        },
+      });
+
+      if (!activity) {
+        return null;
+      }
+
+      await tx.likeActivity.delete({ where: { id } });
+
+      await tx.stack.updateMany({
+        where: {
+          id: activity.stackId,
+          liked: { gt: 0 },
+        },
+        data: {
+          liked: {
+            decrement: 1,
+          },
+        },
+      });
+
+      const stack = await tx.stack.findUnique({
+        where: { id: activity.stackId },
+        select: { id: true, liked: true },
+      });
+
+      return {
+        stackId: stack?.id ?? activity.stackId,
+        liked: stack?.liked ?? 0,
+      };
+    });
+
+    if (!result) {
+      return null;
+    }
+
+    return {
+      success: true,
+      stackId: result.stackId,
+      liked: Math.max(result.liked ?? 0, 0),
+    };
+  }
 }

@@ -38,6 +38,7 @@ export function CreateCollectionModal({
   const [selectedFolderId, setSelectedFolderId] = useState<number | undefined>();
   const [folders, setFolders] = useState<CollectionFolder[]>([]);
   const [loadingFolders, setLoadingFolders] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const loadFolders = useCallback(async () => {
     setLoadingFolders(true);
@@ -92,13 +93,26 @@ export function CreateCollectionModal({
     if (!name.trim() || !datasetId) return;
 
     setLoading(true);
+    setErrorMessage(null);
     try {
-      await apiClient.createCollection({
+      const payload: {
+        name: string;
+        type: CollectionType;
+        dataSetId: number;
+        folderId?: number;
+        filterConfig?: Record<string, unknown>;
+      } = {
         name: name.trim(),
         type: collectionType,
         dataSetId: Number.parseInt(datasetId, 10),
         folderId: selectedFolderId,
-      });
+      };
+
+      if (collectionType === 'SMART') {
+        payload.filterConfig = {};
+      }
+
+      await apiClient.createCollection(payload);
 
       onSuccess?.();
       onOpenChange(false);
@@ -107,9 +121,14 @@ export function CreateCollectionModal({
       setName('');
       setCollectionType(type || 'MANUAL');
       setSelectedFolderId(undefined);
+      setErrorMessage(null);
     } catch (error) {
       console.error('コレクション作成エラー:', error);
-      // TODO: エラー表示
+      if (error instanceof Error) {
+        setErrorMessage(error.message);
+      } else {
+        setErrorMessage('コレクションの作成に失敗しました。');
+      }
     } finally {
       setLoading(false);
     }
@@ -121,6 +140,7 @@ export function CreateCollectionModal({
     setName('');
     setCollectionType(type || 'MANUAL');
     setSelectedFolderId(undefined);
+    setErrorMessage(null);
   };
 
   return (
@@ -133,6 +153,14 @@ export function CreateCollectionModal({
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6 pt-2">
+          {errorMessage && (
+            <div
+              className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600"
+              role="alert"
+            >
+              {errorMessage}
+            </div>
+          )}
           <div className="space-y-2">
             <Label htmlFor="collection-name" className="text-gray-700">
               Name *

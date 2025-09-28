@@ -31,6 +31,11 @@ export class CollectionService {
   }
 
   async create(data: CreateCollectionInput): Promise<Collection> {
+    const filterConfigValue =
+      data.type === 'SMART'
+        ? ((data.filterConfig ?? {}) as Prisma.JsonValue)
+        : ((data.filterConfig ?? Prisma.JsonNull) as Prisma.JsonValue);
+
     return this.prisma.collection.create({
       data: {
         name: data.name,
@@ -39,7 +44,7 @@ export class CollectionService {
         type: data.type || 'MANUAL',
         dataSetId: data.dataSetId,
         folderId: data.folderId || null,
-        filterConfig: data.filterConfig || Prisma.JsonNull,
+        filterConfig: filterConfigValue,
       },
       include: {
         dataSet: true,
@@ -240,9 +245,14 @@ export class CollectionService {
       where: { id: collectionId },
     });
 
-    if (!collection || collection.type !== 'SMART' || !collection.filterConfig) {
+    if (!collection || collection.type !== 'SMART') {
       throw new Error('無効なスマートコレクションです');
     }
+
+    const normalizedFilterConfig =
+      collection.filterConfig === null || collection.filterConfig === Prisma.JsonNull
+        ? {}
+        : (collection.filterConfig as Record<string, unknown>);
 
     type SmartCollectionFilter = FilterConfig & {
       search?: string;
@@ -255,7 +265,7 @@ export class CollectionService {
       liked?: boolean;
     };
 
-    const filterConfig = (collection.filterConfig ?? {}) as SmartCollectionFilter;
+    const filterConfig = normalizedFilterConfig as SmartCollectionFilter;
 
     // Create dataset-scoped services
     const colorSearch = createColorSearchService({

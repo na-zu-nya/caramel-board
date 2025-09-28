@@ -57,9 +57,9 @@ function CollectionView() {
       showShuffle: true,
       showFilter: true,
       showSelection: true,
-      showReorder: collection?.type === 'MANUAL',
+      showReorder: false,
     }),
-    [collection?.type]
+    []
   );
 
   const mtRef = useRef<MersenneTwister | null>(null);

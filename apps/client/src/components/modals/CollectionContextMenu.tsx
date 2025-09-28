@@ -1,7 +1,7 @@
 import type { LucideIcon } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { Pencil, Pin, PinOff, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   ContextMenu,
@@ -47,7 +47,28 @@ export function CollectionContextMenu({
   const [showRenameDialog, setShowRenameDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showPinDialog, setShowPinDialog] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    return () => {
+      if (typeof document !== 'undefined' && document.body.style.pointerEvents === 'none') {
+        document.body.style.pointerEvents = '';
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (
+      typeof document !== 'undefined' &&
+      document.body.style.pointerEvents === 'none' &&
+      !showRenameDialog &&
+      !showDeleteDialog &&
+      !showPinDialog
+    ) {
+      document.body.style.pointerEvents = '';
+    }
+  }, [showDeleteDialog, showPinDialog, showRenameDialog]);
 
   // Rename dialog state
   const [name, setName] = useState(collection.name);
@@ -75,19 +96,30 @@ export function CollectionContextMenu({
     }
   };
 
-  const handleDelete = async () => {
+  const handleDelete = useCallback(async () => {
     setLoading(true);
     try {
       await apiClient.deleteCollection(collection.id);
-      onDelete?.();
       setShowDeleteDialog(false);
+      onDelete?.();
     } catch (error) {
       console.error('コレクション削除エラー:', error);
       // TODO: エラー表示
     } finally {
       setLoading(false);
     }
-  };
+  }, [collection.id, onDelete]);
+
+  const handleDeleteDialogOpenChange = useCallback((open: boolean) => {
+    setShowDeleteDialog(open);
+    if (!open) {
+      setLoading(false);
+    }
+  }, []);
+
+  const closeMenu = useCallback(() => {
+    setMenuOpen(false);
+  }, []);
 
   const handlePin = async () => {
     if (!pinName.trim() || !onPin) return;
@@ -103,12 +135,21 @@ export function CollectionContextMenu({
     }
   };
 
+  const handleMenuOpenChange = useCallback((isOpen: boolean) => {
+    setMenuOpen(isOpen);
+    if (!isOpen) {
+      setLoading(false);
+    }
+  }, []);
+
   const openRenameDialog = () => {
+    closeMenu();
     setName(collection.name);
     setShowRenameDialog(true);
   };
 
   const openPinDialog = () => {
+    closeMenu();
     setPinName(collection.name);
     setSelectedPinIcon('BookText');
     setShowPinDialog(true);
@@ -128,7 +169,7 @@ export function CollectionContextMenu({
 
   return (
     <>
-      <ContextMenu>
+      <ContextMenu open={menuOpen} onOpenChange={handleMenuOpenChange}>
         <ContextMenuTrigger>{children}</ContextMenuTrigger>
         <ContextMenuContent className="w-36">
           <ContextMenuItem onClick={onOpen}>Open</ContextMenuItem>
@@ -152,7 +193,10 @@ export function CollectionContextMenu({
           <ContextMenuSeparator />
           <ContextMenuItem
             className="text-red-600 focus:text-red-600 hover:text-red-600"
-            onClick={() => setShowDeleteDialog(true)}
+            onClick={() => {
+              closeMenu();
+              setShowDeleteDialog(true);
+            }}
           >
             <Trash2 className="w-4 h-4 mr-2" />
             Delete
@@ -207,7 +251,7 @@ export function CollectionContextMenu({
       </Dialog>
 
       {/* Delete Confirmation Dialog */}
-      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+      <Dialog open={showDeleteDialog} onOpenChange={handleDeleteDialogOpenChange}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader className="border-b border-gray-200 pb-4">
             <DialogTitle className="text-lg font-semibold text-gray-900">

@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
-import { useAtom, useSetAtom } from 'jotai';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import {
   Book,
   Check,
@@ -12,6 +12,7 @@ import {
   Star,
   Trash2,
 } from 'lucide-react';
+import { useCallback } from 'react';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -22,6 +23,7 @@ import {
 import { useDrag } from '@/contexts/DragContext';
 import { useScratch } from '@/hooks/useScratch';
 import { apiClient } from '@/lib/api-client';
+import { removeStackFromCache } from '@/lib/stack-cache';
 import { cn } from '@/lib/utils';
 import { navigationStateAtom } from '@/stores/navigation';
 import { infoSidebarOpenAtom, selectedItemIdAtom } from '@/stores/ui';
@@ -158,7 +160,56 @@ export function StackListItem({
   const navigate = useNavigate();
   const setInfoOpen = useSetAtom(infoSidebarOpenAtom);
   const setSelectedItemId = useSetAtom(selectedItemIdAtom);
+  const selectedInfoItemId = useAtomValue(selectedItemIdAtom);
   const { ensureScratch } = useScratch(datasetId);
+
+  const invalidateStackData = useCallback(() => {
+    void Promise.allSettled([
+      queryClient.invalidateQueries({ queryKey: ['stack'] }),
+      queryClient.invalidateQueries({ queryKey: ['stacks'] }),
+      queryClient.invalidateQueries({ queryKey: ['tag-stacks'] }),
+      queryClient.invalidateQueries({ queryKey: ['autotag-stacks'] }),
+      queryClient.invalidateQueries({ queryKey: ['library-counts', datasetId] }),
+      queryClient.invalidateQueries({ queryKey: ['tags', datasetId] }),
+      queryClient.invalidateQueries({ queryKey: ['likes', 'yearly'] }),
+      queryClient.invalidateQueries({ queryKey: ['dataset-overview', datasetId] }),
+    ]);
+  }, [datasetId, queryClient]);
+
+  const handleRemoveFromDataset = useCallback(async () => {
+    const stackLabel = stack.title || stack.name || 'Untitled';
+    const confirmed = window.confirm(
+      `Are you sure you want to remove the stack "${stackLabel}"? This action cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    const numericId =
+      typeof stack.id === 'string' ? Number.parseInt(stack.id, 10) : Number(stack.id);
+    const stringId = typeof stack.id === 'string' ? stack.id : String(stack.id);
+
+    try {
+      await apiClient.removeStack(numericId);
+      removeStackFromCache(queryClient, numericId);
+
+      const selectedIdString =
+        selectedInfoItemId === null
+          ? null
+          : typeof selectedInfoItemId === 'string'
+            ? selectedInfoItemId
+            : String(selectedInfoItemId);
+
+      if (selectedIdString && selectedIdString === stringId) {
+        setSelectedItemId(null);
+        setInfoOpen(false);
+      }
+
+      invalidateStackData();
+      console.log('✅ Stack removed successfully');
+    } catch (error) {
+      console.error('❌ Failed to remove stack:', error);
+      alert('Failed to remove stack. Please try again.');
+    }
+  }, [invalidateStackData, queryClient, selectedInfoItemId, setInfoOpen, setSelectedItemId, stack]);
 
   return (
     <ContextMenu>
@@ -311,51 +362,63 @@ export function StackListItem({
           Add to Scratch
         </ContextMenuItem>
         {(inCollectionPath && isManualCollection) || inScratchPath ? (
-          <ContextMenuSeparator />
+          <>
+            <ContextMenuSeparator />
+            {inCollectionPath && isManualCollection && (
+              <ContextMenuItem
+                className="text-red-600 focus:text-red-700"
+                onClick={async () => {
+                  try {
+                    const collectionId =
+                      document?.body?.dataset?.collectionId ||
+                      (window.location.pathname.match(/collections\/(\d+)/)?.[1] ?? '');
+                    if (!collectionId) return;
+                    const id =
+                      typeof stack.id === 'string' ? Number.parseInt(stack.id, 10) : stack.id;
+                    await apiClient.removeStackFromCollection(collectionId, id);
+                    await queryClient.invalidateQueries({ queryKey: ['stacks'] });
+                    await queryClient.invalidateQueries({ queryKey: ['collection-folders'] });
+                  } catch (e) {
+                    console.error('Failed to remove from collection', e);
+                  }
+                }}
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Remove from Collection
+              </ContextMenuItem>
+            )}
+            {inScratchPath && (
+              <ContextMenuItem
+                className="text-red-600 focus:text-red-700"
+                onClick={async () => {
+                  try {
+                    const scratchId =
+                      document?.body?.dataset?.collectionId ||
+                      (window.location.pathname.match(/scratch\/(\d+)/)?.[1] ?? '');
+                    if (!scratchId) return;
+                    const id =
+                      typeof stack.id === 'string' ? Number.parseInt(stack.id, 10) : stack.id;
+                    await apiClient.removeStackFromCollection(scratchId, id);
+                    await queryClient.invalidateQueries({ queryKey: ['stacks'] });
+                  } catch (e) {
+                    console.error('Failed to remove from scratch', e);
+                  }
+                }}
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Remove from Scratch
+              </ContextMenuItem>
+            )}
+          </>
         ) : null}
-        {inCollectionPath && isManualCollection && (
-          <ContextMenuItem
-            className="text-red-600 focus:text-red-700"
-            onClick={async () => {
-              try {
-                const collectionId =
-                  document?.body?.dataset?.collectionId ||
-                  (window.location.pathname.match(/collections\/(\d+)/)?.[1] ?? '');
-                if (!collectionId) return;
-                const id = typeof stack.id === 'string' ? Number.parseInt(stack.id, 10) : stack.id;
-                await apiClient.removeStackFromCollection(collectionId, id);
-                await queryClient.invalidateQueries({ queryKey: ['stacks'] });
-                await queryClient.invalidateQueries({ queryKey: ['collection-folders'] });
-              } catch (e) {
-                console.error('Failed to remove from collection', e);
-              }
-            }}
-          >
-            <Trash2 className="w-4 h-4 mr-2" />
-            Remove from Collection
-          </ContextMenuItem>
-        )}
-        {inScratchPath && (
-          <ContextMenuItem
-            className="text-red-600 focus:text-red-700"
-            onClick={async () => {
-              try {
-                const scratchId =
-                  document?.body?.dataset?.collectionId ||
-                  (window.location.pathname.match(/scratch\/(\d+)/)?.[1] ?? '');
-                if (!scratchId) return;
-                const id = typeof stack.id === 'string' ? Number.parseInt(stack.id, 10) : stack.id;
-                await apiClient.removeStackFromCollection(scratchId, id);
-                await queryClient.invalidateQueries({ queryKey: ['stacks'] });
-              } catch (e) {
-                console.error('Failed to remove from scratch', e);
-              }
-            }}
-          >
-            <Trash2 className="w-4 h-4 mr-2" />
-            Remove from Scratch
-          </ContextMenuItem>
-        )}
+        <ContextMenuSeparator />
+        <ContextMenuItem
+          className="text-red-600 focus:text-red-700"
+          onClick={handleRemoveFromDataset}
+        >
+          <Trash2 className="w-4 h-4 mr-2" />
+          Remove Stack
+        </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
   );

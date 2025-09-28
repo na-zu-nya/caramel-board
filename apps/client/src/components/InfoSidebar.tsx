@@ -20,7 +20,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AutoTagDisplay } from '@/components/ui/autotag-display';
 import { Badge } from '@/components/ui/badge';
 import { ColorPalette } from '@/components/ui/color-ball';
@@ -37,6 +37,7 @@ import { useSwipeClose } from '@/hooks/features/useSwipeClose';
 import { useScratch } from '@/hooks/useScratch';
 import { apiClient } from '@/lib/api-client';
 import { copyText } from '@/lib/clipboard';
+import { removeStackFromCache } from '@/lib/stack-cache';
 import { cn, hexForCopy } from '@/lib/utils';
 import {
   currentFilterAtom,
@@ -53,7 +54,7 @@ interface InfoSidebarProps {
 
 export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps) {
   const [isOpen, setIsOpen] = useAtom(infoSidebarOpenAtom);
-  const [selectedItemId] = useAtom(selectedItemIdAtom);
+  const [selectedItemId, setSelectedItemId] = useAtom(selectedItemIdAtom);
   const [, setCustomColor] = useAtom(customColorAtom);
   const [currentFilter, setCurrentFilter] = useAtom(currentFilterAtom);
   const queryClient = useQueryClient();
@@ -63,6 +64,19 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
   const datasetId = (params as { datasetId?: string }).datasetId || '1';
   const { ensureScratch } = useScratch(datasetId);
   const addNotification = useSetAtom(addUploadNotificationAtom);
+
+  const invalidateStackData = useCallback(() => {
+    void Promise.allSettled([
+      queryClient.invalidateQueries({ queryKey: ['stack'] }),
+      queryClient.invalidateQueries({ queryKey: ['stacks'] }),
+      queryClient.invalidateQueries({ queryKey: ['tag-stacks'] }),
+      queryClient.invalidateQueries({ queryKey: ['autotag-stacks'] }),
+      queryClient.invalidateQueries({ queryKey: ['library-counts', datasetId] }),
+      queryClient.invalidateQueries({ queryKey: ['tags', datasetId] }),
+      queryClient.invalidateQueries({ queryKey: ['likes', 'yearly'] }),
+      queryClient.invalidateQueries({ queryKey: ['dataset-overview', datasetId] }),
+    ]);
+  }, [datasetId, queryClient]);
 
   // Close Info panel on route changes, except when staying within StackViewer
   useEffect(() => {
@@ -86,6 +100,50 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
     },
     enabled: !!selectedItemId && isOpen,
   });
+
+  const handleRemoveStack = useCallback(async () => {
+    if (!selectedItem) return;
+
+    const confirmed = window.confirm(
+      `Are you sure you want to remove the stack "${selectedItem.name}"? This action cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    const rawId = selectedItem.id;
+    const stackIdValue = typeof rawId === 'string' ? Number.parseInt(rawId, 10) : Number(rawId);
+    const mediaType = selectedItem.mediaType;
+
+    try {
+      await apiClient.removeStack(stackIdValue);
+      removeStackFromCache(queryClient, stackIdValue);
+      setSelectedItemId(null);
+      setIsOpen(false);
+      invalidateStackData();
+      console.log('✅ Stack removed successfully');
+
+      const currentPath = window.location.pathname;
+      if (currentPath.includes('/stacks/')) {
+        const mediaTypeMatch = currentPath.match(/media-type\/(\w+)/);
+        const nextMediaType = mediaType || mediaTypeMatch?.[1] || 'image';
+
+        navigate({
+          to: '/library/$datasetId/media-type/$mediaType',
+          params: { datasetId, mediaType: nextMediaType },
+        });
+      }
+    } catch (error) {
+      console.error('❌ Failed to remove stack:', error);
+      alert('Failed to remove stack. Please try again.');
+    }
+  }, [
+    datasetId,
+    invalidateStackData,
+    navigate,
+    queryClient,
+    selectedItem,
+    setIsOpen,
+    setSelectedItemId,
+  ]);
 
   const previewGenerated = Boolean(selectedItem?.assets?.some((asset) => asset.preview));
   const previewEligible = useMemo(() => {
@@ -993,41 +1051,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
                 <button
                   type="button"
                   className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 bg-white border border-red-300 rounded-md hover:bg-red-50 transition-colors"
-                  onClick={async () => {
-                    if (selectedItem) {
-                      const confirmed = window.confirm(
-                        `Are you sure you want to remove the stack "${selectedItem.name}"? This action cannot be undone.`
-                      );
-                      if (confirmed) {
-                        try {
-                          await apiClient.removeStack(Number(selectedItem.id));
-                          // Close sidebar and refresh list
-                          queryClient.invalidateQueries({ queryKey: ['stacks'] });
-                          console.log('✅ Stack removed successfully');
-
-                          // Navigate back to the list page
-                          const currentPath = window.location.pathname;
-
-                          // Check if we're in the stack viewer page
-                          if (currentPath.includes('/stacks/')) {
-                            // Extract mediaType from current path or use default
-                            const mediaTypeMatch = currentPath.match(/media-type\/(\w+)/);
-                            const mediaType =
-                              selectedItem.mediaType || mediaTypeMatch?.[1] || 'image';
-
-                            // Navigate to the appropriate media type page
-                            navigate({
-                              to: '/library/$datasetId/media-type/$mediaType',
-                              params: { datasetId, mediaType },
-                            });
-                          }
-                        } catch (error) {
-                          console.error('❌ Failed to remove stack:', error);
-                          alert('Failed to remove stack. Please try again.');
-                        }
-                      }
-                    }
-                  }}
+                  onClick={handleRemoveStack}
                   disabled={!selectedItem}
                 >
                   <Trash2 size={16} />

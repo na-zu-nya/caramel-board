@@ -79,7 +79,17 @@ export function GroupedStackList({
     return grouped;
   };
 
-  const actions = useStackTile(datasetId);
+  const {
+    onOpen,
+    onFindSimilar,
+    onAddToScratch,
+    onToggleFavorite,
+    onLike,
+    onInfo,
+    onRemoveLike,
+    onRemoveStack,
+    dragProps,
+  } = useStackTile(datasetId);
 
   return (
     <div className="w-full p-4 space-y-8 list-stable">
@@ -130,15 +140,7 @@ export function GroupedStackList({
                         const pageCount =
                           stack.assetCount || stack._count?.assets || stack.assetsCount || 0;
                         const isFav = stack.favorited || stack.isFavorite || false;
-                        const {
-                          onOpen,
-                          onFindSimilar,
-                          onAddToScratch,
-                          onToggleFavorite,
-                          onLike,
-                          onInfo,
-                          dragProps,
-                        } = actions;
+                        const likeActivityId = item.id;
                         return (
                           <div key={item.id} className={itemWidth}>
                             <StackTile
@@ -152,6 +154,18 @@ export function GroupedStackList({
                               onAddToScratch={() => onAddToScratch(stack.id)}
                               onToggleFavorite={() => onToggleFavorite(stack.id, isFav)}
                               onLike={() => onLike(stack.id)}
+                              onRemoveLike={
+                                onRemoveLike
+                                  ? () =>
+                                      onRemoveLike({
+                                        activityId: likeActivityId,
+                                        stackId: stack.id,
+                                      })
+                                  : undefined
+                              }
+                              onRemoveStack={() =>
+                                onRemoveStack(stack.id, stack.title || stack.name)
+                              }
                               dragHandlers={dragProps(stack.id)}
                               asChild
                             >
