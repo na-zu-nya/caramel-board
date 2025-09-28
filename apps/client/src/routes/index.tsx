@@ -1,10 +1,10 @@
-import { useQuery } from '@tanstack/react-query';
-import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
-import { Loader2 } from 'lucide-react';
-import { type CSSProperties, useEffect, useMemo } from 'react';
-import { useDatasets } from '@/hooks/useDatasets';
-import { useHeaderActions } from '@/hooks/useHeaderActions';
-import { apiClient } from '@/lib/api-client';
+import {useQuery} from '@tanstack/react-query';
+import {createFileRoute, Link, useNavigate} from '@tanstack/react-router';
+import {Loader2} from 'lucide-react';
+import {type CSSProperties, useEffect, useMemo} from 'react';
+import {useDatasets} from '@/hooks/useDatasets';
+import {useHeaderActions} from '@/hooks/useHeaderActions';
+import {apiClient} from '@/lib/api-client';
 
 export const Route = createFileRoute('/')({
   component: DatasetList,
@@ -100,7 +100,7 @@ function DatasetList() {
                 <div className="relative z-10">
                   <div className="flex items-center gap-3 mb-2">
                     <span className="text-3xl">{dataset.icon || '📁'}</span>
-                    <h3 className="text-2xl font-semibold">{dataset.name}</h3>
+                    <h3 className="text-2xl font-bold-display">{dataset.name}</h3>
                   </div>
                   <p className="text-muted-foreground">
                     {(countsMap?.[dataset.id] ?? dataset.itemCount ?? 0).toLocaleString()} items

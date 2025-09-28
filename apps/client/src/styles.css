@@ -34,6 +34,7 @@ code {
   --font-display-ja: "Murecho", "Tilt Warp", var(--font-sans);
   --font-weight-semibold: 500;
   --font-weight-bold: 500;
+  --font-weight-bold-display: 700;
   --background: oklch(1 0 0);
   --foreground: oklch(0.141 0.005 285.823);
   --card: oklch(1 0 0);
@@ -233,6 +234,10 @@ code {
 
 /* Primary color utilities - Direct CSS variable usage */
 @layer utilities {
+  .font-bold-display {
+    font-weight: var(--font-weight-bold-display);
+  }
+
   /* Stabilize list layout during transient scrollbar toggles (context menu, etc.) */
   .list-stable {
     scrollbar-gutter: stable;
