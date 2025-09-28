@@ -555,7 +555,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
           <div className="p-4 border-b border-gray-200">
             <div className="flex items-start justify-between">
               <div className="flex-1 min-w-0">
-                <h2 className="text-lg font-semibold text-gray-900 truncate">
+                <h2 className="text-lg font-semibold text-gray-900 truncate font-sans">
                   {selectedItem.name}
                 </h2>
                 <p className="text-sm text-gray-500">ID: {selectedItem.id}</p>

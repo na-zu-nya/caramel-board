@@ -49,106 +49,75 @@ Auto-tagging analyzes registered assets with a pre-trained model to generate des
 
 This software is built with the assistance of common AI coding tools.
 
-## Getting started
+## Setup guide
 
-### What you need
+### Windows / macOS
 
-- A computer to run the app
-  - A reasonably recent CPU is recommended. Suggested baselines: Apple Silicon (M1 or newer) on macOS / 11th Gen or newer on Windows
-  - If you prefer not to use your main machine, a mini PC or Mac mini works well as a dedicated server
-  - At least 4 GB RAM (8 GB or more recommended)
-- Storage
-  - Space for the assets and videos you want to manage. Pick a size that suits your library.
-  - An SSD with at least 128 GB of free space is recommended
-  - External storage is supported
-- Docker Desktop (Windows/macOS) or Docker Engine (Linux)
+- Windows: [docs/installation-windows.md](./docs/installation-windows.md)
+- macOS: [docs/installation-macos.md](./docs/installation-macos.md)
 
-### Setup
+Refer to those platform-specific guides for detailed steps.
 
-1. **Install prerequisites in advance**
+### Linux quick start
 
-   - **Windows**
-     - WSL2
-     - Docker Desktop (enable WSL2 integration)
-     - *(Optional)* Git (recommended because it makes updates easier)
-   - **macOS**
-     - Command Line Tools for Xcode
-     - Docker Desktop or OrbStack
-   - **Linux**
-     - Docker Engine + docker compose plugin
+#### Requirements
 
-   *Docker Desktop and OrbStack may require paid plans for corporate use depending on organization size or revenue. Check the respective licenses.*
+- Docker Engine with the docker compose plugin
+- Git
+- Python 3 (3.10 or newer recommended)
 
-2. **Download CaramelBoard**
+> `huggingface-hub` is required for the optional auto-tagging feature, so ensure pip is available.
 
-   - **Using a ZIP archive**
-     - Download the ZIP from the Releases page and extract it
-     - This path is easy, but updates are a little manual
-     - Place the extracted folder wherever you like
-   - **Using Git** (recommended when available because updates become simpler)
-     - Open Windows Terminal (or another shell) and move to the directory where you want to install
-     - Run `git clone https://github.com/na-zu-nya/caramel-board.git caramel-board && cd caramel-board`
-
-3. **Run the setup**
-
-   Open the `caramel-board` folder in your terminal or WSL session and execute:
-
-   ```bash
-   ./setup.sh
-   ```
-
-   Follow the prompts. (On Windows you can double-click `setup.bat`.)
-
-### Running the app
-
-#### Starting the services
-
-Run `start.sh` in your terminal on macOS/Linux or WSL on Windows to launch the services. (On Windows you can also double-click `start.bat`.)
+#### Clone the repository
 
 ```bash
-./serve.sh
+git clone https://github.com/na-zu-nya/caramel-board.git caramel-board
+cd caramel-board
 ```
 
-After the services start, access the app at:
+#### Initial setup
 
-- http://localhost:6766
-- http://<local-ip>:6766
-
-If you plan to use phones or tablets, assigning a static IP to the host machine is recommended.
-
-#### Operational commands
-
+```bash
+chmod +x setup.sh serve.sh scripts/*.sh
+python3 -m pip install --upgrade pip
+python3 -m pip install huggingface-hub
+./setup.sh
 ```
-# Start the app
-./serve.sh
 
-# Stop the app
+- Installing `pip` upgrades and `huggingface-hub` ahead of time ensures the setup script can use the required libraries
+- During `./setup.sh`, follow the prompts to choose storage locations and optional features
+
+#### Start and stop the app
+
+```bash
+# production mode
+./serve.sh prod
+
+# development mode
+./serve.sh dev
+
+# stop the services
 ./serve.sh stop
+```
 
-# Update the app (only when cloned via Git)
+Once the services are up, open `http://localhost:6766` or `http://<host-ip>:6766` in your browser.
+
+#### Update
+
+```bash
 ./serve.sh update
 ```
 
-#### Switching release channels (Git branches)
+This command pulls the latest changes, rebuilds the container image, and restarts as needed.
 
-When you cloned the repository via Git, you can jump between the `dev`, `stable`, and `main` channels with:
+## Backup
 
-```bash
-./setup.sh channel dev
-./setup.sh channel stable
-./setup.sh channel main
-```
+### Storage locations (assets and database)
 
-The command fetches the latest state from `origin`, checks out the target branch, and pulls the newest commits. After switching channels, run `./serve.sh update` if you want to rebuild containers with the updated code.
-
-### Backups
-
-#### Storage locations (assets and database)
-
-- Recommended defaults (for local overrides):
+- Recommended defaults:
   - Images and videos (`/app/data` inside the container): `./data/assets`
   - PostgreSQL data: `./data/postgres`
-- You can override these via `docker-compose.local.yml`. When the file exists, `./serve.sh` loads it automatically.
+- Override paths by providing a `docker-compose.local.yml`; `./serve.sh` loads it automatically when present.
 
 Example (using the recommended defaults):
 
@@ -162,22 +131,6 @@ services:
   postgres:
     volumes:
       - ./data/postgres:/var/lib/postgresql/data
-```
-
-Example for Windows/WSL (when storing data elsewhere):
-
-```yaml
-services:
-  app:
-    volumes:
-      - C:\\Data\\CaramelBoard\\assets:/app/data
-      # or using the WSL path form
-      - /mnt/c/Data/CaramelBoard/assets:/app/data
-  postgres:
-    volumes:
-      - C:\\Data\\CaramelBoard\\postgres:/var/lib/postgresql/data
-      # or using the WSL path form
-      - /mnt/c/Data/CaramelBoard/postgres:/var/lib/postgresql/data
 ```
 
 If you encounter permission errors, adjust ownership or permissions on the host directories.

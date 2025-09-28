@@ -1,3 +1,5 @@
+import { execSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import tailwindcss from '@tailwindcss/vite';
@@ -13,10 +15,28 @@ export default defineConfig(({ mode }) => {
   // APIのURLを決定（優先順位: 環境変数 > デフォルト）
   const apiUrl = env.VITE_API_URL || 'http://localhost:6766';
 
+  const packageJsonPath = resolve(process.cwd(), '..', '..', 'package.json');
+  const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'));
+  let gitHash = env.VITE_APP_GIT_HASH;
+  if (!gitHash) {
+    try {
+      gitHash = execSync('git rev-parse --short HEAD').toString().trim();
+    } catch (error) {
+      console.warn('⚠️  Failed to read git hash:', error);
+      gitHash = 'unknown';
+    }
+  }
+
+  const appVersion = env.VITE_APP_VERSION || packageJson.version || '0.0.0';
+
   console.log(`🚀 API Proxy Target: ${apiUrl}`);
 
   return {
     plugins: [TanStackRouterVite({ autoCodeSplitting: true }), viteReact(), tailwindcss()],
+    define: {
+      'import.meta.env.VITE_APP_VERSION': JSON.stringify(appVersion),
+      'import.meta.env.VITE_APP_GIT_HASH': JSON.stringify(gitHash),
+    },
     test: {
       globals: true,
       environment: 'jsdom',

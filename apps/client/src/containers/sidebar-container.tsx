@@ -1,14 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from '@tanstack/react-router';
 import { useAtom } from 'jotai';
-import { useEffect, useState } from 'react';
+import { Github, Megaphone, Twitter } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import { CollectionsSection } from '@/components/sidebar/CollectionsSection';
 import { DatasetSection } from '@/components/sidebar/DatasetSection';
 import { LibrarySection } from '@/components/sidebar/LibrarySection';
 import { SettingsSection } from '@/components/sidebar/SettingsSection';
 import type { NavigationPinHandlers } from '@/components/sidebar/types';
+import { CaramelBoardLogo } from '@/components/ui/CaramelBoardLogo';
 import { SideMenu } from '@/components/ui/SideMenu';
 import { apiClient } from '@/lib/api-client';
+import { APP_GIT_HASH, APP_VERSION } from '@/lib/app-info';
 import { currentDatasetAtom, sidebarOpenAtom } from '@/stores/ui';
 
 // LocalStorage keys for collapsed state
@@ -163,14 +166,66 @@ export default function SidebarContainer() {
   const menuTitle = (
     <Link
       to="/"
-      className="inline-flex items-center rounded-sm text-gray-900 no-underline transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-white hover:text-primary-strong"
+      className="inline-flex items-center gap-2 rounded-sm text-gray-900 no-underline transition-colors hover:text-primary-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-white"
     >
-      Caramel Board
+      <CaramelBoardLogo />
+      <span className="sr-only">Caramel Board</span>
     </Link>
   );
 
+  const headerSupportLeft = useMemo(
+    () => (
+      <>
+        <span>v{APP_VERSION}</span>
+        <span className="opacity-70">#{APP_GIT_HASH}</span>
+      </>
+    ),
+    []
+  );
+
+  const headerSupportRight = useMemo(
+    () => (
+      <>
+        <a
+          href="https://caramel-board.fanbox.cc/"
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1 text-gray-300 no-underline transition-colors hover:text-primary-strong"
+        >
+          <Megaphone className="h-3.5 w-3.5" aria-hidden="true" />
+          <span className="sr-only">Releases</span>
+        </a>
+        <a
+          href="https://x.com/caramel_board"
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1 text-gray-300 no-underline transition-colors hover:text-primary-strong"
+        >
+          <Twitter className="h-3.5 w-3.5" aria-hidden="true" />
+          <span className="sr-only">X</span>
+        </a>
+        <a
+          href="https://github.com/na-zu-nya/caramel-board"
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1 text-gray-300 no-underline transition-colors hover:text-primary-strong"
+        >
+          <Github className="h-3.5 w-3.5" aria-hidden="true" />
+          <span className="sr-only">GitHub</span>
+        </a>
+      </>
+    ),
+    []
+  );
+
   return (
-    <SideMenu open={isOpen} onClose={() => setIsOpen(false)} title={menuTitle}>
+    <SideMenu
+      open={isOpen}
+      onClose={() => setIsOpen(false)}
+      title={menuTitle}
+      supportLeft={headerSupportLeft}
+      supportRight={headerSupportRight}
+    >
       <DatasetSection
         datasetId={datasetId}
         currentDataset={currentDataset}

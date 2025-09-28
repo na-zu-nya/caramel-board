@@ -1,6 +1,19 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { Book, Camera, Folder, Heart, Layers, XCircle } from 'lucide-react';
+import {
+  Book,
+  Camera,
+  Folder,
+  Github,
+  Heart,
+  Layers,
+  Megaphone,
+  Twitter,
+  XCircle,
+} from 'lucide-react';
 import { useState } from 'react';
+
+import { APP_GIT_HASH, APP_VERSION } from '@/lib/app-info';
+import { CaramelBoardLogo } from '../CaramelBoardLogo';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../select';
 import { SideMenu, SideMenuGroup, SideMenuListItem } from './index';
 
@@ -19,7 +32,51 @@ export const Default: Story = {
     const [library, setLibrary] = useState('1');
     return (
       <div style={{ height: '100vh' }}>
-        <SideMenu open={open} onClose={() => setOpen(false)} title="Caramel Board">
+        <SideMenu
+          open={open}
+          onClose={() => setOpen(false)}
+          title={
+            <a
+              href="#"
+              className="inline-flex items-center gap-2 rounded-sm text-gray-900 no-underline transition-colors hover:text-primary-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+              onClick={(event) => event.preventDefault()}
+            >
+              <CaramelBoardLogo className="h-6" />
+              <span className="sr-only">Caramel Board</span>
+            </a>
+          }
+          supportLeft={
+            <>
+              <span>v{APP_VERSION}</span>
+              <span className="opacity-70">#{APP_GIT_HASH}</span>
+            </>
+          }
+          supportRight={
+            <>
+              <a
+                href="https://caramel-board.fanbox.cc/"
+                className="inline-flex items-center gap-1 text-gray-300 no-underline transition-colors hover:text-primary-strong"
+              >
+                <Megaphone className="h-3.5 w-3.5" aria-hidden="true" />
+                <span className="sr-only">Releases</span>
+              </a>
+              <a
+                href="https://x.com/caramel_board"
+                className="inline-flex items-center gap-1 text-gray-300 no-underline transition-colors hover:text-primary-strong"
+              >
+                <Twitter className="h-3.5 w-3.5" aria-hidden="true" />
+                <span className="sr-only">X</span>
+              </a>
+              <a
+                href="https://github.com/na-zu-nya/caramel-board"
+                className="inline-flex items-center gap-1 text-gray-300 no-underline transition-colors hover:text-primary-strong"
+              >
+                <Github className="h-3.5 w-3.5" aria-hidden="true" />
+                <span className="sr-only">GitHub</span>
+              </a>
+            </>
+          }
+        >
           <SideMenuGroup label="Current Library">
             <Select value={library} onValueChange={setLibrary}>
               <SelectTrigger className="w-full h-8 text-sm">
@@ -56,7 +113,7 @@ export const Default: Story = {
   },
 };
 
-export const WithLinkTitle: Story = {
+export const WithTextTitle: Story = {
   render: () => {
     const [open, setOpen] = useState(true);
     return (
@@ -72,6 +129,37 @@ export const WithLinkTitle: Story = {
             >
               Caramel Board
             </a>
+          }
+          supportLeft={
+            <>
+              <span>v{APP_VERSION}</span>
+              <span className="opacity-70">#{APP_GIT_HASH}</span>
+            </>
+          }
+          supportRight={
+            <>
+              <a
+                href="https://caramel-board.fanbox.cc/"
+                className="inline-flex items-center gap-1 text-gray-300 no-underline transition-colors hover:text-primary-strong"
+              >
+                <Megaphone className="h-3.5 w-3.5" aria-hidden="true" />
+                <span className="sr-only">Releases</span>
+              </a>
+              <a
+                href="https://x.com/caramel_board"
+                className="inline-flex items-center gap-1 text-gray-300 no-underline transition-colors hover:text-primary-strong"
+              >
+                <Twitter className="h-3.5 w-3.5" aria-hidden="true" />
+                <span className="sr-only">X</span>
+              </a>
+              <a
+                href="https://github.com/na-zu-nya/caramel-board"
+                className="inline-flex items-center gap-1 text-gray-300 no-underline transition-colors hover:text-primary-strong"
+              >
+                <Github className="h-3.5 w-3.5" aria-hidden="true" />
+                <span className="sr-only">GitHub</span>
+              </a>
+            </>
           }
         >
           <SideMenuGroup label="Example">

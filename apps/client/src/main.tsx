@@ -5,6 +5,8 @@ import { createRoot } from 'react-dom/client';
 import reportWebVitals from './reportWebVitals';
 // Import the generated route tree
 import { routeTree } from './routeTree.gen';
+import '@fontsource/tilt-warp/400.css';
+import '@fontsource/murecho/500.css';
 import './styles.css';
 
 // Create a QueryClient instance

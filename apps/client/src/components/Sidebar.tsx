@@ -1,15 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
 import { useAtom } from 'jotai';
-import { X } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { Github, Megaphone, Twitter, X } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import { CollectionsSection } from '@/components/sidebar/CollectionsSection';
 import { DatasetSection } from '@/components/sidebar/DatasetSection';
 import { LibrarySection } from '@/components/sidebar/LibrarySection';
 import { SettingsSection } from '@/components/sidebar/SettingsSection';
 import type { NavigationPinHandlers } from '@/components/sidebar/types';
+import { CaramelBoardLogo } from '@/components/ui/CaramelBoardLogo';
 import { useSwipeClose } from '@/hooks/features/useSwipeClose';
 import { apiClient } from '@/lib/api-client';
+import { APP_GIT_HASH, APP_VERSION } from '@/lib/app-info';
 import { cn } from '@/lib/utils';
 import { currentDatasetAtom, sidebarOpenAtom } from '@/stores/ui';
 
@@ -218,6 +220,51 @@ export default function Sidebar() {
     onClose: () => setIsOpen(false),
   });
 
+  const headerSupportLeft = useMemo(
+    () => (
+      <>
+        <span>v{APP_VERSION}</span>
+        <span className="opacity-70">#{APP_GIT_HASH}</span>
+      </>
+    ),
+    []
+  );
+
+  const headerSupportRight = useMemo(
+    () => (
+      <>
+        <a
+          href="https://caramel-board.fanbox.cc/"
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1 text-gray-300 no-underline transition-colors hover:text-primary-strong"
+        >
+          <Megaphone className="h-3.5 w-3.5" aria-hidden="true" />
+          <span className="sr-only">Releases</span>
+        </a>
+        <a
+          href="https://x.com/caramel_board"
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1 text-gray-300 no-underline transition-colors hover:text-primary-strong"
+        >
+          <Twitter className="h-3.5 w-3.5" aria-hidden="true" />
+          <span className="sr-only">X</span>
+        </a>
+        <a
+          href="https://github.com/na-zu-nya/caramel-board"
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1 text-gray-300 no-underline transition-colors hover:text-primary-strong"
+        >
+          <Github className="h-3.5 w-3.5" aria-hidden="true" />
+          <span className="sr-only">GitHub</span>
+        </a>
+      </>
+    ),
+    []
+  );
+
   return (
     <aside
       ref={swipeRef}
@@ -228,16 +275,25 @@ export default function Sidebar() {
       style={{ touchAction: 'pan-y' }}
     >
       {/* Header */}
-      <div className="flex items-center justify-between p-3 border-b border-gray-200">
-        <h2 className="text-lg font-semibold text-gray-900">Caramel Board</h2>
-        <button
-          type="button"
-          onClick={() => setIsOpen(false)}
-          className="p-1.5 hover:bg-gray-100 rounded-md transition-colors"
-          aria-label="Close sidebar"
-        >
-          <X size={18} className="text-gray-600" />
-        </button>
+      <div className="flex flex-col gap-1 p-3 border-b border-gray-200">
+        <div className="flex items-center justify-between">
+          <div className="inline-flex items-center gap-2 text-gray-900">
+            <CaramelBoardLogo />
+            <span className="sr-only">Caramel Board</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsOpen(false)}
+            className="p-1.5 hover:bg-gray-100 rounded-md transition-colors"
+            aria-label="Close sidebar"
+          >
+            <X size={18} className="text-gray-600" />
+          </button>
+        </div>
+        <div className="flex items-center justify-between text-xs text-gray-500">
+          <div className="flex items-center gap-2">{headerSupportLeft}</div>
+          <div className="flex items-center gap-3">{headerSupportRight}</div>
+        </div>
       </div>
 
       {/* Content */}

@@ -11,16 +11,27 @@ export function useResponse<T>(c: Context, data: T, status = 200) {
   }
 
   // それ以外はエラーレスポンス
-  return c.json({ error: getMessage(status, data) }, status);
+  return c.json(resolveErrorPayload(status, data), status);
 }
 
-function getMessage(status: number, data: unknown) {
+function resolveErrorPayload(status: number, data: unknown) {
+  if (data && typeof data === 'object') {
+    const maybeError = (data as { error?: unknown }).error;
+    if (typeof maybeError === 'string' && maybeError.trim().length > 0) {
+      return { error: maybeError };
+    }
+  }
+
+  if (typeof data === 'string' && data.trim().length > 0) {
+    return { error: data };
+  }
+
   switch (status) {
     case 500:
-      return 'Internal Error';
+      return { error: 'Internal Error' };
     case 404:
-      return 'Not found';
+      return { error: 'Not found' };
     default:
-      return data && typeof data === 'string' ? data : '';
+      return { error: '' };
   }
 }
