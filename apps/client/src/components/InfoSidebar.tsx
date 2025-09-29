@@ -761,7 +761,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
                         <Badge
                           key={typeof tag === 'string' ? tag : `tag-${index}`}
                           variant="default"
-                          className="cursor-pointer hover:bg-primary/90 transition-colors flex items-center gap-1.5 pr-1 text-base"
+                          className="cursor-pointer hover:bg-primary/90 transition-colors flex items-center gap-1.5 pr-1 px-2.5 py-1 text-sm font-semibold"
                           onClick={() => {
                             // Apply tag filter
                             setCurrentFilter({

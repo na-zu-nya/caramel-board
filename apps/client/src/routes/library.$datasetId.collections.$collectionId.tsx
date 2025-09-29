@@ -329,12 +329,8 @@ function CollectionView() {
         if (currentFilter.hasNoAuthor !== undefined)
           filterParams.hasNoAuthor = currentFilter.hasNoAuthor;
         if (currentFilter.colorFilter) {
-          if (currentFilter.colorFilter.hueCategories?.length > 0)
+          if ((currentFilter.colorFilter.hueCategories?.length ?? 0) > 0)
             filterParams.hueCategories = currentFilter.colorFilter.hueCategories;
-          if (currentFilter.colorFilter.toneSaturation !== undefined)
-            filterParams.toneSaturation = currentFilter.colorFilter.toneSaturation;
-          if (currentFilter.colorFilter.toneLightness !== undefined)
-            filterParams.toneLightness = currentFilter.colorFilter.toneLightness;
           if (currentFilter.colorFilter.toneTolerance !== undefined)
             filterParams.toneTolerance = currentFilter.colorFilter.toneTolerance;
           if (currentFilter.colorFilter.similarityThreshold !== undefined)

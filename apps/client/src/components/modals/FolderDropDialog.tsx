@@ -1,8 +1,14 @@
 import { useEffect, useState } from 'react';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import type { FolderUploadMode } from '@/lib/folder-import';
 
 interface FolderDropDialogProps {
@@ -13,7 +19,13 @@ interface FolderDropDialogProps {
   onConfirm: (mode: FolderUploadMode, options: { collectionName?: string }) => Promise<void>;
 }
 
-export function FolderDropDialog({ open, folderName, fileCount, onCancel, onConfirm }: FolderDropDialogProps) {
+export function FolderDropDialog({
+  open,
+  folderName,
+  fileCount,
+  onCancel,
+  onConfirm,
+}: FolderDropDialogProps) {
   const [mode, setMode] = useState<FolderUploadMode>('single-stack');
   const [collectionName, setCollectionName] = useState<string>(folderName);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -50,11 +62,16 @@ export function FolderDropDialog({ open, folderName, fileCount, onCancel, onConf
             Add folder “{folderName}”
           </DialogTitle>
           <p className="mt-1 text-left text-sm text-muted-foreground">
-            {fileCount} file{fileCount === 1 ? '' : 's'} detected. Choose how you want to import them.
+            {fileCount} file{fileCount === 1 ? '' : 's'} detected. Choose how you want to import
+            them.
           </p>
         </DialogHeader>
 
-        <RadioGroup value={mode} onValueChange={(value) => setMode(value as FolderUploadMode)} className="space-y-4">
+        <RadioGroup
+          value={mode}
+          onValueChange={(value) => setMode(value as FolderUploadMode)}
+          className="space-y-4"
+        >
           <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-transparent p-3 transition hover:border-gray-200">
             <RadioGroupItem value="single-stack" />
             <div className="space-y-1">
@@ -89,7 +106,8 @@ export function FolderDropDialog({ open, folderName, fileCount, onCancel, onConf
             <div className="space-y-1">
               <p className="text-sm font-medium text-gray-900">Add as individual uploads</p>
               <p className="text-xs text-muted-foreground">
-                Push the files into the existing upload queue without preserving the folder structure.
+                Push the files into the existing upload queue without preserving the folder
+                structure.
               </p>
             </div>
           </label>

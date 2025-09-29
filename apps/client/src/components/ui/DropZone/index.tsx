@@ -9,11 +9,17 @@ interface FileSystemEntryBase {
 }
 
 interface FileSystemFileEntry extends FileSystemEntryBase {
-  file: (successCallback: (file: File) => void, errorCallback?: (error: DOMException) => void) => void;
+  file: (
+    successCallback: (file: File) => void,
+    errorCallback?: (error: DOMException) => void
+  ) => void;
 }
 
 interface FileSystemDirectoryReader {
-  readEntries: (successCallback: (entries: FileSystemEntry[]) => void, errorCallback?: (error: DOMException) => void) => void;
+  readEntries: (
+    successCallback: (entries: FileSystemEntry[]) => void,
+    errorCallback?: (error: DOMException) => void
+  ) => void;
 }
 
 interface FileSystemDirectoryEntry extends FileSystemEntryBase {
@@ -231,7 +237,11 @@ function readFileEntry(entry: FileSystemFileEntry): Promise<File> {
         try {
           (file as any).webkitRelativePath = relativePath;
         } catch (error) {
-          console.warn('[DropZone] Failed to assign webkitRelativePath via direct set', relativePath, error);
+          console.warn(
+            '[DropZone] Failed to assign webkitRelativePath via direct set',
+            relativePath,
+            error
+          );
         }
 
         try {
@@ -239,8 +249,9 @@ function readFileEntry(entry: FileSystemFileEntry): Promise<File> {
             value: relativePath,
             configurable: true,
           });
-        } catch (error) {
+        } catch (error: unknown) {
           // Some browsers disallow redefining; that's OK as long as either attempt worked
+          void error;
         }
 
         try {
@@ -250,6 +261,7 @@ function readFileEntry(entry: FileSystemFileEntry): Promise<File> {
           });
         } catch (error) {
           (file as any)[RELATIVE_PATH_KEY] = relativePath;
+          void error;
         }
       }
       resolve(file);
@@ -262,16 +274,19 @@ function readEntriesRecursive(reader: FileSystemDirectoryReader): Promise<FileSy
     const entries: FileSystemEntry[] = [];
 
     const readBatch = () => {
-      reader.readEntries((batch) => {
-        if (batch.length === 0) {
-          resolve(entries);
-          return;
+      reader.readEntries(
+        (batch) => {
+          if (batch.length === 0) {
+            resolve(entries);
+            return;
+          }
+          entries.push(...batch);
+          readBatch();
+        },
+        (error) => {
+          reject(error);
         }
-        entries.push(...batch);
-        readBatch();
-      }, (error) => {
-        reject(error);
-      });
+      );
     };
 
     readBatch();
@@ -287,7 +302,9 @@ async function traverseFileSystemEntry(entry: FileSystemEntry): Promise<File[]> 
   if (entry.isDirectory) {
     const reader = (entry as FileSystemDirectoryEntry).createReader();
     const childEntries = await readEntriesRecursive(reader);
-    const nestedFiles = await Promise.all(childEntries.map((child) => traverseFileSystemEntry(child)));
+    const nestedFiles = await Promise.all(
+      childEntries.map((child) => traverseFileSystemEntry(child))
+    );
     return nestedFiles.flat();
   }
 
@@ -298,7 +315,9 @@ async function extractFilesFromDataTransfer(dataTransfer: DataTransfer | null): 
   if (!dataTransfer) return [];
 
   const itemList = dataTransfer.items ? Array.from(dataTransfer.items) : [];
-  const supportsEntries = itemList.some((item) => typeof (item as any).webkitGetAsEntry === 'function');
+  const supportsEntries = itemList.some(
+    (item) => typeof (item as any).webkitGetAsEntry === 'function'
+  );
 
   if (supportsEntries) {
     const allFiles = await Promise.all(

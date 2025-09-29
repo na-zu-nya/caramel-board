@@ -74,7 +74,9 @@ export function SideMenuListItem({
   const content = (
     <>
       {renderIconNode()}
-      <span className="mr-auto">{label}</span>
+      <span className="mr-auto" title={props.title}>
+        {label}
+      </span>
       <CountBadge count={count} />
       {safeNode(right)}
     </>

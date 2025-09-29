@@ -4,20 +4,20 @@ import { Info, Loader2, Pencil } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { StackGridItem } from '@/components/grid/StackGridItem.tsx';
+import { FolderDropDialog } from '@/components/modals/FolderDropDialog.tsx';
 import { DropZone } from '@/components/ui/DropZone';
 import { HeaderIconButton } from '@/components/ui/Header/HeaderIconButton';
 import { SelectionActionBar } from '@/components/ui/selection-action-bar';
 import { useStackGrid } from '@/hooks/features/useStackGrid';
 import { useSparseInfiniteScroll } from '@/hooks/useSparseInfiniteScroll';
 import { apiClient } from '@/lib/api-client';
-import { FolderDropDialog } from '@/components/modals/FolderDropDialog.tsx';
 import {
-  splitFilesByTopLevelFolder,
-  uploadFolderAsCollection,
-  uploadFolderAsSingleStack,
   type FolderGroup,
   type FolderUploadDefaults,
   type FolderUploadMode,
+  splitFilesByTopLevelFolder,
+  uploadFolderAsCollection,
+  uploadFolderAsSingleStack,
 } from '@/lib/folder-import';
 import { applyScrollbarCompensation, removeScrollbarCompensation } from '@/lib/scrollbar-utils';
 import { cn } from '@/lib/utils';
@@ -109,7 +109,6 @@ export default function SparseStackGrid({
     };
   }, [dataset?.id, datasetId, mediaType, filter.tags, filter.authors]);
 
-
   // While this grid is mounted, stabilize body scrollbar gutter for contextmenu reflows
   useEffect(() => {
     applyScrollbarCompensation();
@@ -167,7 +166,10 @@ export default function SparseStackGrid({
 
       const defaults = activeFolder.defaults;
       if (!defaults) {
-        addNotification({ type: 'error', message: 'Unable to resolve upload defaults for this folder.' });
+        addNotification({
+          type: 'error',
+          message: 'Unable to resolve upload defaults for this folder.',
+        });
         finalizeFolderProcessing();
         return;
       }
@@ -194,7 +196,10 @@ export default function SparseStackGrid({
             type: 'info',
             message: `Merging “${activeFolder.name}” into a single stack…`,
           });
-          const { stackId, assetIds } = await uploadFolderAsSingleStack(activeFolder.files, defaults);
+          const { stackId, assetIds } = await uploadFolderAsSingleStack(
+            activeFolder.files,
+            defaults
+          );
           await refreshAfterManualUpload();
           addNotification({
             type: 'success',
@@ -428,12 +433,7 @@ export default function SparseStackGrid({
         setFolderQueue((prev) => [...prev, ...requests]);
       }
     },
-    [
-      addFilesToQueue,
-      addNotification,
-      computeUploadDefaults,
-      setUploadDefaults,
-    ]
+    [addFilesToQueue, addNotification, computeUploadDefaults, setUploadDefaults]
   );
 
   const handleUrlDrop = useCallback(

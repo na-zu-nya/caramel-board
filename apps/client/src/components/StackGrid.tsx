@@ -12,12 +12,12 @@ import { useStackGrid } from '@/hooks/features/useStackGrid';
 import { useScratch } from '@/hooks/useScratch';
 import { apiClient } from '@/lib/api-client';
 import {
-  splitFilesByTopLevelFolder,
-  uploadFolderAsCollection,
-  uploadFolderAsSingleStack,
   type FolderGroup,
   type FolderUploadDefaults,
   type FolderUploadMode,
+  splitFilesByTopLevelFolder,
+  uploadFolderAsCollection,
+  uploadFolderAsSingleStack,
 } from '@/lib/folder-import';
 import { applyScrollbarCompensation, removeScrollbarCompensation } from '@/lib/scrollbar-utils';
 import { cn } from '@/lib/utils';
@@ -145,8 +145,7 @@ export default function StackGrid({
       author: currentAuthor,
       collectionId,
     };
-  }, [currentFilter, dataset?.id, dsId]);
-
+  }, [currentFilter, dataset?.id, dsId, dataset]);
 
   // While this grid is mounted, stabilize body scrollbar gutter for contextmenu reflows
   useEffect(() => {
@@ -553,14 +552,7 @@ export default function StackGrid({
     } catch (error) {
       console.error('Failed to refresh after folder import', error);
     }
-  }, [
-    actualTotal,
-    dsId,
-    onLoadRange,
-    onRefreshAll,
-    queryClient,
-    rangeStart,
-  ]);
+  }, [actualTotal, dsId, onLoadRange, onRefreshAll, queryClient, rangeStart]);
 
   const finalizeFolderProcessing = useCallback(() => {
     setIsProcessingFolder(false);
@@ -576,7 +568,10 @@ export default function StackGrid({
 
       const defaults = activeFolder.defaults;
       if (!defaults) {
-        addNotification({ type: 'error', message: 'Unable to resolve upload defaults for this folder.' });
+        addNotification({
+          type: 'error',
+          message: 'Unable to resolve upload defaults for this folder.',
+        });
         finalizeFolderProcessing();
         return;
       }
@@ -603,7 +598,10 @@ export default function StackGrid({
             type: 'info',
             message: `Merging “${activeFolder.name}” into a single stack…`,
           });
-          const { stackId, assetIds } = await uploadFolderAsSingleStack(activeFolder.files, defaults);
+          const { stackId, assetIds } = await uploadFolderAsSingleStack(
+            activeFolder.files,
+            defaults
+          );
           await refreshAfterManualUpload();
           addNotification({
             type: 'success',

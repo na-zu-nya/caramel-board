@@ -71,8 +71,12 @@ export function splitFilesByTopLevelFolder(files: File[]): {
 
 export function sortFilesByRelativePath(files: File[]): File[] {
   return [...files].sort((a, b) => {
-    const aPath = ((a as File & { webkitRelativePath?: string }).webkitRelativePath || a.name).toLowerCase();
-    const bPath = ((b as File & { webkitRelativePath?: string }).webkitRelativePath || b.name).toLowerCase();
+    const aPath = (
+      (a as File & { webkitRelativePath?: string }).webkitRelativePath || a.name
+    ).toLowerCase();
+    const bPath = (
+      (b as File & { webkitRelativePath?: string }).webkitRelativePath || b.name
+    ).toLowerCase();
     if (aPath < bPath) return -1;
     if (aPath > bPath) return 1;
     return 0;

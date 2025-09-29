@@ -132,7 +132,14 @@ export function AutoTagsSection({ datasetId, autoFocusOnMount = false }: AutoTag
         itemsToRender.map((m) => {
           const label = m.displayName || m.autoTagKey;
           return (
-            <SideMenuListItem key={m.id} icon={Wand2} label={label} indent={1} asChild>
+            <SideMenuListItem
+              key={m.id}
+              icon={Wand2}
+              label={label}
+              indent={1}
+              title={m.autoTagKey}
+              asChild
+            >
               <Link
                 to="/library/$datasetId/autotag/$autoTagKey"
                 params={{ datasetId, autoTagKey: encodeURIComponent(m.autoTagKey) }}

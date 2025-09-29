@@ -40,7 +40,7 @@ export function TagChip({
   const node = (
     <span
       className={cn(
-        'inline-flex items-center rounded-full px-3 py-1.5 text-sm font-medium cursor-pointer hover:opacity-80 transition-opacity',
+        'inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold cursor-pointer hover:opacity-80 transition-opacity',
         usesCustomColor
           ? 'border border-transparent'
           : 'border border-transparent bg-primary text-primary-foreground',

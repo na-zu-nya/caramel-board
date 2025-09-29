@@ -240,6 +240,7 @@ export function useStackGrid({
     containerRef.current,
     disableVirtualization,
     items.length,
+    columnsPerRow,
   ]);
 
   // Handle animation state changes

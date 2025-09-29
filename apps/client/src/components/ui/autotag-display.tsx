@@ -128,13 +128,13 @@ export function AutoTagDisplay({
 
             return (
               <Badge
-                key={`autotag-${tag.autoTagKey}`}
+                key={`autotag-${autoTagKey}`}
                 variant="secondary"
                 className={badgeClassName}
                 onClick={() => handleBadgeClick(tag)}
                 title={
                   isMapped && onAddTag
-                    ? `Click to add "${displayName}" to tags`
+                    ? `Click to add "${displayName}" to tags (AutoTag: ${autoTagKey})`
                     : `Click to assign a tag to "${autoTagKey}"`
                 }
               >
