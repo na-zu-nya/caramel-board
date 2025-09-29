@@ -1,6 +1,7 @@
 import type { LucideIcon } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { Pencil, Pin, PinOff, Trash2 } from 'lucide-react';
+import type { FormEvent, ReactNode } from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -23,8 +24,17 @@ import { apiClient } from '@/lib/api-client';
 import type { AvailableIcon, Collection } from '@/types';
 import { AVAILABLE_ICONS } from '@/types';
 
+const restoreBodyPointerEvents = () => {
+  if (typeof document === 'undefined') return;
+  const { style } = document.body;
+  if (style.pointerEvents === 'none') {
+    style.pointerEvents = 'auto';
+  }
+  style.removeProperty('pointer-events');
+};
+
 interface CollectionContextMenuProps {
-  children: React.ReactNode;
+  children: ReactNode;
   collection: Collection;
   onUpdate?: () => void;
   onDelete?: () => void;
@@ -52,21 +62,13 @@ export function CollectionContextMenu({
 
   useEffect(() => {
     return () => {
-      if (typeof document !== 'undefined' && document.body.style.pointerEvents === 'none') {
-        document.body.style.pointerEvents = '';
-      }
+      restoreBodyPointerEvents();
     };
   }, []);
 
   useEffect(() => {
-    if (
-      typeof document !== 'undefined' &&
-      document.body.style.pointerEvents === 'none' &&
-      !showRenameDialog &&
-      !showDeleteDialog &&
-      !showPinDialog
-    ) {
-      document.body.style.pointerEvents = '';
+    if (!showRenameDialog && !showDeleteDialog && !showPinDialog) {
+      restoreBodyPointerEvents();
     }
   }, [showDeleteDialog, showPinDialog, showRenameDialog]);
 
@@ -77,7 +79,48 @@ export function CollectionContextMenu({
   const [pinName, setPinName] = useState(collection.name);
   const [selectedPinIcon, setSelectedPinIcon] = useState<AvailableIcon>('BookText');
 
-  const handleRename = async () => {
+  const closeRenameDialog = useCallback(() => {
+    setShowRenameDialog(false);
+    setLoading(false);
+    restoreBodyPointerEvents();
+  }, []);
+
+  const closeDeleteDialog = useCallback(() => {
+    setShowDeleteDialog(false);
+    setLoading(false);
+    restoreBodyPointerEvents();
+  }, []);
+
+  const closePinDialog = useCallback(() => {
+    setShowPinDialog(false);
+    setLoading(false);
+    restoreBodyPointerEvents();
+  }, []);
+
+  const handleRenameDialogOpenChange = useCallback(
+    (open: boolean) => {
+      if (open) {
+        setShowRenameDialog(true);
+      } else {
+        closeRenameDialog();
+      }
+    },
+    [closeRenameDialog]
+  );
+
+  const handlePinDialogOpenChange = useCallback(
+    (open: boolean) => {
+      if (open) {
+        setShowPinDialog(true);
+      } else {
+        closePinDialog();
+      }
+    },
+    [closePinDialog]
+  );
+
+  const handleRename = async (event?: FormEvent) => {
+    event?.preventDefault();
     if (!name.trim()) return;
 
     setLoading(true);
@@ -87,7 +130,7 @@ export function CollectionContextMenu({
       });
 
       onUpdate?.();
-      setShowRenameDialog(false);
+      closeRenameDialog();
     } catch (error) {
       console.error('コレクション更新エラー:', error);
       // TODO: エラー表示
@@ -100,7 +143,7 @@ export function CollectionContextMenu({
     setLoading(true);
     try {
       await apiClient.deleteCollection(collection.id);
-      setShowDeleteDialog(false);
+      closeDeleteDialog();
       onDelete?.();
     } catch (error) {
       console.error('コレクション削除エラー:', error);
@@ -108,14 +151,18 @@ export function CollectionContextMenu({
     } finally {
       setLoading(false);
     }
-  }, [collection.id, onDelete]);
+  }, [closeDeleteDialog, collection.id, onDelete]);
 
-  const handleDeleteDialogOpenChange = useCallback((open: boolean) => {
-    setShowDeleteDialog(open);
-    if (!open) {
-      setLoading(false);
-    }
-  }, []);
+  const handleDeleteDialogOpenChange = useCallback(
+    (open: boolean) => {
+      if (open) {
+        setShowDeleteDialog(true);
+      } else {
+        closeDeleteDialog();
+      }
+    },
+    [closeDeleteDialog]
+  );
 
   const closeMenu = useCallback(() => {
     setMenuOpen(false);
@@ -127,7 +174,7 @@ export function CollectionContextMenu({
     setLoading(true);
     try {
       await onPin(selectedPinIcon, pinName.trim());
-      setShowPinDialog(false);
+      closePinDialog();
     } catch (error) {
       console.error('Pin creation error:', error);
     } finally {
@@ -139,6 +186,7 @@ export function CollectionContextMenu({
     setMenuOpen(isOpen);
     if (!isOpen) {
       setLoading(false);
+      restoreBodyPointerEvents();
     }
   }, []);
 
@@ -205,7 +253,7 @@ export function CollectionContextMenu({
       </ContextMenu>
 
       {/* Rename Dialog */}
-      <Dialog open={showRenameDialog} onOpenChange={setShowRenameDialog}>
+      <Dialog open={showRenameDialog} onOpenChange={handleRenameDialogOpenChange}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader className="border-b border-gray-200 pb-4">
             <DialogTitle className="text-lg font-semibold text-gray-900">
@@ -213,7 +261,7 @@ export function CollectionContextMenu({
             </DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-6 pt-2">
+          <form className="space-y-6 pt-2" onSubmit={handleRename}>
             <div className="space-y-2">
               <Label htmlFor="edit-name" className="text-gray-700">
                 Collection Name *
@@ -225,6 +273,8 @@ export function CollectionContextMenu({
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Enter collection name"
                 required
+                autoFocus
+                disabled={loading}
               />
             </div>
 
@@ -232,21 +282,21 @@ export function CollectionContextMenu({
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setShowRenameDialog(false)}
+                onClick={closeRenameDialog}
                 disabled={loading}
                 className="px-4 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
               >
                 Cancel
               </Button>
               <Button
-                onClick={handleRename}
+                type="submit"
                 disabled={loading || !name.trim()}
                 className="px-4 py-2 text-sm text-primary-foreground bg-primary rounded-md hover:bg-primary/90 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
               >
                 {loading ? 'Updating...' : 'Update'}
               </Button>
             </div>
-          </div>
+          </form>
         </DialogContent>
       </Dialog>
 
@@ -266,7 +316,7 @@ export function CollectionContextMenu({
             <Button
               type="button"
               variant="outline"
-              onClick={() => setShowDeleteDialog(false)}
+              onClick={closeDeleteDialog}
               disabled={loading}
               className="px-4 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
             >
@@ -284,7 +334,7 @@ export function CollectionContextMenu({
       </Dialog>
 
       {/* Pin Dialog */}
-      <Dialog open={showPinDialog} onOpenChange={setShowPinDialog}>
+      <Dialog open={showPinDialog} onOpenChange={handlePinDialogOpenChange}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader className="border-b border-gray-200 pb-4">
             <DialogTitle className="text-lg font-semibold text-gray-900">
@@ -336,7 +386,7 @@ export function CollectionContextMenu({
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setShowPinDialog(false)}
+                onClick={closePinDialog}
                 disabled={loading}
                 className="px-4 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
               >

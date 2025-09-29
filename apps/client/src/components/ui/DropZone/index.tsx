@@ -1,6 +1,27 @@
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 
+interface FileSystemEntryBase {
+  isFile: boolean;
+  isDirectory: boolean;
+  name: string;
+  fullPath: string;
+}
+
+interface FileSystemFileEntry extends FileSystemEntryBase {
+  file: (successCallback: (file: File) => void, errorCallback?: (error: DOMException) => void) => void;
+}
+
+interface FileSystemDirectoryReader {
+  readEntries: (successCallback: (entries: FileSystemEntry[]) => void, errorCallback?: (error: DOMException) => void) => void;
+}
+
+interface FileSystemDirectoryEntry extends FileSystemEntryBase {
+  createReader: () => FileSystemDirectoryReader;
+}
+
+type FileSystemEntry = FileSystemFileEntry | FileSystemDirectoryEntry;
+
 type UrlDropHandler = (urls: string[], event: DragEvent) => void;
 
 interface DropZoneProps {
@@ -194,6 +215,120 @@ function extractUrlsFromDataTransfer(dataTransfer: DataTransfer | null): string[
   return Array.from(bestByKey.values()).map((url) => url.toString());
 }
 
+const RELATIVE_PATH_KEY = '__dropZoneRelativePath';
+
+function normalizeRelativePath(fullPath: string): string {
+  if (!fullPath) return '';
+  const trimmed = fullPath.startsWith('/') ? fullPath.slice(1) : fullPath;
+  return trimmed;
+}
+
+function readFileEntry(entry: FileSystemFileEntry): Promise<File> {
+  return new Promise<File>((resolve, reject) => {
+    entry.file((file) => {
+      const relativePath = normalizeRelativePath(entry.fullPath || entry.name);
+      if (relativePath) {
+        try {
+          (file as any).webkitRelativePath = relativePath;
+        } catch (error) {
+          console.warn('[DropZone] Failed to assign webkitRelativePath via direct set', relativePath, error);
+        }
+
+        try {
+          Object.defineProperty(file, 'webkitRelativePath', {
+            value: relativePath,
+            configurable: true,
+          });
+        } catch (error) {
+          // Some browsers disallow redefining; that's OK as long as either attempt worked
+        }
+
+        try {
+          Object.defineProperty(file, RELATIVE_PATH_KEY, {
+            value: relativePath,
+            configurable: true,
+          });
+        } catch (error) {
+          (file as any)[RELATIVE_PATH_KEY] = relativePath;
+        }
+      }
+      resolve(file);
+    }, reject);
+  });
+}
+
+function readEntriesRecursive(reader: FileSystemDirectoryReader): Promise<FileSystemEntry[]> {
+  return new Promise<FileSystemEntry[]>((resolve, reject) => {
+    const entries: FileSystemEntry[] = [];
+
+    const readBatch = () => {
+      reader.readEntries((batch) => {
+        if (batch.length === 0) {
+          resolve(entries);
+          return;
+        }
+        entries.push(...batch);
+        readBatch();
+      }, (error) => {
+        reject(error);
+      });
+    };
+
+    readBatch();
+  });
+}
+
+async function traverseFileSystemEntry(entry: FileSystemEntry): Promise<File[]> {
+  if (entry.isFile) {
+    const file = await readFileEntry(entry as FileSystemFileEntry);
+    return [file];
+  }
+
+  if (entry.isDirectory) {
+    const reader = (entry as FileSystemDirectoryEntry).createReader();
+    const childEntries = await readEntriesRecursive(reader);
+    const nestedFiles = await Promise.all(childEntries.map((child) => traverseFileSystemEntry(child)));
+    return nestedFiles.flat();
+  }
+
+  return [];
+}
+
+async function extractFilesFromDataTransfer(dataTransfer: DataTransfer | null): Promise<File[]> {
+  if (!dataTransfer) return [];
+
+  const itemList = dataTransfer.items ? Array.from(dataTransfer.items) : [];
+  const supportsEntries = itemList.some((item) => typeof (item as any).webkitGetAsEntry === 'function');
+
+  if (supportsEntries) {
+    const allFiles = await Promise.all(
+      itemList.map(async (item) => {
+        if (item.kind !== 'file') return [] as File[];
+        const entry = (item as any).webkitGetAsEntry?.() as FileSystemEntry | null;
+        if (!entry) {
+          const fallbackFile = item.getAsFile();
+          return fallbackFile ? [fallbackFile] : [];
+        }
+        try {
+          const files = await traverseFileSystemEntry(entry);
+          return files;
+        } catch (error) {
+          console.warn('[DropZone] Failed to traverse file system entry', entry?.fullPath, error);
+          const fallbackFile = item.getAsFile();
+          return fallbackFile ? [fallbackFile] : [];
+        }
+      })
+    );
+
+    const flattened = allFiles.flat();
+    if (flattened.length > 0) {
+      return flattened;
+    }
+  }
+
+  return Array.from(dataTransfer.files || []);
+}
+
 export function DropZone({
   onDrop,
   onFilesDrop,
@@ -249,11 +384,12 @@ export function DropZone({
     };
 
     const handleDrop = (e: DragEvent) => {
-      const types = Array.from(e.dataTransfer?.types ?? []);
-      const dataTransferItems = Array.from(e.dataTransfer?.items ?? []);
+      const dataTransfer = e.dataTransfer ?? null;
+      const types = Array.from(dataTransfer?.types ?? []);
+      const dataTransferItems = Array.from(dataTransfer?.items ?? []);
       const hasFilePayload =
         types.includes('Files') || dataTransferItems.some((item) => item.kind === 'file');
-      const urls = extractUrlsFromDataTransfer(e.dataTransfer ?? null);
+      const urls = extractUrlsFromDataTransfer(dataTransfer);
       const fileHandler = onDrop ?? onFilesDrop;
       const shouldHandleFiles = hasFilePayload && typeof fileHandler === 'function';
       const shouldHandleUrls =
@@ -270,32 +406,35 @@ export function DropZone({
       setIsDragActive(false);
       dragCounter.current = 0;
 
-      if (shouldHandleFiles && e.dataTransfer?.files?.length) {
-        const fileList = Array.from(e.dataTransfer.files);
+      if (shouldHandleFiles) {
         const acceptedTypes = accept
           .split(',')
           .map((type) => type.trim())
           .filter((type) => type.length > 0);
 
-        const filteredFiles = acceptedTypes.length
-          ? fileList.filter((file) =>
-              acceptedTypes.some((type) => {
-                if (type.endsWith('/*')) {
-                  const baseType = type.slice(0, -2);
-                  return file.type.startsWith(baseType);
-                }
-                return file.type === type;
-              })
-            )
-          : fileList;
+        void (async () => {
+          const resolvedFiles = await extractFilesFromDataTransfer(dataTransfer);
 
-        if (filteredFiles.length > 0) {
-          if (multiple) {
-            fileHandler(filteredFiles);
-          } else {
-            fileHandler([filteredFiles[0]]);
+          const filteredFiles = acceptedTypes.length
+            ? resolvedFiles.filter((file) =>
+                acceptedTypes.some((type) => {
+                  if (type.endsWith('/*')) {
+                    const baseType = type.slice(0, -2);
+                    return file.type.startsWith(baseType);
+                  }
+                  return file.type === type;
+                })
+              )
+            : resolvedFiles;
+
+          if (filteredFiles.length > 0) {
+            if (multiple) {
+              fileHandler(filteredFiles);
+            } else {
+              fileHandler([filteredFiles[0]]);
+            }
           }
-        }
+        })();
       }
 
       if (shouldHandleUrls) {

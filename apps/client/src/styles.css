@@ -173,6 +173,20 @@ code {
     font-family: var(--font-display);
   }
 
+  .sidebar-logo-link {
+    color: var(--sidebar-primary, oklch(0.21 0.006 285.885));
+    transition: color 0.2s ease-in-out;
+  }
+
+  .sidebar-logo-link:hover,
+  .sidebar-logo-link:focus-visible {
+    color: color-mix(
+      in oklch,
+      var(--sidebar-primary, oklch(0.21 0.006 285.885)) 85%,
+      white 15%
+    );
+  }
+
   h1,
   h2 {
     font-family: var(--font-display);

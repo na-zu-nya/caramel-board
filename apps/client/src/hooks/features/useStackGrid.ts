@@ -86,26 +86,36 @@ export function useStackGrid({
 
   // Calculate dynamic columns and item size
   const containerWidth = containerRef.current?.clientWidth ?? window.innerWidth;
-  const columnsPerRow = 5; //Math.max(minColumns, Math.floor(containerWidth / minItemSize));
+  const columnsPerRow = Math.max(1, 5); // Placeholder: replace with responsive logic when available
   const itemSize = containerWidth / columnsPerRow;
-  const totalContentHeight = Math.ceil(total / columnsPerRow) * itemSize;
+  const totalContentHeight = Math.ceil(total / Math.max(columnsPerRow, 1)) * itemSize;
+  const disableVirtualization = total <= columnsPerRow * 3;
 
   // Create visible items array from the full sparse items array
   const finalVisibleItems: (MediaGridItem | undefined)[] = [];
 
-  // Extract items from rangeStart to rangeEnd
-  for (let i = rangeStart; i < rangeEnd && i < total; i++) {
-    // Use the item at index i if it exists, otherwise undefined
-    finalVisibleItems.push(items[i]);
+  if (disableVirtualization) {
+    const limit = Math.max(total, items.length);
+    for (let i = 0; i < limit; i++) {
+      finalVisibleItems.push(items[i]);
+    }
+  } else {
+    for (let i = rangeStart; i < rangeEnd && i < total; i++) {
+      finalVisibleItems.push(items[i]);
+    }
   }
 
-  const topSpacerHeight = Math.floor(rangeStart / columnsPerRow) * itemSize;
-  const bottomSpacerHeight = Math.max(
-    0,
-    totalContentHeight -
-      topSpacerHeight -
-      Math.ceil((rangeEnd - rangeStart) / columnsPerRow) * itemSize
-  );
+  const topSpacerHeight = disableVirtualization
+    ? 0
+    : Math.floor(rangeStart / columnsPerRow) * itemSize;
+  const bottomSpacerHeight = disableVirtualization
+    ? 0
+    : Math.max(
+        0,
+        totalContentHeight -
+          topSpacerHeight -
+          Math.ceil((rangeEnd - rangeStart) / columnsPerRow) * itemSize
+      );
 
   // Keyboard shortcuts
   useKeyboardShortcuts({
@@ -116,11 +126,18 @@ export function useStackGrid({
 
   // Create throttled version of onLoadRange
   const throttledLoadRange = useThrottle((startIndex: number, endIndex: number) => {
-    if (onLoadRange) {
+    if (onLoadRange && !disableVirtualization) {
       // Load only the requested range
       onLoadRange(startIndex, endIndex);
     }
   }, SCROLL_THROTTLE_MS);
+
+  useEffect(() => {
+    if (disableVirtualization) {
+      setRangeStart(0);
+      setRangeEnd(Math.max(total, items.length));
+    }
+  }, [disableVirtualization, total, items.length]);
 
   // Optimistic favorite UI state
   const [favoriteOverrides, setFavoriteOverrides] = useState<Map<string | number, boolean>>(
@@ -152,7 +169,11 @@ export function useStackGrid({
   });
 
   const updateBounds = useCallback(() => {
-    if (!onLoadRange || isCurrentlyAnimating) return;
+    if (!onLoadRange || isCurrentlyAnimating || disableVirtualization) {
+      setRangeStart(0);
+      setRangeEnd(Math.max(total, items.length));
+      return;
+    }
     // When there are zero results, avoid repeatedly issuing loadRange requests.
     // Callers should explicitly trigger initial fetch; here we suppress further requests.
     if (total === 0) {
@@ -217,27 +238,34 @@ export function useStackGrid({
     throttledLoadRange,
     useWindowScroll,
     containerRef.current,
+    disableVirtualization,
+    items.length,
   ]);
 
   // Handle animation state changes
   useEffect(() => {
-    if (isCurrentlyAnimating) {
+    if (!disableVirtualization && isCurrentlyAnimating) {
       preserveAnchorItem(containerRef, items);
     }
-    maintainScrollDuringAnimation(containerRef, isCurrentlyAnimating);
+    if (!disableVirtualization) {
+      maintainScrollDuringAnimation(containerRef, isCurrentlyAnimating);
+    }
   }, [
     isCurrentlyAnimating,
     items,
     maintainScrollDuringAnimation,
     preserveAnchorItem,
     containerRef,
+    disableVirtualization,
   ]);
 
   useEffect(() => {
     const container = containerRef.current;
 
     const resizeObserver = new ResizeObserver(() => {
-      updateBounds();
+      if (!disableVirtualization) {
+        updateBounds();
+      }
     });
 
     if (container) {
@@ -245,28 +273,34 @@ export function useStackGrid({
     }
 
     // スクロールリスナーは body/window へ（useWindowScroll時）
-    if (useWindowScroll) {
-      window.addEventListener('scroll', updateBounds, { passive: true });
-    } else if (container) {
-      container.addEventListener('scroll', updateBounds, { passive: true });
+    if (!disableVirtualization) {
+      if (useWindowScroll) {
+        window.addEventListener('scroll', updateBounds, { passive: true });
+      } else if (container) {
+        container.addEventListener('scroll', updateBounds, { passive: true });
+      }
     }
 
     // 初期計算
-    updateBounds();
+    if (!disableVirtualization) {
+      updateBounds();
+    }
 
     const handleWindowResize = () => updateBounds();
     window.addEventListener('resize', handleWindowResize);
 
     return () => {
       resizeObserver.disconnect();
-      if (useWindowScroll) {
-        window.removeEventListener('scroll', updateBounds);
-      } else if (container) {
-        container.removeEventListener('scroll', updateBounds);
+      if (!disableVirtualization) {
+        if (useWindowScroll) {
+          window.removeEventListener('scroll', updateBounds);
+        } else if (container) {
+          container.removeEventListener('scroll', updateBounds);
+        }
       }
       window.removeEventListener('resize', handleWindowResize);
     };
-  }, [updateBounds, containerRef, useWindowScroll]);
+  }, [updateBounds, containerRef, useWindowScroll, disableVirtualization]);
 
   // Handlers
   const handleFavoriteToggle = useCallback(

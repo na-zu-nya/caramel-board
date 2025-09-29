@@ -166,9 +166,9 @@ export default function SidebarContainer() {
   const menuTitle = (
     <Link
       to="/"
-      className="inline-flex items-center gap-2 rounded-sm text-gray-900 no-underline transition-colors hover:text-primary-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+      className="sidebar-logo-link inline-flex items-center gap-2 rounded-sm no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-white"
     >
-      <CaramelBoardLogo />
+      <CaramelBoardLogo className="transition-colors duration-200" />
       <span className="sr-only">Caramel Board</span>
     </Link>
   );

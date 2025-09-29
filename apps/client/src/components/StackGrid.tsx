@@ -1,15 +1,24 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { Clapperboard, Info, Loader2, Pencil, RefreshCw, Trash2 } from 'lucide-react';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { StackGridItem } from '@/components/grid/StackGridItem.tsx';
+import { FolderDropDialog } from '@/components/modals/FolderDropDialog.tsx';
 import { DropZone } from '@/components/ui/DropZone';
 import { HeaderIconButton } from '@/components/ui/Header/HeaderIconButton';
 import { SelectionActionBar } from '@/components/ui/selection-action-bar';
 import { useStackGrid } from '@/hooks/features/useStackGrid';
 import { useScratch } from '@/hooks/useScratch';
 import { apiClient } from '@/lib/api-client';
+import {
+  splitFilesByTopLevelFolder,
+  uploadFolderAsCollection,
+  uploadFolderAsSingleStack,
+  type FolderGroup,
+  type FolderUploadDefaults,
+  type FolderUploadMode,
+} from '@/lib/folder-import';
 import { applyScrollbarCompensation, removeScrollbarCompensation } from '@/lib/scrollbar-utils';
 import { cn } from '@/lib/utils';
 import { currentFilterAtom, reorderModeAtom, selectionModeAtom } from '@/stores/ui';
@@ -50,6 +59,13 @@ interface StackGridProps {
   scratchCollectionId?: string | number;
 }
 
+interface FolderImportRequest {
+  id: string;
+  name: string;
+  files: File[];
+  defaults: FolderUploadDefaults;
+}
+
 export default function StackGrid({
   // Legacy mode props
   items,
@@ -82,6 +98,56 @@ export default function StackGrid({
   const addNotification = useSetAtom(addUploadNotificationAtom);
   const uploadNotifications = useAtomValue(uploadNotificationsAtom);
 
+  // Legacy mode normalization for downstream hooks/utilities
+  const actualItems = items || [];
+  const actualTotal = legacyTotal;
+  const actualIsLoading = legacyIsLoading;
+  const actualOnRefreshAll = legacyOnRefreshAll;
+
+  const [folderQueue, setFolderQueue] = useState<FolderImportRequest[]>([]);
+  const [activeFolder, setActiveFolder] = useState<FolderImportRequest | null>(null);
+  const [isFolderDialogOpen, setIsFolderDialogOpen] = useState(false);
+  const [isProcessingFolder, setIsProcessingFolder] = useState(false);
+
+  useEffect(() => {
+    if (isProcessingFolder) return;
+    if (!activeFolder && folderQueue.length > 0) {
+      setActiveFolder(folderQueue[0]);
+      setFolderQueue((prev) => prev.slice(1));
+      setIsFolderDialogOpen(true);
+    }
+  }, [activeFolder, folderQueue, isProcessingFolder]);
+
+  const computeUploadDefaults = useCallback((): FolderUploadDefaults | null => {
+    const datasetNumericId = dataset?.id ? Number(dataset.id) : Number.parseInt(dsId, 10);
+    if (!Number.isFinite(datasetNumericId)) {
+      console.error('Failed to resolve dataset ID for folder import', dataset, dsId);
+      return null;
+    }
+
+    const currentAuthor =
+      Array.isArray(currentFilter.authors) && currentFilter.authors.length > 0
+        ? currentFilter.authors[0]
+        : undefined;
+
+    let targetMediaType = currentFilter.mediaType || undefined;
+    const collectionMatch = window.location.pathname.match(/collections\/(\d+)/);
+    const inCollectionView = Boolean(collectionMatch);
+    const collectionId = collectionMatch ? Number.parseInt(collectionMatch[1], 10) : undefined;
+    if (inCollectionView) {
+      targetMediaType = 'image';
+    }
+
+    return {
+      datasetId: datasetNumericId,
+      mediaType: targetMediaType,
+      tags: currentFilter.tags,
+      author: currentAuthor,
+      collectionId,
+    };
+  }, [currentFilter, dataset?.id, dsId]);
+
+
   // While this grid is mounted, stabilize body scrollbar gutter for contextmenu reflows
   useEffect(() => {
     applyScrollbarCompensation();
@@ -91,12 +157,6 @@ export default function StackGrid({
   }, []);
 
   // Initialize upload queue processing
-
-  // Always use legacy mode
-  const actualItems = items || [];
-  const actualTotal = legacyTotal;
-  const actualIsLoading = legacyIsLoading;
-  const actualOnRefreshAll = legacyOnRefreshAll;
 
   const {
     containerRef: internalContainerRef,
@@ -474,6 +534,130 @@ export default function StackGrid({
     }
   };
 
+  const refreshAfterManualUpload = useCallback(async () => {
+    try {
+      if (onRefreshAll) {
+        await onRefreshAll();
+        if (onLoadRange && rangeStart !== undefined) {
+          const endIndex = Math.min(rangeStart + 100, actualTotal);
+          onLoadRange(rangeStart, endIndex);
+        }
+      } else {
+        void queryClient.invalidateQueries({ queryKey: ['stacks'] });
+      }
+
+      void queryClient.invalidateQueries({ queryKey: ['collection-folders'] });
+      void queryClient.invalidateQueries({ queryKey: ['navigation-pins'] });
+      void queryClient.invalidateQueries({ queryKey: ['library-counts', dsId] });
+      void queryClient.refetchQueries({ queryKey: ['library-counts', dsId] });
+    } catch (error) {
+      console.error('Failed to refresh after folder import', error);
+    }
+  }, [
+    actualTotal,
+    dsId,
+    onLoadRange,
+    onRefreshAll,
+    queryClient,
+    rangeStart,
+  ]);
+
+  const finalizeFolderProcessing = useCallback(() => {
+    setIsProcessingFolder(false);
+    setIsFolderDialogOpen(false);
+    setActiveFolder(null);
+  }, []);
+
+  const handleFolderDecision = useCallback(
+    async (mode: FolderUploadMode, options: { collectionName?: string }) => {
+      if (!activeFolder) {
+        return;
+      }
+
+      const defaults = activeFolder.defaults;
+      if (!defaults) {
+        addNotification({ type: 'error', message: 'Unable to resolve upload defaults for this folder.' });
+        finalizeFolderProcessing();
+        return;
+      }
+
+      setIsProcessingFolder(true);
+      setIsFolderDialogOpen(false);
+
+      try {
+        if (mode === 'flat-upload') {
+          setUploadDefaults({
+            datasetId: defaults.datasetId,
+            mediaType: defaults.mediaType,
+            tags: defaults.tags,
+            author: defaults.author,
+            collectionId: defaults.collectionId,
+          });
+          addFilesToQueue({ files: activeFolder.files, type: 'new-stack' });
+          addNotification({
+            type: 'success',
+            message: `Queued ${activeFolder.files.length} file(s) from “${activeFolder.name}” for upload.`,
+          });
+        } else if (mode === 'single-stack') {
+          addNotification({
+            type: 'info',
+            message: `Merging “${activeFolder.name}” into a single stack…`,
+          });
+          const { stackId, assetIds } = await uploadFolderAsSingleStack(activeFolder.files, defaults);
+          await refreshAfterManualUpload();
+          addNotification({
+            type: 'success',
+            message: `Created stack #${stackId} from “${activeFolder.name}” with ${assetIds.length + 1} file(s).`,
+          });
+        } else if (mode === 'create-collection') {
+          const cleanDefaults: FolderUploadDefaults = {
+            ...defaults,
+            collectionId: undefined,
+          };
+          const targetName = options.collectionName?.trim() || activeFolder.name;
+          addNotification({
+            type: 'info',
+            message: `Creating collection “${targetName}” from “${activeFolder.name}”…`,
+          });
+          const { collectionId, stackIds } = await uploadFolderAsCollection(
+            activeFolder.files,
+            cleanDefaults,
+            targetName
+          );
+          await refreshAfterManualUpload();
+          addNotification({
+            type: 'success',
+            message: `Collection “${targetName}” (ID: ${collectionId}) now contains ${stackIds.length} created stack(s).`,
+          });
+        }
+      } catch (error) {
+        console.error('Folder import flow failed', error);
+        const message = error instanceof Error ? error.message : 'Folder import failed.';
+        addNotification({ type: 'error', message });
+      } finally {
+        finalizeFolderProcessing();
+      }
+    },
+    [
+      activeFolder,
+      addFilesToQueue,
+      addNotification,
+      finalizeFolderProcessing,
+      refreshAfterManualUpload,
+      setUploadDefaults,
+    ]
+  );
+
+  const handleFolderCancel = useCallback(() => {
+    if (activeFolder) {
+      addNotification({
+        type: 'info',
+        message: `Cancelled import for “${activeFolder.name}”.`,
+      });
+    }
+    finalizeFolderProcessing();
+  }, [activeFolder, addNotification, finalizeFolderProcessing]);
+
   // Check if we're in a collection view
   const _isCollectionView = window.location.pathname.includes('/collections/');
   const _isScratchView = window.location.pathname.includes('/scratch/');
@@ -481,44 +665,39 @@ export default function StackGrid({
   // Handle file drops for new stack creation
   const handleFileDrop = useCallback(
     (files: File[]) => {
+      if (!files?.length) return;
       console.log('Files dropped for new stack creation:', files);
-      console.log('Current filter:', currentFilter);
+      const defaults = computeUploadDefaults();
 
-      // Extract author from current filter (take first one if multiple)
-      const currentAuthor =
-        Array.isArray(currentFilter.authors) && currentFilter.authors.length > 0
-          ? currentFilter.authors[0]
-          : undefined;
-
-      // Determine mediaType - prioritize current page mediaType
-      let targetMediaType = currentFilter.mediaType || undefined;
-
-      // If dropping into a manual collection view, force image to create picture stacks
-      const collectionMatch = window.location.pathname.match(/collections\/(\d+)/);
-      const inCollectionView = Boolean(collectionMatch);
-      const collectionId = collectionMatch ? Number.parseInt(collectionMatch[1], 10) : undefined;
-      if (inCollectionView) {
-        targetMediaType = 'image';
+      if (!defaults) {
+        addNotification({ type: 'error', message: 'データセットが特定できませんでした' });
+        return;
       }
 
-      console.log('Setting upload defaults with mediaType:', targetMediaType);
+      const { folders, standalone } = splitFilesByTopLevelFolder(files);
 
-      // Set upload defaults based on current filter and context
-      setUploadDefaults({
-        datasetId: dataset?.id ? Number(dataset.id) : undefined,
-        mediaType: targetMediaType, // Force 'image' in collection view
-        tags: currentFilter.tags, // Use filter tags if specified
-        author: currentAuthor, // Use first author from filter if specified
-        collectionId,
-      });
+      if (standalone.length > 0) {
+        setUploadDefaults({
+          datasetId: defaults.datasetId,
+          mediaType: defaults.mediaType,
+          tags: defaults.tags,
+          author: defaults.author,
+          collectionId: defaults.collectionId,
+        });
+        addFilesToQueue({ files: standalone, type: 'new-stack' });
+      }
 
-      // Add files to upload queue
-      addFilesToQueue({
-        files,
-        type: 'new-stack',
-      });
+      if (folders.length > 0) {
+        const requests: FolderImportRequest[] = folders.map((folder: FolderGroup) => ({
+          id: folder.id,
+          name: folder.name,
+          files: folder.files,
+          defaults: { ...defaults },
+        }));
+        setFolderQueue((prev) => [...prev, ...requests]);
+      }
     },
-    [addFilesToQueue, setUploadDefaults, dataset?.id, currentFilter]
+    [addFilesToQueue, addNotification, computeUploadDefaults, setUploadDefaults]
   );
 
   const handleUrlDrop = useCallback(
@@ -807,6 +986,16 @@ export default function StackGrid({
             : []
         }
       />
+
+      {activeFolder && (
+        <FolderDropDialog
+          open={isFolderDialogOpen}
+          folderName={activeFolder.name}
+          fileCount={activeFolder.files.length}
+          onCancel={handleFolderCancel}
+          onConfirm={(mode, options) => handleFolderDecision(mode, options)}
+        />
+      )}
 
       {/* Portal for header actions - Info button */}
       {createPortal(

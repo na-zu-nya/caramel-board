@@ -1,6 +1,7 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { Info, Loader2, Pencil } from 'lucide-react';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { StackGridItem } from '@/components/grid/StackGridItem.tsx';
 import { DropZone } from '@/components/ui/DropZone';
@@ -9,6 +10,15 @@ import { SelectionActionBar } from '@/components/ui/selection-action-bar';
 import { useStackGrid } from '@/hooks/features/useStackGrid';
 import { useSparseInfiniteScroll } from '@/hooks/useSparseInfiniteScroll';
 import { apiClient } from '@/lib/api-client';
+import { FolderDropDialog } from '@/components/modals/FolderDropDialog.tsx';
+import {
+  splitFilesByTopLevelFolder,
+  uploadFolderAsCollection,
+  uploadFolderAsSingleStack,
+  type FolderGroup,
+  type FolderUploadDefaults,
+  type FolderUploadMode,
+} from '@/lib/folder-import';
 import { applyScrollbarCompensation, removeScrollbarCompensation } from '@/lib/scrollbar-utils';
 import { cn } from '@/lib/utils';
 import { reorderModeAtom, selectionModeAtom } from '@/stores/ui';
@@ -36,6 +46,13 @@ interface SparseStackGridProps {
   className?: string;
 }
 
+interface FolderImportRequest {
+  id: string;
+  name: string;
+  files: File[];
+  defaults: FolderUploadDefaults;
+}
+
 export default function SparseStackGrid({
   datasetId,
   mediaType,
@@ -46,12 +63,52 @@ export default function SparseStackGrid({
   onItemClick,
   className,
 }: SparseStackGridProps) {
+  const queryClient = useQueryClient();
   const setSelectionMode = useSetAtom(selectionModeAtom);
   const reorderMode = useAtomValue(reorderModeAtom);
   const addFilesToQueue = useSetAtom(addFilesToQueueAtom);
   const setUploadDefaults = useSetAtom(uploadDefaultsAtom);
   const addNotification = useSetAtom(addUploadNotificationAtom);
   const uploadNotifications = useAtomValue(uploadNotificationsAtom);
+
+  const [folderQueue, setFolderQueue] = useState<FolderImportRequest[]>([]);
+  const [activeFolder, setActiveFolder] = useState<FolderImportRequest | null>(null);
+  const [isFolderDialogOpen, setIsFolderDialogOpen] = useState(false);
+  const [isProcessingFolder, setIsProcessingFolder] = useState(false);
+
+  useEffect(() => {
+    if (isProcessingFolder) return;
+    if (!activeFolder && folderQueue.length > 0) {
+      setActiveFolder(folderQueue[0]);
+      setFolderQueue((prev) => prev.slice(1));
+      setIsFolderDialogOpen(true);
+    }
+  }, [activeFolder, folderQueue, isProcessingFolder]);
+
+  const computeUploadDefaults = useCallback((): FolderUploadDefaults | null => {
+    const datasetNumericId = dataset?.id ? Number(dataset.id) : Number(datasetId);
+    if (!Number.isFinite(datasetNumericId)) {
+      console.error('Failed to resolve dataset ID for sparse folder import', datasetId);
+      return null;
+    }
+
+    const collectionMatch = window.location.pathname.match(/collections\/(\d+)/);
+    const collectionId = collectionMatch ? Number.parseInt(collectionMatch[1], 10) : undefined;
+    const targetMediaType = collectionId ? 'image' : mediaType || undefined;
+
+    const tags = Array.isArray(filter.tags) ? filter.tags : undefined;
+    const author =
+      Array.isArray(filter.authors) && filter.authors.length > 0 ? filter.authors[0] : undefined;
+
+    return {
+      datasetId: datasetNumericId,
+      mediaType: targetMediaType,
+      tags,
+      author,
+      collectionId,
+    };
+  }, [dataset?.id, datasetId, mediaType, filter.tags, filter.authors]);
+
 
   // While this grid is mounted, stabilize body scrollbar gutter for contextmenu reflows
   useEffect(() => {
@@ -80,6 +137,117 @@ export default function SparseStackGrid({
     pageSize: 50,
     throttleMs: 300, // 300ms throttle between requests
   });
+
+  const refreshAfterManualUpload = useCallback(async () => {
+    try {
+      await refreshAll();
+      if (total > 0) {
+        const endIndex = Math.min(99, total - 1);
+        requestLoadRange(0, endIndex);
+      }
+      void queryClient.invalidateQueries({ queryKey: ['stacks'] });
+      void queryClient.invalidateQueries({ queryKey: ['collection-folders'] });
+      void queryClient.invalidateQueries({ queryKey: ['navigation-pins'] });
+      void queryClient.invalidateQueries({ queryKey: ['library-counts', datasetId] });
+      void queryClient.refetchQueries({ queryKey: ['library-counts', datasetId] });
+    } catch (error) {
+      console.error('Failed to refresh sparse grid after folder import', error);
+    }
+  }, [datasetId, queryClient, refreshAll, requestLoadRange, total]);
+
+  const finalizeFolderProcessing = useCallback(() => {
+    setIsProcessingFolder(false);
+    setIsFolderDialogOpen(false);
+    setActiveFolder(null);
+  }, []);
+
+  const handleFolderDecision = useCallback(
+    async (mode: FolderUploadMode, options: { collectionName?: string }) => {
+      if (!activeFolder) return;
+
+      const defaults = activeFolder.defaults;
+      if (!defaults) {
+        addNotification({ type: 'error', message: 'Unable to resolve upload defaults for this folder.' });
+        finalizeFolderProcessing();
+        return;
+      }
+
+      setIsProcessingFolder(true);
+      setIsFolderDialogOpen(false);
+
+      try {
+        if (mode === 'flat-upload') {
+          setUploadDefaults({
+            datasetId: defaults.datasetId,
+            mediaType: defaults.mediaType,
+            tags: defaults.tags,
+            author: defaults.author,
+            collectionId: defaults.collectionId,
+          });
+          addFilesToQueue({ files: activeFolder.files, type: 'new-stack' });
+          addNotification({
+            type: 'success',
+            message: `Queued ${activeFolder.files.length} file(s) from “${activeFolder.name}” for upload.`,
+          });
+        } else if (mode === 'single-stack') {
+          addNotification({
+            type: 'info',
+            message: `Merging “${activeFolder.name}” into a single stack…`,
+          });
+          const { stackId, assetIds } = await uploadFolderAsSingleStack(activeFolder.files, defaults);
+          await refreshAfterManualUpload();
+          addNotification({
+            type: 'success',
+            message: `Created stack #${stackId} from “${activeFolder.name}” with ${assetIds.length + 1} file(s).`,
+          });
+        } else if (mode === 'create-collection') {
+          const cleanDefaults: FolderUploadDefaults = {
+            ...defaults,
+            collectionId: undefined,
+          };
+          const targetName = options.collectionName?.trim() || activeFolder.name;
+          addNotification({
+            type: 'info',
+            message: `Creating collection “${targetName}” from “${activeFolder.name}”…`,
+          });
+          const { collectionId: createdCollectionId, stackIds } = await uploadFolderAsCollection(
+            activeFolder.files,
+            cleanDefaults,
+            targetName
+          );
+          await refreshAfterManualUpload();
+          addNotification({
+            type: 'success',
+            message: `Collection “${targetName}” (ID: ${createdCollectionId}) now contains ${stackIds.length} created stack(s).`,
+          });
+        }
+      } catch (error) {
+        console.error('Folder import flow failed (sparse grid)', error);
+        const message = error instanceof Error ? error.message : 'Folder import failed.';
+        addNotification({ type: 'error', message });
+      } finally {
+        finalizeFolderProcessing();
+      }
+    },
+    [
+      activeFolder,
+      addFilesToQueue,
+      addNotification,
+      finalizeFolderProcessing,
+      refreshAfterManualUpload,
+      setUploadDefaults,
+    ]
+  );
+
+  const handleFolderCancel = useCallback(() => {
+    if (activeFolder) {
+      addNotification({
+        type: 'info',
+        message: `Cancelled import for “${activeFolder.name}”.`,
+      });
+    }
+    finalizeFolderProcessing();
+  }, [activeFolder, addNotification, finalizeFolderProcessing]);
 
   const {
     containerRef,
@@ -230,21 +398,42 @@ export default function SparseStackGrid({
   // Handle file uploads
   const handleFilesDrop = useCallback(
     (files: File[]) => {
-      if (!dataset) return;
+      if (!files?.length) return;
+      const defaults = computeUploadDefaults();
+      if (!defaults) {
+        addNotification({ type: 'error', message: 'データセットが特定できませんでした' });
+        return;
+      }
 
-      // Set upload defaults based on current context
-      const collectionMatch = window.location.pathname.match(/collections\/(\d+)/);
-      const collectionId = collectionMatch ? Number.parseInt(collectionMatch[1], 10) : undefined;
-      setUploadDefaults({
-        datasetId: Number(dataset.id),
-        mediaType: collectionId ? 'image' : mediaType || undefined,
-        collectionId,
-      });
+      const { folders, standalone } = splitFilesByTopLevelFolder(files);
 
-      // Add files to upload queue
-      addFilesToQueue({ files, type: 'new-stack' });
+      if (standalone.length > 0) {
+        setUploadDefaults({
+          datasetId: defaults.datasetId,
+          mediaType: defaults.mediaType,
+          tags: defaults.tags,
+          author: defaults.author,
+          collectionId: defaults.collectionId,
+        });
+        addFilesToQueue({ files: standalone, type: 'new-stack' });
+      }
+
+      if (folders.length > 0) {
+        const requests: FolderImportRequest[] = folders.map((folder: FolderGroup) => ({
+          id: folder.id,
+          name: folder.name,
+          files: folder.files,
+          defaults: { ...defaults },
+        }));
+        setFolderQueue((prev) => [...prev, ...requests]);
+      }
     },
-    [dataset, mediaType, setUploadDefaults, addFilesToQueue]
+    [
+      addFilesToQueue,
+      addNotification,
+      computeUploadDefaults,
+      setUploadDefaults,
+    ]
   );
 
   const handleUrlDrop = useCallback(
@@ -426,6 +615,16 @@ export default function SparseStackGrid({
           </div>
         ))}
       </div>
+
+      {activeFolder && (
+        <FolderDropDialog
+          open={isFolderDialogOpen}
+          folderName={activeFolder.name}
+          fileCount={activeFolder.files.length}
+          onCancel={handleFolderCancel}
+          onConfirm={(mode, options) => handleFolderDecision(mode, options)}
+        />
+      )}
 
       {/* Selection Action Bar */}
       {isSelectionMode && selectedItems.size > 0 && (

@@ -11,6 +11,7 @@ import {
 } from '@dnd-kit/core';
 import { ChevronDown, ChevronRight, Folder, FolderOpen } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { CollectionFolderContextMenu } from '@/components/modals/CollectionFolderContextMenu';
 import { SideMenuMessage } from '@/components/ui/SideMenu';
 import { CountBadge } from '@/components/ui/SideMenu/CountBadge';
 import { isScratchCollection } from '@/hooks/useScratch';
@@ -89,6 +90,27 @@ export function FolderTreeView({
     };
     setExpandedFolders(newState);
     saveExpandedState(newState);
+  };
+
+  const handleFolderUpdated = (_folderId: number) => {
+    setExpandedFolders((prev) => {
+      const next = { ...prev };
+      saveExpandedState(next);
+      return next;
+    });
+    onCollectionUpdate();
+  };
+
+  const handleFolderDeleted = (folderId: number) => {
+    setExpandedFolders((prev) => {
+      const next = { ...prev };
+      if (folderId in next) {
+        delete next[folderId];
+      }
+      saveExpandedState(next);
+      return next;
+    });
+    onCollectionUpdate();
   };
 
   // Save to localStorage whenever state changes
@@ -332,27 +354,34 @@ export function FolderTreeView({
 
     return (
       <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-        <button
-          type="button"
-          onClick={() => toggleFolder(node.id)}
-          className={cn(
-            'w-full flex items-center gap-1.5 px-2 py-1 text-sm text-gray-700 rounded hover:bg-gray-100 transition-colors cursor-grab active:cursor-grabbing'
-          )}
-          style={{ paddingLeft: `${0.5 + node.level * 1.25}rem` }}
+        <CollectionFolderContextMenu
+          folder={node.folder!}
+          onOpen={() => toggleFolder(node.id)}
+          onUpdated={() => handleFolderUpdated(node.id)}
+          onDeleted={() => handleFolderDeleted(node.id)}
         >
-          {node.isExpanded ? (
-            <ChevronDown size={12} className="text-gray-500" />
-          ) : (
-            <ChevronRight size={12} className="text-gray-500" />
-          )}
-          {node.isExpanded ? (
-            <FolderOpen size={15} className="text-blue-500" />
-          ) : (
-            <Folder size={15} className="text-blue-500" />
-          )}
-          <span className="flex-1 text-left">{node.name}</span>
-          <CountBadge count={node._count?.collections} />
-        </button>
+          <button
+            type="button"
+            onClick={() => toggleFolder(node.id)}
+            className={cn(
+              'w-full flex items-center gap-1.5 px-2 py-1 text-sm text-gray-700 rounded hover:bg-gray-100 transition-colors cursor-grab active:cursor-grabbing'
+            )}
+            style={{ paddingLeft: `${0.5 + node.level * 1.25}rem` }}
+          >
+            {node.isExpanded ? (
+              <ChevronDown size={12} className="text-gray-500" />
+            ) : (
+              <ChevronRight size={12} className="text-gray-500" />
+            )}
+            {node.isExpanded ? (
+              <FolderOpen size={15} className="text-blue-500" />
+            ) : (
+              <Folder size={15} className="text-blue-500" />
+            )}
+            <span className="flex-1 text-left">{node.name}</span>
+            <CountBadge count={node._count?.collections} />
+          </button>
+        </CollectionFolderContextMenu>
       </div>
     );
   };

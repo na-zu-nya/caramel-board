@@ -29,6 +29,8 @@ export const Route = createFileRoute('/library/$datasetId/collections/$collectio
   component: CollectionView,
 });
 
+const SMART_PAGE_SIZE = 100;
+
 function CollectionView() {
   console.log('CollectionView');
 
@@ -40,6 +42,11 @@ function CollectionView() {
     field: 'recommended',
     order: 'desc',
   });
+  const [smartStacks, setSmartStacks] = useState<(MediaGridItem | undefined)[]>([]);
+  const [smartTotal, setSmartTotal] = useState(0);
+  const [smartLoadedPages, setSmartLoadedPages] = useState<Record<number, boolean>>({});
+  const [isSmartLoading, setIsSmartLoading] = useState(false);
+  const smartInFlightOffsetsRef = useRef<Set<number>>(new Set());
 
   // Fetch collection details
   const { data: collection, isLoading: isCollectionLoading } = useQuery({
@@ -203,6 +210,20 @@ function CollectionView() {
     );
   }, [collection, currentFilter]);
 
+  const isSmartUnmodified = collection?.type === 'SMART' && !isFilterModified;
+  const smartResetKey = useMemo(
+    () => `${collection?.id ?? 'none'}-${isSmartUnmodified ? 'smart' : 'other'}`,
+    [collection?.id, isSmartUnmodified]
+  );
+
+  useEffect(() => {
+    if (!smartResetKey) return;
+    smartInFlightOffsetsRef.current.clear();
+    setSmartStacks([]);
+    setSmartTotal(0);
+    setSmartLoadedPages({});
+  }, [smartResetKey]);
+
   // Fetch collection stacks based on collection type
   const {
     data: stacksData,
@@ -328,6 +349,29 @@ function CollectionView() {
     enabled: !!collection,
   });
 
+  useEffect(() => {
+    if (!isSmartUnmodified) return;
+    if (!collection || !stacksData) return;
+    if (smartLoadedPages[0]) return;
+
+    const initialStacks = (stacksData.stacks || []) as MediaGridItem[];
+    const totalFromResponse = stacksData.total ?? initialStacks.length;
+
+    setSmartTotal((prev) => Math.max(prev, totalFromResponse));
+    setSmartStacks((prev) => {
+      const requiredLength = Math.max(prev.length, totalFromResponse, initialStacks.length);
+      const next = prev.slice();
+      if (next.length < requiredLength) {
+        next.length = requiredLength;
+      }
+      for (let index = 0; index < initialStacks.length; index++) {
+        next[index] = initialStacks[index];
+      }
+      return next;
+    });
+    setSmartLoadedPages((prev) => ({ ...prev, 0: true }));
+  }, [collection, isSmartUnmodified, smartLoadedPages, stacksData]);
+
   // Initialize filter with current dataset (don't include collectionId in filter)
   useEffect(() => {
     setCurrentFilter((prev) => ({
@@ -337,9 +381,69 @@ function CollectionView() {
   }, [datasetId, setCurrentFilter]);
 
   // Memoize loaded items
-  const stableLoadedItems = useMemo(() => {
+  const stableLoadedItems = useMemo<(MediaGridItem | undefined)[]>(() => {
+    if (isSmartUnmodified) {
+      const limit = Math.max(smartTotal, smartStacks.length);
+      return smartStacks.slice(0, limit);
+    }
     return (stacksData?.stacks || []) as unknown as MediaGridItem[];
-  }, [stacksData?.stacks]);
+  }, [isSmartUnmodified, smartStacks, smartTotal, stacksData?.stacks]);
+
+  const resolvedLoadedItems = useMemo(() => {
+    return stableLoadedItems.filter((item): item is MediaGridItem => Boolean(item));
+  }, [stableLoadedItems]);
+
+  const loadSmartPage = useCallback(
+    async (offset: number) => {
+      if (!collection || !isSmartUnmodified) return;
+      const normalizedOffset = Math.max(0, Math.floor(offset / SMART_PAGE_SIZE) * SMART_PAGE_SIZE);
+      if (
+        smartLoadedPages[normalizedOffset] ||
+        smartInFlightOffsetsRef.current.has(normalizedOffset)
+      ) {
+        return;
+      }
+
+      smartInFlightOffsetsRef.current.add(normalizedOffset);
+      setIsSmartLoading(true);
+      try {
+        const response = await apiClient.getSmartCollectionStacks(collection.id, {
+          limit: SMART_PAGE_SIZE,
+          offset: normalizedOffset,
+        });
+
+        setSmartTotal((prev) => {
+          const reported = response.total ?? prev;
+          return Math.max(reported, normalizedOffset + response.stacks.length);
+        });
+
+        setSmartStacks((prev) => {
+          const expectedTotal = response.total ?? Math.max(prev.length, smartTotal);
+          const requiredLength = Math.max(
+            prev.length,
+            expectedTotal,
+            normalizedOffset + response.stacks.length
+          );
+          const next = prev.slice();
+          if (next.length < requiredLength) {
+            next.length = requiredLength;
+          }
+          for (let index = 0; index < response.stacks.length; index++) {
+            next[normalizedOffset + index] = response.stacks[index] as MediaGridItem;
+          }
+          return next;
+        });
+
+        setSmartLoadedPages((prev) => ({ ...prev, [normalizedOffset]: true }));
+      } catch (error) {
+        console.error('Failed to load smart collection page:', error);
+      } finally {
+        smartInFlightOffsetsRef.current.delete(normalizedOffset);
+        setIsSmartLoading(smartInFlightOffsetsRef.current.size > 0);
+      }
+    },
+    [collection, isSmartUnmodified, smartLoadedPages, smartTotal]
+  );
 
   // Expose collection metadata for children (context menu gating, etc.)
   useEffect(() => {
@@ -389,7 +493,7 @@ function CollectionView() {
     setNavigationState({
       scrollPosition: window.scrollY,
       total,
-      items: stableLoadedItems,
+      items: resolvedLoadedItems,
       lastPath: window.location.pathname,
       filter: currentFilter,
       sort: currentSort,
@@ -397,7 +501,7 @@ function CollectionView() {
     console.log('Navigate to stack:', item.id);
     // Build ids from loaded stacks
     // StackViewerは右→左の順序で巡回するため、ID配列は反転させて保存する
-    const loadedIdsLtr = (stableLoadedItems || []).map((it) =>
+    const loadedIdsLtr = resolvedLoadedItems.map((it) =>
       typeof it.id === 'string' ? Number.parseInt(it.id, 10) : (it.id as number)
     );
     const loadedIds = loadedIdsLtr.slice().reverse();
@@ -437,29 +541,52 @@ function CollectionView() {
     });
   };
 
-  // Handle range loading (for future virtual scrolling)
-  const handleLoadRange = useCallback((startIndex: number, endIndex: number) => {
-    // For now, we load all items at once
-    // Future enhancement: implement virtual scrolling for large collections
-    console.log('Load range requested:', startIndex, endIndex);
-  }, []);
+  // Handle range loading (virtualized grid requests)
+  const handleLoadRange = useCallback(
+    (startIndex: number, endIndex: number) => {
+      if (!isSmartUnmodified || smartTotal <= 0) return;
+
+      const clampedStart = Math.max(0, startIndex);
+      const clampedEnd = Math.min(endIndex, smartTotal - 1);
+      if (clampedStart > clampedEnd) return;
+
+      let offset = Math.floor(clampedStart / SMART_PAGE_SIZE) * SMART_PAGE_SIZE;
+      const endOffset = Math.floor(clampedEnd / SMART_PAGE_SIZE) * SMART_PAGE_SIZE;
+      while (offset <= endOffset) {
+        void loadSmartPage(offset);
+        offset += SMART_PAGE_SIZE;
+      }
+    },
+    [isSmartUnmodified, loadSmartPage, smartTotal]
+  );
 
   // Refresh all items
   const handleRefreshAll = useCallback(async () => {
+    if (isSmartUnmodified) {
+      smartInFlightOffsetsRef.current.clear();
+      setSmartStacks([]);
+      setSmartLoadedPages({});
+      setSmartTotal(0);
+      setIsSmartLoading(false);
+    }
     await refetchStacks();
-  }, [refetchStacks]);
+  }, [isSmartUnmodified, refetchStacks]);
 
   // Handle reorder of stacks within collection
   const handleReorderStacks = useCallback(
     async (sourceIndex: number, destinationIndex: number) => {
-      if (!collection || sourceIndex === destinationIndex) return;
+      if (!collection || collection.type !== 'MANUAL' || sourceIndex === destinationIndex) return;
+
+      const resolvedItems = [...resolvedLoadedItems];
+      if (!resolvedItems[sourceIndex] || !resolvedItems[destinationIndex]) return;
 
       try {
         console.log(`🔄 Reordering item from index ${sourceIndex} to ${destinationIndex}`);
 
         // Create a copy of current items for UI optimization
-        const reorderedItems = [...stableLoadedItems];
+        const reorderedItems = [...resolvedItems];
         const [movedItem] = reorderedItems.splice(sourceIndex, 1);
+        if (!movedItem) return;
         reorderedItems.splice(destinationIndex, 0, movedItem);
 
         // Generate new order indices based on the reordered array
@@ -482,11 +609,29 @@ function CollectionView() {
         // Optionally show user notification here
       }
     },
-    [collection, stableLoadedItems, refetchStacks]
+    [collection, resolvedLoadedItems, refetchStacks]
   );
 
-  const isLoading = isCollectionLoading || isStacksLoading;
-  const total = stacksData?.total || 0;
+  const isLoading = isCollectionLoading || isStacksLoading || isSmartLoading;
+  const total = isSmartUnmodified ? smartTotal : stacksData?.total || 0;
+
+  const smartHasMore = useMemo(() => {
+    if (!isSmartUnmodified) return false;
+    if (smartTotal === 0) return false;
+
+    const entries = Object.entries(smartLoadedPages);
+    if (entries.length === 0) return true;
+
+    let loadedCount = 0;
+    for (const [offsetStr, loaded] of entries) {
+      if (!loaded) continue;
+      const offset = Number(offsetStr);
+      const remaining = Math.max(0, smartTotal - offset);
+      loadedCount += Math.min(SMART_PAGE_SIZE, remaining);
+    }
+
+    return loadedCount < smartTotal;
+  }, [isSmartUnmodified, smartLoadedPages, smartTotal]);
 
   // Determine empty state based on collection type
   const getEmptyState = () => {
@@ -554,7 +699,7 @@ function CollectionView() {
       <StackGrid
         items={stableLoadedItems}
         total={total}
-        hasMore={false} // For now, load all items at once
+        hasMore={isSmartUnmodified && smartHasMore}
         isLoading={isLoading}
         error={null}
         dataset={dataset}
