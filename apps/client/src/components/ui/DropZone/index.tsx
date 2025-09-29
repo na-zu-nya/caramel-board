@@ -410,13 +410,11 @@ export function DropZone({
         types.includes('Files') || dataTransferItems.some((item) => item.kind === 'file');
       const urls = extractUrlsFromDataTransfer(dataTransfer);
       const fileHandler = onDrop ?? onFilesDrop;
-      const shouldHandleFiles = hasFilePayload && typeof fileHandler === 'function';
-      const shouldHandleUrls =
-        urls.length > 0 &&
-        typeof onUrlDrop === 'function' &&
-        (!hasFilePayload || !shouldHandleFiles);
+      const canHandleFiles = hasFilePayload && typeof fileHandler === 'function';
+      const hasUrlHandler = typeof onUrlDrop === 'function';
+      const canHandleUrls = hasUrlHandler && urls.length > 0;
 
-      if (!shouldHandleFiles && !shouldHandleUrls) {
+      if (!canHandleFiles && !canHandleUrls) {
         return; // Let stack drops bubble to items
       }
 
@@ -425,7 +423,7 @@ export function DropZone({
       setIsDragActive(false);
       dragCounter.current = 0;
 
-      if (shouldHandleFiles) {
+      if (canHandleFiles) {
         const acceptedTypes = accept
           .split(',')
           .map((type) => type.trim())
@@ -452,12 +450,18 @@ export function DropZone({
             } else {
               fileHandler([filteredFiles[0]]);
             }
+            return;
+          }
+
+          if (canHandleUrls) {
+            // Safariでもファイル抽出に失敗した場合はURL経由で処理する
+            onUrlDrop?.(urls, e);
           }
         })();
       }
 
-      if (shouldHandleUrls) {
-        // Safari ではファイルとURLが同時に渡されるため、ファイルを処理した場合はURLを実行しない
+      if (!canHandleFiles && canHandleUrls) {
+        // Safari ではファイルとURLが同時に渡されるため、正常にファイルを処理できた場合はURLを実行しない
         onUrlDrop(urls, e);
       }
     };
