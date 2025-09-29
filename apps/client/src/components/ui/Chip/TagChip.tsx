@@ -9,21 +9,10 @@ export interface TagChipProps extends React.HTMLAttributes<HTMLSpanElement> {
   count?: number;
   prefixHash?: boolean;
   color?: string; // optional custom background color (e.g. "#ff00aa" or CSS color)
+  foregroundColor?: string; // optional text color override when using custom background
 }
 
-function getReadableTextColor(bg: string): string {
-  // Basic luminance heuristic; supports hex like #rrggbb or any valid css color where possible
-  // For non-hex, default to white text to be safe.
-  const m = bg.trim().match(/^#?([0-9a-fA-F]{6})$/);
-  if (!m) return '#ffffff';
-  const hex = m[1];
-  const r = parseInt(hex.slice(0, 2), 16);
-  const g = parseInt(hex.slice(2, 4), 16);
-  const b = parseInt(hex.slice(4, 6), 16);
-  // Perceived luminance (YIQ)
-  const yiq = (r * 299 + g * 587 + b * 114) / 1000;
-  return yiq >= 140 ? '#111111' : '#ffffff';
-}
+const FALLBACK_FOREGROUND = '#ffffff';
 
 export function TagChip({
   asChild,
@@ -32,16 +21,21 @@ export function TagChip({
   count,
   prefixHash = true,
   color,
+  foregroundColor,
   className,
   children,
+  style: inlineStyle,
   ...rest
 }: TagChipProps) {
   const label = `${prefixHash ? '#' : ''}${displayName || name}`;
 
   const usesCustomColor = !!color;
-  const style: React.CSSProperties | undefined = usesCustomColor
-    ? { backgroundColor: color!, color: getReadableTextColor(color!) }
+  const resolvedForegroundColor = usesCustomColor
+    ? (foregroundColor ?? FALLBACK_FOREGROUND)
     : undefined;
+  const style: React.CSSProperties | undefined = usesCustomColor
+    ? { ...inlineStyle, backgroundColor: color!, color: resolvedForegroundColor }
+    : inlineStyle;
 
   const node = (
     <span
@@ -65,8 +59,9 @@ export function TagChip({
   );
 
   if (asChild && children && isValidElement(children)) {
-    return cloneElement(children as any, {
-      className: cn((children as any).props?.className),
+    const childElement = children as React.ReactElement;
+    return cloneElement(childElement, {
+      className: cn(childElement.props?.className),
       children: node,
     });
   }

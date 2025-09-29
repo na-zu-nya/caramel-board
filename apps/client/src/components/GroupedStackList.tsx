@@ -1,8 +1,9 @@
 import { Link } from '@tanstack/react-router';
 import { format } from 'date-fns';
-import { ja } from 'date-fns/locale';
+import { enUS, ja } from 'date-fns/locale';
 import { useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
+import { MonthSectionHeader } from '@/components/ui/MonthSectionHeader';
 import { StackTile } from '@/components/ui/Stack';
 import { useStackTile } from '@/hooks/useStackTile';
 import { applyScrollbarCompensation, removeScrollbarCompensation } from '@/lib/scrollbar-utils';
@@ -99,7 +100,8 @@ export function GroupedStackList({
 
         const showMonthHeader = groupByMonth && monthKey !== 'all';
         const monthDate = showMonthHeader ? new Date(`${monthKey}-01`) : null;
-        const monthLabel = monthDate ? format(monthDate, 'MMMM', { locale: ja }) : null;
+        const monthLabel = monthDate ? format(monthDate, 'MMMM', { locale: enUS }) : null;
+        const monthLikeCount = monthItems.length;
 
         const itemsByDate = getGroupedByDate(monthItems);
         const sortedDates = Object.keys(itemsByDate).sort((a, b) => {
@@ -110,7 +112,7 @@ export function GroupedStackList({
         return (
           <div key={monthKey} className="space-y-4">
             {showMonthHeader && monthLabel && (
-              <h2 className="text-2xl font-semibold">{monthLabel}</h2>
+              <MonthSectionHeader month={monthLabel} likeCount={monthLikeCount} />
             )}
 
             {/* Wrapped horizontal container for date groups */}

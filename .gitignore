@@ -85,3 +85,5 @@ tmp/
 docker-compose.local.yml
 
 notes/**/*.md
+
+AGENTS.md

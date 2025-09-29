@@ -24,6 +24,7 @@ export function SuggestInput({
   suggestions,
   loading = false,
   onSearch,
+  autoFocus = false,
 }: SuggestInputProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
@@ -122,6 +123,19 @@ export function SuggestInput({
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (!autoFocus) {
+      return;
+    }
+    const raf = window.requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    });
+    return () => {
+      window.cancelAnimationFrame(raf);
+    };
+  }, [autoFocus]);
 
   return (
     <div className="relative">

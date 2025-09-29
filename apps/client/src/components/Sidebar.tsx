@@ -277,8 +277,8 @@ export default function Sidebar() {
       {/* Header */}
       <div className="flex flex-col gap-1 p-3 border-b border-gray-200">
         <div className="flex items-center justify-between">
-          <div className="inline-flex items-center gap-2 text-gray-900">
-            <CaramelBoardLogo />
+          <div className="inline-flex items-center gap-2 sidebar-logo-link">
+            <CaramelBoardLogo className="transition-colors duration-200" />
             <span className="sr-only">Caramel Board</span>
           </div>
           <button

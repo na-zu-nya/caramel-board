@@ -216,9 +216,9 @@ export default function AutoTagMappingModal({
             <Input
               id={autoTagKeyInputId}
               value={formData.autoTagKey}
-              onChange={(e) => setFormData({ ...formData, autoTagKey: e.target.value })}
               placeholder="e.g., 1girl, blonde hair"
-              disabled={!!existingMapping}
+              readOnly
+              disabled
               className="font-mono text-sm"
             />
           </div>
