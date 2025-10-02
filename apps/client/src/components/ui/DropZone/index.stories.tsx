@@ -37,6 +37,9 @@ export const Default: Story = {
           <p className="text-sm text-gray-500">
             Finderやローカルファイルはもちろん、X / Pixiv などからの画像ドロップもテストできます。
           </p>
+          <p className="text-xs text-gray-400">
+            ファイルが取得できる場合はファイルを優先し、取得できないときだけURLを処理します。
+          </p>
           <div className="text-left text-xs text-gray-500 space-y-1">
             {logs.map((log) => (
               <div key={log.id}>• {log.message}</div>

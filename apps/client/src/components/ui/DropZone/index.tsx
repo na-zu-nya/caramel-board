@@ -315,34 +315,44 @@ async function extractFilesFromDataTransfer(dataTransfer: DataTransfer | null): 
   if (!dataTransfer) return [];
 
   const itemList = dataTransfer.items ? Array.from(dataTransfer.items) : [];
-  const supportsEntries = itemList.some(
-    (item) => typeof (item as any).webkitGetAsEntry === 'function'
-  );
+  const resolvedFiles: File[] = [];
 
-  if (supportsEntries) {
-    const allFiles = await Promise.all(
-      itemList.map(async (item) => {
-        if (item.kind !== 'file') return [] as File[];
-        const entry = (item as any).webkitGetAsEntry?.() as FileSystemEntry | null;
-        if (!entry) {
-          const fallbackFile = item.getAsFile();
-          return fallbackFile ? [fallbackFile] : [];
-        }
-        try {
-          const files = await traverseFileSystemEntry(entry);
-          return files;
-        } catch (error) {
-          console.warn('[DropZone] Failed to traverse file system entry', entry?.fullPath, error);
-          const fallbackFile = item.getAsFile();
-          return fallbackFile ? [fallbackFile] : [];
-        }
-      })
-    );
+  for (const item of itemList) {
+    if (item.kind !== 'file') continue;
 
-    const flattened = allFiles.flat();
-    if (flattened.length > 0) {
-      return flattened;
+    const entry = (item as any).webkitGetAsEntry?.() as FileSystemEntry | null;
+
+    if (entry?.isDirectory) {
+      try {
+        const files = await traverseFileSystemEntry(entry);
+        if (files.length > 0) {
+          resolvedFiles.push(...files);
+        }
+      } catch (error) {
+        console.warn('[DropZone] Failed to traverse directory entry', entry?.fullPath, error);
+      }
     }
+
+    const directFile = item.getAsFile();
+    if (directFile) {
+      resolvedFiles.push(directFile);
+      continue;
+    }
+
+    if (entry?.isFile) {
+      try {
+        const files = await traverseFileSystemEntry(entry);
+        if (files.length > 0) {
+          resolvedFiles.push(...files);
+        }
+      } catch (error) {
+        console.warn('[DropZone] Failed to traverse file entry', entry?.fullPath, error);
+      }
+    }
+  }
+
+  if (resolvedFiles.length > 0) {
+    return resolvedFiles;
   }
 
   return Array.from(dataTransfer.files || []);
@@ -404,17 +414,22 @@ export function DropZone({
 
     const handleDrop = (e: DragEvent) => {
       const dataTransfer = e.dataTransfer ?? null;
-      const types = Array.from(dataTransfer?.types ?? []);
-      const dataTransferItems = Array.from(dataTransfer?.items ?? []);
-      const hasFilePayload =
-        types.includes('Files') || dataTransferItems.some((item) => item.kind === 'file');
       const urls = extractUrlsFromDataTransfer(dataTransfer);
       const fileHandler = onDrop ?? onFilesDrop;
-      const canHandleFiles = hasFilePayload && typeof fileHandler === 'function';
+      const hasFileHandler = typeof fileHandler === 'function';
       const hasUrlHandler = typeof onUrlDrop === 'function';
       const canHandleUrls = hasUrlHandler && urls.length > 0;
 
-      if (!canHandleFiles && !canHandleUrls) {
+      console.log('handleDrop');
+      for (const item of dataTransfer.items) {
+        console.log('Kind', item.kind);
+        console.log('Type', item.type);
+        item.getAsString((str) => {
+          console.log('File:', str);
+        });
+      }
+
+      if (!hasFileHandler && !canHandleUrls) {
         return; // Let stack drops bubble to items
       }
 
@@ -423,47 +438,46 @@ export function DropZone({
       setIsDragActive(false);
       dragCounter.current = 0;
 
-      if (canHandleFiles) {
-        const acceptedTypes = accept
-          .split(',')
-          .map((type) => type.trim())
-          .filter((type) => type.length > 0);
+      const acceptedTypes = accept
+        .split(',')
+        .map((type) => type.trim())
+        .filter((type) => type.length > 0);
 
-        void (async () => {
+      void (async () => {
+        if (hasFileHandler) {
           const resolvedFiles = await extractFilesFromDataTransfer(dataTransfer);
 
-          const filteredFiles = acceptedTypes.length
-            ? resolvedFiles.filter((file) =>
-                acceptedTypes.some((type) => {
-                  if (type.endsWith('/*')) {
-                    const baseType = type.slice(0, -2);
-                    return file.type.startsWith(baseType);
-                  }
-                  return file.type === type;
-                })
-              )
-            : resolvedFiles;
+          if (resolvedFiles.length > 0) {
+            const filteredFiles = acceptedTypes.length
+              ? resolvedFiles.filter((file) =>
+                  acceptedTypes.some((type) => {
+                    if (type.endsWith('/*')) {
+                      const baseType = type.slice(0, -2);
+                      return file.type.startsWith(baseType);
+                    }
+                    return file.type === type;
+                  })
+                )
+              : resolvedFiles;
 
-          if (filteredFiles.length > 0) {
-            if (multiple) {
-              fileHandler(filteredFiles);
-            } else {
-              fileHandler([filteredFiles[0]]);
+            if (filteredFiles.length > 0) {
+              if (multiple) {
+                fileHandler(filteredFiles);
+              } else {
+                fileHandler([filteredFiles[0]]);
+              }
+              return;
             }
+
+            // 受理できるファイルが存在したものの MIME がマッチしない場合はここで終了
             return;
           }
+        }
 
-          if (canHandleUrls) {
-            // Safariでもファイル抽出に失敗した場合はURL経由で処理する
-            onUrlDrop?.(urls, e);
-          }
-        })();
-      }
-
-      if (!canHandleFiles && canHandleUrls) {
-        // Safari ではファイルとURLが同時に渡されるため、正常にファイルを処理できた場合はURLを実行しない
-        onUrlDrop(urls, e);
-      }
+        if (canHandleUrls) {
+          onUrlDrop?.(urls, e);
+        }
+      })();
     };
 
     element.addEventListener('dragenter', handleDragEnter);

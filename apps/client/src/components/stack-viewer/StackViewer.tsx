@@ -665,8 +665,14 @@ export default function StackViewer({
           urls,
         });
 
-        const successes = results.filter((r) => r.status === 'added' || r.status === 'created');
-        const failures = results.filter((r) => r.status === 'error');
+        const successes = results.filter(
+          (result) => result.status === 'added' || result.status === 'created'
+        );
+        const duplicates = results.filter((result) => result.status === 'skipped');
+        const failures = results.filter((result) => result.status === 'error');
+        const protectedFailures = failures.filter((failure) =>
+          /HTTP 40[13]/.test(failure.message ?? '')
+        );
 
         if (successes.length > 0) {
           addNotification({
@@ -681,6 +687,13 @@ export default function StackViewer({
           }
         }
 
+        if (duplicates.length > 0) {
+          addNotification({
+            type: 'info',
+            message: `${duplicates.length}件のURLは既に取り込み済みのためスキップしました`,
+          });
+        }
+
         if (failures.length > 0) {
           const summary = failures
             .map((failure) => failure.message || failure.url)
@@ -690,10 +703,18 @@ export default function StackViewer({
           addNotification({
             type: 'error',
             message:
-              failures.length === urls.length
+              failures.length === results.length
                 ? 'URLのアップロードに失敗しました'
                 : `${failures.length}件のURLでエラーが発生しました${summary ? `: ${summary}` : ''}`,
           });
+
+          if (protectedFailures.length > 0) {
+            addNotification({
+              type: 'info',
+              message:
+                '保護された画像は直接ドロップできません。一度保存してから再度ドロップしてください。',
+            });
+          }
         }
       } catch (error) {
         console.error('Failed to import URLs for stack', error);

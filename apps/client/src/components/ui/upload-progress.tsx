@@ -48,7 +48,7 @@ export function UploadProgress() {
                 'bg-green-50 text-green-800 border border-green-200':
                   notification.type === 'success',
                 'bg-red-50 text-red-800 border border-red-200': notification.type === 'error',
-                'bg-primary/10 text-primary border border-primary/20': notification.type === 'info',
+                'bg-amber-50 text-amber-800 border border-amber-200': notification.type === 'info',
               }
             )}
           >

@@ -463,13 +463,26 @@ export default function SparseStackGrid({
           collectionId,
         });
 
-        const successes = results.filter((r) => r.status === 'created' || r.status === 'added');
-        const failures = results.filter((r) => r.status === 'error');
+        const successes = results.filter(
+          (result) => result.status === 'created' || result.status === 'added'
+        );
+        const duplicates = results.filter((result) => result.status === 'skipped');
+        const failures = results.filter((result) => result.status === 'error');
+        const protectedFailures = failures.filter((failure) =>
+          /HTTP 40[13]/.test(failure.message ?? '')
+        );
 
         if (successes.length > 0) {
           addNotification({
             type: 'success',
             message: `${successes.length}件のURLからアップロードしました`,
+          });
+        }
+
+        if (duplicates.length > 0) {
+          addNotification({
+            type: 'info',
+            message: `${duplicates.length}件のURLは既に取り込み済みのためスキップしました`,
           });
         }
 
@@ -482,10 +495,18 @@ export default function SparseStackGrid({
           addNotification({
             type: 'error',
             message:
-              failures.length === urls.length
+              failures.length === results.length
                 ? 'URLのアップロードに失敗しました'
                 : `${failures.length}件のURLでエラーが発生しました${summary ? `: ${summary}` : ''}`,
           });
+
+          if (protectedFailures.length > 0) {
+            addNotification({
+              type: 'info',
+              message:
+                '保護された画像は直接ドロップできません。一度保存してから再度ドロップしてください。',
+            });
+          }
         }
       } catch (error) {
         console.error('Failed to import URLs for sparse grid', error);

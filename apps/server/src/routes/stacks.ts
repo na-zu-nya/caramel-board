@@ -1059,7 +1059,7 @@ stacksRoute.post('/import-from-urls', async (c) => {
 
     const results: Array<{
       url: string;
-      status: 'created' | 'added' | 'error';
+      status: 'created' | 'added' | 'skipped' | 'error';
       stackId?: number;
       assetId?: number;
       message?: string;
@@ -1125,7 +1125,17 @@ stacksRoute.post('/import-from-urls', async (c) => {
         let message = 'URLの取得に失敗しました';
         if (error instanceof DuplicateAssetError) {
           message = error.message;
-        } else if (error instanceof Error) {
+          results.push({
+            url,
+            status: 'skipped',
+            stackId: error.details?.stackId,
+            assetId: error.details?.assetId,
+            message,
+          });
+          continue;
+        }
+
+        if (error instanceof Error) {
           message = error.message;
         }
 
