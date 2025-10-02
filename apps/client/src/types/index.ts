@@ -85,6 +85,20 @@ export interface AutoTag {
   score?: number;
 }
 
+export interface JoyTagHealth {
+  status: string;
+  services?: Record<string, string>;
+  version?: string;
+  device?: string;
+  tags?: number;
+}
+
+export interface JoyTagHealthResponse {
+  status: 'ok' | 'error';
+  joytag?: JoyTagHealth;
+  message?: string;
+}
+
 // Asset types
 export interface Asset {
   id: string | number;

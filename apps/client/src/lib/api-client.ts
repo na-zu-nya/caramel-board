@@ -4,6 +4,7 @@ import type {
   CollectionFolder,
   Dataset,
   ImportUrlResult,
+  JoyTagHealthResponse,
   Pin,
   SortOption,
   Stack,
@@ -979,6 +980,18 @@ class ApiClient {
     if (limit !== undefined) queryParams.append('limit', String(limit));
     if (offset !== undefined) queryParams.append('offset', String(offset));
     return this.fetch(`/api/v1/auto-tags/mappings/${datasetId}?${queryParams.toString()}`);
+  }
+
+  async getJoyTagHealth(): Promise<JoyTagHealthResponse> {
+    try {
+      return await this.fetch<JoyTagHealthResponse>('/api/v1/auto-tags/joytag/health');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'JoyTag health check failed';
+      return {
+        status: 'error',
+        message,
+      } satisfies JoyTagHealthResponse;
+    }
   }
 
   async getAutoTagStatistics(params: {

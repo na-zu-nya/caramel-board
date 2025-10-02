@@ -2,6 +2,7 @@ import { zValidator } from '@hono/zod-validator';
 import type { Context } from 'hono';
 import { Hono } from 'hono';
 import { z } from 'zod';
+import { getAutoTagClient } from '../lib/AutoTagClient';
 import { prisma } from '../shared/di';
 
 export const autoTagsRoute = new Hono();
@@ -31,6 +32,17 @@ interface CacheEntry<TValue = CacheValue> {
 
 const statisticsCache = new Map<string, CacheEntry>();
 const CACHE_TTL = 5 * 60 * 1000; // 5分間のキャッシュ
+
+autoTagsRoute.get('/joytag/health', async (c) => {
+  try {
+    const health = await getAutoTagClient().healthCheck();
+    return c.json({ status: 'ok', joytag: health });
+  } catch (error) {
+    console.error('JoyTag health check failed:', error);
+    const message = error instanceof Error ? error.message : 'Unknown JoyTag error';
+    return c.json({ status: 'error', message }, 503);
+  }
+});
 
 function getCacheKey(
   datasetId: number,

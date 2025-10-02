@@ -25,6 +25,7 @@ import { AutoTagDisplay } from '@/components/ui/autotag-display';
 import { Button } from '@/components/ui/button';
 import { SmallSearchField, SmallSelect } from '@/components/ui/Controls';
 import { HeaderIconButton } from '@/components/ui/Header/HeaderIconButton';
+import { JoyTagStatus } from '@/components/ui/JoyTagStatus';
 import { StackTile } from '@/components/ui/Stack';
 import { SelectItem } from '@/components/ui/select';
 import { SelectionActionBar } from '@/components/ui/selection-action-bar';
@@ -38,7 +39,7 @@ import {
   infoSidebarOpenAtom,
   selectionModeAtom,
 } from '@/stores/ui';
-import type { Stack, StackFilter } from '@/types';
+import type { JoyTagHealthResponse, Stack, StackFilter } from '@/types';
 
 export const Route = createFileRoute('/library/$datasetId/autotag-config')({
   component: AutoTagConfigPage,
@@ -169,6 +170,37 @@ function AutoTagConfigPage() {
       return response.data;
     },
   });
+
+  const {
+    data: joyTagHealth,
+    isLoading: joyTagHealthLoading,
+    isFetching: joyTagHealthFetching,
+  } = useQuery<JoyTagHealthResponse>({
+    queryKey: ['joytag-health'],
+    queryFn: () => apiClient.getJoyTagHealth(),
+    staleTime: 60_000,
+    refetchInterval: 60_000,
+  });
+
+  const joyTagStatusComputed = useMemo(() => {
+    const payload = joyTagHealth?.joytag;
+    if (payload?.status === 'ok') {
+      return {
+        status: 'running' as const,
+        message: payload.device ? `Device: ${payload.device}` : undefined,
+      };
+    }
+
+    const fallbackMessage =
+      joyTagHealth?.message ?? (payload?.status ? `status: ${payload.status}` : undefined);
+
+    return {
+      status: 'not-available' as const,
+      message: fallbackMessage,
+    };
+  }, [joyTagHealth]);
+
+  const joyTagStatusLoading = joyTagHealthLoading || joyTagHealthFetching;
 
   // Sort statistics (placed early to avoid TDZ in effects below)
   const filteredStatistics = useMemo(() => {
@@ -672,9 +704,16 @@ function AutoTagConfigPage() {
         <div className="sticky top-14 h-[calc(100vh-56px)] border-r bg-white">
           <div className="overflow-y-auto h-full">
             <div className="p-4 border-b">
-              <h2 className="text-lg font-semibold mb-3">AutoTag Statistics</h2>
-
               <div className="space-y-3">
+                <div className="space-y-1">
+                  <h2 className="text-lg font-semibold">AutoTag Statistics</h2>
+                  <JoyTagStatus
+                    status={joyTagStatusComputed.status}
+                    isLoading={joyTagStatusLoading}
+                    message={joyTagStatusComputed.message}
+                  />
+                </div>
+
                 <SmallSearchField
                   value={searchQuery}
                   onValueChange={setSearchQuery}
