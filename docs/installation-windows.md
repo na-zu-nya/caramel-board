@@ -102,7 +102,7 @@ git clone https://github.com/na-zu-nya/caramel-board.git caramel-board
 #### アプリの起動
 
 - serve.bat をダブルクリックで実行することで、サービスが立ち上がります
-- API Ready と表示されたら立ち上がり完了です (Terminalは閉じてもOKです)
+- API Ready と表示されたら立ち上がり完了です (Terminalは最小化して維持してください。また画面上でコピーをするときは、コマンドではなく右クリックで行ってください)
 - 立ち上がった後は、
   - http://localhost:6766
   - http://<ローカルIP>:6766
