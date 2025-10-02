@@ -2,6 +2,20 @@ import type { DataSet, Prisma, PrismaClient } from '@prisma/client';
 import { processStacksThumbnails } from '../../utils/stackHelpers';
 import { prisma } from '../di';
 
+export class DatasetNotFoundError extends Error {
+  constructor(id: number) {
+    super(`Dataset ${id} not found`);
+    this.name = 'DatasetNotFoundError';
+  }
+}
+
+export class DatasetIsDefaultError extends Error {
+  constructor(id: number) {
+    super(`Dataset ${id} is set as default and cannot be deleted`);
+    this.name = 'DatasetIsDefaultError';
+  }
+}
+
 export interface CreateDataSetData {
   name: string;
   icon?: string;
@@ -101,14 +115,32 @@ export class DataSetService {
   }
 
   async delete(id: number): Promise<void> {
-    // デフォルトデータセットは削除できない
-    const ds = await this.prisma.dataSet.findUnique({ where: { id }, select: { isDefault: true } });
-    if (ds?.isDefault) {
-      throw new Error('Cannot delete default dataset');
-    }
+    await this.prisma.$transaction(async (tx) => {
+      const target = await tx.dataSet.findUnique({
+        where: { id },
+        select: { id: true, isDefault: true },
+      });
 
-    await this.prisma.dataSet.delete({
-      where: { id },
+      if (!target) {
+        throw new DatasetNotFoundError(id);
+      }
+
+      if (target.isDefault) {
+        throw new DatasetIsDefaultError(id);
+      }
+
+      // スタック関連のデータを先に削除して参照整合性を保つ
+      await tx.stack.deleteMany({ where: { dataSetId: id } });
+
+      // データセット直下のエンティティを削除
+      await tx.collection.deleteMany({ where: { dataSetId: id } });
+      await tx.collectionFolder.deleteMany({ where: { dataSetId: id } });
+      await tx.navigationPin.deleteMany({ where: { dataSetId: id } });
+      await tx.autoTagMapping.deleteMany({ where: { dataSetId: id } });
+      await tx.tag.deleteMany({ where: { dataSetId: id } });
+      await tx.author.deleteMany({ where: { dataSetId: id } });
+
+      await tx.dataSet.delete({ where: { id } });
     });
   }
 

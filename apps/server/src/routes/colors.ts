@@ -106,22 +106,20 @@ app.post(
       const { stackId } = c.req.valid('param');
       const colors = await colorSearchService.updateStackColors(stackId);
 
-      if (colors) {
+      if (!colors) {
         return useResponse(c, {
-          success: true,
-          colors,
-          message: `スタック ${stackId} の色情報を更新しました`,
+          success: false,
+          colors: null,
+          reason: 'STACK_ASSET_COLORS_MISSING',
+          message: 'スタックに画像アセットが見つからないか、色情報が未生成です',
         });
-      } else {
-        return useResponse(
-          c,
-          {
-            success: false,
-            message: 'スタックに画像アセットが見つかりません',
-          },
-          404
-        );
       }
+
+      return useResponse(c, {
+        success: true,
+        colors,
+        message: `スタック ${stackId} の色情報を更新しました`,
+      });
     } catch (error) {
       console.error('Color update error:', error);
       return useResponse(c, { error: '色情報の更新に失敗しました' }, 500);

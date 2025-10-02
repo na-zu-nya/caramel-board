@@ -431,12 +431,29 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
 
   const updateColorsMutation = useMutation({
     mutationFn: async ({ stackId }: { stackId: number }) => {
-      const response = await apiClient.updateStackColors(stackId);
-      return response;
+      return apiClient.updateStackColors(stackId);
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['stack', datasetId, selectedItemId] });
       queryClient.invalidateQueries({ queryKey: ['stacks'] });
+
+      if (result.success) {
+        if (result.message) {
+          addNotification({ type: 'success', message: result.message });
+        }
+      } else {
+        addNotification({
+          type: 'info',
+          message: result.message || '色情報が未生成のため、更新はスキップされました。',
+        });
+      }
+    },
+    onError: (error: unknown) => {
+      const message =
+        error instanceof Error
+          ? error.message
+          : '色情報の更新に失敗しました。時間を置いて再度お試しください。';
+      addNotification({ type: 'error', message });
     },
   });
 
@@ -460,17 +477,36 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
   // Refresh (thumbnail + colors + auto-tags) in sequence (embeddings removed)
   const refreshAllMutation = useMutation({
     mutationFn: async ({ stackId }: { stackId: number }) => {
-      // 1) Refresh thumbnail
-      await apiClient.refreshThumbnail(stackId);
-      // 2) Update colors
-      await apiClient.updateStackColors(stackId);
-      // 3) Aggregate AutoTags
-      await apiClient.aggregateStackTags(stackId, { threshold: 0.4 });
-      return { success: true };
+      const thumbnailResult = await apiClient.refreshThumbnail(stackId);
+      const colorResult = await apiClient.updateStackColors(stackId);
+      const autoTagResult = await apiClient.aggregateStackTags(stackId, { threshold: 0.4 });
+
+      return {
+        thumbnailResult,
+        colorResult,
+        autoTagResult,
+      };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['stack', datasetId, selectedItemId] });
       queryClient.invalidateQueries({ queryKey: ['stacks'] });
+
+      addNotification({ type: 'success', message: 'スタックのリフレッシュ処理が完了しました。' });
+
+      if (!result.colorResult?.success) {
+        addNotification({
+          type: 'info',
+          message:
+            result.colorResult?.message || '色情報が未生成のため、カラー更新はスキップされました。',
+        });
+      }
+    },
+    onError: (error: unknown) => {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'リフレッシュ処理に失敗しました。時間を置いて再実行してください。';
+      addNotification({ type: 'error', message });
     },
   });
 

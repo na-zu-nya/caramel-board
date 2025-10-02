@@ -129,16 +129,31 @@ function DatasetManagement() {
     );
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this library?')) {
+  const handleDelete = async (dataset: Dataset & { itemCount?: number }) => {
+    const rawItemCount = dataset.itemCount;
+    const itemCount =
+      typeof rawItemCount === 'number' && Number.isFinite(rawItemCount) ? rawItemCount : 0;
+    const hasItems = itemCount > 0;
+    const datasetName = dataset.name || 'this library';
+    const message = hasItems
+      ? [
+          `Delete "${datasetName}"?`,
+          '',
+          `${itemCount.toLocaleString()} items in this library will be permanently removed.`,
+          '',
+          'This action cannot be undone. Continue?',
+        ].join('\n')
+      : [`Delete "${datasetName}"?`, '', 'This action cannot be undone. Continue?'].join('\n');
+
+    if (!confirm(message)) {
       return;
     }
 
     try {
-      await deleteDataset.mutateAsync(id);
+      await deleteDataset.mutateAsync(String(dataset.id));
     } catch (error) {
       console.error('Failed to delete library:', error);
-      alert('Failed to delete library. It may still contain items.');
+      alert('Failed to delete library. Please try again.');
     }
   };
 
@@ -286,7 +301,7 @@ function DatasetManagement() {
                   isRefreshing={isUpdating}
                   disableSetDefault={defaultSettingId === dataset.id}
                   onUpdate={(updates) => handleUpdateLibrary(dataset.id, updates)}
-                  onDelete={() => handleDelete(dataset.id)}
+                  onDelete={() => handleDelete(libraryDataset)}
                   onSetDefault={() => handleSetDefault(dataset.id)}
                   onStartRefresh={() => handleOpenRefreshDialog(dataset.id)}
                   onProtectionClick={() => {

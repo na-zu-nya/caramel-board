@@ -1,6 +1,15 @@
 import { Prisma, type PrismaClient } from '@prisma/client';
+import { DataStorage } from '../../lib/DataStorage';
 import type { DominantColor } from '../../utils/colorExtractor';
 import { ColorExtractor } from '../../utils/colorExtractor';
+
+type AssetWithColorData = {
+  id: number;
+  file: string;
+  thumbnail: string | null;
+  fileType: string;
+  dominantColors: Prisma.JsonValue | null;
+};
 
 export interface ColorSearchOptions {
   color: { r: number; g: number; b: number };
@@ -38,6 +47,8 @@ const isDominantColor = (value: unknown): value is DominantColor => {
 
 export class ColorSearchService {
   private prisma: PrismaClient;
+  private static readonly imageExtensions = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp']);
+  private static readonly videoExtensions = new Set(['mp4', 'mov', 'avi', 'mkv', 'webm']);
 
   constructor(prisma: PrismaClient) {
     this.prisma = prisma;
@@ -47,38 +58,125 @@ export class ColorSearchService {
    * スタックの代表色を再計算して保存
    */
   async updateStackColors(stackId: number) {
-    // 1) アセットの色データを取得（AssetColorテーブルが無い環境もあるためフォールバック）
-    // まず AssetColor 経由で取得を試みる
-    const assetColors = await this.prisma.asset.findMany({
+    const stack = await this.prisma.stack.findUnique({
+      where: { id: stackId },
+      select: { dataSetId: true },
+    });
+
+    if (!stack) {
+      return null;
+    }
+
+    const assets = await this.prisma.asset.findMany({
       where: { stackId },
       select: {
+        id: true,
+        file: true,
+        thumbnail: true,
+        fileType: true,
         dominantColors: true,
       },
     });
 
-    const colorSets = assetColors
-      .map((asset) => asset.dominantColors)
-      .filter(
-        (colors): colors is DominantColor[] =>
-          Array.isArray(colors) && colors.every(isDominantColor)
-      );
+    const validColorSets: DominantColor[][] = [];
 
-    if (colorSets.length === 0) {
-      // 色情報が無い場合は null を保存（もしくはそのまま）
+    for (const asset of assets) {
+      const existingColors = this.extractDominantColorArray(asset.dominantColors);
+
+      if (existingColors) {
+        validColorSets.push(existingColors);
+        continue;
+      }
+
+      const regenerated = await this.regenerateAssetColors(asset);
+      if (regenerated && regenerated.length > 0) {
+        validColorSets.push(regenerated);
+        await this.prisma.asset.update({
+          where: { id: asset.id },
+          data: { dominantColors: regenerated },
+        });
+      }
+    }
+
+    if (validColorSets.length === 0) {
       await this.prisma.stack.update({ where: { id: stackId }, data: { dominantColors: null } });
+      await this.prisma.stackColor.deleteMany({ where: { stackId } });
       return null;
     }
 
-    // 2) 代表色を集計
-    const aggregated = ColorExtractor.aggregateStackColors(colorSets);
+    const aggregated = ColorExtractor.aggregateStackColors(validColorSets);
 
-    // 3) スタックへ保存
     await this.prisma.stack.update({
       where: { id: stackId },
       data: { dominantColors: aggregated },
     });
 
+    await this.prisma.stackColor.deleteMany({ where: { stackId } });
+
+    if (aggregated.length > 0) {
+      const records = aggregated.map((color, index) => ({
+        stackId,
+        r: color.r,
+        g: color.g,
+        b: color.b,
+        hex: color.hex,
+        percentage: color.percentage,
+        hue: color.hue,
+        saturation: color.saturation,
+        lightness: color.lightness,
+        hueCategory: color.hueCategory,
+        orderIndex: index,
+      }));
+
+      await this.prisma.stackColor.createMany({ data: records });
+    }
+
     return aggregated;
+  }
+
+  private extractDominantColorArray(value: Prisma.JsonValue | null): DominantColor[] | null {
+    if (!Array.isArray(value)) {
+      return null;
+    }
+
+    const colors: DominantColor[] = [];
+    for (const entry of value) {
+      if (isDominantColor(entry)) {
+        colors.push(entry);
+      } else {
+        return null;
+      }
+    }
+
+    return colors;
+  }
+
+  private async regenerateAssetColors(asset: AssetWithColorData): Promise<DominantColor[] | null> {
+    const extension = asset.fileType?.toLowerCase() ?? '';
+
+    if (ColorSearchService.imageExtensions.has(extension)) {
+      return this.extractFromPath(asset.file);
+    }
+
+    if (ColorSearchService.videoExtensions.has(extension) && asset.thumbnail) {
+      return this.extractFromPath(asset.thumbnail);
+    }
+
+    return null;
+  }
+
+  private async extractFromPath(key: string): Promise<DominantColor[] | null> {
+    try {
+      const absolutePath = DataStorage.getPath(key);
+      const colors = await ColorExtractor.extractDominantColors(absolutePath, 3);
+      if (colors.length === 0) {
+        return null;
+      }
+      return colors;
+    } catch (error) {
+      console.error('Failed to extract dominant colors from path', key, error);
+      return null;
+    }
   }
 
   /**

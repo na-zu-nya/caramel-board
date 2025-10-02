@@ -640,12 +640,50 @@ class ApiClient {
   async updateStackColors(
     stackId: string | number
   ): Promise<{ success: boolean; colors?: any[]; message: string }> {
-    return this.fetch<{ success: boolean; colors?: any[]; message: string }>(
-      `/api/v1/colors/stacks/${stackId}/update-colors`,
-      {
-        method: 'POST',
+    const path = `/api/v1/colors/stacks/${stackId}/update-colors`;
+    const url = `${this.baseUrl}${path}`;
+
+    const response = await fetch(url, {
+      method: 'POST',
+    });
+
+    if (response.status === 404) {
+      try {
+        const payload = (await response.json()) as {
+          success?: boolean;
+          colors?: unknown;
+          message?: string;
+        };
+        const colors = Array.isArray(payload?.colors) ? payload.colors : undefined;
+        return {
+          success: false,
+          colors,
+          message: payload?.message ?? 'スタックに画像アセットが見つかりません',
+        };
+      } catch {
+        return {
+          success: false,
+          colors: undefined,
+          message: 'スタックに画像アセットが見つかりません',
+        };
       }
-    );
+    }
+
+    if (!response.ok) {
+      let errorMessage = `API Error: ${response.status} ${response.statusText}`;
+      try {
+        const errorData = await response.json();
+        const maybeError = (errorData as { error?: string }).error;
+        if (typeof maybeError === 'string' && maybeError.trim().length > 0) {
+          errorMessage = maybeError;
+        }
+      } catch {
+        // JSONが無い場合は既定メッセージを使用
+      }
+      throw new Error(errorMessage);
+    }
+
+    return response.json();
   }
 
   async updateAllDatasetColors(

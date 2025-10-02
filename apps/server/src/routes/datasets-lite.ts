@@ -4,7 +4,11 @@ import { createFileService } from '../features/datasets/services/file-service';
 import { getPrisma } from '../lib/Repository.js';
 import { useDataStorage } from '../shared/di';
 import { AutoTagService } from '../shared/services/AutoTagService';
-import { DataSetService } from '../shared/services/DataSetService';
+import {
+  DataSetService,
+  DatasetIsDefaultError,
+  DatasetNotFoundError,
+} from '../shared/services/DataSetService';
 import {
   ensureDatasetAuthorized,
   hashPassword,
@@ -16,9 +20,16 @@ import {
 // Minimal datasets router to satisfy client needs without heavy deps
 const app = new Hono();
 const dataSetService = new DataSetService(getPrisma());
+const STORAGE_PREFIXES_TO_PRUNE = ['library/', 'files/'] as const;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const isErrnoException = (error: unknown): error is NodeJS.ErrnoException =>
+  typeof error === 'object' &&
+  error !== null &&
+  'code' in error &&
+  typeof (error as { code: unknown }).code === 'string';
 
 const getErrorCode = (error: unknown): string | undefined => {
   if (typeof error !== 'object' || error === null) return undefined;
@@ -180,6 +191,41 @@ app.put('/:id', async (c) => {
     const message = error instanceof Error ? error.message : 'Failed to update dataset';
     return c.json({ error: message }, 500);
   }
+});
+
+// Delete dataset with cascaded relations cleanup
+app.delete('/:id', async (c) => {
+  const id = Number.parseInt(c.req.param('id'), 10);
+  if (Number.isNaN(id)) {
+    return c.json({ error: 'Invalid dataset id' }, 400);
+  }
+
+  try {
+    await dataSetService.delete(id);
+  } catch (error) {
+    if (error instanceof DatasetNotFoundError) {
+      return c.json({ error: 'DataSet not found' }, 404);
+    }
+    if (error instanceof DatasetIsDefaultError) {
+      return c.json({ error: 'Default dataset cannot be deleted' }, 400);
+    }
+    console.error('Failed to delete dataset:', error);
+    return c.json({ error: 'Failed to delete dataset' }, 500);
+  }
+
+  const dataStorage = useDataStorage(c);
+  for (const prefix of STORAGE_PREFIXES_TO_PRUNE) {
+    try {
+      await dataStorage.rmdir(prefix, id);
+    } catch (error) {
+      if (isErrnoException(error) && (error.code === 'ENOENT' || error.code === 'ENOTDIR')) {
+        continue;
+      }
+      console.warn(`Failed to remove storage directory for ${prefix}${id}:`, error);
+    }
+  }
+
+  return c.json({ success: true });
 });
 
 // Helper: simple concurrency controller
