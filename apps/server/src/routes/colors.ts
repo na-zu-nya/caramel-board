@@ -104,7 +104,9 @@ app.post(
   async (c) => {
     try {
       const { stackId } = c.req.valid('param');
-      const colors = await colorSearchService.updateStackColors(stackId);
+      const colors = await colorSearchService.updateStackColors(stackId, {
+        forceRegenerate: true,
+      });
 
       if (!colors) {
         return useResponse(c, {
@@ -171,7 +173,9 @@ app.post(
 
         for (const stack of stacks) {
           try {
-            await colorSearchService.updateStackColors(stack.id);
+            await colorSearchService.updateStackColors(stack.id, {
+              forceRegenerate: true,
+            });
             processedCount++;
             console.log(`Progress: ${processedCount}/${stacks.length} stacks processed`);
           } catch (error) {

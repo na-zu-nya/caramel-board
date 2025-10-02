@@ -1,4 +1,5 @@
 import { Prisma, type PrismaClient } from '@prisma/client';
+import { ColorSearchService as StackColorService } from '../../../shared/services/ColorSearchService-fix';
 import { ColorExtractor } from '../../../utils/colorExtractor';
 
 export interface ColorSearchOptions {
@@ -40,6 +41,7 @@ function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
 
 export const createColorSearchService = (deps: { prisma: PrismaClient; dataSetId: number }) => {
   const { prisma, dataSetId } = deps;
+  const stackColorService = new StackColorService(prisma);
 
   /**
    * 色フィルタでマッチするスタックIDのみを取得
@@ -398,9 +400,36 @@ export const createColorSearchService = (deps: { prisma: PrismaClient; dataSetId
       select: { id: true },
     });
 
-    // TODO: 実際にはキューに追加する処理を実装
-    // 現時点では件数のみを返す
-    return stacks.length;
+    if (stacks.length === 0) {
+      return 0;
+    }
+
+    const total = stacks.length;
+    const concurrency = Math.min(4, total);
+    let cursor = 0;
+
+    const runWorker = async () => {
+      while (true) {
+        const index = cursor++;
+        if (index >= total) break;
+        const stackId = stacks[index]?.id;
+        if (!stackId) continue;
+
+        try {
+          await stackColorService.updateStackColors(stackId, { forceRegenerate });
+        } catch (error) {
+          console.error(`Failed to update colors for stack ${stackId}:`, error);
+        }
+      }
+    };
+
+    void Promise.all(Array.from({ length: concurrency }, runWorker)).then(() => {
+      console.log(
+        `Color refresh completed for dataset ${dataSetId}: processed ${total} stacks (force=${forceRegenerate})`
+      );
+    });
+
+    return total;
   }
 
   /**

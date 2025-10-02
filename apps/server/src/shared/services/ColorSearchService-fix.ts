@@ -57,7 +57,8 @@ export class ColorSearchService {
   /**
    * スタックの代表色を再計算して保存
    */
-  async updateStackColors(stackId: number) {
+  async updateStackColors(stackId: number, options?: { forceRegenerate?: boolean }) {
+    const forceRegenerate = options?.forceRegenerate ?? false;
     const stack = await this.prisma.stack.findUnique({
       where: { id: stackId },
       select: { dataSetId: true },
@@ -81,20 +82,31 @@ export class ColorSearchService {
     const validColorSets: DominantColor[][] = [];
 
     for (const asset of assets) {
-      const existingColors = this.extractDominantColorArray(asset.dominantColors);
+      let colors: DominantColor[] | null = null;
 
-      if (existingColors) {
-        validColorSets.push(existingColors);
-        continue;
+      if (!forceRegenerate) {
+        colors = this.extractDominantColorArray(asset.dominantColors);
       }
 
-      const regenerated = await this.regenerateAssetColors(asset);
-      if (regenerated && regenerated.length > 0) {
-        validColorSets.push(regenerated);
-        await this.prisma.asset.update({
-          where: { id: asset.id },
-          data: { dominantColors: regenerated },
-        });
+      if (!colors) {
+        const regenerated = await this.regenerateAssetColors(asset);
+        if (regenerated && regenerated.length > 0) {
+          colors = regenerated;
+          await this.prisma.asset.update({
+            where: { id: asset.id },
+            data: { dominantColors: regenerated },
+          });
+        } else if (!forceRegenerate) {
+          // 既存データが null かつ再生成できない場合はスキップ
+          colors = null;
+        } else {
+          // 強制再生成時に失敗した場合は既存データをそのまま使う（消失しないように）
+          colors = this.extractDominantColorArray(asset.dominantColors);
+        }
+      }
+
+      if (colors && colors.length > 0) {
+        validColorSets.push(colors);
       }
     }
 
