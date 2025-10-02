@@ -362,8 +362,6 @@ channel_prompt_flow() {
   esac
 
   if [ "$chosen" = "skip" ]; then
-    write_env CB_CHANNEL_SELECTED skip
-    CB_CHANNEL_SELECTED=skip
     say "[setup] $(t channel_select_skip_msg)"
     return 0
   fi
