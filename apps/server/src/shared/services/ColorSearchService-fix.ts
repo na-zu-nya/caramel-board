@@ -46,12 +46,48 @@ const isDominantColor = (value: unknown): value is DominantColor => {
 };
 
 export class ColorSearchService {
+  private static readonly imageExtensions = new Set([
+    'jpg',
+    'jpeg',
+    'png',
+    'gif',
+    'webp',
+    'bmp',
+    'avif',
+    'heic',
+    'heif',
+    'tif',
+    'tiff',
+  ]);
+  private static readonly videoExtensions = new Set([
+    'mp4',
+    'mov',
+    'avi',
+    'mkv',
+    'webm',
+    'm4v',
+    'mpeg',
+    'mpg',
+    'wmv',
+  ]);
   private prisma: PrismaClient;
-  private static readonly imageExtensions = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp']);
-  private static readonly videoExtensions = new Set(['mp4', 'mov', 'avi', 'mkv', 'webm']);
 
   constructor(prisma: PrismaClient) {
     this.prisma = prisma;
+  }
+
+  /**
+   * 16進数カラーコードをRGBに変換
+   */
+  private static hexToRgb(hex: string): { r: number; g: number; b: number } | null {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result
+      ? {
+          r: Number.parseInt(result[1], 16),
+          g: Number.parseInt(result[2], 16),
+          b: Number.parseInt(result[3], 16),
+        }
+      : null;
   }
 
   /**
@@ -144,65 +180,6 @@ export class ColorSearchService {
     }
 
     return aggregated;
-  }
-
-  private extractDominantColorArray(value: Prisma.JsonValue | null): DominantColor[] | null {
-    if (!Array.isArray(value)) {
-      return null;
-    }
-
-    const colors: DominantColor[] = [];
-    for (const entry of value) {
-      if (isDominantColor(entry)) {
-        colors.push(entry);
-      } else {
-        return null;
-      }
-    }
-
-    return colors;
-  }
-
-  private async regenerateAssetColors(asset: AssetWithColorData): Promise<DominantColor[] | null> {
-    const extension = asset.fileType?.toLowerCase() ?? '';
-
-    if (ColorSearchService.imageExtensions.has(extension)) {
-      return this.extractFromPath(asset.file);
-    }
-
-    if (ColorSearchService.videoExtensions.has(extension) && asset.thumbnail) {
-      return this.extractFromPath(asset.thumbnail);
-    }
-
-    return null;
-  }
-
-  private async extractFromPath(key: string): Promise<DominantColor[] | null> {
-    try {
-      const absolutePath = DataStorage.getPath(key);
-      const colors = await ColorExtractor.extractDominantColors(absolutePath, 3);
-      if (colors.length === 0) {
-        return null;
-      }
-      return colors;
-    } catch (error) {
-      console.error('Failed to extract dominant colors from path', key, error);
-      return null;
-    }
-  }
-
-  /**
-   * 16進数カラーコードをRGBに変換
-   */
-  private static hexToRgb(hex: string): { r: number; g: number; b: number } | null {
-    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-    return result
-      ? {
-          r: Number.parseInt(result[1], 16),
-          g: Number.parseInt(result[2], 16),
-          b: Number.parseInt(result[3], 16),
-        }
-      : null;
   }
 
   /**
@@ -430,6 +407,70 @@ export class ColorSearchService {
         migrationComplete: assetsWithJson === assetsWithTable.length,
       },
     };
+  }
+
+  private extractDominantColorArray(value: Prisma.JsonValue | null): DominantColor[] | null {
+    if (!Array.isArray(value)) {
+      return null;
+    }
+
+    const colors: DominantColor[] = [];
+    for (const entry of value) {
+      if (isDominantColor(entry)) {
+        colors.push(entry);
+      } else {
+        return null;
+      }
+    }
+
+    return colors;
+  }
+
+  private async regenerateAssetColors(asset: AssetWithColorData): Promise<DominantColor[] | null> {
+    const extension = asset.fileType?.toLowerCase() ?? '';
+
+    if (ColorSearchService.imageExtensions.has(extension)) {
+      return this.extractFromPath(asset.file);
+    }
+
+    if (ColorSearchService.videoExtensions.has(extension) && asset.thumbnail) {
+      return this.extractFromPath(asset.thumbnail);
+    }
+
+    if (!extension || !ColorSearchService.videoExtensions.has(extension)) {
+      const fallbackTargets: Array<{ key: string; label: string }> = [
+        { key: asset.file, label: 'file' },
+      ];
+      if (asset.thumbnail) {
+        fallbackTargets.push({ key: asset.thumbnail, label: 'thumbnail' });
+      }
+
+      for (const target of fallbackTargets) {
+        const colors = await this.extractFromPath(target.key);
+        if (colors && colors.length > 0) {
+          console.warn(
+            `[ColorSearchService] Fallback color extraction succeeded for asset ${asset.id} using ${target.label} (fileType="${asset.fileType}")`
+          );
+          return colors;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  private async extractFromPath(key: string): Promise<DominantColor[] | null> {
+    try {
+      const absolutePath = DataStorage.getPath(key);
+      const colors = await ColorExtractor.extractDominantColors(absolutePath, 3);
+      if (colors.length === 0) {
+        return null;
+      }
+      return colors;
+    } catch (error) {
+      console.error('Failed to extract dominant colors from path', key, error);
+      return null;
+    }
   }
 
   /**

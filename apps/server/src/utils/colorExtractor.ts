@@ -1,5 +1,5 @@
 import fs from 'node:fs';
-import sharp from 'sharp';
+import sharp, { type OutputInfo } from 'sharp';
 
 export interface DominantColor {
   r: number;
@@ -29,7 +29,20 @@ export class ColorExtractor {
         return [];
       }
 
-      return await ColorExtractor.extractColorsWithAdvancedAlgorithm(imagePath, numColors);
+      const refinedPalette = await ColorExtractor.extractColorsWithAdvancedAlgorithm(
+        imagePath,
+        numColors
+      );
+
+      if (refinedPalette.length > 0) {
+        return refinedPalette;
+      }
+
+      console.warn(
+        `[ColorExtractor] Advanced extraction returned no colors, falling back. path="${imagePath}"`
+      );
+
+      return await ColorExtractor.extractFallbackPalette(imagePath, numColors);
     } catch (error) {
       console.error('Error extracting dominant colors:', error);
       return [];
@@ -183,6 +196,72 @@ export class ColorExtractor {
     }
 
     return dominantColors;
+  }
+
+  /**
+   * フィルタリングで色が取得できなかった場合のフォールバック処理
+   * グレースケール画像などでも最低1色は返す
+   */
+  private static async extractFallbackPalette(
+    imagePath: string,
+    numColors: number
+  ): Promise<DominantColor[]> {
+    const image = sharp(imagePath);
+    const { data, info } = await image
+      .resize(150, 150, { fit: 'inside' })
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+
+    if (!info.width || !info.height) {
+      return [];
+    }
+
+    const { width, height, channels } = info;
+    const pixelCount = width * height;
+    if (pixelCount === 0) {
+      return [];
+    }
+
+    const colorCounts = new Map<string, number>();
+    let validPixels = 0;
+
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const index = (y * width + x) * channels;
+        const alpha = channels >= 4 ? data[index + 3] : 255;
+        if (alpha < 16) {
+          continue;
+        }
+
+        const r = data[index];
+        const g = data[index + 1];
+        const b = data[index + 2];
+
+        // 量子化して近似色をまとめる
+        const qr = Math.round(r / 16) * 16;
+        const qg = Math.round(g / 16) * 16;
+        const qb = Math.round(b / 16) * 16;
+        const key = `${qr},${qg},${qb}`;
+
+        colorCounts.set(key, (colorCounts.get(key) ?? 0) + 1);
+        validPixels++;
+      }
+    }
+
+    if (validPixels === 0) {
+      return [];
+    }
+
+    if (colorCounts.size === 0) {
+      const fallbackColor = ColorExtractor.calculateAverageColor(data, info, validPixels);
+      return fallbackColor ? [fallbackColor] : [];
+    }
+
+    const sorted = Array.from(colorCounts.entries()).sort((a, b) => b[1] - a[1]);
+    return sorted.slice(0, numColors).map(([key, count]) => {
+      const [r, g, b] = key.split(',').map(Number);
+      return ColorExtractor.createDominantColor(r, g, b, count / validPixels);
+    });
   }
 
   /**
@@ -403,6 +482,7 @@ export class ColorExtractor {
    */
   static createDominantColor(r: number, g: number, b: number, percentage: number): DominantColor {
     const hsl = ColorExtractor.rgbToHsl(r, g, b);
+    const hueCategory = hsl.s <= 5 ? 'gray' : ColorExtractor.getHueCategory(hsl.h);
     return {
       r,
       g,
@@ -412,7 +492,47 @@ export class ColorExtractor {
       hue: hsl.h,
       saturation: hsl.s,
       lightness: hsl.l,
-      hueCategory: ColorExtractor.getHueCategory(hsl.h),
+      hueCategory,
     };
+  }
+
+  private static calculateAverageColor(
+    data: Buffer,
+    info: OutputInfo,
+    validPixels: number
+  ): DominantColor | null {
+    const { width, height, channels } = info;
+    if (!width || !height || validPixels === 0) {
+      return null;
+    }
+
+    let sumR = 0;
+    let sumG = 0;
+    let sumB = 0;
+    let counted = 0;
+
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const index = (y * width + x) * channels;
+        const alpha = channels >= 4 ? data[index + 3] : 255;
+        if (alpha < 16) {
+          continue;
+        }
+
+        sumR += data[index];
+        sumG += data[index + 1];
+        sumB += data[index + 2];
+        counted++;
+      }
+    }
+
+    if (counted === 0) {
+      return null;
+    }
+
+    const r = Math.round(sumR / counted);
+    const g = Math.round(sumG / counted);
+    const b = Math.round(sumB / counted);
+    return ColorExtractor.createDominantColor(r, g, b, 1);
   }
 }

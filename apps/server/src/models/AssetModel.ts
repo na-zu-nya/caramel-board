@@ -1,4 +1,6 @@
 import fs from 'node:fs';
+import type { FileHandle } from 'node:fs/promises';
+import { open } from 'node:fs/promises';
 import path from 'node:path';
 import type { Asset, Prisma } from '@prisma/client';
 import urlJoin from 'url-join';
@@ -17,6 +19,21 @@ import { StackModel } from './StackModel';
 const prisma = getPrisma();
 const stacksAIClient = getAutoTagClient();
 const autoTagService = new AutoTagService(prisma);
+
+const IMAGE_EXTENSIONS = new Set([
+  'jpg',
+  'jpeg',
+  'png',
+  'gif',
+  'webp',
+  'bmp',
+  'avif',
+  'heic',
+  'heif',
+  'tif',
+  'tiff',
+]);
+const VIDEO_EXTENSIONS = new Set(['mp4', 'mov', 'avi', 'mkv', 'webm']);
 
 const hasErrorCode = (error: unknown): error is { code?: string } =>
   typeof error === 'object' && error !== null && 'code' in error;
@@ -37,6 +54,151 @@ const isDominantColorArray = (value: Prisma.JsonValue | null): value is Dominant
   Array.isArray(value) && value.every(isDominantColor);
 
 export class AssetModel {
+  private static normalizeExtension(ext: string): string {
+    return ext.replace(/^\./, '').toLowerCase();
+  }
+
+  private static canonicalizeExtension(ext: string): string {
+    const normalized = AssetModel.normalizeExtension(ext);
+    if (normalized === 'jpeg') {
+      return 'jpg';
+    }
+    return normalized;
+  }
+
+  private static isImageExtension(ext: string): boolean {
+    return IMAGE_EXTENSIONS.has(ext);
+  }
+
+  private static isVideoExtension(ext: string): boolean {
+    return VIDEO_EXTENSIONS.has(ext);
+  }
+
+  private static isSupportedExtension(ext: string): boolean {
+    return AssetModel.isImageExtension(ext) || AssetModel.isVideoExtension(ext);
+  }
+
+  private static async resolveAssetExtension(
+    sourcePath: string,
+    originalName: string
+  ): Promise<string> {
+    const candidates = [
+      AssetModel.canonicalizeExtension(getFileType(originalName)),
+      AssetModel.canonicalizeExtension(getExtension(originalName)),
+      AssetModel.canonicalizeExtension(path.extname(originalName)),
+      AssetModel.canonicalizeExtension(path.extname(sourcePath)),
+    ].filter((value) => value.length > 0);
+
+    for (const candidate of candidates) {
+      if (AssetModel.isSupportedExtension(candidate)) {
+        return candidate;
+      }
+    }
+
+    const detected = await AssetModel.detectAssetExtension(sourcePath);
+    if (detected && AssetModel.isSupportedExtension(detected)) {
+      return detected;
+    }
+
+    console.warn(
+      candidates.length > 0
+        ? `[AssetModel] Could not resolve a supported extension for "${originalName}" (candidates: ${candidates.join(', ')}). Defaulting to jpg.`
+        : `[AssetModel] Could not determine file extension for "${originalName}". Defaulting to jpg.`
+    );
+    return 'jpg';
+  }
+
+  private static async detectAssetExtension(sourcePath: string): Promise<string | null> {
+    const signature = await AssetModel.readFileSignature(sourcePath, 12);
+    if (!signature) {
+      return null;
+    }
+
+    if (
+      signature.length >= 3 &&
+      signature[0] === 0xff &&
+      signature[1] === 0xd8 &&
+      signature[2] === 0xff
+    ) {
+      return 'jpg';
+    }
+
+    if (
+      signature.length >= 8 &&
+      signature.slice(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+    ) {
+      return 'png';
+    }
+
+    if (signature.length >= 4 && signature.slice(0, 4).toString('ascii') === 'GIF8') {
+      return 'gif';
+    }
+
+    if (signature.length >= 12 && signature.slice(0, 4).toString('ascii') === 'RIFF') {
+      const fourCC = signature.slice(8, 12).toString('ascii');
+      if (fourCC === 'WEBP') {
+        return 'webp';
+      }
+      if (fourCC === 'AVI ') {
+        return 'avi';
+      }
+    }
+
+    if (signature.length >= 2 && signature.slice(0, 2).toString('ascii') === 'BM') {
+      return 'bmp';
+    }
+
+    if (signature.length >= 12 && signature.slice(4, 8).toString('ascii') === 'ftyp') {
+      const brand = signature.slice(8, 12).toString('ascii');
+      if (brand.trim() === 'qt' || brand === 'qt  ') {
+        return 'mov';
+      }
+      if (brand.startsWith('mp') || brand === 'isom' || brand === 'iso2' || brand === 'avc1') {
+        return 'mp4';
+      }
+      if (brand.startsWith('avif')) {
+        return 'avif';
+      }
+      if (brand.startsWith('heic') || brand.startsWith('heif')) {
+        return 'heic';
+      }
+    }
+
+    if (
+      signature.length >= 4 &&
+      signature[0] === 0x1a &&
+      signature[1] === 0x45 &&
+      signature[2] === 0xdf &&
+      signature[3] === 0xa3
+    ) {
+      return 'mkv';
+    }
+
+    return null;
+  }
+
+  private static async readFileSignature(
+    sourcePath: string,
+    length: number
+  ): Promise<Buffer | null> {
+    let handle: FileHandle | null = null;
+    try {
+      handle = await open(sourcePath, 'r');
+      const buffer = Buffer.alloc(length);
+      const { bytesRead } = await handle.read(buffer, 0, length, 0);
+      if (bytesRead <= 0) {
+        return null;
+      }
+      return buffer.slice(0, bytesRead);
+    } catch (error) {
+      console.warn(`[AssetModel] Failed to read file signature for ${sourcePath}:`, error);
+      return null;
+    } finally {
+      if (handle) {
+        await handle.close();
+      }
+    }
+  }
   static async createWithFile(
     sourcePath: string,
     originalName: string,
@@ -45,7 +207,7 @@ export class AssetModel {
   ): Promise<number> {
     console.log('Source', sourcePath);
     const id = await getHash(sourcePath);
-    const ext = getFileType(originalName);
+    const ext = await AssetModel.resolveAssetExtension(sourcePath, originalName);
     console.log('src,type,ext', sourcePath, ext, getExtension(originalName));
     const key = buildAssetKey(dataSetId, id, ext);
 
@@ -97,16 +259,13 @@ export class AssetModel {
     }
 
     // 画像や動画の場合、色を抽出
-    let dominantColors = null;
-    if (ext === 'jpg' || ext === 'jpeg' || ext === 'png' || ext === 'gif' || ext === 'webp') {
+    let dominantColors: DominantColor[] | null = null;
+    if (AssetModel.isImageExtension(ext)) {
       // 画像の場合は元ファイルから抽出
       const localPath = DataStorage.getPath(key);
       dominantColors = await ColorExtractor.extractDominantColors(localPath, 3);
       console.log(`Extracted ${dominantColors.length} dominant colors from image`);
-    } else if (
-      (ext === 'mp4' || ext === 'mov' || ext === 'avi' || ext === 'mkv' || ext === 'webm') &&
-      thumbnailKey
-    ) {
+    } else if (AssetModel.isVideoExtension(ext) && thumbnailKey) {
       // 動画の場合はサムネイルから抽出
       try {
         const thumbnailPath = DataStorage.getPath(thumbnailKey);
@@ -155,7 +314,7 @@ export class AssetModel {
     }
 
     // 画像の場合、バックグラウンドでJoyTag予測を実行し、スタックのAutoTagを更新
-    if (ext === 'jpg' || ext === 'jpeg' || ext === 'png' || ext === 'gif' || ext === 'webp') {
+    if (AssetModel.isImageExtension(ext)) {
       AssetModel.predictTagsAsync(asset.id, key)
         .then(async () => {
           // 個別アセットの予測後、スタック全体のAutoTagを集計
@@ -191,7 +350,7 @@ export class AssetModel {
     const stack = await StackModel.get(asset.stackId);
 
     const hash = await getHash(sourcePath);
-    const fileType = getFileType(originalName);
+    const fileType = await AssetModel.resolveAssetExtension(sourcePath, originalName);
     const file = buildAssetKey(stack.dataSetId, hash, fileType);
 
     // Move
