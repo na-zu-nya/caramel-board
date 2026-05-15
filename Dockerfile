@@ -1,89 +1,106 @@
-# Multi-architecture friendly base image (BuildKit picks the platform automatically).
+# マルチアーキテクチャ対応の共通ベース。
 FROM node:22-bookworm-slim AS base
 ARG TARGETPLATFORM
 ARG BUILDPLATFORM
 ARG TARGETOS
 ARG TARGETARCH
 
-# Log resolved build platforms for troubleshooting.
-RUN echo "BUILDPLATFORM=$BUILDPLATFORM TARGETPLATFORM=$TARGETPLATFORM TARGETOS=$TARGETOS TARGETARCH=$TARGETARCH" \
- && node -e 'console.log("node:",process.version, "arch:",process.arch, "platform:",process.platform)'
+WORKDIR /app
 
-# Install system dependencies in a single non-interactive layer.
+# 依存解決とビルドに必要なツールのみを持つステージ。
+FROM base AS build-deps
 ARG DEBIAN_FRONTEND=noninteractive
+
 RUN set -eux; \
+  echo "BUILDPLATFORM=$BUILDPLATFORM TARGETPLATFORM=$TARGETPLATFORM TARGETOS=$TARGETOS TARGETARCH=$TARGETARCH"; \
+  node -e 'console.log("node:",process.version,"arch:",process.arch,"platform:",process.platform)'; \
   apt-get update; \
   apt-get install -y --no-install-recommends \
     ca-certificates \
-    ffmpeg \
-    curl \
     build-essential \
     python3; \
   rm -rf /var/lib/apt/lists/*
 
-# Relax file descriptor limit for runtime heavy IO.
-RUN ulimit -Sn 65536
-
-WORKDIR /app
-
-# Seed workspace manifests for dependency installation.
+# 依存関係のキャッシュを効かせるため、先にマニフェストだけをコピーする。
 COPY package.json package-lock.json turbo.json ./
 COPY apps/server/package.json ./apps/server/
 COPY apps/client/package.json ./apps/client/
 
-# Install dependencies (node_modules remain inside the image).
-RUN npm ci --no-audit
+RUN npm ci --no-audit --no-fund
 
-# Copy Prisma schema before generating the client.
+# Prisma Client を先に生成してキャッシュを効かせる。
 COPY apps/server/prisma ./apps/server/prisma
 
-# Generate Prisma client early to leverage caching.
 WORKDIR /app/apps/server
 RUN npx prisma generate
 
-# Copy application sources.
+# 実アプリをビルドするステージ。
+FROM build-deps AS builder
+
 WORKDIR /app
 COPY apps/server ./apps/server
 COPY apps/client ./apps/client
 
-# Remove stale static assets from previous builds.
+# 以前のビルド成果物が混ざらないように明示的に削除する。
 RUN rm -rf /app/apps/server/static
 
-# Rebuild esbuild for the container architecture to avoid host binary issues.
+# ホスト依存の esbuild バイナリを避けるため、コンテナ環境で再構築する。
 RUN npm rebuild esbuild --workspace=@caramelboard/server || npm rebuild esbuild || true \
  && npx --yes esbuild --version
 
-# Build client bundle in production mode.
 WORKDIR /app/apps/client
-# Set production env only for the build step.
 ENV NODE_ENV=production
 RUN npm run build
 
-# Build server bundle.
 WORKDIR /app/apps/server
 RUN npm run build
 
-# Sanity check ffmpeg availability.
-RUN ffmpeg -version
+# クライアント成果物をサーバー配信用ディレクトリへ集約する。
+RUN rm -rf /app/apps/server/static \
+ && cp -r /app/apps/client/dist /app/apps/server/static
 
-# Copy client build output into the server static directory.
-RUN rm -rf /app/apps/server/static && \
-    cp -r /app/apps/client/dist /app/apps/server/static && \
-    echo "Static files copied successfully"
+# 実行に必要なものだけを含む軽量ステージ。
+FROM node:22-bookworm-slim AS runtime
+ARG DEBIAN_FRONTEND=noninteractive
 
-# Create a dedicated runtime user.
+WORKDIR /app
+
+RUN set -eux; \
+  apt-get update; \
+  apt-get install -y --no-install-recommends \
+    ca-certificates \
+    ffmpeg; \
+  rm -rf /var/lib/apt/lists/*
+
+COPY package.json package-lock.json ./
+COPY apps/server/package.json ./apps/server/
+COPY apps/server/prisma ./apps/server/prisma
+
+# server ワークスペースの本番依存だけを新規インストールする。
+RUN PRISMA_SKIP_POSTINSTALL_GENERATE=true npm ci --omit=dev --workspace=@caramelboard/server --include-workspace-root=false --no-audit --no-fund
+
+# runtime 側の node_modules 配置に合わせて Prisma Client を生成する。
+WORKDIR /app/apps/server
+RUN npx prisma generate
+WORKDIR /app
+
+COPY --from=builder /app/apps/server/dist ./apps/server/dist
+COPY --from=builder /app/apps/server/static ./apps/server/static
+
+ENV NODE_ENV=production
+ENV PORT=6766
+
 RUN addgroup --system --gid 1001 nodejs \
-  && adduser --system --uid 1001 nodejs
+  && adduser --system --uid 1001 nodejs \
+  && chown -R nodejs:nodejs /app
 
-# Ensure runtime ownership.
-RUN chown -R nodejs:nodejs /app
+USER nodejs
 
 EXPOSE 6766
 
-# Health check served by the application.
+# curl を入れずに Node の fetch でヘルスチェックする。
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
-  CMD curl -f http://localhost:6766/api/v1/health || exit 1
+  CMD ["node", "-e", "fetch('http://127.0.0.1:6766/api/v1/health').then((response)=>{if(!response.ok)process.exit(1);}).catch(()=>process.exit(1));"]
 
-# Default command: start the production server.
 WORKDIR /app/apps/server
 CMD ["npm", "run", "start:prod"]
