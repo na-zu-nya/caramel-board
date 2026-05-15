@@ -17,24 +17,35 @@ export default function StackPageIndicator({
   const [visible, setVisible] = useState(false);
   const timeoutRef = useRef<number | null>(null);
   const firstRenderRef = useRef(true);
+  const previousPageRef = useRef(currentPage);
 
   useEffect(() => {
-    if (totalPages <= 1) return;
+    if (totalPages <= 1) {
+      setVisible(false);
+      previousPageRef.current = currentPage;
+      return;
+    }
+
     // Avoid showing on initial mount
     if (firstRenderRef.current) {
       firstRenderRef.current = false;
-    } else {
+      previousPageRef.current = currentPage;
+    } else if (previousPageRef.current !== currentPage) {
+      previousPageRef.current = currentPage;
       setVisible(true);
       if (timeoutRef.current) window.clearTimeout(timeoutRef.current);
       timeoutRef.current = window.setTimeout(() => setVisible(false), 1000); // show 1s
+    } else {
+      previousPageRef.current = currentPage;
     }
+
     return () => {
       if (timeoutRef.current) {
         window.clearTimeout(timeoutRef.current);
         timeoutRef.current = null;
       }
     };
-  }, [totalPages]);
+  }, [currentPage, totalPages]);
 
   if (totalPages <= 1) return null;
 

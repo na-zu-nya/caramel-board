@@ -30,8 +30,11 @@ interface ImageCarouselProps {
   onImageClick?: (relativeX: number, relativeY?: number) => void;
   className?: string;
   translateX?: number;
-  /** Cmd押下中など、ネイティブのドラッグ＆ドロップを許可する */
-  nativeDragEnabled?: boolean;
+  zoomTransform?: {
+    scale: number;
+    translateX: number;
+    translateY: number;
+  };
   /** シークバーの固定表示位置（オーバーレイより上に出すため） */
   uiInsets?: { top: number; left: number; right: number };
   /** マーカー編集リクエスト（SeekBar のダブルクリックから） */
@@ -49,6 +52,8 @@ export interface ImageCarouselRef {
   getViewportWidth: () => number;
   /** 現在表示中の画像要素（画像時のみ）。動画の場合は null */
   getCurrentImageElement: () => HTMLImageElement | null;
+  /** 現在表示中の画像のズーム対象面（画像時のみ）。動画の場合は null */
+  getCurrentImageSurfaceElement: () => HTMLDivElement | null;
   /** 現在のアセットが動画なら true */
   isCurrentVideo: () => boolean;
   /** 現在の動画の再生/停止をトグル（動画以外は無視） */
@@ -103,7 +108,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
       onImageClick,
       className,
       translateX = 0,
-      nativeDragEnabled = false,
+      zoomTransform = { scale: 1, translateX: 0, translateY: 0 },
       uiInsets,
       onEditMarkerRequest,
     },
@@ -122,6 +127,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
     const containerRef = useRef<HTMLDivElement>(null);
     const backgroundRef = containerRef; // Use container as background ref
     const currentAssetRef = useRef<HTMLDivElement>(null);
+    const currentImageSurfaceRef = useRef<HTMLDivElement | null>(null);
     const nextAssetRef = useRef<HTMLDivElement>(null);
     const prevAssetRef = useRef<HTMLDivElement>(null);
     const currentVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -258,6 +264,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
           const el = currentAssetRef.current?.querySelector('img');
           return (el as HTMLImageElement) || null;
         },
+        getCurrentImageSurfaceElement: () => currentImageSurfaceRef.current,
         isCurrentVideo: () => !!currentVideoRef.current,
         toggleVideo: () => {
           const v = currentVideoRef.current;
@@ -547,6 +554,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
     // Calculate initial styles (transforms will be handled by direct DOM manipulation)
     const getImageStyle = (position: 'current' | 'next' | 'prev') => {
       const opacity = gestureTransform.opacity;
+      const shouldShowNeighbor = gestureTransform.scale === 1 && zoomTransform.scale === 1;
 
       switch (position) {
         case 'current':
@@ -556,12 +564,12 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
           };
         case 'next':
           return {
-            opacity: gestureTransform.scale === 1 ? opacity : 0,
+            opacity: shouldShowNeighbor ? opacity : 0,
             willChange: 'transform',
           };
         case 'prev':
           return {
-            opacity: gestureTransform.scale === 1 ? opacity : 0,
+            opacity: shouldShowNeighbor ? opacity : 0,
             willChange: 'transform',
           };
       }
@@ -589,8 +597,16 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
       const source = getVideoSource(asset);
       const dragStyle: DragImageStyle | undefined = !isVideo
         ? {
-            cursor: nativeDragEnabled ? 'grab' : 'default',
-            WebkitUserDrag: nativeDragEnabled ? 'element' : 'none',
+            cursor: 'default',
+            WebkitUserDrag: 'none',
+          }
+        : undefined;
+      const isCurrentImage = position === 'current' && !isVideo;
+      const zoomStyle: CSSProperties | undefined = isCurrentImage
+        ? {
+            transform: `translate3d(${zoomTransform.translateX}px, ${zoomTransform.translateY}px, 0) scale(${zoomTransform.scale})`,
+            transformOrigin: 'center center',
+            willChange: 'transform',
           }
         : undefined;
 
@@ -639,13 +655,20 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
               poster={asset.thumbnail || asset.thumbnailUrl || undefined}
             />
           ) : (
-            <img
-              src={source || ''}
-              alt={asset.preview || asset.file || asset.url || ''}
-              className="max-w-full max-h-full w-full h-full object-contain select-none"
-              draggable={nativeDragEnabled}
-              style={dragStyle}
-            />
+            <div
+              ref={isCurrentImage ? currentImageSurfaceRef : undefined}
+              className="max-w-full max-h-full w-full h-full flex items-center justify-center"
+            >
+              <div className="w-full h-full flex items-center justify-center" style={zoomStyle}>
+                <img
+                  src={source || ''}
+                  alt={asset.preview || asset.file || asset.url || ''}
+                  className="max-w-full max-h-full w-full h-full object-contain select-none"
+                  draggable={false}
+                  style={dragStyle}
+                />
+              </div>
+            </div>
           )}
         </div>
       );

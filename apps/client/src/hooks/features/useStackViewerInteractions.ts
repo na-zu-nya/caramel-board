@@ -10,6 +10,7 @@ export interface ImageCarouselBridge {
   updateVerticalTransform: (y: number, scale: number, opacity: number, bg?: number) => void;
   getViewportWidth: () => number;
   getCurrentImageElement: () => HTMLImageElement | null;
+  getCurrentImageSurfaceElement: () => HTMLDivElement | null;
 }
 
 export function useStackViewerInteractions(params: {

@@ -5,19 +5,14 @@ import { GalleryVerticalEnd, Info, NotebookText, PenTool, Pipette, Trash2 } from
 import MersenneTwister from 'mersenne-twister';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuSeparator,
-  ContextMenuTrigger,
-} from '@/components/ui/context-menu';
 import { FullPageDropZone } from '@/components/ui/DropZone';
 import { HeaderIconButton } from '@/components/ui/Header/HeaderIconButton';
 import MarkerEditorDialog from '@/components/ui/SeekBar/MarkerEditorDialog';
 import { useStackNavigation } from '@/hooks/features/useStackNavigation';
 import { useStackViewer } from '@/hooks/features/useStackViewer';
 import { useStackViewerInteractions } from '@/hooks/features/useStackViewerInteractions';
+import { useStackViewerZoom } from '@/hooks/features/useStackViewerZoom';
+import { useViewerContextMenu } from '@/hooks/features/useViewerContextMenu';
 import { useHeaderActions } from '@/hooks/useHeaderActions';
 import { useScratch } from '@/hooks/useScratch';
 import { useViewContext } from '@/hooks/useViewContext';
@@ -49,6 +44,14 @@ interface StackViewerProps {
   mediaType: string;
   stackId: string;
   listToken?: string;
+}
+
+interface ViewerShellProps {
+  children: React.ReactNode;
+  isReorderMode: boolean;
+  isPenMode: boolean;
+  onDrop: (files: File[]) => void;
+  onUrlDrop: (urls: string[]) => void;
 }
 
 const assetNameCollator = new Intl.Collator(undefined, {
@@ -104,6 +107,23 @@ const sortAssetsByPreset = (assets: Asset[], preset: AssetSortPreset) => {
 
   return sorted.map((asset, index) => ({ ...asset, orderInStack: index }));
 };
+
+function ViewerShell({ children, isReorderMode, isPenMode, onDrop, onUrlDrop }: ViewerShellProps) {
+  // 並び替え中は誤ドロップを避けるため、ドロップゾーンを外す。
+  if (isReorderMode) return <>{children}</>;
+
+  return (
+    <FullPageDropZone
+      onDrop={onDrop}
+      onUrlDrop={onUrlDrop}
+      accept="image/*,video/*,application/pdf"
+      multiple
+      disabled={isPenMode}
+    >
+      {children}
+    </FullPageDropZone>
+  );
+}
 
 export default function StackViewer({
   datasetId,
@@ -193,42 +213,47 @@ export default function StackViewer({
   const currentVerticalOffsetRef = useRef(0);
   const verticalAnimRef = useRef<number | null>(null);
   const lockedScrollYRef = useRef(0);
-  const [isZoomed, setIsZoomed] = useState(false);
+  const {
+    isOpen: isViewerContextMenuOpen,
+    position: viewerContextMenuPosition,
+    menuRef: viewerContextMenuRef,
+    close: closeViewerContextMenu,
+    cancelPendingOpen: cancelPendingViewerContextMenu,
+    triggerProps: viewerContextMenuTriggerProps,
+  } = useViewerContextMenu();
   // ピッカー状態: 手動トグルとAltホールドのOR
   const [isColorPickerManual, setIsColorPickerManual] = useState(false);
   const [isColorPickerAlt, setIsColorPickerAlt] = useState(false);
   const isColorPicker = isColorPickerManual || isColorPickerAlt;
   // ペンモード
   const [isPenMode, setIsPenMode] = useState(false);
-  // Cmd(Meta)押下中はネイティブD&D優先
-  const [isMetaDragMode, setIsMetaDragMode] = useState(false);
-  // 検証用: UIからネイティブD&Dモードを固定ON/OFFできるようにする
-  const [isDragModePinned, setIsDragModePinned] = useState(false);
-  const isNativeDragMode = isMetaDragMode || isDragModePinned;
-  const canUseNativeDragMode = !!currentAsset && !isCurrentVideoAsset;
   const canUseImageTools = !!currentAsset && !isCurrentVideoAsset && !isListMode;
-  // 一時的に再生状態を退避（Alt/Meta押下時のリマウント対策）
-  const savedPlaybackRef = useRef<{ time: number; wasPlaying: boolean } | null>(null);
   const markerDialogPlaybackRef = useRef<{ time: number; wasPlaying: boolean } | null>(null);
-  const savedVVRef = useRef<{ x: number; y: number; ts: number } | null>(null);
-  const captureVisualViewport = useCallback(() => {
-    const vv: any = (window as any).visualViewport;
-    const x = vv?.offsetLeft ?? window.scrollX ?? 0;
-    const y = vv?.offsetTop ?? window.scrollY ?? 0;
-    savedVVRef.current = { x, y, ts: Date.now() };
-  }, []);
-  const restoreVisualViewport = useCallback((tries = 10) => {
-    const saved = savedVVRef.current;
-    if (!saved) return;
-    const { x, y } = saved;
-    let attempt = 0;
-    const step = () => {
-      window.scrollTo(x, y);
-      attempt++;
-      if (attempt < tries) requestAnimationFrame(step);
-    };
-    requestAnimationFrame(step);
-  }, []);
+  const canUseImageZoom = canUseImageTools && !isColorPicker && !isPenMode;
+  const getZoomImageElement = useCallback(
+    () => imageCarouselRef.current?.getCurrentImageElement() || null,
+    [imageCarouselRef]
+  );
+  const getZoomSurfaceElement = useCallback(
+    () => imageCarouselRef.current?.getCurrentImageSurfaceElement() || null,
+    [imageCarouselRef]
+  );
+  const {
+    zoomTransform,
+    isZoomed,
+    resetZoom,
+    zoomWithWheel,
+    startPinch,
+    updatePinch,
+    endPinch,
+    panBy,
+  } = useStackViewerZoom({
+    enabled: canUseImageZoom,
+    assetKey: currentAsset?.id ?? null,
+    getImageElement: getZoomImageElement,
+    getSurfaceElement: getZoomSurfaceElement,
+    maxScale: 10,
+  });
   const handlePenModeToggle = useCallback(() => {
     if (!canUseImageTools) return;
     setIsPenMode((prev) => {
@@ -236,35 +261,25 @@ export default function StackViewer({
       if (next) {
         setIsColorPickerAlt(false);
         setIsColorPickerManual(false);
-        setIsDragModePinned(false);
+        resetZoom();
       }
       return next;
     });
-  }, [canUseImageTools]);
+  }, [canUseImageTools, resetZoom]);
   const handleColorPickerToggle = useCallback(() => {
     if (!canUseImageTools) return;
     setIsPenMode(false);
-    setIsDragModePinned(false);
+    resetZoom();
     setIsColorPickerManual((prev) => !prev);
-  }, [canUseImageTools]);
-  const handleDragModeToggle = useCallback(() => {
-    if (!canUseNativeDragMode) return;
-    setIsPenMode(false);
-    setIsColorPickerAlt(false);
-    setIsColorPickerManual(false);
-    setIsMetaDragMode(false);
-    setIsDragModePinned((prev) => !prev);
-  }, [canUseNativeDragMode]);
+  }, [canUseImageTools, resetZoom]);
   const handleInfoSidebarToggle = useCallback(() => {
     if (!isInfoSidebarOpen) setSelectionMode(false);
     setIsInfoSidebarOpen(!isInfoSidebarOpen);
   }, [isInfoSidebarOpen, setIsInfoSidebarOpen, setSelectionMode]);
-
-  useEffect(() => {
-    if (!canUseNativeDragMode && isDragModePinned) {
-      setIsDragModePinned(false);
-    }
-  }, [canUseNativeDragMode, isDragModePinned]);
+  const handleContextMenuCancelRequest = useCallback(() => {
+    cancelPendingViewerContextMenu();
+    closeViewerContextMenu();
+  }, [cancelPendingViewerContextMenu, closeViewerContextMenu]);
 
   useEffect(() => {
     if (canUseImageTools) return;
@@ -417,6 +432,43 @@ export default function StackViewer({
     setSelectedItemId,
     stack,
   ]);
+  const handleContextMenuInfo = useCallback(() => {
+    if (!stack) return;
+    closeViewerContextMenu();
+    setSelectedItemId(stack.id);
+    setIsInfoSidebarOpen(true);
+  }, [closeViewerContextMenu, setIsInfoSidebarOpen, setSelectedItemId, stack]);
+  const handleContextMenuFindSimilar = useCallback(async () => {
+    if (!stack) return;
+    closeViewerContextMenu();
+    const id = typeof stack.id === 'string' ? Number.parseInt(stack.id, 10) : (stack.id as number);
+    await navigate({
+      to: '/library/$datasetId/stacks/$stackId/similar',
+      params: { datasetId, stackId: String(id) },
+    });
+  }, [closeViewerContextMenu, datasetId, navigate, stack]);
+  const handleContextMenuAddToScratch = useCallback(async () => {
+    if (!stack) return;
+    closeViewerContextMenu();
+
+    try {
+      const sc = await ensureScratch();
+      const id =
+        typeof stack.id === 'string' ? Number.parseInt(stack.id, 10) : (stack.id as number);
+      await apiClient.addStackToCollection(sc.id, id);
+      await queryClient.invalidateQueries({ queryKey: ['stacks'] });
+      await queryClient.invalidateQueries({
+        queryKey: ['library-counts', datasetId],
+      });
+      await queryClient.refetchQueries({ queryKey: ['library-counts', datasetId] });
+    } catch (e) {
+      console.error('Failed to add to Scratch', e);
+    }
+  }, [closeViewerContextMenu, datasetId, ensureScratch, queryClient, stack]);
+  const handleContextMenuDelete = useCallback(() => {
+    closeViewerContextMenu();
+    void handleDeleteCurrentStack();
+  }, [closeViewerContextMenu, handleDeleteCurrentStack]);
 
   // --- Marker editor state ---
   const [markerEditor, setMarkerEditor] = useState<{
@@ -464,40 +516,6 @@ export default function StackViewer({
       setSelectedItemId(stack.id);
     }
   }, [isInfoSidebarOpen, stack?.id, setSelectedItemId, stack]);
-
-  // Track viewport zoom (iOS pinch-zoom)
-  useEffect(() => {
-    const updateZoom = () => {
-      const s = (window as any).visualViewport?.scale ?? 1;
-      setIsZoomed(Math.abs(s - 1) > 0.01);
-    };
-    updateZoom();
-    const vv: any = (window as any).visualViewport;
-    if (vv) {
-      vv.addEventListener('resize', updateZoom);
-      vv.addEventListener('scroll', updateZoom);
-    } else {
-      window.addEventListener('resize', updateZoom);
-    }
-    return () => {
-      if (vv) {
-        vv.removeEventListener('resize', updateZoom);
-        vv.removeEventListener('scroll', updateZoom);
-      } else {
-        window.removeEventListener('resize', updateZoom);
-      }
-    };
-  }, []);
-
-  // After page/stack change, if zoomed and we recently captured viewport, restore it
-  useEffect(() => {
-    if (!isZoomed) return;
-    const saved = savedVVRef.current;
-    if (!saved) return;
-    if (Date.now() - saved.ts > 1500) return;
-    // Restore over multiple frames to fight reflow
-    restoreVisualViewport(12);
-  }, [isZoomed, restoreVisualViewport]);
 
   // Expose shuffle button in header
   useHeaderActions({
@@ -556,21 +574,6 @@ export default function StackViewer({
       const hasModifier = e.metaKey || e.ctrlKey || e.altKey || e.shiftKey;
       const refAny = imageCarouselRef.current as any;
       const isCurrentVideo = !!refAny?.isCurrentVideo?.();
-      const isVideoAssetCurrent = isVideoAsset(currentAsset);
-      // Cmd(Meta)押下 → ネイティブD&Dモード
-      if (e.key === 'Meta') {
-        if (isVideoAssetCurrent) return;
-        if (isCurrentVideo) {
-          savedPlaybackRef.current = {
-            time: Number(refAny?.getCurrentTime?.() ?? 0),
-            wasPlaying: !!refAny?.getIsPlaying?.(),
-          };
-        }
-        setIsMetaDragMode(true);
-        (imageCarouselRef.current as any)?.requestRestorePlayback?.(
-          savedPlaybackRef.current || undefined
-        );
-      }
       if (isColorPicker && e.key === 'Escape') {
         e.stopPropagation();
         e.preventDefault();
@@ -659,12 +662,10 @@ export default function StackViewer({
       }
       switch (e.key) {
         case 'ArrowLeft':
-          if (isZoomed) captureVisualViewport();
           if (stack && currentPage < stack.assets.length - 1) setCurrentPage((p) => p + 1);
           else if (mediaType !== 'comic') onLeftTap();
           break;
         case 'ArrowRight':
-          if (isZoomed) captureVisualViewport();
           if (currentPage > 0) setCurrentPage((p) => p - 1);
           else if (mediaType !== 'comic') onRightTap();
           break;
@@ -693,35 +694,9 @@ export default function StackViewer({
           break;
       }
     };
-    const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.key === 'Meta') {
-        setIsMetaDragMode(false);
-      }
-    };
-    const handleBlur = () => {
-      setIsMetaDragMode(false);
-    };
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!e.metaKey) {
-        setIsMetaDragMode(false);
-      }
-    };
-    const handleDragEnd = (e: DragEvent) => {
-      if (!e.metaKey) {
-        setIsMetaDragMode(false);
-      }
-    };
     window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
-    window.addEventListener('blur', handleBlur);
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('dragend', handleDragEnd);
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
-      window.removeEventListener('blur', handleBlur);
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('dragend', handleDragEnd);
     };
   }, [
     currentPage,
@@ -737,8 +712,6 @@ export default function StackViewer({
     handleShuffle,
     isColorPicker,
     canUseImageTools,
-    captureVisualViewport,
-    isZoomed,
     imageCarouselRef,
     currentAsset,
     datasetId,
@@ -865,24 +838,13 @@ export default function StackViewer({
   const gestureState = { translateX: 0, translateY: 0, scale: 1, opacity: 1 };
   const isGesturing = false;
 
-  const ViewerShell = ({ children }: { children: React.ReactNode }) => {
-    // Disable drop zone while reordering to avoid accidental uploads
-    if (isReorderMode) return <>{children}</>;
-    return (
-      <FullPageDropZone
-        onDrop={handleFileDrop}
-        onUrlDrop={handleUrlDrop}
-        accept="image/*,video/*,application/pdf"
-        multiple
-        disabled={isNativeDragMode || isPenMode}
-      >
-        {children}
-      </FullPageDropZone>
-    );
-  };
-
   return (
-    <ViewerShell>
+    <ViewerShell
+      isReorderMode={isReorderMode}
+      isPenMode={isPenMode}
+      onDrop={handleFileDrop}
+      onUrlDrop={handleUrlDrop}
+    >
       <div
         className="fixed top-0 left-0 right-0 bottom-0 bg-black"
         id="stack-viewer-container"
@@ -902,208 +864,148 @@ export default function StackViewer({
           )}
         >
           {!isListMode ? (
-            <ContextMenu>
-              <ContextMenuTrigger asChild>
-                <div className="relative w-full h-full">
-                  <ImageCarousel
-                    ref={imageCarouselRef as any}
-                    currentAsset={currentAsset}
-                    nextAsset={nextAsset}
-                    prevAsset={prevAsset}
-                    markers={getMarkersFor(currentAsset)}
-                    onEditMarkerRequest={(marker, index) => openMarkerEditor(marker as any, index)}
-                    gestureTransform={gestureState}
-                    translateX={dragOffset}
-                    nativeDragEnabled={isNativeDragMode}
-                    uiInsets={{
-                      top: 56,
-                      left: sidebarOpen ? 320 : 0,
-                      right: isInfoSidebarOpen ? 320 : 0,
-                    }}
-                    className="w-full h-full"
-                  />
-                  <TapZoneOverlay
-                    enabled={!isListMode && !isColorPicker && !isNativeDragMode && !isPenMode}
-                    // Leave safe area at bottom so toolbar remains clickable
-                    contentArea={{
-                      top: 14,
-                      left: sidebarOpen ? 320 : 0,
-                      right: isInfoSidebarOpen ? 320 : 0,
-                      bottom: 96,
-                    }}
-                    disableDrag={isZoomed || isColorPicker || isNativeDragMode || isPenMode}
-                    canGoLeft={stack ? currentPage < stack.assets.length - 1 : false}
-                    canGoRight={stack ? currentPage > 0 : false}
-                    onLeftTap={() => {
-                      if (isZoomed) captureVisualViewport();
-                      onLeftTap();
-                    }}
-                    onRightTap={() => {
-                      if (isZoomed) captureVisualViewport();
-                      onRightTap();
-                    }}
-                    onCenterTap={() => {
-                      // Move無しのクリック/タップ: 動画なら再生/停止をトグル
-                      const ref = imageCarouselRef.current as any;
-                      if (ref && typeof ref.isCurrentVideo === 'function' && ref.isCurrentVideo()) {
-                        if (typeof ref.toggleVideo === 'function') ref.toggleVideo();
+            <div
+              className="relative w-full h-full"
+              style={{ WebkitTouchCallout: 'none', userSelect: 'none' }}
+              {...viewerContextMenuTriggerProps}
+            >
+              <ImageCarousel
+                ref={imageCarouselRef as any}
+                currentAsset={currentAsset}
+                nextAsset={nextAsset}
+                prevAsset={prevAsset}
+                markers={getMarkersFor(currentAsset)}
+                onEditMarkerRequest={(marker, index) => openMarkerEditor(marker as any, index)}
+                gestureTransform={gestureState}
+                translateX={dragOffset}
+                zoomTransform={zoomTransform}
+                uiInsets={{
+                  top: 56,
+                  left: sidebarOpen ? 320 : 0,
+                  right: isInfoSidebarOpen ? 320 : 0,
+                }}
+                className="w-full h-full"
+              />
+              <TapZoneOverlay
+                enabled={!isListMode && !isColorPicker && !isPenMode}
+                // Leave safe area at bottom so toolbar remains clickable
+                contentArea={{
+                  top: 14,
+                  left: sidebarOpen ? 320 : 0,
+                  right: isInfoSidebarOpen ? 320 : 0,
+                  bottom: 96,
+                }}
+                disableDrag={isZoomed || isColorPicker || isPenMode}
+                isZoomed={isZoomed}
+                canGoLeft={stack ? currentPage < stack.assets.length - 1 : false}
+                canGoRight={stack ? currentPage > 0 : false}
+                onLeftTap={onLeftTap}
+                onRightTap={onRightTap}
+                onWheelZoom={
+                  canUseImageZoom && !isViewerContextMenuOpen ? zoomWithWheel : undefined
+                }
+                onPinchStart={canUseImageZoom && !isViewerContextMenuOpen ? startPinch : undefined}
+                onPinchZoom={canUseImageZoom && !isViewerContextMenuOpen ? updatePinch : undefined}
+                onPinchEnd={canUseImageZoom && !isViewerContextMenuOpen ? endPinch : undefined}
+                onZoomPan={canUseImageZoom && !isViewerContextMenuOpen ? panBy : undefined}
+                onContextMenuCancelRequest={handleContextMenuCancelRequest}
+                onCenterTap={() => {
+                  // Move無しのクリック/タップ: 動画なら再生/停止をトグル
+                  const ref = imageCarouselRef.current as any;
+                  if (ref && typeof ref.isCurrentVideo === 'function' && ref.isCurrentVideo()) {
+                    if (typeof ref.toggleVideo === 'function') ref.toggleVideo();
+                  }
+                }}
+                onDrag={(dx) => {
+                  if (isZoomed) return;
+                  onDrag(dx);
+                }}
+                onDragEnd={(dx, velocity) => {
+                  if (isZoomed) return;
+                  onDragEnd(dx, velocity);
+                }}
+                onVerticalDrag={(deltaY, progress) => {
+                  if (isZoomed) return;
+                  if (!imageCarouselRef.current) return;
+                  // Default vertical dismiss behavior
+                  verticalAnimRef.current && cancelAnimationFrame(verticalAnimRef.current);
+                  currentVerticalOffsetRef.current += deltaY;
+                  const scale = Math.max(0, 1 - progress * 0.5);
+                  const opacity = Math.max(0, 1 - progress * 0.7);
+                  const bg = Math.max(0, Math.min(1, progress));
+                  imageCarouselRef.current.updateVerticalTransform(
+                    currentVerticalOffsetRef.current,
+                    scale,
+                    opacity,
+                    bg
+                  );
+                }}
+                onVerticalDragEnd={(_, velocity, progress) => {
+                  if (isZoomed) return;
+                  if (!imageCarouselRef.current) return;
+                  verticalAnimRef.current && cancelAnimationFrame(verticalAnimRef.current);
+                  const dismissThreshold = 0.8;
+                  const velocityThreshold = 600;
+                  if (progress > dismissThreshold || velocity > velocityThreshold) {
+                    const containerEl = document.getElementById('stack-viewer-container');
+                    if (containerEl) {
+                      containerEl.style.backgroundColor = 'white';
+                      containerEl.style.transition = 'none';
+                    }
+                    const isUpward = currentVerticalOffsetRef.current < 0;
+                    const targetOffset = (isUpward ? -1 : 1) * window.innerHeight * 1.2;
+                    const step = () => {
+                      const cur = currentVerticalOffsetRef.current;
+                      const nx = cur + (targetOffset - cur) * 0.15;
+                      currentVerticalOffsetRef.current = nx;
+                      const animProgress = Math.abs(nx) / window.innerHeight;
+                      const scale = Math.max(0, 1 - animProgress * 0.5);
+                      const opacity = Math.max(0, 1 - animProgress);
+                      const bg = Math.min(1, animProgress);
+                      imageCarouselRef.current!.updateVerticalTransform(nx, scale, opacity, bg);
+                      if (bg >= 1) {
+                        verticalAnimRef.current = null;
+                        if (isUpward) {
+                          navigate({
+                            to: '/library/$datasetId/stacks/$stackId/similar',
+                            params: { datasetId, stackId },
+                          });
+                        } else {
+                          navigateBack();
+                        }
+                        return;
                       }
-                    }}
-                    onDrag={(dx) => {
-                      if (isZoomed) return;
-                      onDrag(dx);
-                    }}
-                    onDragEnd={(dx, velocity) => {
-                      if (isZoomed) return;
-                      onDragEnd(dx, velocity);
-                    }}
-                    onVerticalDrag={(deltaY, progress) => {
-                      if (isZoomed) return;
-                      if (!imageCarouselRef.current) return;
-                      // Default vertical dismiss behavior
-                      verticalAnimRef.current && cancelAnimationFrame(verticalAnimRef.current);
-                      currentVerticalOffsetRef.current += deltaY;
-                      const scale = Math.max(0, 1 - progress * 0.5);
-                      const opacity = Math.max(0, 1 - progress * 0.7);
-                      const bg = Math.max(0, Math.min(1, progress));
-                      imageCarouselRef.current.updateVerticalTransform(
-                        currentVerticalOffsetRef.current,
+                      verticalAnimRef.current = requestAnimationFrame(step);
+                    };
+                    verticalAnimRef.current = requestAnimationFrame(step);
+                  } else {
+                    // Return to center
+                    const step = () => {
+                      const cur = currentVerticalOffsetRef.current;
+                      const nx = cur + (0 - cur) * 0.15;
+                      if (Math.abs(nx) < 0.5) {
+                        currentVerticalOffsetRef.current = 0;
+                        imageCarouselRef.current!.updateVerticalTransform(0, 1, 1, 0);
+                        verticalAnimRef.current = null;
+                        return;
+                      }
+                      currentVerticalOffsetRef.current = nx;
+                      const prog = Math.abs(nx) / window.innerHeight;
+                      const scale = Math.max(0, 1 - prog * 0.5);
+                      const opacity = Math.max(0, 1 - prog * 0.7);
+                      imageCarouselRef.current!.updateVerticalTransform(
+                        nx,
                         scale,
                         opacity,
-                        bg
+                        Math.max(0, Math.min(1, prog))
                       );
-                    }}
-                    onVerticalDragEnd={(_, velocity, progress) => {
-                      if (isZoomed) return;
-                      if (!imageCarouselRef.current) return;
-                      verticalAnimRef.current && cancelAnimationFrame(verticalAnimRef.current);
-                      const dismissThreshold = 0.8;
-                      const velocityThreshold = 600;
-                      if (progress > dismissThreshold || velocity > velocityThreshold) {
-                        const containerEl = document.getElementById('stack-viewer-container');
-                        if (containerEl) {
-                          containerEl.style.backgroundColor = 'white';
-                          containerEl.style.transition = 'none';
-                        }
-                        const isUpward = currentVerticalOffsetRef.current < 0;
-                        const targetOffset = (isUpward ? -1 : 1) * window.innerHeight * 1.2;
-                        const step = () => {
-                          const cur = currentVerticalOffsetRef.current;
-                          const nx = cur + (targetOffset - cur) * 0.15;
-                          currentVerticalOffsetRef.current = nx;
-                          const animProgress = Math.abs(nx) / window.innerHeight;
-                          const scale = Math.max(0, 1 - animProgress * 0.5);
-                          const opacity = Math.max(0, 1 - animProgress);
-                          const bg = Math.min(1, animProgress);
-                          imageCarouselRef.current!.updateVerticalTransform(nx, scale, opacity, bg);
-                          if (bg >= 1) {
-                            verticalAnimRef.current = null;
-                            if (isUpward) {
-                              navigate({
-                                to: '/library/$datasetId/stacks/$stackId/similar',
-                                params: { datasetId, stackId },
-                              });
-                            } else {
-                              navigateBack();
-                            }
-                            return;
-                          }
-                          verticalAnimRef.current = requestAnimationFrame(step);
-                        };
-                        verticalAnimRef.current = requestAnimationFrame(step);
-                      } else {
-                        // Return to center
-                        const step = () => {
-                          const cur = currentVerticalOffsetRef.current;
-                          const nx = cur + (0 - cur) * 0.15;
-                          if (Math.abs(nx) < 0.5) {
-                            currentVerticalOffsetRef.current = 0;
-                            imageCarouselRef.current!.updateVerticalTransform(0, 1, 1, 0);
-                            verticalAnimRef.current = null;
-                            return;
-                          }
-                          currentVerticalOffsetRef.current = nx;
-                          const prog = Math.abs(nx) / window.innerHeight;
-                          const scale = Math.max(0, 1 - prog * 0.5);
-                          const opacity = Math.max(0, 1 - prog * 0.7);
-                          imageCarouselRef.current!.updateVerticalTransform(
-                            nx,
-                            scale,
-                            opacity,
-                            Math.max(0, Math.min(1, prog))
-                          );
-                          verticalAnimRef.current = requestAnimationFrame(step);
-                        };
-                        verticalAnimRef.current = requestAnimationFrame(step);
-                      }
-                    }}
-                  />
-                </div>
-              </ContextMenuTrigger>
-              <ContextMenuContent className="w-48">
-                <ContextMenuItem
-                  onClick={() => {
-                    if (!stack) return;
-                    setSelectedItemId(stack.id);
-                    setIsInfoSidebarOpen(true);
-                  }}
-                  disabled={!stack}
-                >
-                  <Info className="w-4 h-4 mr-2" />
-                  Info
-                </ContextMenuItem>
-                <ContextMenuItem
-                  onClick={async () => {
-                    if (!stack) return;
-                    const id =
-                      typeof stack.id === 'string'
-                        ? Number.parseInt(stack.id, 10)
-                        : (stack.id as number);
-                    await navigate({
-                      to: '/library/$datasetId/stacks/$stackId/similar',
-                      params: { datasetId, stackId: String(id) },
-                    });
-                  }}
-                  disabled={!stack}
-                >
-                  <GalleryVerticalEnd className="w-4 h-4 mr-2" />
-                  Find similar
-                </ContextMenuItem>
-                <ContextMenuItem
-                  onClick={async () => {
-                    if (!stack) return;
-                    try {
-                      const sc = await ensureScratch();
-                      const id =
-                        typeof stack.id === 'string'
-                          ? Number.parseInt(stack.id, 10)
-                          : (stack.id as number);
-                      await apiClient.addStackToCollection(sc.id, id);
-                      await queryClient.invalidateQueries({ queryKey: ['stacks'] });
-                      await queryClient.invalidateQueries({
-                        queryKey: ['library-counts', datasetId],
-                      });
-                      await queryClient.refetchQueries({ queryKey: ['library-counts', datasetId] });
-                    } catch (e) {
-                      console.error('Failed to add to Scratch', e);
-                    }
-                  }}
-                  disabled={!stack}
-                >
-                  <NotebookText className="w-4 h-4 mr-2" />
-                  Add to Scratch
-                </ContextMenuItem>
-                <ContextMenuSeparator />
-                <ContextMenuItem
-                  className="text-red-600 focus:text-red-600 hover:text-red-600"
-                  onClick={handleDeleteCurrentStack}
-                  disabled={!stack}
-                >
-                  <Trash2 className="w-4 h-4 mr-2" />
-                  Delete
-                </ContextMenuItem>
-              </ContextMenuContent>
-            </ContextMenu>
+                      verticalAnimRef.current = requestAnimationFrame(step);
+                    };
+                    verticalAnimRef.current = requestAnimationFrame(step);
+                  }
+                }}
+              />
+            </div>
           ) : (
             <AssetGrid
               assets={isReorderMode && pendingOrder ? pendingOrder : stack.assets}
@@ -1185,6 +1087,56 @@ export default function StackViewer({
             />
           )}
 
+          {isViewerContextMenuOpen && !isListMode && (
+            <div
+              ref={viewerContextMenuRef}
+              className="fixed z-50 w-48 overflow-hidden rounded-md border border-gray-200 bg-white p-1 text-gray-700 shadow-md"
+              style={{
+                left: viewerContextMenuPosition.x,
+                top: viewerContextMenuPosition.y,
+              }}
+              role="menu"
+            >
+              <button
+                type="button"
+                className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-left text-[13px] outline-none transition-colors hover:bg-gray-100 hover:text-gray-700"
+                onClick={handleContextMenuInfo}
+                role="menuitem"
+              >
+                <Info className="w-4 h-4 mr-2" />
+                Info
+              </button>
+              <button
+                type="button"
+                className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-left text-[13px] outline-none transition-colors hover:bg-gray-100 hover:text-gray-700"
+                onClick={() => void handleContextMenuFindSimilar()}
+                role="menuitem"
+              >
+                <GalleryVerticalEnd className="w-4 h-4 mr-2" />
+                Find similar
+              </button>
+              <button
+                type="button"
+                className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-left text-[13px] outline-none transition-colors hover:bg-gray-100 hover:text-gray-700"
+                onClick={() => void handleContextMenuAddToScratch()}
+                role="menuitem"
+              >
+                <NotebookText className="w-4 h-4 mr-2" />
+                Add to Scratch
+              </button>
+              <div className="-mx-1 my-1 h-px bg-border" />
+              <button
+                type="button"
+                className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-left text-[13px] text-red-600 outline-none transition-colors hover:bg-gray-100 hover:text-red-600"
+                onClick={handleContextMenuDelete}
+                role="menuitem"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Delete
+              </button>
+            </div>
+          )}
+
           <StackPageIndicator
             currentPage={currentPage}
             totalPages={stack.assets.length}
@@ -1203,7 +1155,7 @@ export default function StackViewer({
       </div>
 
       {/* Pen overlay (draws above content, below header) */}
-      {isPenMode && !isNativeDragMode && (
+      {isPenMode && (
         <PenOverlay
           leftInset={sidebarOpen ? 320 : 0}
           rightInset={isInfoSidebarOpen ? 320 : 0}
@@ -1242,18 +1194,6 @@ export default function StackViewer({
 
       {createPortal(
         <HeaderIconButton
-          onClick={handleDragModeToggle}
-          isActive={isNativeDragMode}
-          disabled={!canUseNativeDragMode}
-          aria-label={isNativeDragMode ? 'Exit drag mode' : 'Enter drag mode'}
-        >
-          <span className="text-[11px] font-semibold leading-none">DRAG</span>
-        </HeaderIconButton>,
-        document.getElementById('header-actions') || document.body
-      )}
-
-      {createPortal(
-        <HeaderIconButton
           onClick={handleInfoSidebarToggle}
           isActive={isInfoSidebarOpen}
           aria-label={isInfoSidebarOpen ? 'Close info panel' : 'Open info panel'}
@@ -1263,7 +1203,7 @@ export default function StackViewer({
         document.getElementById('header-actions') || document.body
       )}
 
-      {isColorPicker && !isNativeDragMode && (
+      {isColorPicker && (
         <ColorPickerOverlay
           getImageEl={() => imageCarouselRef.current?.getCurrentImageElement() || null}
           onCancel={() => {
