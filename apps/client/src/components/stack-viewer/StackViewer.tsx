@@ -154,6 +154,7 @@ export default function StackViewer({
     isListMode,
     setIsListMode,
     handleFavoriteToggle,
+    handleAssetFavoriteToggle,
     handleLikeToggle,
     refetch,
   } = useStackViewer({ datasetId, mediaType, stackId });
@@ -1147,7 +1148,9 @@ export default function StackViewer({
             stack={stack}
             isListMode={isListMode}
             isGesturing={isGesturing}
-            onFavoriteToggle={handleFavoriteToggle}
+            isCurrentAssetFavorited={Boolean(currentAsset?.favorited ?? currentAsset?.isFavorite)}
+            onStackFavoriteToggle={handleFavoriteToggle}
+            onAssetFavoriteToggle={handleAssetFavoriteToggle}
             onLikeToggle={handleLikeToggle}
             onListModeToggle={() => setIsListMode((prev) => !prev)}
           />

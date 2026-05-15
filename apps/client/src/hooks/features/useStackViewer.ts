@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation, useSearch } from '@tanstack/react-router';
 import { useSetAtom } from 'jotai';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -20,6 +20,7 @@ interface UseStackViewerReturn {
   isListMode: boolean;
   setIsListMode: (mode: boolean | ((prev: boolean) => boolean)) => void;
   handleFavoriteToggle: () => Promise<void>;
+  handleAssetFavoriteToggle: () => Promise<void>;
   handleLikeToggle: () => Promise<void>;
   refetch: () => void;
 }
@@ -33,6 +34,7 @@ export function useStackViewer({
   const [isListMode, setIsListMode] = useState(false);
   const setSelectedItemId = useSetAtom(selectedItemIdAtom);
   const setIsInfoSidebarOpen = useSetAtom(infoSidebarOpenAtom);
+  const queryClient = useQueryClient();
   const location = useLocation();
   const previousLocationRef = useRef(location);
 
@@ -86,16 +88,32 @@ export function useStackViewer({
     }
   }, [stack, currentPage]);
 
-  // Favorite toggle
+  // Stack favorite toggle
   const handleFavoriteToggle = useCallback(async () => {
     if (!stack) return;
     try {
       await apiClient.toggleStackFavorite(stack.id, !stack.favorited);
-      refetch();
+      await refetch();
+      await queryClient.invalidateQueries({ queryKey: ['favorite-items', datasetId] });
     } catch (error) {
-      console.error('Failed to toggle favorite:', error);
+      console.error('Failed to toggle stack favorite:', error);
     }
-  }, [stack, refetch]);
+  }, [datasetId, queryClient, stack, refetch]);
+
+  // Page favorite toggle
+  const handleAssetFavoriteToggle = useCallback(async () => {
+    if (!stack) return;
+    const asset = stack.assets?.[currentPage];
+    if (!asset) return;
+    try {
+      const currentFavorited = Boolean(asset.favorited ?? asset.isFavorite);
+      await apiClient.toggleAssetFavorite(asset.id, !currentFavorited);
+      await refetch();
+      await queryClient.invalidateQueries({ queryKey: ['favorite-items', datasetId] });
+    } catch (error) {
+      console.error('Failed to toggle page favorite:', error);
+    }
+  }, [currentPage, datasetId, queryClient, stack, refetch]);
 
   // Like toggle
   const handleLikeToggle = useCallback(async () => {
@@ -116,6 +134,7 @@ export function useStackViewer({
     isListMode,
     setIsListMode,
     handleFavoriteToggle,
+    handleAssetFavoriteToggle,
     handleLikeToggle,
     refetch,
   };

@@ -81,6 +81,7 @@ model Asset {
   stack             Stack              @relation(fields: [stackId], references: [id], onDelete: Cascade)
   autoTagPrediction AutoTagPrediction?
   colors            AssetColor[]
+  favorites         AssetFavorite[]
 
   @@index([stackId])
   @@index([hash])
@@ -270,6 +271,21 @@ model StackFavorite {
   @@index([stackId])
 }
 
+model AssetFavorite {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  assetId   Int
+  createdAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, assetId])
+  @@index([userId])
+  @@index([assetId])
+  @@index([createdAt])
+}
+
 model User {
   id           Int             @id @default(autoincrement())
   name         String          @unique
@@ -281,6 +297,7 @@ model User {
 
   likeActivities LikeActivity[]
   favorites      StackFavorite[]
+  assetFavorites AssetFavorite[]
   navigationPins NavigationPin[]
 }
 

@@ -5,6 +5,7 @@ import type {
   Dataset,
   ImportUrlResult,
   JoyTagHealthResponse,
+  MediaGridItem,
   Pin,
   SortOption,
   Stack,
@@ -314,6 +315,33 @@ class ApiClient {
       method: 'PUT',
       body: JSON.stringify({ favorited }),
     });
+  }
+
+  async toggleAssetFavorite(
+    assetId: string | number,
+    favorited: boolean
+  ): Promise<{ success: boolean; favorited: boolean }> {
+    return this.fetch<{ success: boolean; favorited: boolean }>(
+      `/api/v1/assets/${assetId}/favorite`,
+      {
+        method: 'PUT',
+        body: JSON.stringify({ favorited }),
+      }
+    );
+  }
+
+  async getFavoriteItems(params: {
+    datasetId: string | number;
+    limit?: number;
+    offset?: number;
+  }): Promise<{ stacks: MediaGridItem[]; total: number; limit: number; offset: number }> {
+    const query = new URLSearchParams();
+    query.append('dataSetId', String(params.datasetId));
+    if (params.limit !== undefined) query.append('limit', String(params.limit));
+    if (params.offset !== undefined) query.append('offset', String(params.offset));
+    return this.fetch<{ stacks: MediaGridItem[]; total: number; limit: number; offset: number }>(
+      `/api/v1/stacks/favorites/list?${query.toString()}`
+    );
   }
 
   async likeStack(stackId: string | number): Promise<{ success: boolean; liked: number }> {

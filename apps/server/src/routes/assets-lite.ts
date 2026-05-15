@@ -5,6 +5,7 @@ import { createAssetService } from '../features/datasets/services/asset-service'
 import { createColorSearchService } from '../features/datasets/services/color-search-service';
 import { createStackService } from '../features/datasets/services/stack-service';
 import { useDataStorage, usePrisma } from '../shared/di';
+import { ensureSuperUser } from '../shared/services/UserService';
 
 export const assetsLiteRoute = new Hono();
 
@@ -138,4 +139,47 @@ assetsLiteRoute.put('/:assetId/order', async (c) => {
   const assetService = createAssetService({ prisma, dataStorage: useDataStorage(c), dataSetId });
   await assetService.updateOrder(assetId, parse.data.order);
   return c.json({ success: true });
+});
+
+// PUT /assets/:assetId/favorite
+assetsLiteRoute.put('/:assetId/favorite', async (c) => {
+  const assetId = Number.parseInt(c.req.param('assetId'), 10);
+  if (Number.isNaN(assetId)) return c.json({ error: 'Invalid asset id' }, 400);
+
+  const body = await c.req.json().catch(() => ({}));
+  const parse = z.object({ favorited: z.boolean() }).safeParse(body);
+  if (!parse.success) return c.json({ error: 'Invalid body', details: parse.error }, 400);
+
+  const prisma = usePrisma(c);
+  const userId = await ensureSuperUser(prisma);
+  const exists = await prisma.asset.findUnique({
+    where: { id: assetId },
+    select: { id: true },
+  });
+  if (!exists) return c.json({ error: 'Asset not found' }, 404);
+
+  if (parse.data.favorited) {
+    await prisma.assetFavorite.upsert({
+      where: {
+        userId_assetId: {
+          userId,
+          assetId,
+        },
+      },
+      update: {},
+      create: {
+        userId,
+        assetId,
+      },
+    });
+  } else {
+    await prisma.assetFavorite.deleteMany({
+      where: {
+        userId,
+        assetId,
+      },
+    });
+  }
+
+  return c.json({ success: true, favorited: parse.data.favorited });
 });

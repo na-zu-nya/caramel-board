@@ -32,7 +32,9 @@ const meta: Meta<typeof StackToolbar> = {
     stack: baseStack,
     isListMode: true,
     isGesturing: false,
-    onFavoriteToggle: () => console.log('favorite'),
+    isCurrentAssetFavorited: false,
+    onStackFavoriteToggle: () => console.log('stack favorite'),
+    onAssetFavoriteToggle: () => console.log('page bookmark'),
     onLikeToggle: () => console.log('like'),
     onListModeToggle: () => console.log('list'),
   },
@@ -47,5 +49,30 @@ export const Default: Story = {};
 export const SingleMode: Story = {
   args: {
     isListMode: false,
+  },
+};
+
+export const CurrentPageFavorited: Story = {
+  args: {
+    isCurrentAssetFavorited: true,
+  },
+};
+
+export const StackFavorited: Story = {
+  args: {
+    stack: {
+      ...baseStack,
+      favorited: true,
+    },
+  },
+};
+
+export const SinglePageStack: Story = {
+  args: {
+    stack: {
+      ...baseStack,
+      assetCount: 1,
+      assetsCount: 1,
+    },
   },
 };

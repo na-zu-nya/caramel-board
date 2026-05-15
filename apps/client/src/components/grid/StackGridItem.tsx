@@ -3,6 +3,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import {
   Book,
+  Bookmark,
   Check,
   GalleryVerticalEnd,
   GitMerge,
@@ -67,6 +68,7 @@ export function StackGridItem({
 }: StackGridItemProps) {
   const currentFavorited = overrideFavorited ?? item.favorited ?? item.isFavorite ?? false;
   const thumbnailUrl = item.thumbnail || item.thumbnailUrl || '/no-image.png';
+  const favoriteKind = item.favoriteKind;
   const toNumber = useCallback((value: unknown): number | null => {
     if (typeof value === 'number') return value;
     if (typeof value === 'string') {
@@ -75,6 +77,7 @@ export function StackGridItem({
     }
     return null;
   }, []);
+  const getStackId = useCallback(() => item.stackId ?? item.id, [item.id, item.stackId]);
 
   const likeCount = toNumber(item.likeCount) ?? toNumber(item.liked) ?? toNumber(item.likes) ?? 0;
   const assetCount = toNumber(item.assetCount);
@@ -234,7 +237,7 @@ export function StackGridItem({
               }
             } else {
               // Not in selection mode, just drag single item
-              e.dataTransfer.setData('text/plain', `stack-item:${item.id}`);
+              e.dataTransfer.setData('text/plain', `stack-item:${getStackId()}`);
             }
 
             // Chrome では dropEffect が copy の場合に effectAllowed に copy が含まれていないと
@@ -267,7 +270,9 @@ export function StackGridItem({
 
             try {
               const targetId =
-                typeof item.id === 'string' ? Number.parseInt(item.id, 10) : (item.id as number);
+                typeof getStackId() === 'string'
+                  ? Number.parseInt(getStackId() as string, 10)
+                  : (getStackId() as number);
               let sourceIds: number[] = [];
 
               if (text.startsWith('stack-item:')) {
@@ -388,12 +393,18 @@ export function StackGridItem({
               onClick={(e) => onToggleFavorite(item, e)}
               className={`absolute bottom-2 left-2 p-1 rounded-full transition-all duration-200 z-10 ${
                 currentFavorited
-                  ? 'bg-yellow-500 text-white'
+                  ? favoriteKind === 'asset'
+                    ? 'bg-sky-500 text-white'
+                    : 'bg-yellow-500 text-white'
                   : 'bg-white/80 text-gray-700 hover:bg-white'
               }`}
               disabled={isFavoritePending}
             >
-              <Star size={16} className={currentFavorited ? 'fill-current' : ''} />
+              {favoriteKind === 'asset' ? (
+                <Bookmark size={14} className={currentFavorited ? 'fill-current' : ''} />
+              ) : (
+                <Star size={16} className={currentFavorited ? 'fill-current' : ''} />
+              )}
             </button>
           )}
 
@@ -423,11 +434,15 @@ export function StackGridItem({
         <ContextMenuItem
           onClick={async () => {
             const ds = datasetId || '1';
-            const id =
-              typeof item.id === 'string' ? Number.parseInt(item.id, 10) : (item.id as number);
+            const stackId = getStackId();
+            const id = typeof stackId === 'string' ? Number.parseInt(stackId, 10) : stackId;
             await navigate({
               to: '/library/$datasetId/stacks/$stackId',
               params: { datasetId: ds, stackId: String(id) },
+              search:
+                favoriteKind === 'asset' && typeof item.favoritePage === 'number'
+                  ? { page: item.favoritePage - 1 }
+                  : undefined,
             });
           }}
         >
@@ -448,8 +463,8 @@ export function StackGridItem({
         <ContextMenuItem
           onClick={async () => {
             const ds = datasetId || '1';
-            const id =
-              typeof item.id === 'string' ? Number.parseInt(item.id, 10) : (item.id as number);
+            const stackId = getStackId();
+            const id = typeof stackId === 'string' ? Number.parseInt(stackId, 10) : stackId;
             await navigate({
               to: '/library/$datasetId/stacks/$stackId/similar',
               params: { datasetId: ds, stackId: String(id) },

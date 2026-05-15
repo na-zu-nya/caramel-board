@@ -167,6 +167,7 @@ export function useStackGrid({
     onSuccess: () => {
       // Keep UI responsive; still refresh relevant caches in background
       void queryClient.invalidateQueries({ queryKey: ['stacks'] });
+      void queryClient.invalidateQueries({ queryKey: ['favorite-items'] });
     },
   });
 
@@ -310,6 +311,9 @@ export function useStackGrid({
     async (item: MediaGridItem, event: React.MouseEvent) => {
       event.stopPropagation();
       const id = item.id;
+      const favoriteKind = item.favoriteKind;
+      const targetId =
+        favoriteKind === 'asset' && item.assetId !== undefined ? item.assetId : item.id;
       const currentFavorited = favoriteOverrides.has(id)
         ? (favoriteOverrides.get(id) as boolean)
         : (item.favorited ?? item.isFavorite ?? false);
@@ -337,7 +341,12 @@ export function useStackGrid({
       }
 
       try {
-        await favoriteMutation.mutateAsync({ stackId: id, favorited: nextFavorited });
+        if (favoriteKind === 'asset') {
+          await apiClient.toggleAssetFavorite(targetId, nextFavorited);
+          await queryClient.invalidateQueries({ queryKey: ['favorite-items'] });
+        } else {
+          await favoriteMutation.mutateAsync({ stackId: id, favorited: nextFavorited });
+        }
       } catch (err) {
         // Revert optimistic override on failure
         setFavoriteOverrides((prev) => new Map(prev).set(id, currentFavorited));

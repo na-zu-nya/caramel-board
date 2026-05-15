@@ -24,7 +24,7 @@ import { ensureSuperUser } from '../shared/services/UserService';
 import { toPublicAssetPath, withPublicAssetArray } from '../utils/assetPath';
 
 type StackAssetSummary = {
-  id: number;
+  id?: number;
   file?: string | null;
   thumbnail?: string | null;
   preview?: string | null;
@@ -94,6 +94,12 @@ const ImportFromUrlsSchema = z.object({
   collectionId: z.number().int().positive().optional(),
   author: z.string().min(1).max(200).optional(),
   tags: z.array(z.string().min(1)).optional(),
+});
+
+const FavoriteListQuerySchema = z.object({
+  dataSetId: z.coerce.number().int().positive(),
+  limit: z.coerce.number().int().min(1).max(500).optional().default(200),
+  offset: z.coerce.number().int().min(0).optional().default(0),
 });
 
 export const stacksRoute = new Hono();
@@ -262,6 +268,129 @@ stacksRoute.get('/paginated', async (c) => {
   });
 
   return c.json({ stacks, total: result.total, limit: result.limit, offset: result.offset });
+});
+
+// GET /stacks/favorites/list
+// Favorites ページ専用: 検索/フィルタ用の stack favorite とは分けて、asset favorite も混ぜて返す。
+stacksRoute.get('/favorites/list', async (c) => {
+  const queryObj = getQueryObject(c);
+  const parse = FavoriteListQuerySchema.safeParse(queryObj);
+  if (!parse.success) return c.json({ error: 'Invalid query', details: parse.error }, 400);
+
+  const { dataSetId, limit, offset } = parse.data;
+  const auth = await (await import('../utils/dataset-protection')).ensureDatasetAuthorized(
+    c,
+    dataSetId
+  );
+  if (auth) return auth;
+
+  const prisma = usePrisma(c);
+  const userId = await ensureSuperUser(prisma);
+
+  const [stackFavorites, assetFavorites] = await Promise.all([
+    prisma.stackFavorite.findMany({
+      where: {
+        userId,
+        stack: { dataSetId },
+      },
+      include: {
+        stack: {
+          include: {
+            assets: {
+              take: 1,
+              orderBy: { orderInStack: 'asc' },
+            },
+            _count: {
+              select: { assets: true },
+            },
+          },
+        },
+      },
+    }),
+    prisma.assetFavorite.findMany({
+      where: {
+        userId,
+        asset: {
+          stack: { dataSetId },
+        },
+      },
+      include: {
+        asset: {
+          include: {
+            stack: {
+              include: {
+                _count: {
+                  select: { assets: true },
+                },
+              },
+            },
+          },
+        },
+      },
+    }),
+  ]);
+
+  const stackFavoriteSet = new Set(stackFavorites.map((favorite) => favorite.stackId));
+  const combined = [
+    ...stackFavorites.map((favorite) => {
+      const stack = favorite.stack;
+      const leadAsset = stack.assets[0];
+      const thumbnail = toPublicAssetPath(leadAsset?.thumbnail || stack.thumbnail, dataSetId);
+      const likeCount = typeof stack.liked === 'number' ? stack.liked : Number(stack.liked ?? 0);
+      return {
+        id: stack.id,
+        stackId: stack.id,
+        favoriteKind: 'stack' as const,
+        favoriteId: favorite.id,
+        favoriteCreatedAt: favorite.createdAt,
+        name: stack.name,
+        mediaType: stack.mediaType,
+        thumbnail,
+        favorited: true,
+        isFavorite: true,
+        liked: likeCount,
+        likeCount,
+        assetCount: stack._count.assets,
+        assetsCount: stack._count.assets,
+        createdAt: stack.createdAt,
+        updatedAt: stack.updateAt,
+      };
+    }),
+    ...assetFavorites.map((favorite) => {
+      const asset = favorite.asset;
+      const stack = asset.stack;
+      const thumbnail = toPublicAssetPath(asset.thumbnail || asset.file, dataSetId);
+      const likeCount = typeof stack.liked === 'number' ? stack.liked : Number(stack.liked ?? 0);
+      return {
+        id: `asset:${asset.id}`,
+        stackId: stack.id,
+        favoriteKind: 'asset' as const,
+        favoriteId: favorite.id,
+        favoriteCreatedAt: favorite.createdAt,
+        assetId: asset.id,
+        favoritePage: asset.orderInStack + 1,
+        name: stack.name,
+        mediaType: stack.mediaType,
+        thumbnail,
+        favorited: true,
+        isFavorite: true,
+        stackFavorited: stackFavoriteSet.has(stack.id),
+        liked: likeCount,
+        likeCount,
+        assetCount: stack._count.assets,
+        assetsCount: stack._count.assets,
+        createdAt: stack.createdAt,
+        updatedAt: stack.updateAt,
+      };
+    }),
+  ].sort((left, right) => right.favoriteCreatedAt.getTime() - left.favoriteCreatedAt.getTime());
+
+  return c.json({
+    stacks: combined.slice(offset, offset + limit),
+    total: combined.length,
+    limit,
+    offset,
+  });
 });
 
 // GET /stacks/search/autotag?autoTag=xxx&dataSetId=1&limit=50&offset=0
@@ -972,9 +1101,37 @@ stacksRoute.get('/:id{[0-9]+}', async (c) => {
   const stackService = createStackService({ prisma, colorSearch, dataSetId: effectiveDs });
   const stack = await stackService.getById(id, { assets: true, tags: true, author: true });
   if (!stack) return c.json({ error: 'Stack not found' }, 404);
+  const assets = withPublicAssetArray(stack.assets ?? [], effectiveDs);
+  const assetRows =
+    assets.length > 0
+      ? await prisma.asset.findMany({
+          where: { stackId: id },
+          orderBy: { orderInStack: 'asc' },
+          select: { id: true },
+        })
+      : [];
+  let assetFavoriteSet = new Set<number>();
+  if (assetRows.length > 0) {
+    const userId = await ensureSuperUser(prisma);
+    const favorites = await prisma.assetFavorite.findMany({
+      where: {
+        userId,
+        assetId: {
+          in: assetRows.map((asset) => asset.id),
+        },
+      },
+      select: { assetId: true },
+    });
+    assetFavoriteSet = new Set(favorites.map((favorite) => favorite.assetId));
+  }
   const sanitized = {
     ...stack,
-    assets: withPublicAssetArray(stack.assets ?? [], effectiveDs),
+    assets: assets.map((asset, index) => ({
+      ...asset,
+      id: assetRows[index]?.id,
+      favorited: assetFavoriteSet.has(assetRows[index]?.id ?? -1),
+      isFavorite: assetFavoriteSet.has(assetRows[index]?.id ?? -1),
+    })),
     thumbnail: toPublicAssetPath(stack.thumbnail, effectiveDs),
   };
   return c.json(sanitized);

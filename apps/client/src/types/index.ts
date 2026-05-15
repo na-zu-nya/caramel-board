@@ -68,6 +68,12 @@ export interface Stack {
   likeCount?: number;
   liked?: number; // Legacy support
   isLiked?: boolean;
+  favoriteKind?: 'stack' | 'asset';
+  favoriteId?: number;
+  favoriteCreatedAt?: string;
+  favoritePage?: number;
+  assetId?: number;
+  stackId?: string | number;
   assets: Asset[]; // Stack contains assets
   dominantColors?: DominantColor[]; // 代表色
   autoTags?: AutoTag[]; // AI生成タグ
@@ -109,6 +115,8 @@ export interface Asset {
   thumbnail?: string; // Thumbnail path
   thumbnailUrl?: string; // Alternative to thumbnail
   preview?: string | null; // プレイバック用プレビュー
+  favorited?: boolean;
+  isFavorite?: boolean;
   width?: number;
   height?: number;
   size?: number;
@@ -353,10 +361,18 @@ export interface SortOption {
 // MediaGrid component types
 export interface MediaGridItem {
   id: string | number;
+  stackId?: string | number;
+  assetId?: string | number;
   name: string;
+  mediaType?: MediaType;
   thumbnail?: string;
   thumbnailUrl?: string;
   favorited?: boolean;
   isFavorite?: boolean;
+  stackFavorited?: boolean;
+  favoriteKind?: 'stack' | 'asset';
+  favoriteId?: string | number;
+  favoriteCreatedAt?: string;
+  favoritePage?: number;
   [key: string]: unknown;
 }

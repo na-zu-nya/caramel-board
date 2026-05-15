@@ -1,3 +1,4 @@
+import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useAtom } from 'jotai';
 import MersenneTwister from 'mersenne-twister';
@@ -6,7 +7,7 @@ import FilterPanel from '@/components/FilterPanel';
 import StackGrid from '@/components/StackGrid';
 import { useDataset } from '@/hooks/useDatasets';
 import { useHeaderActions } from '@/hooks/useHeaderActions';
-import { useRangeBasedQuery } from '@/hooks/useRangeBasedQuery';
+import { apiClient } from '@/lib/api-client';
 import { navigationStateAtom } from '@/stores/navigation';
 import { currentFilterAtom } from '@/stores/ui';
 import { genListToken, saveViewContext } from '@/stores/view-context';
@@ -36,8 +37,6 @@ function FavoritesPage() {
     []
   );
 
-  // useRangeBasedQuery は shuffle で参照する total/loadPage/allItems を先に初期化
-
   // フィルタ漏れ防止: 常に最小構成にリセット
   // 現在のフィルタにお気に入り条件を付与（フリーワード等と併用）
   useEffect(() => {
@@ -45,14 +44,63 @@ function FavoritesPage() {
     setCurrentFilter({ datasetId, isFavorite: true });
   }, [datasetId, setCurrentFilter]);
 
-  // Range-based query for virtual scrolling
-  const { total, allItems, loadPage, loadRange, isLoading, loadedPages, refreshAll } =
-    useRangeBasedQuery({
-      datasetId,
-      filter: { ...currentFilter, datasetId, isFavorite: true },
-      sort: currentSort,
-      pageSize: 50,
+  const {
+    data: favoriteItems,
+    isLoading,
+    refetch,
+  } = useQuery({
+    queryKey: ['favorite-items', datasetId],
+    queryFn: () => apiClient.getFavoriteItems({ datasetId, limit: 500, offset: 0 }),
+  });
+
+  const stableLoadedItems = useMemo(() => {
+    const items = favoriteItems?.stacks ?? [];
+    const search = currentFilter.search?.trim().toLowerCase();
+    const filtered = items.filter((item) => {
+      if (currentFilter.mediaType && item.mediaType !== currentFilter.mediaType) return false;
+      if (
+        search &&
+        !String(item.name ?? '')
+          .toLowerCase()
+          .includes(search)
+      )
+        return false;
+      return true;
+    }) as MediaGridItem[];
+
+    return filtered.sort((left, right) => {
+      const direction = currentSort.order === 'asc' ? 1 : -1;
+      switch (currentSort.field) {
+        case 'name':
+          return direction * String(left.name ?? '').localeCompare(String(right.name ?? ''));
+        case 'liked':
+          return (
+            direction *
+            (Number(left.likeCount ?? left.liked ?? 0) -
+              Number(right.likeCount ?? right.liked ?? 0))
+          );
+        case 'updatedAt':
+        case 'updateAt':
+          return (
+            direction *
+            (new Date(String(left.updatedAt ?? 0)).getTime() -
+              new Date(String(right.updatedAt ?? 0)).getTime())
+          );
+        default:
+          return (
+            direction *
+            (new Date(String(left.favoriteCreatedAt ?? left.createdAt ?? 0)).getTime() -
+              new Date(String(right.favoriteCreatedAt ?? right.createdAt ?? 0)).getTime())
+          );
+      }
     });
+  }, [currentFilter.mediaType, currentFilter.search, currentSort, favoriteItems?.stacks]);
+
+  const total = stableLoadedItems.length;
+  const allItems = stableLoadedItems;
+  const refreshAll = useCallback(async () => {
+    await refetch();
+  }, [refetch]);
 
   // RNG for shuffle（useRangeBasedQuery 後に定義）
   const mtRef = useRef<MersenneTwister | null>(null);
@@ -61,7 +109,6 @@ function FavoritesPage() {
   // Shuffle across all favorites
   const handleShuffle = useCallback(async () => {
     if (total <= 0) return;
-    const PAGE_SIZE = 50;
     const MAX = 0x100000000;
     const bound = MAX - (MAX % total);
     let r: number;
@@ -69,31 +116,32 @@ function FavoritesPage() {
       r = mtRef.current!.random_int();
     } while (r >= bound);
     const targetIndex = r % total;
-    const pageIndex = Math.floor(targetIndex / PAGE_SIZE);
-    const withinPageIndex = targetIndex % PAGE_SIZE;
-    const page = await loadPage(pageIndex);
-    const item = page?.stacks?.[withinPageIndex] || allItems[targetIndex];
+    const item = allItems[targetIndex];
     if (!item) return;
 
-    const ids = (page?.stacks || [])
-      .map((s) =>
-        typeof s.id === 'string' ? Number.parseInt(s.id as string, 10) : (s.id as number)
+    const ids = Array.from(
+      new Set(
+        allItems
+          .map((s) => s.stackId ?? s.id)
+          .map((id) => (typeof id === 'string' ? Number.parseInt(id, 10) : id))
+          .filter((id): id is number => Number.isFinite(id))
       )
-      .reverse();
+    ).reverse();
+    const itemStackId = item.stackId ?? item.id;
     const clickedId =
-      typeof item.id === 'string' ? Number.parseInt(item.id as string, 10) : (item.id as number);
+      typeof itemStackId === 'string' ? Number.parseInt(itemStackId, 10) : itemStackId;
     const currentIndex = Math.max(0, ids.indexOf(clickedId));
     const token = genListToken({
       datasetId,
-      mediaType: (item as any).mediaType,
+      mediaType: item.mediaType,
       filters: { ...currentFilter, datasetId, isFavorite: true },
       sort: currentSort,
     });
     saveViewContext({
       token,
       datasetId,
-      mediaType: (item as any).mediaType,
-      filters: { ...currentFilter, datasetId, isFavorite: true } as any,
+      mediaType: item.mediaType,
+      filters: { ...currentFilter, datasetId, isFavorite: true },
       sort: currentSort,
       ids,
       currentIndex,
@@ -102,10 +150,14 @@ function FavoritesPage() {
 
     navigate({
       to: '/library/$datasetId/stacks/$stackId',
-      params: { datasetId, stackId: String(item.id) },
-      search: { page: 0, mediaType: (item as any).mediaType, listToken: token },
+      params: { datasetId, stackId: String(clickedId) },
+      search: {
+        page: typeof item.favoritePage === 'number' ? item.favoritePage - 1 : 0,
+        mediaType: item.mediaType,
+        listToken: token,
+      },
     });
-  }, [total, allItems, datasetId, currentFilter, currentSort, navigate, loadPage]);
+  }, [total, allItems, datasetId, currentFilter, currentSort, navigate]);
 
   useHeaderActions({ ...headerActionsConfig, onShuffle: handleShuffle });
 
@@ -129,43 +181,12 @@ function FavoritesPage() {
     };
   }, []);
 
-  // Load initial items when total is available and no pages are loaded
   useEffect(() => {
-    if (total > 0 && loadedPages.size === 0) {
-      // If returning, prefetch visible range then restore
-      if (navigationState && navigationState.lastPath === window.location.pathname) {
-        const itemSize = 200;
-        const itemsPerRow = 5;
-        const scrollTop = navigationState.scrollPosition;
-        const viewportHeight = window.innerHeight;
-        const startRow = Math.floor(scrollTop / itemSize);
-        const endRow = Math.ceil((scrollTop + viewportHeight) / itemSize);
-        const bufferRows = 3;
-        const startIndex = Math.max(0, (startRow - bufferRows) * itemsPerRow);
-        const endIndex = Math.min((endRow + bufferRows) * itemsPerRow - 1, total - 1);
-        void (async () => {
-          await loadRange(startIndex, endIndex);
-          restoreScrollSafely(scrollTop);
-          setNavigationState(null);
-        })();
-      } else {
-        void loadRange(0, Math.min(49, total - 1));
-      }
+    if (navigationState && navigationState.lastPath === window.location.pathname) {
+      restoreScrollSafely(navigationState.scrollPosition);
+      setNavigationState(null);
     }
-  }, [
-    total,
-    loadedPages.size,
-    loadRange,
-    navigationState,
-    restoreScrollSafely,
-    setNavigationState,
-  ]);
-
-  // Memoize loaded items to prevent unnecessary recalculations
-  const stableLoadedItems = useMemo(() => {
-    const items = allItems.filter((item) => item !== undefined) as MediaGridItem[];
-    return items;
-  }, [allItems]);
+  }, [navigationState, restoreScrollSafely, setNavigationState]);
 
   // Handle filter changes
   const handleFilterChange = useCallback(
@@ -180,16 +201,6 @@ function FavoritesPage() {
     setCurrentSort(newSort);
   }, []);
 
-  // Load specific range of items
-  const handleLoadRange = useCallback(
-    (startIndex: number, endIndex: number) => {
-      if (startIndex < total && endIndex < total) {
-        void loadRange(startIndex, endIndex);
-      }
-    },
-    [total, loadRange]
-  );
-
   const handleItemClick = (item: MediaGridItem) => {
     // Save scroll position for restoration
     setNavigationState({
@@ -201,18 +212,23 @@ function FavoritesPage() {
       sort: currentSort,
     });
     // 現在ロード済みのウィンドウから右→左順のID配列を構築
-    const loadedIdsLtr = (allItems || [])
-      .filter((it): it is MediaGridItem => !!it)
-      .map((it) =>
-        typeof it.id === 'string' ? Number.parseInt(it.id as string, 10) : (it.id as number)
-      );
+    const loadedIdsLtr = Array.from(
+      new Set(
+        (allItems || [])
+          .filter((it): it is MediaGridItem => !!it)
+          .map((it) => it.stackId ?? it.id)
+          .map((id) => (typeof id === 'string' ? Number.parseInt(id, 10) : id))
+          .filter((id): id is number => Number.isFinite(id))
+      )
+    );
     const ids = loadedIdsLtr.slice().reverse();
+    const itemStackId = item.stackId ?? item.id;
     const clickedId =
-      typeof item.id === 'string' ? Number.parseInt(item.id as string, 10) : (item.id as number);
+      typeof itemStackId === 'string' ? Number.parseInt(itemStackId, 10) : itemStackId;
     const currentIndex = Math.max(0, ids.indexOf(clickedId));
 
     // ViewContext を保存（お気に入りフィルタ固定）
-    const mediaType = (item as any).mediaType as string | undefined;
+    const mediaType = item.mediaType;
     const token = genListToken({
       datasetId,
       mediaType,
@@ -222,7 +238,7 @@ function FavoritesPage() {
     saveViewContext({
       token,
       datasetId,
-      mediaType: mediaType as any,
+      mediaType,
       filters: { ...currentFilter, datasetId, isFavorite: true },
       sort: currentSort,
       ids,
@@ -233,8 +249,12 @@ function FavoritesPage() {
     // StackViewer へ（listToken と mediaType を付与）
     navigate({
       to: '/library/$datasetId/stacks/$stackId',
-      params: { datasetId, stackId: String(item.id) },
-      search: { page: 0, mediaType, listToken: token },
+      params: { datasetId, stackId: String(clickedId) },
+      search: {
+        page: typeof item.favoritePage === 'number' ? item.favoritePage - 1 : 0,
+        mediaType,
+        listToken: token,
+      },
     });
   };
 
@@ -248,7 +268,6 @@ function FavoritesPage() {
         error={null}
         dataset={dataset}
         onItemClick={handleItemClick}
-        onLoadRange={handleLoadRange}
         onRefreshAll={refreshAll}
         emptyState={{
           icon: '⭐',

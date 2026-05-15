@@ -1,4 +1,4 @@
-import { Heart, Layers, Star } from 'lucide-react';
+import { Bookmark, Heart, Layers, Star } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Stack } from '@/types';
 
@@ -8,7 +8,9 @@ interface StackToolbarProps {
   stack: Stack;
   isListMode: boolean;
   isGesturing: boolean;
-  onFavoriteToggle: () => void;
+  isCurrentAssetFavorited?: boolean;
+  onStackFavoriteToggle: () => void;
+  onAssetFavoriteToggle: () => void;
   onLikeToggle: () => void;
   onListModeToggle: () => void;
 }
@@ -17,10 +19,14 @@ export default function StackToolbar({
   stack,
   isListMode,
   isGesturing,
-  onFavoriteToggle,
+  isCurrentAssetFavorited = false,
+  onStackFavoriteToggle,
+  onAssetFavoriteToggle,
   onLikeToggle,
   onListModeToggle,
 }: StackToolbarProps) {
+  const canBookmarkPage = stack.assets.length > 1 || stack.assetCount > 1 || stack.assetsCount > 1;
+
   return (
     <div
       className={cn(
@@ -29,17 +35,34 @@ export default function StackToolbar({
       )}
     >
       <button
-        onClick={onFavoriteToggle}
+        onClick={onStackFavoriteToggle}
         className={cn(
           'p-3 rounded-full transition-colors',
           stack.favorited
             ? 'bg-yellow-500 text-white'
             : 'bg-black/40 text-white hover:bg-black/60 hover:text-primary'
         )}
-        aria-label={stack.favorited ? 'Remove from favorites' : 'Add to favorites'}
+        aria-label={stack.favorited ? 'Remove stack from favorites' : 'Add stack to favorites'}
       >
         <Star size={20} className={stack.favorited ? 'fill-current' : ''} />
       </button>
+
+      {canBookmarkPage && (
+        <button
+          onClick={onAssetFavoriteToggle}
+          className={cn(
+            'p-3 rounded-full transition-colors',
+            isCurrentAssetFavorited
+              ? 'bg-sky-500 text-white'
+              : 'bg-black/40 text-white hover:bg-black/60 hover:text-sky-300'
+          )}
+          aria-label={
+            isCurrentAssetFavorited ? 'Remove current page bookmark' : 'Bookmark current page'
+          }
+        >
+          <Bookmark size={20} className={isCurrentAssetFavorited ? 'fill-current' : ''} />
+        </button>
+      )}
 
       <button
         onClick={onLikeToggle}
