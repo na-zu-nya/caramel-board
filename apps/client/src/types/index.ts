@@ -104,6 +104,7 @@ export interface Asset {
   id: string | number;
   stackId: string | number;
   file: string; // Full file path
+  originalName?: string;
   url?: string; // Alternative to file
   thumbnail?: string; // Thumbnail path
   thumbnailUrl?: string; // Alternative to thumbnail

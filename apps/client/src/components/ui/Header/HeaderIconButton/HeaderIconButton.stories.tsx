@@ -24,3 +24,10 @@ export const Active: Story = {
   args: { isActive: true, children: <Filter size={18} />, 'aria-label': 'Filter' },
 };
 export const Highlight: Story = { args: { variant: 'highlight' } };
+export const TextToggle: Story = {
+  args: {
+    isActive: true,
+    children: <span className="text-[11px] font-semibold leading-none">DRAG</span>,
+    'aria-label': 'Drag mode',
+  },
+};

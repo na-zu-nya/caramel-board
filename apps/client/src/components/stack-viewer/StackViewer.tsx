@@ -41,7 +41,7 @@ import ColorPickerOverlay from './ColorPickerOverlay';
 import ImageCarousel from './ImageCarousel';
 import PenOverlay from './PenOverlay';
 import StackPageIndicator from './StackPageIndicator';
-import StackToolbar from './StackToolbar';
+import StackToolbar, { type AssetSortPreset } from './StackToolbar';
 import TapZoneOverlay from './TapZoneOverlay';
 
 interface StackViewerProps {
@@ -50,6 +50,60 @@ interface StackViewerProps {
   stackId: string;
   listToken?: string;
 }
+
+const assetNameCollator = new Intl.Collator(undefined, {
+  numeric: true,
+  sensitivity: 'base',
+});
+
+const getAssetSortName = (asset: Asset) => {
+  if (asset.originalName && asset.originalName.trim().length > 0) {
+    return asset.originalName;
+  }
+  const rawPath = asset.file || asset.url || '';
+  const normalizedPath = rawPath.split('?')[0];
+  const segments = normalizedPath.split('/');
+  return segments[segments.length - 1] || '';
+};
+
+const getAssetCreatedAtValue = (asset: Asset) => {
+  const time = asset.createdAt ? new Date(asset.createdAt).getTime() : Number.NaN;
+  if (Number.isFinite(time)) return time;
+  const numericId = typeof asset.id === 'string' ? Number.parseInt(asset.id, 10) : asset.id;
+  return Number.isFinite(numericId) ? numericId : 0;
+};
+
+const sortAssetsByPreset = (assets: Asset[], preset: AssetSortPreset) => {
+  const sorted = [...assets];
+  sorted.sort((left, right) => {
+    switch (preset) {
+      case 'filename-asc': {
+        const byName = assetNameCollator.compare(getAssetSortName(left), getAssetSortName(right));
+        if (byName !== 0) return byName;
+        return getAssetCreatedAtValue(left) - getAssetCreatedAtValue(right);
+      }
+      case 'filename-desc': {
+        const byName = assetNameCollator.compare(getAssetSortName(right), getAssetSortName(left));
+        if (byName !== 0) return byName;
+        return getAssetCreatedAtValue(right) - getAssetCreatedAtValue(left);
+      }
+      case 'created-asc': {
+        const byCreated = getAssetCreatedAtValue(left) - getAssetCreatedAtValue(right);
+        if (byCreated !== 0) return byCreated;
+        return assetNameCollator.compare(getAssetSortName(left), getAssetSortName(right));
+      }
+      case 'created-desc': {
+        const byCreated = getAssetCreatedAtValue(right) - getAssetCreatedAtValue(left);
+        if (byCreated !== 0) return byCreated;
+        return assetNameCollator.compare(getAssetSortName(left), getAssetSortName(right));
+      }
+      default:
+        return 0;
+    }
+  });
+
+  return sorted.map((asset, index) => ({ ...asset, orderInStack: index }));
+};
 
 export default function StackViewer({
   datasetId,
@@ -116,6 +170,20 @@ export default function StackViewer({
     },
     [optimisticMarkers]
   );
+  const isCurrentVideoAsset = isVideoAsset(currentAsset);
+
+  const handleSortPresetSelect = useCallback(
+    (preset: AssetSortPreset) => {
+      if (!stack || stack.assets.length < 2) return;
+
+      setIsReorderMode(true);
+      setPendingOrder((prev) => {
+        const source = prev && prev.length > 0 ? prev : stack.assets.map((asset) => ({ ...asset }));
+        return sortAssetsByPreset(source, preset);
+      });
+    },
+    [stack]
+  );
 
   // Navigation
   const { navigateBack } = useStackNavigation({ currentStackId: stackId, currentPage });
@@ -134,6 +202,11 @@ export default function StackViewer({
   const [isPenMode, setIsPenMode] = useState(false);
   // Cmd(Meta)押下中はネイティブD&D優先
   const [isMetaDragMode, setIsMetaDragMode] = useState(false);
+  // 検証用: UIからネイティブD&Dモードを固定ON/OFFできるようにする
+  const [isDragModePinned, setIsDragModePinned] = useState(false);
+  const isNativeDragMode = isMetaDragMode || isDragModePinned;
+  const canUseNativeDragMode = !!currentAsset && !isCurrentVideoAsset;
+  const canUseImageTools = !!currentAsset && !isCurrentVideoAsset && !isListMode;
   // 一時的に再生状態を退避（Alt/Meta押下時のリマウント対策）
   const savedPlaybackRef = useRef<{ time: number; wasPlaying: boolean } | null>(null);
   const markerDialogPlaybackRef = useRef<{ time: number; wasPlaying: boolean } | null>(null);
@@ -156,6 +229,49 @@ export default function StackViewer({
     };
     requestAnimationFrame(step);
   }, []);
+  const handlePenModeToggle = useCallback(() => {
+    if (!canUseImageTools) return;
+    setIsPenMode((prev) => {
+      const next = !prev;
+      if (next) {
+        setIsColorPickerAlt(false);
+        setIsColorPickerManual(false);
+        setIsDragModePinned(false);
+      }
+      return next;
+    });
+  }, [canUseImageTools]);
+  const handleColorPickerToggle = useCallback(() => {
+    if (!canUseImageTools) return;
+    setIsPenMode(false);
+    setIsDragModePinned(false);
+    setIsColorPickerManual((prev) => !prev);
+  }, [canUseImageTools]);
+  const handleDragModeToggle = useCallback(() => {
+    if (!canUseNativeDragMode) return;
+    setIsPenMode(false);
+    setIsColorPickerAlt(false);
+    setIsColorPickerManual(false);
+    setIsMetaDragMode(false);
+    setIsDragModePinned((prev) => !prev);
+  }, [canUseNativeDragMode]);
+  const handleInfoSidebarToggle = useCallback(() => {
+    if (!isInfoSidebarOpen) setSelectionMode(false);
+    setIsInfoSidebarOpen(!isInfoSidebarOpen);
+  }, [isInfoSidebarOpen, setIsInfoSidebarOpen, setSelectionMode]);
+
+  useEffect(() => {
+    if (!canUseNativeDragMode && isDragModePinned) {
+      setIsDragModePinned(false);
+    }
+  }, [canUseNativeDragMode, isDragModePinned]);
+
+  useEffect(() => {
+    if (canUseImageTools) return;
+    setIsPenMode(false);
+    setIsColorPickerAlt(false);
+    setIsColorPickerManual(false);
+  }, [canUseImageTools]);
 
   // Shuffle navigation (uses original list context if available)
   const mtRef = useRef<MersenneTwister | null>(null);
@@ -422,7 +538,7 @@ export default function StackViewer({
     };
   }, []);
 
-  // Keyboard: Left=next, Right=previous, ESC=Back/CancelPicker, z=toggle list, e=toggle info, s=shuffle, Alt=hold to pick
+  // Keyboard: Left=next, Right=previous, ESC=Back/CancelPicker, z=toggle list, e=toggle info, s=shuffle
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
@@ -437,25 +553,10 @@ export default function StackViewer({
         '[role="dialog"][data-state="open"], [data-radix-dialog-content]'
       );
       if (dialogOpen) return;
+      const hasModifier = e.metaKey || e.ctrlKey || e.altKey || e.shiftKey;
       const refAny = imageCarouselRef.current as any;
       const isCurrentVideo = !!refAny?.isCurrentVideo?.();
       const isVideoAssetCurrent = isVideoAsset(currentAsset);
-      // Altホールドで一時的にピッカーON
-      if (e.altKey && e.key === 'Alt') {
-        if (isVideoAssetCurrent) return;
-        // 再生位置を退避
-        if (isCurrentVideo) {
-          savedPlaybackRef.current = {
-            time: Number(refAny?.getCurrentTime?.() ?? 0),
-            wasPlaying: !!refAny?.getIsPlaying?.(),
-          };
-        }
-        setIsColorPickerAlt(true);
-        // 再生位置復元をキュー（実体に依存せず後で適用）
-        (imageCarouselRef.current as any)?.requestRestorePlayback?.(
-          savedPlaybackRef.current || undefined
-        );
-      }
       // Cmd(Meta)押下 → ネイティブD&Dモード
       if (e.key === 'Meta') {
         if (isVideoAssetCurrent) return;
@@ -580,6 +681,7 @@ export default function StackViewer({
           handleShuffle();
           break;
         case 'n':
+          if (hasModifier || !canUseImageTools) break;
           setIsPenMode((v) => {
             const next = !v;
             if (next) {
@@ -592,9 +694,6 @@ export default function StackViewer({
       }
     };
     const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.key === 'Alt') {
-        setIsColorPickerAlt(false);
-      }
       if (e.key === 'Meta') {
         setIsMetaDragMode(false);
       }
@@ -602,13 +701,27 @@ export default function StackViewer({
     const handleBlur = () => {
       setIsMetaDragMode(false);
     };
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!e.metaKey) {
+        setIsMetaDragMode(false);
+      }
+    };
+    const handleDragEnd = (e: DragEvent) => {
+      if (!e.metaKey) {
+        setIsMetaDragMode(false);
+      }
+    };
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
     window.addEventListener('blur', handleBlur);
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('dragend', handleDragEnd);
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
       window.removeEventListener('blur', handleBlur);
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('dragend', handleDragEnd);
     };
   }, [
     currentPage,
@@ -623,6 +736,7 @@ export default function StackViewer({
     setCurrentPage,
     handleShuffle,
     isColorPicker,
+    canUseImageTools,
     captureVisualViewport,
     isZoomed,
     imageCarouselRef,
@@ -760,7 +874,7 @@ export default function StackViewer({
         onUrlDrop={handleUrlDrop}
         accept="image/*,video/*,application/pdf"
         multiple
-        disabled={isMetaDragMode || isPenMode}
+        disabled={isNativeDragMode || isPenMode}
       >
         {children}
       </FullPageDropZone>
@@ -800,7 +914,7 @@ export default function StackViewer({
                     onEditMarkerRequest={(marker, index) => openMarkerEditor(marker as any, index)}
                     gestureTransform={gestureState}
                     translateX={dragOffset}
-                    nativeDragEnabled={isMetaDragMode}
+                    nativeDragEnabled={isNativeDragMode}
                     uiInsets={{
                       top: 56,
                       left: sidebarOpen ? 320 : 0,
@@ -809,7 +923,7 @@ export default function StackViewer({
                     className="w-full h-full"
                   />
                   <TapZoneOverlay
-                    enabled={!isListMode && !isColorPicker && !isMetaDragMode && !isPenMode}
+                    enabled={!isListMode && !isColorPicker && !isNativeDragMode && !isPenMode}
                     // Leave safe area at bottom so toolbar remains clickable
                     contentArea={{
                       top: 14,
@@ -817,7 +931,7 @@ export default function StackViewer({
                       right: isInfoSidebarOpen ? 320 : 0,
                       bottom: 96,
                     }}
-                    disableDrag={isZoomed || isColorPicker || isMetaDragMode || isPenMode}
+                    disableDrag={isZoomed || isColorPicker || isNativeDragMode || isPenMode}
                     canGoLeft={stack ? currentPage < stack.assets.length - 1 : false}
                     canGoRight={stack ? currentPage > 0 : false}
                     onLeftTap={() => {
@@ -1000,6 +1114,19 @@ export default function StackViewer({
               }}
               // Reorder mode decoupled from Info panel; we allow reordering only in explicit mode
               isEditMode={isReorderMode}
+              onSortPresetSelect={handleSortPresetSelect}
+              canSortAssets={stack.assets.length >= 2}
+              onReorderToggle={() => {
+                setIsReorderMode((prev) => {
+                  const next = !prev;
+                  if (next) {
+                    setPendingOrder(stack.assets.map((a) => ({ ...a })) as any);
+                  } else {
+                    setPendingOrder(null);
+                  }
+                  return next;
+                });
+              }}
               onSeparateAsset={!isReorderMode ? handleSeparateAsset : undefined}
               // Disable removal while reordering for clarity
               onRemoveAsset={
@@ -1071,29 +1198,12 @@ export default function StackViewer({
             onFavoriteToggle={handleFavoriteToggle}
             onLikeToggle={handleLikeToggle}
             onListModeToggle={() => setIsListMode((prev) => !prev)}
-            // New: Reorder toggle button appears only in list mode
-            onReorderToggle={
-              isListMode
-                ? () => {
-                    setIsReorderMode((prev) => {
-                      const next = !prev;
-                      if (next) {
-                        setPendingOrder(stack.assets.map((a) => ({ ...a })) as any);
-                      } else {
-                        setPendingOrder(null);
-                      }
-                      return next;
-                    });
-                  }
-                : undefined
-            }
-            isReorderMode={isReorderMode}
           />
         </div>
       </div>
 
       {/* Pen overlay (draws above content, below header) */}
-      {isPenMode && !isMetaDragMode && (
+      {isPenMode && !isNativeDragMode && (
         <PenOverlay
           leftInset={sidebarOpen ? 320 : 0}
           rightInset={isInfoSidebarOpen ? 320 : 0}
@@ -1108,18 +1218,9 @@ export default function StackViewer({
 
       {createPortal(
         <HeaderIconButton
-          onClick={() => {
-            // Toggle pen mode; exit color picker if entering pen
-            setIsPenMode((v) => {
-              const next = !v;
-              if (next) {
-                setIsColorPickerAlt(false);
-                setIsColorPickerManual(false);
-              }
-              return next;
-            });
-          }}
+          onClick={handlePenModeToggle}
           isActive={isPenMode}
+          disabled={!canUseImageTools}
           aria-label={isPenMode ? 'Exit pen mode' : 'Enter pen mode'}
         >
           <PenTool size={18} />
@@ -1129,12 +1230,9 @@ export default function StackViewer({
 
       {createPortal(
         <HeaderIconButton
-          onClick={() => {
-            // Exit pen mode if entering color picker to avoid overlap
-            setIsPenMode(false);
-            setIsColorPickerManual((v) => !v);
-          }}
+          onClick={handleColorPickerToggle}
           isActive={isColorPicker}
+          disabled={!canUseImageTools}
           aria-label={isColorPicker ? 'Exit color picker' : 'Enter color picker'}
         >
           <Pipette size={18} />
@@ -1144,10 +1242,19 @@ export default function StackViewer({
 
       {createPortal(
         <HeaderIconButton
-          onClick={() => {
-            if (!isInfoSidebarOpen) setSelectionMode(false);
-            setIsInfoSidebarOpen(!isInfoSidebarOpen);
-          }}
+          onClick={handleDragModeToggle}
+          isActive={isNativeDragMode}
+          disabled={!canUseNativeDragMode}
+          aria-label={isNativeDragMode ? 'Exit drag mode' : 'Enter drag mode'}
+        >
+          <span className="text-[11px] font-semibold leading-none">DRAG</span>
+        </HeaderIconButton>,
+        document.getElementById('header-actions') || document.body
+      )}
+
+      {createPortal(
+        <HeaderIconButton
+          onClick={handleInfoSidebarToggle}
           isActive={isInfoSidebarOpen}
           aria-label={isInfoSidebarOpen ? 'Close info panel' : 'Open info panel'}
         >
@@ -1156,7 +1263,7 @@ export default function StackViewer({
         document.getElementById('header-actions') || document.body
       )}
 
-      {isColorPicker && !isMetaDragMode && (
+      {isColorPicker && !isNativeDragMode && (
         <ColorPickerOverlay
           getImageEl={() => imageCarouselRef.current?.getCurrentImageElement() || null}
           onCancel={() => {

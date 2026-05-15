@@ -1,4 +1,4 @@
-import { SplitSquareHorizontal, Trash2, X } from 'lucide-react';
+import { ArrowUpDown, ChevronDown, SplitSquareHorizontal, Trash2, X } from 'lucide-react';
 import React, { useCallback, useState } from 'react';
 import {
   ContextMenu,
@@ -7,9 +7,17 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { isVideoAsset } from '@/lib/media';
 import { cn } from '@/lib/utils';
 import type { Asset } from '@/types';
+import type { AssetSortPreset } from './StackToolbar';
 
 interface AssetGridProps {
   assets: Asset[];
@@ -27,7 +35,21 @@ interface AssetGridProps {
     onSave: () => void;
     onCancel: () => void;
   };
+  // Top action bar (list mode)
+  onSortPresetSelect?: (preset: AssetSortPreset) => void;
+  canSortAssets?: boolean;
+  onReorderToggle?: () => void;
 }
+
+const getAssetDisplayName = (asset: Asset) => {
+  if (asset.originalName && asset.originalName.trim().length > 0) {
+    return asset.originalName;
+  }
+  const rawPath = asset.file || asset.url || '';
+  const normalizedPath = rawPath.split('?')[0];
+  const segments = normalizedPath.split('/');
+  return segments[segments.length - 1] || '';
+};
 
 export default function AssetGrid({
   assets,
@@ -38,6 +60,9 @@ export default function AssetGrid({
   isEditMode = false,
   className,
   reorderBanner,
+  onSortPresetSelect,
+  canSortAssets = false,
+  onReorderToggle,
 }: AssetGridProps) {
   const [draggedItem, setDraggedItem] = useState<number | null>(null);
   const [hoverDividerIndex, setHoverDividerIndex] = useState<number | null>(null);
@@ -121,39 +146,97 @@ export default function AssetGrid({
     return () => window.removeEventListener('resize', onResize);
   }, [recomputeColumns]);
 
+  const isReorderMode = isEditMode;
+  const showSortControl = !!onSortPresetSelect && canSortAssets;
+  const showReorderControl = !!onReorderToggle;
+  const showSaveCancel = !!reorderBanner?.show;
+  const showTopBar = showSortControl || showReorderControl || showSaveCancel;
+
   return (
     <div ref={containerRef} className={cn('p-4 overflow-auto h-full bg-gray-900', className)}>
-      {reorderBanner?.show && (
+      {showTopBar && (
         <div className="absolute top-0 left-0 z-20 w-full">
-          <div className="w-full bg-black/60 text-white p-4 flex items-center justify-between backdrop-blur-sm border-b border-white/10">
+          <div className="w-full bg-black/60 text-white px-4 py-2 flex items-center justify-between gap-2 backdrop-blur-sm border-b border-white/10">
             <span className="text-sm">
-              並び替えモード {reorderBanner.canSave ? '(変更あり)' : ''}
+              {isReorderMode
+                ? `並び替えモード ${reorderBanner?.canSave ? '(変更あり)' : ''}`
+                : '一覧'}
             </span>
-            <div className="flex gap-2">
-              <button
-                onClick={reorderBanner.onCancel}
-                className="px-3 py-1 rounded bg-white/10 hover:bg-white/20 transition"
-              >
-                キャンセル
-              </button>
-              <button
-                disabled={!reorderBanner.canSave || reorderBanner.saving}
-                onClick={reorderBanner.onSave}
-                className={cn(
-                  'px-3 py-1 rounded transition',
-                  reorderBanner.canSave && !reorderBanner.saving
-                    ? 'bg-blue-500 hover:bg-blue-600'
-                    : 'bg-white/20 cursor-not-allowed'
-                )}
-              >
-                {reorderBanner.saving ? '保存中…' : '保存'}
-              </button>
+            <div className="flex items-center gap-2">
+              {showSortControl && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      className="px-3 py-1 rounded transition-colors bg-white/10 text-white hover:bg-white/20 text-sm flex items-center gap-1"
+                      aria-label="Sort assets"
+                    >
+                      ソート
+                      <ChevronDown size={14} />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48">
+                    <DropdownMenuItem onSelect={() => onSortPresetSelect?.('filename-asc')}>
+                      ファイル名 昇順
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => onSortPresetSelect?.('filename-desc')}>
+                      ファイル名 降順
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onSelect={() => onSortPresetSelect?.('created-asc')}>
+                      追加順 昇順
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => onSortPresetSelect?.('created-desc')}>
+                      追加順 降順
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+              {showReorderControl && !showSaveCancel && (
+                <button
+                  type="button"
+                  onClick={onReorderToggle}
+                  className={cn(
+                    'p-2 rounded-full transition-colors',
+                    isReorderMode
+                      ? 'bg-green-500 text-white'
+                      : 'bg-white/10 text-white hover:bg-white/20'
+                  )}
+                  aria-label={isReorderMode ? 'Exit reorder mode' : 'Enter reorder mode'}
+                >
+                  <ArrowUpDown size={16} />
+                </button>
+              )}
+              {showSaveCancel && reorderBanner && (
+                <>
+                  <button
+                    type="button"
+                    onClick={reorderBanner.onCancel}
+                    className="px-3 py-1 rounded bg-white/10 hover:bg-white/20 transition"
+                  >
+                    キャンセル
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!reorderBanner.canSave || reorderBanner.saving}
+                    onClick={reorderBanner.onSave}
+                    className={cn(
+                      'px-3 py-1 rounded transition',
+                      reorderBanner.canSave && !reorderBanner.saving
+                        ? 'bg-blue-500 hover:bg-blue-600'
+                        : 'bg-white/20 cursor-not-allowed'
+                    )}
+                  >
+                    {reorderBanner.saving ? '保存中…' : '保存'}
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
       )}
       <div
-        className="grid pt-1"
+        className={cn('grid', showTopBar ? 'pt-12' : 'pt-1')}
         style={{
           gridTemplateColumns: `repeat(${Math.max(1, columns)}, 1fr)`,
           columnGap: `${dividerBase}px`,
@@ -165,6 +248,7 @@ export default function AssetGrid({
           const videoSrc = asset.preview || asset.file || asset.url;
           const thumbnailSrc = asset.thumbnail || asset.thumbnailUrl || videoSrc || asset.file;
           const isDragging = draggedItem === index;
+          const displayName = getAssetDisplayName(asset);
           // Grid handles item sizing; maintain 1:1 via aspect-square
 
           // Visual shift around hovered divider (no layout shift)
@@ -173,6 +257,11 @@ export default function AssetGrid({
             if (index === hoverDividerIndex - 1) translateX = -6; // left of divider
             if (index === hoverDividerIndex) translateX = 6; // right of divider
           }
+
+          // Drop indicator bars: show one bar at hovered divider position
+          const showLeftBar = isEditMode && hoverDividerIndex === index;
+          const showRightBar =
+            isEditMode && hoverDividerIndex === assets.length && index === assets.length - 1;
 
           const content = (
             <div
@@ -234,6 +323,16 @@ export default function AssetGrid({
               </div>
               {/* No page index badge in list grid */}
 
+              {/* Original filename overlay (bottom-left) */}
+              {displayName && (
+                <div
+                  className="absolute bottom-1 left-1 max-w-[calc(100%-0.5rem)] px-1.5 py-0.5 rounded bg-black/55 text-white text-[10px] leading-tight pointer-events-none truncate"
+                  title={displayName}
+                >
+                  {displayName}
+                </div>
+              )}
+
               {/* Remove button (shown when removal is enabled by parent) */}
               {onRemoveAsset && (
                 <button
@@ -253,7 +352,23 @@ export default function AssetGrid({
           );
 
           if (isEditMode) {
-            return <React.Fragment key={asset.id}>{content}</React.Fragment>;
+            return (
+              <div key={asset.id} className="relative">
+                {content}
+                {showLeftBar && (
+                  <div
+                    className="absolute top-1 bottom-1 w-1 bg-blue-500 rounded-full pointer-events-none shadow-[0_0_8px_rgba(59,130,246,0.8)]"
+                    style={{ left: '-8px' }}
+                  />
+                )}
+                {showRightBar && (
+                  <div
+                    className="absolute top-1 bottom-1 w-1 bg-blue-500 rounded-full pointer-events-none shadow-[0_0_8px_rgba(59,130,246,0.8)]"
+                    style={{ right: '-8px' }}
+                  />
+                )}
+              </div>
+            );
           }
 
           return (

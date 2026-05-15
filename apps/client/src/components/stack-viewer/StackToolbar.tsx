@@ -1,6 +1,8 @@
-import { ArrowUpDown, Heart, Layers, Star } from 'lucide-react';
+import { Heart, Layers, Star } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Stack } from '@/types';
+
+export type AssetSortPreset = 'filename-asc' | 'filename-desc' | 'created-asc' | 'created-desc';
 
 interface StackToolbarProps {
   stack: Stack;
@@ -9,9 +11,6 @@ interface StackToolbarProps {
   onFavoriteToggle: () => void;
   onLikeToggle: () => void;
   onListModeToggle: () => void;
-  // Optional: show reorder button when list mode
-  onReorderToggle?: () => void;
-  isReorderMode?: boolean;
 }
 
 export default function StackToolbar({
@@ -21,8 +20,6 @@ export default function StackToolbar({
   onFavoriteToggle,
   onLikeToggle,
   onListModeToggle,
-  onReorderToggle,
-  isReorderMode,
 }: StackToolbarProps) {
   return (
     <div
@@ -70,21 +67,6 @@ export default function StackToolbar({
       >
         <Layers size={20} />
       </button>
-
-      {isListMode && onReorderToggle && (
-        <button
-          onClick={onReorderToggle}
-          className={cn(
-            'p-3 rounded-full transition-colors',
-            isReorderMode
-              ? 'bg-green-500 text-white'
-              : 'bg-black/40 text-white hover:bg-black/60 hover:text-primary'
-          )}
-          aria-label={isReorderMode ? 'Exit reorder mode' : 'Enter reorder mode'}
-        >
-          <ArrowUpDown size={20} />
-        </button>
-      )}
     </div>
   );
 }
