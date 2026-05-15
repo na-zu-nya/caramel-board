@@ -1579,32 +1579,47 @@ export const createStackService = (deps: {
     return { success: true };
   }
 
+  async function syncStackThumbnailFromLeadAsset(
+    stackId: number,
+    options?: { regenerate?: boolean }
+  ) {
+    const leadAsset = await prisma.asset.findFirst({
+      where: { stackId },
+      orderBy: [{ orderInStack: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
+      select: {
+        file: true,
+        fileType: true,
+        thumbnail: true,
+      },
+    });
+
+    if (!leadAsset) {
+      throw new Error('No assets found for this stack');
+    }
+
+    const thumbnail = options?.regenerate
+      ? await generateThumbnail(leadAsset.file, leadAsset.fileType, true, dataSetId)
+      : leadAsset.thumbnail;
+
+    await prisma.stack.update({
+      where: { id: stackId },
+      data: { thumbnail },
+    });
+
+    return thumbnail;
+  }
+
   async function refreshThumbnail(id: number) {
     const stack = await prisma.stack.findUnique({
       where: { id, dataSetId },
-      include: { assets: { take: 1, orderBy: { id: 'asc' } } },
+      select: { id: true },
     });
 
     if (!stack) {
       throw new Error('Stack not found');
     }
 
-    if (stack.assets.length === 0) {
-      throw new Error('No assets found for this stack');
-    }
-
-    const firstAsset = stack.assets[0];
-    const newThumbnail = await generateThumbnail(
-      firstAsset.file,
-      firstAsset.fileType,
-      true,
-      dataSetId
-    );
-
-    await prisma.stack.update({
-      where: { id },
-      data: { thumbnail: newThumbnail },
-    });
+    await syncStackThumbnailFromLeadAsset(id, { regenerate: true });
 
     return { success: true, message: 'Thumbnail refreshed successfully' };
   }
@@ -1825,7 +1840,7 @@ export const createStackService = (deps: {
     // Verify all stacks exist in this dataset
     const stacks = await prisma.stack.findMany({
       where: { id: { in: stackIds }, dataSetId },
-      include: { assets: { take: 1, orderBy: { id: 'asc' } } },
+      select: { id: true },
     });
 
     if (stacks.length !== stackIds.length) {
@@ -1838,24 +1853,8 @@ export const createStackService = (deps: {
     // Process each stack
     for (const stack of stacks) {
       try {
-        if (stack.assets.length > 0) {
-          const firstAsset = stack.assets[0];
-          const newThumbnail = await generateThumbnail(
-            firstAsset.file,
-            firstAsset.fileType,
-            true,
-            dataSetId
-          );
-
-          await prisma.stack.update({
-            where: { id: stack.id },
-            data: { thumbnail: newThumbnail },
-          });
-
-          updated++;
-        } else {
-          errors.push(`Stack ${stack.id}: No assets found`);
-        }
+        await syncStackThumbnailFromLeadAsset(stack.id, { regenerate: true });
+        updated++;
       } catch (error) {
         errors.push(
           `Stack ${stack.id}: ${error instanceof Error ? error.message : 'Unknown error'}`
@@ -1915,6 +1914,7 @@ export const createStackService = (deps: {
     // Sum likes across target + sources
     const likeSum = sources.reduce((acc, s) => acc + (s.liked || 0), target.liked || 0);
     await prisma.stack.update({ where: { id: targetId }, data: { liked: likeSum } });
+    await syncStackThumbnailFromLeadAsset(targetId);
 
     // Delete source stacks
     await prisma.stack.deleteMany({ where: { id: { in: uniqueSourceIds } } });

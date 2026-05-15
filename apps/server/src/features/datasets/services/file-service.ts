@@ -6,6 +6,9 @@ import sharp from 'sharp';
 import type { DataStorageService } from '../../../shared/services/DataStorageService';
 import { buildThumbnailKey } from '../../../utils/assetPath';
 
+const THUMBNAIL_SIZE = 512;
+const THUMBNAIL_QUALITY = 70;
+
 function getFFMPEGPath() {
   return process.env.FFMPEG_PATH;
 }
@@ -24,8 +27,9 @@ export const createFileService = (deps: {
     async generateThumbnailFromAsset(
       assetId: number,
       dataSetId: number,
-      width = 320,
-      height = 320
+      width = THUMBNAIL_SIZE,
+      height = THUMBNAIL_SIZE,
+      forceUpdate = false
     ): Promise<string> {
       // アセット情報を取得
       const asset = await prisma.asset.findUnique({
@@ -41,7 +45,7 @@ export const createFileService = (deps: {
       const type = getFileType(asset.fileType);
 
       // 既存のサムネイルがあれば返す
-      if (dataStorage.exists(key, dataSetId)) {
+      if (!forceUpdate && dataStorage.exists(key, dataSetId)) {
         return key;
       }
 
@@ -56,7 +60,7 @@ export const createFileService = (deps: {
           .resize(width, height, {
             fit: 'cover',
           })
-          .jpeg({ quality: 80 })
+          .jpeg({ quality: THUMBNAIL_QUALITY })
           .toFile(outputPath);
       } else if (type === 'movie') {
         console.log('thumbnail: movie');
@@ -76,7 +80,10 @@ export const createFileService = (deps: {
         mkdirpSync(path.dirname(outputPath));
         execSync(cmd.filter(Boolean).join(' '));
 
-        await sharp(dataStorage.getPath(tmpKey)).jpeg({ quality: 80 }).toFile(outputPath);
+        await sharp(dataStorage.getPath(tmpKey))
+          .resize(width, height, { fit: 'cover' })
+          .jpeg({ quality: THUMBNAIL_QUALITY })
+          .toFile(outputPath);
 
         // 一時ファイルを削除
         await dataStorage.delete(tmpKey, dataSetId);
@@ -104,8 +111,9 @@ export const createFileService = (deps: {
       const thumbnailPath = await this.generateThumbnailFromAsset(
         firstAsset.id,
         dataSetId,
-        300,
-        300
+        THUMBNAIL_SIZE,
+        THUMBNAIL_SIZE,
+        true
       );
 
       // Stackのサムネイルパスを更新

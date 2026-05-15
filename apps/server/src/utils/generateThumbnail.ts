@@ -6,6 +6,9 @@ import { DataStorage } from '../lib/DataStorage';
 import { buildThumbnailKey } from './assetPath';
 import { getFFMPEGPath, probeDurationSec } from './ffmpeg';
 
+const THUMBNAIL_SIZE = 512;
+const THUMBNAIL_QUALITY = 70;
+
 function getFileType(ext: string): 'movie' | 'image' {
   return /(mov|mp4|m4v|avi|mkv|webm|mpeg|mpg|wmv)$/i.test(ext) ? 'movie' : 'image';
 }
@@ -37,8 +40,8 @@ export async function generateThumbnail(
       await sharp(inputPath, { failOnError: false, sequentialRead: true })
         .rotate() // EXIF Orientation 対応
         .flatten({ background: '#ffffff' }) // 透過を白で潰す（ある場合）
-        .resize(320, 320, { fit: 'cover' })
-        .jpeg({ quality: 80 })
+        .resize(THUMBNAIL_SIZE, THUMBNAIL_SIZE, { fit: 'cover' })
+        .jpeg({ quality: THUMBNAIL_QUALITY })
         .toFile(outputPath);
     } catch (e) {
       console.warn(
@@ -63,8 +66,8 @@ export async function generateThumbnail(
       try {
         execFileSync(ff, args, { stdio: 'ignore' });
         await sharp(tmpPath)
-          .resize(320, 320, { fit: 'cover' })
-          .jpeg({ quality: 80 })
+          .resize(THUMBNAIL_SIZE, THUMBNAIL_SIZE, { fit: 'cover' })
+          .jpeg({ quality: THUMBNAIL_QUALITY })
           .toFile(outputPath);
       } finally {
         try {
@@ -129,10 +132,10 @@ export async function generateThumbnail(
     // 出力ディレクトリを確実に作成
     mkdirpSync(path.dirname(outputPath));
     await sharp(DataStorage.getPath(frameKey))
-      .resize(320, 320, {
+      .resize(THUMBNAIL_SIZE, THUMBNAIL_SIZE, {
         fit: 'cover',
       })
-      .jpeg({ quality: 80 })
+      .jpeg({ quality: THUMBNAIL_QUALITY })
       .toFile(outputPath);
     await DataStorage.delete(frameKey, dataSetId);
   }
