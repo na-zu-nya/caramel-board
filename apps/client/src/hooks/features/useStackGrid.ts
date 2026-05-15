@@ -77,9 +77,11 @@ export function useStackGrid({
   const {
     selectedItems,
     setSelectedItems,
+    selectedItemOrder,
     isEditPanelOpen,
     setIsEditPanelOpen,
     toggleItemSelection,
+    selectItemRange,
     clearSelection,
     exitSelectionMode,
   } = useSelectionMode(isSelectionMode);
@@ -425,6 +427,7 @@ export function useStackGrid({
     selectedItemId,
     selectedItems,
     setSelectedItems,
+    selectedItemOrder,
     isEditPanelOpen,
     columnsPerRow,
     rangeStart,
@@ -445,6 +448,7 @@ export function useStackGrid({
     handleItemClick,
     handleFavoriteToggle,
     handleToggleSelection: toggleItemSelection,
+    selectItemRange,
     handleToggleFavorite: handleFavoriteToggle,
     handleSelectAll: () => {}, // Not implemented in useStackGrid
     handleDeselectAll: clearSelection,

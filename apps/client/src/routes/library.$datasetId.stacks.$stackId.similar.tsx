@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useAtom } from 'jotai';
-import { Clapperboard, Info, Pencil, RefreshCw, Trash2 } from 'lucide-react';
+import { Clapperboard, GitMerge, Info, Pencil, RefreshCw, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import BulkEditPanel, { type EditUpdates } from '@/components/BulkEditPanel';
@@ -9,6 +9,7 @@ import { StackGridItem } from '@/components/grid/StackGridItem';
 import InfoSidebar from '@/components/InfoSidebar';
 import { HeaderIconButton } from '@/components/ui/Header/HeaderIconButton';
 import { SelectionActionBar } from '@/components/ui/selection-action-bar';
+import { useSelectionMode } from '@/hooks/features/useSelectionMode';
 import { useHeaderActions } from '@/hooks/useHeaderActions';
 import { apiClient } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
@@ -34,9 +35,17 @@ function SimilarStacksRoute() {
   const [_currentFilter, setCurrentFilter] = useAtom(currentFilterAtom);
   const [infoSidebarOpen, setInfoSidebarOpen] = useAtom(infoSidebarOpenAtom);
   const [selectedItemId, setSelectedItemId] = useAtom(selectedItemIdAtom);
-  const [selectedItems, setSelectedItems] = useState<Set<string | number>>(new Set());
-  const [isEditPanelOpen, setIsEditPanelOpen] = useState(false);
   const lastClickedIndexRef = useRef<number | null>(null);
+  const {
+    selectedItems,
+    selectedItemOrder,
+    isEditPanelOpen,
+    setIsEditPanelOpen,
+    toggleItemSelection,
+    selectItemRange,
+    clearSelection,
+    exitSelectionMode,
+  } = useSelectionMode(selectionMode);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['similar-stacks', datasetId, stackId, limit],
@@ -62,27 +71,21 @@ function SimilarStacksRoute() {
     }
   }, [items, isLoading, isError, refetch]);
 
-  // Selection helpers
-  const handleToggleSelection = useCallback((itemId: string | number) => {
-    setSelectedItems((prev) => {
-      const next = new Set(prev);
-      if (next.has(itemId)) next.delete(itemId);
-      else next.add(itemId);
-      return next;
-    });
-  }, []);
-
-  const clearSelection = useCallback(() => setSelectedItems(new Set()), []);
-  const exitSelectionMode = useCallback(() => {
-    setSelectionMode(false);
-    clearSelection();
-    setIsEditPanelOpen(false);
-  }, [clearSelection, setSelectionMode]);
-
   const toggleEditPanel = useCallback(() => {
     if (selectedItems.size === 0) return;
     setIsEditPanelOpen((p) => !p);
-  }, [selectedItems.size]);
+  }, [selectedItems.size, setIsEditPanelOpen]);
+
+  const selectedStackIdsInOrder = useMemo(() => {
+    const stackIds: number[] = [];
+    for (const selectedId of selectedItemOrder) {
+      const stackId = typeof selectedId === 'string' ? Number.parseInt(selectedId, 10) : selectedId;
+      if (Number.isFinite(stackId)) {
+        stackIds.push(stackId);
+      }
+    }
+    return stackIds;
+  }, [selectedItemOrder]);
 
   // Click handler with Cmd/Ctrl and Shift support
   const handleItemClick = useCallback(
@@ -92,7 +95,7 @@ function SimilarStacksRoute() {
       if (event && (event.metaKey || event.ctrlKey)) {
         event.preventDefault();
         if (!selectionMode) setSelectionMode(true);
-        handleToggleSelection(item.id);
+        toggleItemSelection(item.id);
         if (idx >= 0) lastClickedIndexRef.current = idx;
         return;
       }
@@ -102,15 +105,15 @@ function SimilarStacksRoute() {
         if (!selectionMode) setSelectionMode(true);
         const last = lastClickedIndexRef.current ?? idx;
         if (last >= 0 && idx >= 0) {
-          const [start, end] = last < idx ? [last, idx] : [idx, last];
-          const next = new Set(selectedItems);
-          for (let i = start; i <= end; i++) {
+          const step = last <= idx ? 1 : -1;
+          const rangeIds: Array<string | number> = [];
+          for (let i = last; step > 0 ? i <= idx : i >= idx; i += step) {
             const it = items[i];
-            if (it) next.add(it.id);
+            if (it) rangeIds.push(it.id);
           }
-          setSelectedItems(next);
+          selectItemRange(rangeIds);
         } else {
-          handleToggleSelection(item.id);
+          toggleItemSelection(item.id);
         }
         if (idx >= 0) lastClickedIndexRef.current = idx;
         return;
@@ -118,7 +121,7 @@ function SimilarStacksRoute() {
 
       if (selectionMode) {
         event?.preventDefault();
-        handleToggleSelection(item.id);
+        toggleItemSelection(item.id);
         if (idx >= 0) lastClickedIndexRef.current = idx;
         return;
       }
@@ -163,11 +166,11 @@ function SimilarStacksRoute() {
     [
       items,
       selectionMode,
-      selectedItems,
       datasetId,
       stackId,
       setSelectionMode,
-      handleToggleSelection,
+      toggleItemSelection,
+      selectItemRange,
       navigate,
       infoSidebarOpen,
       setSelectedItemId,
@@ -272,6 +275,28 @@ function SimilarStacksRoute() {
     }
   }, [selectedItems, datasetId, exitSelectionMode, refetch]);
 
+  const handleMergeStacks = useCallback(async () => {
+    if (selectedStackIdsInOrder.length < 2) return;
+
+    const [targetId, ...sourceIds] = selectedStackIdsInOrder;
+
+    try {
+      await apiClient.mergeStacks(targetId, sourceIds);
+      exitSelectionMode();
+      await Promise.allSettled([
+        queryClient.invalidateQueries({ queryKey: ['stack'] }),
+        queryClient.invalidateQueries({ queryKey: ['stacks'] }),
+        queryClient.invalidateQueries({ queryKey: ['library-counts', datasetId] }),
+        queryClient.invalidateQueries({ queryKey: ['likes', 'yearly'] }),
+        queryClient.invalidateQueries({ queryKey: ['dataset-overview', datasetId] }),
+      ]);
+      await refetch();
+    } catch (error) {
+      console.error('Error merging stacks:', error);
+      alert('スタックのマージに失敗しました');
+    }
+  }, [datasetId, exitSelectionMode, queryClient, refetch, selectedStackIdsInOrder]);
+
   return (
     <div className="p-4">
       <div className="mb-3 text-sm text-gray-600">Similar to #{stackId}</div>
@@ -301,6 +326,8 @@ function SimilarStacksRoute() {
             onToggleSelection={handleToggleSelection}
             onToggleFavorite={onToggleFavorite}
             selectedItems={selectedItems}
+            selectedStackIdsInOrder={selectedStackIdsInOrder}
+            onMergeStacks={handleMergeStacks}
           />
         ))}
       </div>
@@ -333,7 +360,18 @@ function SimilarStacksRoute() {
                     value: 'bulk-edit',
                     onSelect: toggleEditPanel,
                     icon: <Pencil size={12} />,
-                    group: 'primary',
+                    group: 'primary' as const,
+                  },
+                  {
+                    label: 'Merge Stacks',
+                    value: 'merge-stacks',
+                    onSelect: handleMergeStacks,
+                    icon: <GitMerge size={12} />,
+                    confirmMessage:
+                      selectedStackIdsInOrder.length >= 2
+                        ? `選択順の先頭スタック #${selectedStackIdsInOrder[0]} に残り ${selectedStackIdsInOrder.length - 1} 件をマージします。実行しますか？`
+                        : undefined,
+                    group: 'primary' as const,
                   },
                   {
                     label: 'Refresh Thumbnails',
@@ -355,7 +393,9 @@ function SimilarStacksRoute() {
                     confirmMessage: `選択した${selectedItems.size}件のスタックを削除します。元に戻せません。`,
                     destructive: true,
                   },
-                ]
+                ].filter(
+                  (action) => action.value !== 'merge-stacks' || selectedStackIdsInOrder.length >= 2
+                )
               : []
           }
         />

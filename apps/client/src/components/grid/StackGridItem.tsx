@@ -5,6 +5,7 @@ import {
   Book,
   Check,
   GalleryVerticalEnd,
+  GitMerge,
   Heart,
   Info,
   NotebookText,
@@ -38,6 +39,8 @@ interface StackGridItemProps {
   onToggleSelection: (itemId: string | number) => void;
   onToggleFavorite: (item: MediaGridItem, event: React.MouseEvent) => void;
   selectedItems?: Set<string | number>;
+  selectedStackIdsInOrder?: number[];
+  onMergeStacks?: () => void | Promise<void>;
   allowRemoveFromCollection?: boolean;
   onRemoveFromCollection?: (id: string | number) => void | Promise<void>;
   allowRemoveFromScratch?: boolean;
@@ -55,6 +58,8 @@ export function StackGridItem({
   onToggleSelection,
   onToggleFavorite,
   selectedItems,
+  selectedStackIdsInOrder,
+  onMergeStacks,
   allowRemoveFromCollection = false,
   onRemoveFromCollection,
   allowRemoveFromScratch = false,
@@ -86,6 +91,11 @@ export function StackGridItem({
   const setSelectedItemId = useSetAtom(selectedItemIdAtom);
   const selectedInfoId = useAtomValue(selectedItemIdAtom);
   const queryClient = useQueryClient();
+  const canMergeSelectedStacks =
+    isSelectionMode &&
+    (selectedStackIdsInOrder?.length ?? 0) >= 2 &&
+    !!selectedItems?.has(item.id) &&
+    typeof onMergeStacks === 'function';
   const invalidateStackData = useCallback(() => {
     void Promise.allSettled([
       queryClient.invalidateQueries({ queryKey: ['stack'] }),
@@ -205,7 +215,10 @@ export function StackGridItem({
             if (isSelectionMode && selectedItems && selectedItems.size > 0) {
               // If the dragged item is selected, drag all selected items
               if (selectedItems.has(item.id)) {
-                const selectedIds = Array.from(selectedItems);
+                const selectedIds =
+                  selectedStackIdsInOrder && selectedStackIdsInOrder.length > 0
+                    ? selectedStackIdsInOrder
+                    : Array.from(selectedItems);
                 e.dataTransfer.setData('text/plain', `stack-items:${selectedIds.join(',')}`);
                 e.dataTransfer.setData(
                   'application/json',
@@ -464,6 +477,22 @@ export function StackGridItem({
           <NotebookText className="w-4 h-4 mr-2" />
           Add to Scratch
         </ContextMenuItem>
+        {canMergeSelectedStacks && (
+          <ContextMenuItem
+            onClick={async () => {
+              if (!selectedStackIdsInOrder || typeof onMergeStacks !== 'function') return;
+              const [targetId, ...sourceIds] = selectedStackIdsInOrder;
+              const confirmed = window.confirm(
+                `選択順の先頭スタック #${targetId} に残り ${sourceIds.length} 件をマージします。実行しますか？`
+              );
+              if (!confirmed) return;
+              await onMergeStacks();
+            }}
+          >
+            <GitMerge className="w-4 h-4 mr-2" />
+            Merge Stacks
+          </ContextMenuItem>
+        )}
         {(allowRemoveFromCollection || allowRemoveFromScratch) && <ContextMenuSeparator />}
         {allowRemoveFromCollection && (
           <ContextMenuItem

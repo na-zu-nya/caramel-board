@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { Provider, useSetAtom } from 'jotai';
-import { Clapperboard, Pencil, RefreshCw, Trash2 } from 'lucide-react';
+import { Clapperboard, GitMerge, Pencil, RefreshCw, Trash2 } from 'lucide-react';
 import { useEffect } from 'react';
 import { selectionModeAtom } from '@/stores/ui';
 import { SelectionActionBar } from '../selection-action-bar';
@@ -43,6 +43,14 @@ export const Default: Story = {
               value: 'bulk-edit',
               onSelect: () => console.log('open bulk edit'),
               icon: <Pencil size={12} />,
+              group: 'primary',
+            },
+            {
+              label: 'Merge Stacks',
+              value: 'merge-stacks',
+              onSelect: () => console.log('merge stacks'),
+              icon: <GitMerge size={12} />,
+              confirmMessage: '選択順の先頭スタックに残りをマージします。実行しますか？',
               group: 'primary',
             },
             {

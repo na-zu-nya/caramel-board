@@ -1,7 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useAtomValue, useSetAtom } from 'jotai';
-import { Clapperboard, Info, Loader2, Pencil, RefreshCw, Trash2 } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Clapperboard, GitMerge, Info, Loader2, Pencil, RefreshCw, Trash2 } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { StackGridItem } from '@/components/grid/StackGridItem.tsx';
 import { FolderDropDialog } from '@/components/modals/FolderDropDialog.tsx';
@@ -165,7 +165,7 @@ export default function StackGrid({
     isSelectionMode,
     selectedItemId,
     selectedItems,
-    setSelectedItems,
+    selectedItemOrder,
     isEditPanelOpen,
     setIsEditPanelOpen,
     finalVisibleItems,
@@ -177,6 +177,7 @@ export default function StackGrid({
     favoriteOverrides,
     handleItemClick,
     handleToggleSelection,
+    selectItemRange,
     handleToggleFavorite,
     clearSelection,
     exitSelectionMode,
@@ -236,13 +237,13 @@ export default function StackGrid({
         setSelectionMode(true);
         const last = lastClickedIndexRef.current ?? idx;
         if (last >= 0 && idx >= 0) {
-          const [start, end] = last < idx ? [last, idx] : [idx, last];
-          const next = new Set(selectedItems);
-          for (let i = start; i <= end; i++) {
+          const step = last <= idx ? 1 : -1;
+          const rangeIds: Array<string | number> = [];
+          for (let i = last; step > 0 ? i <= idx : i >= idx; i += step) {
             const it = actualItems[i];
-            if (it) next.add(it.id);
+            if (it) rangeIds.push(it.id);
           }
-          setSelectedItems(next);
+          selectItemRange(rangeIds);
         } else {
           handleToggleSelection(id);
         }
@@ -256,15 +257,25 @@ export default function StackGrid({
     },
     [
       actualItems,
-      selectedItems,
-      setSelectedItems,
       setSelectionMode,
       handleToggleSelection,
+      selectItemRange,
       handleItemClick,
       onItemClick,
       findIndexById,
     ]
   );
+
+  const selectedStackIdsInOrder = useMemo(() => {
+    const stackIds: number[] = [];
+    for (const selectedId of selectedItemOrder) {
+      const stackId = typeof selectedId === 'string' ? Number.parseInt(selectedId, 10) : selectedId;
+      if (Number.isFinite(stackId)) {
+        stackIds.push(stackId);
+      }
+    }
+    return stackIds;
+  }, [selectedItemOrder]);
 
   // Track processed notification IDs to avoid duplicate refreshes
   const processedNotificationIds = useRef<Set<string>>(new Set());
@@ -487,6 +498,44 @@ export default function StackGrid({
       alert('Failed to optimize video previews. Please try again.');
     }
   };
+
+  const handleMergeStacks = useCallback(async () => {
+    if (selectedStackIdsInOrder.length < 2) return;
+
+    const [targetId, ...sourceIds] = selectedStackIdsInOrder;
+
+    try {
+      await apiClient.mergeStacks(targetId, sourceIds);
+
+      clearSelection();
+      exitSelectionMode();
+
+      addNotification({
+        type: 'success',
+        message: `選択順の先頭スタック #${targetId} に ${sourceIds.length} 件をマージしました`,
+      });
+
+      window.dispatchEvent(new CustomEvent('stacks-merged', { detail: { targetId, sourceIds } }));
+
+      void Promise.allSettled([
+        queryClient.invalidateQueries({ queryKey: ['stack'] }),
+        queryClient.invalidateQueries({ queryKey: ['stacks'] }),
+        queryClient.invalidateQueries({ queryKey: ['library-counts', dsId] }),
+        queryClient.invalidateQueries({ queryKey: ['likes', 'yearly'] }),
+        queryClient.invalidateQueries({ queryKey: ['dataset-overview', dsId] }),
+      ]);
+    } catch (error) {
+      console.error('❌ Failed to merge stacks:', error);
+      addNotification({ type: 'error', message: 'スタックのマージに失敗しました' });
+    }
+  }, [
+    addNotification,
+    clearSelection,
+    dsId,
+    exitSelectionMode,
+    queryClient,
+    selectedStackIdsInOrder,
+  ]);
 
   // Handle bulk delete stacks
   const handleRemoveStacks = async (itemIds: (string | number)[]) => {
@@ -890,6 +939,8 @@ export default function StackGrid({
                   onToggleSelection={handleToggleSelection}
                   onToggleFavorite={handleToggleFavorite}
                   allowRemoveFromCollection={allowRemoveFromCollection}
+                  selectedStackIdsInOrder={selectedStackIdsInOrder}
+                  onMergeStacks={handleMergeStacks}
                   onRemoveFromCollection={
                     allowRemoveFromCollection ? (id) => handleRemoveFromCollection([id]) : undefined
                   }
@@ -979,7 +1030,18 @@ export default function StackGrid({
                     });
                   },
                   icon: <Pencil size={12} />,
-                  group: 'primary',
+                  group: 'primary' as const,
+                },
+                {
+                  label: 'Merge Stacks',
+                  value: 'merge-stacks',
+                  onSelect: handleMergeStacks,
+                  icon: <GitMerge size={12} />,
+                  confirmMessage:
+                    selectedStackIdsInOrder.length >= 2
+                      ? `選択順の先頭スタック #${selectedStackIdsInOrder[0]} に残り ${selectedStackIdsInOrder.length - 1} 件をマージします。実行しますか？`
+                      : undefined,
+                  group: 'primary' as const,
                 },
                 {
                   label: 'Refresh Thumbnails',
@@ -1001,7 +1063,9 @@ export default function StackGrid({
                   confirmMessage: `選択した${selectedItems.size}件のスタックを削除します。元に戻せません。`,
                   destructive: true,
                 },
-              ]
+              ].filter(
+                (action) => action.value !== 'merge-stacks' || selectedStackIdsInOrder.length >= 2
+              )
             : []
         }
       />

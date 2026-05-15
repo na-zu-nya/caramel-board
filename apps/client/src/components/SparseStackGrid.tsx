@@ -1,7 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useAtomValue, useSetAtom } from 'jotai';
-import { Info, Loader2, Pencil } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { GitMerge, Info, Loader2, Pencil } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { StackGridItem } from '@/components/grid/StackGridItem.tsx';
 import { FolderDropDialog } from '@/components/modals/FolderDropDialog.tsx';
@@ -261,7 +261,7 @@ export default function SparseStackGrid({
     isSelectionMode,
     selectedItemId,
     selectedItems,
-    setSelectedItems,
+    selectedItemOrder,
     isEditPanelOpen,
     setIsEditPanelOpen,
     itemsPerRow,
@@ -270,10 +270,12 @@ export default function SparseStackGrid({
     favoriteOverrides,
     handleItemClick,
     handleToggleSelection,
+    selectItemRange,
     handleToggleFavorite,
     handleDeselectAll,
     applyEditUpdates,
     closeEditPanel,
+    exitSelectionMode,
     isSidebarAnimating,
   } = useStackGrid({
     items: sparseItems.filter((item): item is MediaGridItem => item !== undefined), // Only pass actual items for selection logic
@@ -306,13 +308,13 @@ export default function SparseStackGrid({
         setSelectionMode(true);
         const last = lastClickedIndexRef.current ?? idx;
         if (last >= 0 && idx >= 0) {
-          const [start, end] = last < idx ? [last, idx] : [idx, last];
-          const next = new Set(selectedItems);
-          for (let i = start; i <= end; i++) {
+          const step = last <= idx ? 1 : -1;
+          const rangeIds: Array<string | number> = [];
+          for (let i = last; step > 0 ? i <= idx : i >= idx; i += step) {
             const it = sparseItems[i];
-            if (it) next.add(it.id);
+            if (it) rangeIds.push(it.id);
           }
-          setSelectedItems(next);
+          selectItemRange(rangeIds);
         } else {
           handleToggleSelection(id);
         }
@@ -325,14 +327,59 @@ export default function SparseStackGrid({
     },
     [
       sparseItems,
-      selectedItems,
-      setSelectedItems,
       setSelectionMode,
       handleToggleSelection,
+      selectItemRange,
       handleItemClick,
       onItemClick,
     ]
   );
+
+  const selectedStackIdsInOrder = useMemo(() => {
+    const stackIds: number[] = [];
+    for (const selectedId of selectedItemOrder) {
+      const stackId = typeof selectedId === 'string' ? Number.parseInt(selectedId, 10) : selectedId;
+      if (Number.isFinite(stackId)) {
+        stackIds.push(stackId);
+      }
+    }
+    return stackIds;
+  }, [selectedItemOrder]);
+
+  const handleMergeStacks = useCallback(async () => {
+    if (selectedStackIdsInOrder.length < 2) return;
+
+    const [targetId, ...sourceIds] = selectedStackIdsInOrder;
+
+    try {
+      await apiClient.mergeStacks(targetId, sourceIds);
+      handleDeselectAll();
+      exitSelectionMode();
+      addNotification({
+        type: 'success',
+        message: `選択順の先頭スタック #${targetId} に ${sourceIds.length} 件をマージしました`,
+      });
+      await refreshAll();
+      void Promise.allSettled([
+        queryClient.invalidateQueries({ queryKey: ['stack'] }),
+        queryClient.invalidateQueries({ queryKey: ['stacks'] }),
+        queryClient.invalidateQueries({ queryKey: ['library-counts', datasetId] }),
+        queryClient.invalidateQueries({ queryKey: ['likes', 'yearly'] }),
+        queryClient.invalidateQueries({ queryKey: ['dataset-overview', datasetId] }),
+      ]);
+    } catch (error) {
+      console.error('❌ Failed to merge stacks:', error);
+      addNotification({ type: 'error', message: 'スタックのマージに失敗しました' });
+    }
+  }, [
+    addNotification,
+    datasetId,
+    exitSelectionMode,
+    handleDeselectAll,
+    queryClient,
+    refreshAll,
+    selectedStackIdsInOrder,
+  ]);
 
   // Handle scroll-based loading
   const handleScroll = useCallback(() => {
@@ -608,6 +655,9 @@ export default function SparseStackGrid({
                   onItemClick={onTileClick}
                   onToggleSelection={handleToggleSelection}
                   onToggleFavorite={handleToggleFavorite}
+                  selectedItems={selectedItems}
+                  selectedStackIdsInOrder={selectedStackIdsInOrder}
+                  onMergeStacks={handleMergeStacks}
                   onReorder={() => {}} // Not implemented in sparse mode
                 />
               </div>
@@ -661,6 +711,18 @@ export default function SparseStackGrid({
               icon: <Pencil size={12} />,
               group: 'primary',
             },
+            ...(selectedStackIdsInOrder.length >= 2
+              ? [
+                  {
+                    label: 'Merge Stacks',
+                    value: 'merge-stacks',
+                    onSelect: handleMergeStacks,
+                    icon: <GitMerge size={12} />,
+                    confirmMessage: `選択順の先頭スタック #${selectedStackIdsInOrder[0]} に残り ${selectedStackIdsInOrder.length - 1} 件をマージします。実行しますか？`,
+                    group: 'primary' as const,
+                  },
+                ]
+              : []),
           ]}
         />
       )}
