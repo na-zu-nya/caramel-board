@@ -13,6 +13,8 @@ import io
 import os
 import time
 import logging
+from threading import Event, Lock, Thread
+from typing import Optional
 
 # JoyTag repo dependency
 try:
@@ -32,6 +34,13 @@ top_tags: list[str] | None = None
 device = "cpu"
 THRESHOLD_DEFAULT = float(os.environ.get("JOYTAG_THRESHOLD", 0.4))
 
+model_ready = Event()
+model_error: Optional[str] = None
+_model_loader_lock = Lock()
+_model_loader_thread: Optional[Thread] = None
+_model_load_started_at: Optional[float] = None
+_model_load_finished_at: Optional[float] = None
+
 
 def _pick_device() -> str:
     if torch.backends.mps.is_available():
@@ -41,21 +50,24 @@ def _pick_device() -> str:
     return "cpu"
 
 
-def initialize_model():
+def initialize_model(force_device: Optional[str] = None):
     global model, top_tags, device
     model_dir = os.environ.get("JOYTAG_MODEL_DIR", str(Path(__file__).parent / "models"))
-    device = _pick_device()
+    device = force_device or _pick_device()
     logger.info(f"Loading JoyTag model… (dir={model_dir}, device={device})")
 
     # Load VisionModel from JoyTag repo
-    model = VisionModel.load_model(model_dir)
-    model = model.to(device).eval()
+    model_instance = VisionModel.load_model(model_dir)
+    model_instance = model_instance.to(device).eval()
 
     # Load tags
     tags_file = Path(model_dir) / "top_tags.txt"
     if not tags_file.exists():
         raise FileNotFoundError(f"top_tags.txt not found in {model_dir}. Download JoyTag models first.")
-    top_tags = [ln.strip() for ln in tags_file.read_text(encoding="utf-8").splitlines() if ln.strip()]
+    loaded_tags = [ln.strip() for ln in tags_file.read_text(encoding="utf-8").splitlines() if ln.strip()]
+
+    model = model_instance
+    top_tags = loaded_tags
     logger.info(f"Model ready. tags={len(top_tags)}")
 
 
@@ -89,15 +101,71 @@ def _predict_image(img: Image.Image, threshold: float):
     return predicted, scores
 
 
+def start_model_loader() -> None:
+    global _model_loader_thread, _model_load_started_at, _model_load_finished_at, model_error, device
+
+    with _model_loader_lock:
+        if model_ready.is_set() and model_error is None:
+            return
+
+        if _model_loader_thread and _model_loader_thread.is_alive():
+            return
+
+        device = _pick_device()
+        _model_load_started_at = time.time()
+        model_error = None
+        _model_load_finished_at = None
+
+        def _load_worker() -> None:
+            global model_error, _model_load_finished_at
+            try:
+                initialize_model(force_device=device)
+                model_ready.set()
+            except Exception as exc:  # pragma: no cover
+                logger.exception("Failed to load JoyTag model")
+                model_ready.clear()
+                model_error = str(exc)
+            finally:
+                _model_load_finished_at = time.time()
+
+        _model_loader_thread = Thread(target=_load_worker, name="joytag-model-loader", daemon=True)
+        _model_loader_thread.start()
+
+
+@app.before_first_request
+def _ensure_model_loader() -> None:  # pragma: no cover
+    start_model_loader()
+
+
 @app.get("/health")
 def health():
-    return jsonify({
-        "status": "ok",
-        "services": {"joytag": "ready" if (model is not None) else "loading"},
+    if model_ready.is_set():
+        status = "ok"
+    elif model_error:
+        status = "error"
+    else:
+        status = "loading"
+
+    services_status = "ready" if model_ready.is_set() else ("error" if model_error else "loading")
+
+    payload = {
+        "status": status,
+        "services": {"joytag": services_status},
         "device": device,
         "tags": len(top_tags or []),
         "version": "cb-joytag-bridge-1",
-    })
+    }
+
+    if model_error:
+        payload["message"] = model_error
+
+    if _model_load_started_at is not None:
+        payload["loading_started_at"] = _model_load_started_at
+
+    if _model_load_finished_at is not None:
+        payload["loading_finished_at"] = _model_load_finished_at
+
+    return jsonify(payload)
 
 
 @app.post("/api/v1/tag")
@@ -106,6 +174,11 @@ def api_tag():
         t0 = time.time()
         threshold = THRESHOLD_DEFAULT
         image: Image.Image | None = None
+
+        if not model_ready.is_set() or model is None or top_tags is None:
+            status = "error" if model_error else "loading"
+            message = model_error or "JoyTag model is still loading"
+            return jsonify({"error": message, "status": status}), 503
 
         if request.is_json:
             data = request.get_json() or {}
@@ -151,9 +224,8 @@ def api_tag():
 
 
 if __name__ == "__main__":  # pragma: no cover
-    initialize_model()
+    start_model_loader()
     port = int(os.environ.get("PORT", 5001))
     debug = (os.environ.get("DEBUG", "false").lower() == "true")
     logger.info(f"Starting JoyTag bridge on :{port} ({device})")
     app.run(host="0.0.0.0", port=port, debug=debug)
-
