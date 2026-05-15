@@ -38,7 +38,16 @@ export const Default: Story = {
             Finderやローカルファイルはもちろん、X / Pixiv などからの画像ドロップもテストできます。
           </p>
           <p className="text-xs text-gray-400">
-            ファイルが取得できる場合はファイルを優先し、取得できないときだけURLを処理します。
+            ファイルが取得できる場合はファイルを優先し、取得できないときだけ複数URLを処理します。
+          </p>
+          <p className="text-xs text-gray-400">
+            `text/plain` / `text/uri-list` の改行区切りに加えて、Safari 系の連結URLも吸収します。
+          </p>
+          <p className="text-xs text-gray-400">
+            ドロップ時には `console` に `DataTransfer` の生ペイロードも種類別で出力されます。
+          </p>
+          <p className="text-xs text-gray-400">
+            `dragover` では `dropEffect = copy` を明示し、Cmd 併用時の再投入も検証できます。
           </p>
           <div className="text-left text-xs text-gray-500 space-y-1">
             {logs.map((log) => (

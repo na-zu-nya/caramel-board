@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { Prisma, PrismaClient, Stack } from '@prisma/client';
 import { type Context, Hono } from 'hono';
 import { z } from 'zod';
@@ -728,6 +729,50 @@ async function downloadRemoteAsset(url: string, tmpDir: string) {
   };
 }
 
+function copyLocalAssetFromFileUrl(url: string, tmpDir: string) {
+  const targetUrl = new URL(url);
+  const sourcePath = fileURLToPath(targetUrl);
+
+  let stat: fs.Stats;
+  try {
+    stat = fs.statSync(sourcePath);
+  } catch {
+    throw new Error('ローカルファイルが見つかりません');
+  }
+
+  if (!stat.isFile()) {
+    throw new Error('ローカルファイルのみドロップできます');
+  }
+
+  const originalname = sanitizeFileNameForStorage(path.basename(sourcePath));
+  const tmpPath = path.join(
+    tmpDir,
+    `${Date.now()}-${Math.random().toString(36).slice(2, 10)}-${originalname}`
+  );
+  fs.copyFileSync(sourcePath, tmpPath);
+
+  return {
+    path: tmpPath,
+    originalname,
+    mimetype: lookupMimeFromExtension(originalname) ?? 'application/octet-stream',
+    size: stat.size,
+  };
+}
+
+async function importAssetFromUrl(url: string, tmpDir: string) {
+  const targetUrl = new URL(url);
+
+  if (targetUrl.protocol === 'file:') {
+    return copyLocalAssetFromFileUrl(url, tmpDir);
+  }
+
+  if (targetUrl.protocol !== 'http:' && targetUrl.protocol !== 'https:') {
+    throw new Error('未対応のURLスキームです');
+  }
+
+  return downloadRemoteAsset(url, tmpDir);
+}
+
 // Helper: resolve datasetId for a stack or for a list of stackIds
 function sanitizeStackIds(stackIds: number[] | number) {
   const raw = Array.isArray(stackIds) ? stackIds : [stackIds];
@@ -1073,7 +1118,7 @@ stacksRoute.post('/import-from-urls', async (c) => {
         size: number;
       } | null = null;
       try {
-        downloaded = await downloadRemoteAsset(url, tmpDir);
+        downloaded = await importAssetFromUrl(url, tmpDir);
 
         if (stackId) {
           const asset = await assetService.createWithFile(stackId, downloaded);

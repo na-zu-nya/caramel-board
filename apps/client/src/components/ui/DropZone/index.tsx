@@ -165,24 +165,49 @@ function pickPreferred(existing: URL, candidate: URL): URL {
   return existing;
 }
 
+function splitConcatenatedUrls(value: string): string[] {
+  const trimmed = value.trim();
+  if (!trimmed) return [];
+
+  const matches = trimmed.match(/(?:https?|file):\/\/[\s\S]+?(?=(?:https?|file):\/\/|$)/g);
+  if (!matches) {
+    return [];
+  }
+
+  return matches.map((part) => part.trim()).filter((part) => part.length > 0);
+}
+
+function extractRawUrlStrings(value: string): string[] {
+  const lines = value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !line.startsWith('#'));
+
+  const extracted: string[] = [];
+
+  for (const line of lines) {
+    const splitUrls = splitConcatenatedUrls(line);
+    if (splitUrls.length > 0) {
+      extracted.push(...splitUrls);
+    }
+  }
+
+  return extracted;
+}
+
 function extractUrlsFromDataTransfer(dataTransfer: DataTransfer | null): string[] {
   if (!dataTransfer) return [];
 
   const rawUrls: string[] = [];
   const uriList = dataTransfer.getData('text/uri-list');
   if (uriList) {
-    for (const line1 of uriList
-      .split('\n')
-      .map((line) => line.trim())
-      .filter((line) => line.length > 0 && !line.startsWith('#'))) {
-      rawUrls.push(line1);
-    }
+    rawUrls.push(...extractRawUrlStrings(uriList));
   }
 
   if (rawUrls.length === 0) {
     const plain = dataTransfer.getData('text/plain')?.trim();
-    if (plain && /^https?:\/\//i.test(plain)) {
-      rawUrls.push(plain);
+    if (plain) {
+      rawUrls.push(...extractRawUrlStrings(plain));
     }
 
     if (rawUrls.length === 0) {
@@ -219,6 +244,46 @@ function extractUrlsFromDataTransfer(dataTransfer: DataTransfer | null): string[
   });
 
   return Array.from(bestByKey.values()).map((url) => url.toString());
+}
+
+function debugLogDroppedDataTransfer(dataTransfer: DataTransfer | null) {
+  if (!dataTransfer) {
+    console.log('[DropZone] drop payload', { hasDataTransfer: false });
+    return;
+  }
+
+  const types = Array.from(dataTransfer.types ?? []);
+  const items = dataTransfer.items
+    ? Array.from(dataTransfer.items).map((item, index) => ({
+        index,
+        kind: item.kind,
+        type: item.type,
+      }))
+    : [];
+  const files = Array.from(dataTransfer.files ?? []).map((file, index) => ({
+    index,
+    name: file.name,
+    type: file.type,
+    size: file.size,
+    lastModified: file.lastModified,
+  }));
+
+  const dataByType: Record<string, string> = {};
+  for (const type of types) {
+    try {
+      dataByType[type] = dataTransfer.getData(type);
+    } catch (error) {
+      dataByType[type] =
+        `[getData failed: ${error instanceof Error ? error.message : String(error)}]`;
+    }
+  }
+
+  console.groupCollapsed('[DropZone] Raw drop payload');
+  console.log('types', types);
+  console.log('items', items);
+  console.log('files', files);
+  console.log('dataByType', dataByType);
+  console.groupEnd();
 }
 
 const RELATIVE_PATH_KEY = '__dropZoneRelativePath';
@@ -410,24 +475,20 @@ export function DropZone({
       if (!isFileLikeDrag(e)) return; // Ignore non-file drags
       e.preventDefault();
       e.stopPropagation();
+      try {
+        // Cmd 併用時でも再投入を常に copy として受け付ける
+        e.dataTransfer.dropEffect = 'copy';
+      } catch {}
     };
 
     const handleDrop = (e: DragEvent) => {
       const dataTransfer = e.dataTransfer ?? null;
+      debugLogDroppedDataTransfer(dataTransfer);
       const urls = extractUrlsFromDataTransfer(dataTransfer);
       const fileHandler = onDrop ?? onFilesDrop;
       const hasFileHandler = typeof fileHandler === 'function';
       const hasUrlHandler = typeof onUrlDrop === 'function';
       const canHandleUrls = hasUrlHandler && urls.length > 0;
-
-      console.log('handleDrop');
-      for (const item of dataTransfer.items) {
-        console.log('Kind', item.kind);
-        console.log('Type', item.type);
-        item.getAsString((str) => {
-          console.log('File:', str);
-        });
-      }
 
       if (!hasFileHandler && !canHandleUrls) {
         return; // Let stack drops bubble to items
