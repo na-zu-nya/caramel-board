@@ -1,6 +1,7 @@
 import { Link } from '@tanstack/react-router';
 import { format } from 'date-fns';
 import { enUS, ja } from 'date-fns/locale';
+import { Heart } from 'lucide-react';
 import { useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { MonthSectionHeader } from '@/components/ui/MonthSectionHeader';
@@ -11,6 +12,8 @@ import type { Stack } from '@/types';
 
 export interface GroupedStack {
   id: string | number;
+  assetId?: string | number | null;
+  likePage?: number;
   createdAt: string;
   stack: Stack;
 }
@@ -139,12 +142,13 @@ export function GroupedStackList({
                         const stack = item.stack;
                         const thumb = stack.thumbnail || stack.thumbnailUrl || '/no-image.png';
                         const likeCount = Number(stack.likeCount ?? stack.liked ?? 0);
-                        const pageCount =
-                          stack.assetCount || stack._count?.assets || stack.assetsCount || 0;
+                        const pageCount = stack.assetCount || stack.assetsCount || 0;
                         const isFav = stack.favorited || stack.isFavorite || false;
                         const likeActivityId = item.id;
+                        const likePage = item.likePage;
+                        const isAssetLike = item.assetId != null && typeof likePage === 'number';
                         return (
-                          <div key={item.id} className={itemWidth}>
+                          <div key={item.id} className={`${itemWidth} relative`}>
                             <StackTile
                               thumbnailUrl={thumb}
                               pageCount={pageCount}
@@ -165,17 +169,25 @@ export function GroupedStackList({
                                       })
                                   : undefined
                               }
-                              onRemoveStack={() =>
-                                onRemoveStack(stack.id, stack.title || stack.name)
-                              }
+                              onRemoveStack={() => onRemoveStack(stack.id, stack.name)}
                               dragHandlers={dragProps(stack.id)}
                               asChild
                             >
                               <Link
                                 to="/library/$datasetId/stacks/$stackId"
                                 params={{ datasetId, stackId: String(stack.id) }}
+                                search={{
+                                  ...(isAssetLike ? { page: likePage - 1 } : {}),
+                                  mediaType: stack.mediaType,
+                                }}
                               />
                             </StackTile>
+                            {isAssetLike && (
+                              <div className="pointer-events-none absolute left-2 top-2 z-20 flex items-center gap-1 rounded-full bg-rose-500/90 px-2 py-1 text-[11px] font-semibold text-white shadow-sm backdrop-blur">
+                                <Heart size={11} className="fill-current" />
+                                p.{likePage}
+                              </div>
+                            )}
                           </div>
                         );
                       })}

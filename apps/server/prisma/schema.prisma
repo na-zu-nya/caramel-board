@@ -82,6 +82,7 @@ model Asset {
   autoTagPrediction AutoTagPrediction?
   colors            AssetColor[]
   favorites         AssetFavorite[]
+  likeActivities    LikeActivity[]
 
   @@index([stackId])
   @@index([hash])
@@ -123,12 +124,15 @@ model TagsOnStack {
 model LikeActivity {
   id        Int      @id @default(autoincrement())
   stackId   Int
+  assetId   Int?
   userId    Int?
   createdAt DateTime @default(now())
   stack     Stack    @relation(fields: [stackId], references: [id], onDelete: Cascade)
+  asset     Asset?   @relation(fields: [assetId], references: [id], onDelete: SetNull)
   user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([stackId])
+  @@index([assetId])
   @@index([userId])
   @@index([createdAt])
 }

@@ -350,6 +350,17 @@ class ApiClient {
     });
   }
 
+  async likeAsset(
+    assetId: string | number
+  ): Promise<{ success: boolean; liked: number; stackId: number; assetId: number }> {
+    return this.fetch<{ success: boolean; liked: number; stackId: number; assetId: number }>(
+      `/api/v1/assets/${assetId}/like`,
+      {
+        method: 'POST',
+      }
+    );
+  }
+
   async removeLikeActivity(
     activityId: string | number
   ): Promise<{ success: boolean; stackId: number; liked: number }> {
@@ -734,6 +745,8 @@ class ApiClient {
       Array<{
         id: string;
         stackId: string;
+        assetId?: string | number | null;
+        likePage?: number;
         createdAt: string;
         stack: Stack;
       }>
@@ -752,6 +765,8 @@ class ApiClient {
         Array<{
           id: string;
           stackId: string;
+          assetId?: string | number | null;
+          likePage?: number;
           createdAt: string;
           stack: Stack;
         }>

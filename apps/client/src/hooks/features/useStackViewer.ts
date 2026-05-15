@@ -118,13 +118,19 @@ export function useStackViewer({
   // Like toggle
   const handleLikeToggle = useCallback(async () => {
     if (!stack) return;
+    const asset = stack.assets?.[currentPage];
     try {
-      await apiClient.likeStack(stack.id);
-      refetch();
+      if (asset) {
+        await apiClient.likeAsset(asset.id);
+      } else {
+        await apiClient.likeStack(stack.id);
+      }
+      await refetch();
+      await queryClient.invalidateQueries({ queryKey: ['likes', 'yearly'] });
     } catch (error) {
       console.error('Failed to like stack:', error);
     }
-  }, [stack, refetch]);
+  }, [currentPage, queryClient, stack, refetch]);
 
   return {
     stack,

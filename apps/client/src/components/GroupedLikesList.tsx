@@ -7,6 +7,8 @@ interface GroupedLikesListProps {
     Array<{
       id: string;
       stackId: string;
+      assetId?: string | number | null;
+      likePage?: number;
       createdAt: string;
       stack: Stack;
     }>
@@ -29,6 +31,8 @@ export function GroupedLikesList({
     for (const item of items) {
       allItems.push({
         id: item.id,
+        assetId: item.assetId,
+        likePage: item.likePage,
         createdAt: item.createdAt,
         stack: item.stack,
       });

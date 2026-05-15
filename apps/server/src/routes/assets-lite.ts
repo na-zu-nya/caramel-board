@@ -183,3 +183,45 @@ assetsLiteRoute.put('/:assetId/favorite', async (c) => {
 
   return c.json({ success: true, favorited: parse.data.favorited });
 });
+
+// POST /assets/:assetId/like
+assetsLiteRoute.post('/:assetId/like', async (c) => {
+  const assetId = Number.parseInt(c.req.param('assetId'), 10);
+  if (Number.isNaN(assetId)) return c.json({ error: 'Invalid asset id' }, 400);
+
+  const prisma = usePrisma(c);
+  const asset = await prisma.asset.findUnique({
+    where: { id: assetId },
+    select: {
+      id: true,
+      stackId: true,
+      stack: {
+        select: {
+          dataSetId: true,
+        },
+      },
+    },
+  });
+
+  if (!asset) return c.json({ error: 'Asset not found' }, 404);
+
+  const colorSearch = createColorSearchService({ prisma, dataSetId: asset.stack.dataSetId });
+  const stackService = createStackService({
+    prisma,
+    colorSearch,
+    dataSetId: asset.stack.dataSetId,
+  });
+  await stackService.like(asset.stackId, asset.id);
+
+  const updated = await prisma.stack.findUnique({
+    where: { id: asset.stackId },
+    select: { liked: true },
+  });
+
+  return c.json({
+    success: true,
+    liked: updated?.liked ?? 0,
+    stackId: asset.stackId,
+    assetId: asset.id,
+  });
+});

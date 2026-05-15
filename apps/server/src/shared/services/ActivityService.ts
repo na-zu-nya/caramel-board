@@ -73,6 +73,7 @@ export class ActivityService {
       take: limit,
       orderBy: { createdAt: 'desc' },
       include: {
+        asset: true,
         stack: {
           include: {
             assets: {
@@ -98,19 +99,27 @@ export class ActivityService {
     // Transform the data to match expected format
     const transformedActivities = likeActivities.map((activity) => {
       const assets = withPublicAssetArray(activity.stack.assets, activity.stack.dataSetId);
-      const thumbnail = toPublicAssetPath(
+      const stackThumbnail = toPublicAssetPath(
         assets[0]?.thumbnail || activity.stack.thumbnail,
         activity.stack.dataSetId
       );
+      const activityThumbnail = activity.asset
+        ? toPublicAssetPath(
+            activity.asset.thumbnail || activity.asset.file,
+            activity.stack.dataSetId
+          )
+        : stackThumbnail;
 
       return {
         id: activity.id,
         stackId: activity.stackId,
+        assetId: activity.assetId,
+        likePage: activity.asset ? activity.asset.orderInStack + 1 : undefined,
         createdAt: activity.createdAt,
         stack: {
           ...activity.stack,
           assets,
-          thumbnail,
+          thumbnail: activityThumbnail,
           assetsCount: activity.stack._count.assets,
           tags: activity.stack.tags.map((t) => t.tag.title),
         },
@@ -145,6 +154,7 @@ export class ActivityService {
       },
       orderBy: { createdAt: 'desc' },
       include: {
+        asset: true,
         stack: {
           include: {
             assets: {
@@ -211,19 +221,27 @@ export class ActivityService {
       }
 
       const assets = withPublicAssetArray(activity.stack.assets, activity.stack.dataSetId);
-      const thumbnail = toPublicAssetPath(
+      const stackThumbnail = toPublicAssetPath(
         assets[0]?.thumbnail || activity.stack.thumbnail,
         activity.stack.dataSetId
       );
+      const activityThumbnail = activity.asset
+        ? toPublicAssetPath(
+            activity.asset.thumbnail || activity.asset.file,
+            activity.stack.dataSetId
+          )
+        : stackThumbnail;
 
       groupedByMonth[monthKey].push({
         id: activity.id,
         stackId: activity.stackId,
+        assetId: activity.assetId,
+        likePage: activity.asset ? activity.asset.orderInStack + 1 : undefined,
         createdAt: activity.createdAt,
         stack: {
           ...activity.stack,
           assets,
-          thumbnail,
+          thumbnail: activityThumbnail,
           assetsCount: activity.stack._count.assets,
           tags: activity.stack.tags.map((t) => t.tag.title),
         },

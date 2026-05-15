@@ -1526,26 +1526,43 @@ export const createStackService = (deps: {
     return { success: true };
   }
 
-  async function like(stackId: number) {
+  async function like(stackId: number, assetId?: number | null) {
     const userId = await ensureSuperUser(prisma);
+    let likeAssetId: number | undefined;
 
-    // Increment the liked count
-    await prisma.stack.update({
-      where: { id: stackId },
-      data: {
-        liked: {
-          increment: 1,
+    if (assetId != null) {
+      const asset = await prisma.asset.findFirst({
+        where: {
+          id: assetId,
+          stackId,
         },
-      },
-    });
+        select: { id: true },
+      });
 
-    // Create activity record
-    await prisma.likeActivity.create({
-      data: {
-        stackId,
-        userId,
-      },
-    });
+      if (!asset) {
+        throw new Error('Asset not found in this stack');
+      }
+
+      likeAssetId = asset.id;
+    }
+
+    await prisma.$transaction([
+      prisma.stack.update({
+        where: { id: stackId },
+        data: {
+          liked: {
+            increment: 1,
+          },
+        },
+      }),
+      prisma.likeActivity.create({
+        data: {
+          stackId,
+          userId,
+          ...(likeAssetId !== undefined ? { assetId: likeAssetId } : {}),
+        },
+      }),
+    ]);
 
     return { success: true };
   }
