@@ -147,6 +147,10 @@ export function GroupedStackList({
                         const likeActivityId = item.id;
                         const likePage = item.likePage;
                         const isAssetLike = item.assetId != null && typeof likePage === 'number';
+                        const stackOpenOptions = {
+                          ...(isAssetLike ? { page: likePage - 1 } : {}),
+                          mediaType: stack.mediaType,
+                        };
                         return (
                           <div key={item.id} className={`${itemWidth} relative`}>
                             <StackTile
@@ -154,7 +158,7 @@ export function GroupedStackList({
                               pageCount={pageCount}
                               favorited={isFav}
                               likeCount={likeCount}
-                              onOpen={() => onOpen(stack.id)}
+                              onOpen={() => onOpen(stack.id, stackOpenOptions)}
                               onInfo={() => onInfo(stack.id)}
                               onFindSimilar={() => onFindSimilar(stack.id)}
                               onAddToScratch={() => onAddToScratch(stack.id)}
@@ -176,10 +180,7 @@ export function GroupedStackList({
                               <Link
                                 to="/library/$datasetId/stacks/$stackId"
                                 params={{ datasetId, stackId: String(stack.id) }}
-                                search={{
-                                  ...(isAssetLike ? { page: likePage - 1 } : {}),
-                                  mediaType: stack.mediaType,
-                                }}
+                                search={stackOpenOptions}
                               />
                             </StackTile>
                             {isAssetLike && (

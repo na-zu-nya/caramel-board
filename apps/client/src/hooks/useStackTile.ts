@@ -30,12 +30,25 @@ export function useStackTile(datasetId: string) {
     ]);
   }, [datasetId, queryClient]);
 
-  const onOpen = async (stackId: number | string) => {
-    await navigate({
-      to: '/library/$datasetId/stacks/$stackId',
-      params: { datasetId, stackId: String(stackId) },
-    });
-  };
+  const onOpen = useCallback(
+    async (
+      stackId: number | string,
+      options?: { page?: number; mediaType?: string; listToken?: string }
+    ) => {
+      const search = {
+        ...(typeof options?.page === 'number' && options.page > 0 ? { page: options.page } : {}),
+        ...(options?.mediaType ? { mediaType: options.mediaType } : {}),
+        ...(options?.listToken ? { listToken: options.listToken } : {}),
+      };
+
+      await navigate({
+        to: '/library/$datasetId/stacks/$stackId',
+        params: { datasetId, stackId: String(stackId) },
+        search,
+      });
+    },
+    [datasetId, navigate]
+  );
 
   const onFindSimilar = async (stackId: number | string) => {
     await navigate({
