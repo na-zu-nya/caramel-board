@@ -113,6 +113,22 @@ python3 -m pip install huggingface-hub
 
 ## バックアップ
 
+### DBバックアップ
+
+```bash
+./serve.sh backup
+```
+
+バックアップファイルは `backups/caramel-board-db-YYYYMMDD-HHMMSS.sql` に作成されます。
+保存先を指定したい場合は、次のようにパスを渡します。
+
+```bash
+./serve.sh backup backups/my-backup.sql
+./serve.sh backup backups/my-backup.sql.gz
+```
+
+`npm run db:backup` でも同じ処理を実行できます。
+
 ### ストレージ（画像/動画・DBの置き場所）
 
 - 推奨の既定（ローカル上書き用）

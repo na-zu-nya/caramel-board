@@ -394,6 +394,32 @@ case "$MODE" in
     dc run --rm app npm run db:migrate:prod
     echo "[update] Migrations completed."
     ;;
+  backup)
+    BACKUP_PATH="${2:-}"
+    if [ -z "$BACKUP_PATH" ]; then
+      mkdir -p backups
+      BACKUP_PATH="backups/caramel-board-db-$(date +%Y%m%d-%H%M%S).sql"
+    else
+      mkdir -p "$(dirname "$BACKUP_PATH")"
+    fi
+
+    TMP_PATH="${BACKUP_PATH}.tmp"
+    rm -f "$TMP_PATH"
+
+    echo "[backup] Starting PostgreSQL backup: $BACKUP_PATH"
+    if ! dc ps --status running --services | grep -qx postgres; then
+      dc up -d postgres
+    fi
+
+    if [[ "$BACKUP_PATH" == *.gz ]]; then
+      dc exec -T postgres pg_dump -U caramel_user -d caramel_board_db | gzip -c > "$TMP_PATH"
+    else
+      dc exec -T postgres pg_dump -U caramel_user -d caramel_board_db > "$TMP_PATH"
+    fi
+
+    mv "$TMP_PATH" "$BACKUP_PATH"
+    echo "[backup] Done: $BACKUP_PATH"
+    ;;
   build)
     echo "$(t building)"
     dc build --pull app
@@ -427,7 +453,7 @@ case "$MODE" in
     echo "$(t update_shutdown_done)"
     ;;
   *)
-    echo "Usage: $0 [dev|prod|migrate|build|update]"
+    echo "Usage: $0 [dev|prod|migrate|backup|build|update]"
     exit 1
     ;;
 esac

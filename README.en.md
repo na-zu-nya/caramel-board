@@ -112,6 +112,22 @@ This command pulls the latest changes, rebuilds the container image, and restart
 
 ## Backup
 
+### Database backup
+
+```bash
+./serve.sh backup
+```
+
+The backup file is written to `backups/caramel-board-db-YYYYMMDD-HHMMSS.sql`.
+Pass a path if you want to choose the output location.
+
+```bash
+./serve.sh backup backups/my-backup.sql
+./serve.sh backup backups/my-backup.sql.gz
+```
+
+You can also run the same backup with `npm run db:backup`.
+
 ### Storage locations (assets and database)
 
 - Recommended defaults:
