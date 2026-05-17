@@ -129,6 +129,9 @@ python3 -m pip install huggingface-hub
 
 `npm run db:backup` でも同じ処理を実行できます。
 
+`./serve.sh update` は、更新前に自動で
+`backups/pre-update-db-YYYYMMDD-HHMMSS.sql` を作成します。
+
 ### ストレージ（画像/動画・DBの置き場所）
 
 - 推奨の既定（ローカル上書き用）

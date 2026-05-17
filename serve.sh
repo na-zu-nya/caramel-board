@@ -296,6 +296,34 @@ stop_joytag() {
   return 0
 }
 
+backup_database() {
+  local backup_path="${1:-}"
+
+  if [ -z "$backup_path" ]; then
+    mkdir -p backups
+    backup_path="backups/caramel-board-db-$(date +%Y%m%d-%H%M%S).sql"
+  else
+    mkdir -p "$(dirname "$backup_path")"
+  fi
+
+  local tmp_path="${backup_path}.tmp"
+  rm -f "$tmp_path"
+
+  echo "[backup] Starting PostgreSQL backup: $backup_path"
+  if ! dc ps --status running --services | grep -qx postgres; then
+    dc up -d postgres
+  fi
+
+  if [[ "$backup_path" == *.gz ]]; then
+    dc exec -T postgres pg_dump -U caramel_user -d caramel_board_db | gzip -c > "$tmp_path"
+  else
+    dc exec -T postgres pg_dump -U caramel_user -d caramel_board_db > "$tmp_path"
+  fi
+
+  mv "$tmp_path" "$backup_path"
+  echo "[backup] Done: $backup_path"
+}
+
 git_check_updates() {
   GIT_BEHIND_COUNT=0
   if ! have git; then
@@ -395,30 +423,7 @@ case "$MODE" in
     echo "[update] Migrations completed."
     ;;
   backup)
-    BACKUP_PATH="${2:-}"
-    if [ -z "$BACKUP_PATH" ]; then
-      mkdir -p backups
-      BACKUP_PATH="backups/caramel-board-db-$(date +%Y%m%d-%H%M%S).sql"
-    else
-      mkdir -p "$(dirname "$BACKUP_PATH")"
-    fi
-
-    TMP_PATH="${BACKUP_PATH}.tmp"
-    rm -f "$TMP_PATH"
-
-    echo "[backup] Starting PostgreSQL backup: $BACKUP_PATH"
-    if ! dc ps --status running --services | grep -qx postgres; then
-      dc up -d postgres
-    fi
-
-    if [[ "$BACKUP_PATH" == *.gz ]]; then
-      dc exec -T postgres pg_dump -U caramel_user -d caramel_board_db | gzip -c > "$TMP_PATH"
-    else
-      dc exec -T postgres pg_dump -U caramel_user -d caramel_board_db > "$TMP_PATH"
-    fi
-
-    mv "$TMP_PATH" "$BACKUP_PATH"
-    echo "[backup] Done: $BACKUP_PATH"
+    backup_database "${2:-}"
     ;;
   build)
     echo "$(t building)"
@@ -437,6 +442,7 @@ case "$MODE" in
       echo "[update] $(t update_git_not_repo)"
       exit 0
     fi
+    backup_database "backups/pre-update-db-$(date +%Y%m%d-%H%M%S).sql"
     git checkout .
     git fetch --all --prune || true
     git pull --rebase || true

@@ -128,6 +128,9 @@ Pass a path if you want to choose the output location.
 
 You can also run the same backup with `npm run db:backup`.
 
+`./serve.sh update` automatically creates
+`backups/pre-update-db-YYYYMMDD-HHMMSS.sql` before applying updates.
+
 ### Storage locations (assets and database)
 
 - Recommended defaults:
