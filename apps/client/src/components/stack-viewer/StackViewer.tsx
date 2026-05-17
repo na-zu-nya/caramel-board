@@ -50,6 +50,7 @@ interface ViewerShellProps {
   children: React.ReactNode;
   isReorderMode: boolean;
   isPenMode: boolean;
+  isNativeInteractionMode: boolean;
   onDrop: (files: File[]) => void;
   onUrlDrop: (urls: string[]) => void;
 }
@@ -108,7 +109,14 @@ const sortAssetsByPreset = (assets: Asset[], preset: AssetSortPreset) => {
   return sorted.map((asset, index) => ({ ...asset, orderInStack: index }));
 };
 
-function ViewerShell({ children, isReorderMode, isPenMode, onDrop, onUrlDrop }: ViewerShellProps) {
+function ViewerShell({
+  children,
+  isReorderMode,
+  isPenMode,
+  isNativeInteractionMode,
+  onDrop,
+  onUrlDrop,
+}: ViewerShellProps) {
   // 並び替え中は誤ドロップを避けるため、ドロップゾーンを外す。
   if (isReorderMode) return <>{children}</>;
 
@@ -118,7 +126,7 @@ function ViewerShell({ children, isReorderMode, isPenMode, onDrop, onUrlDrop }: 
       onUrlDrop={onUrlDrop}
       accept="image/*,video/*,application/pdf"
       multiple
-      disabled={isPenMode}
+      disabled={isPenMode || isNativeInteractionMode}
     >
       {children}
     </FullPageDropZone>
@@ -228,7 +236,10 @@ export default function StackViewer({
   const isColorPicker = isColorPickerManual || isColorPickerAlt;
   // ペンモード
   const [isPenMode, setIsPenMode] = useState(false);
+  const [isMetaNativeMode, setIsMetaNativeMode] = useState(false);
   const canUseImageTools = !!currentAsset && !isCurrentVideoAsset && !isListMode;
+  const canUseNativeInteraction = canUseImageTools && !isColorPicker && !isPenMode;
+  const isNativeInteractionMode = canUseNativeInteraction && isMetaNativeMode;
   const markerDialogPlaybackRef = useRef<{ time: number; wasPlaying: boolean } | null>(null);
   const canUseImageZoom = canUseImageTools && !isColorPicker && !isPenMode;
   const getZoomImageElement = useCallback(
@@ -288,6 +299,11 @@ export default function StackViewer({
     setIsColorPickerAlt(false);
     setIsColorPickerManual(false);
   }, [canUseImageTools]);
+
+  useEffect(() => {
+    if (canUseNativeInteraction) return;
+    setIsMetaNativeMode(false);
+  }, [canUseNativeInteraction]);
 
   // Shuffle navigation (uses original list context if available)
   const mtRef = useRef<MersenneTwister | null>(null);
@@ -575,6 +591,9 @@ export default function StackViewer({
       const hasModifier = e.metaKey || e.ctrlKey || e.altKey || e.shiftKey;
       const refAny = imageCarouselRef.current as any;
       const isCurrentVideo = !!refAny?.isCurrentVideo?.();
+      if (e.key === 'Meta') {
+        setIsMetaNativeMode(true);
+      }
       if (isColorPicker && e.key === 'Escape') {
         e.stopPropagation();
         e.preventDefault();
@@ -695,9 +714,35 @@ export default function StackViewer({
           break;
       }
     };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'Meta') {
+        setIsMetaNativeMode(false);
+      }
+    };
+    const handleBlur = () => {
+      setIsMetaNativeMode(false);
+    };
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!e.metaKey) {
+        setIsMetaNativeMode(false);
+      }
+    };
+    const handleDragEnd = (e: DragEvent) => {
+      if (!e.metaKey) {
+        setIsMetaNativeMode(false);
+      }
+    };
     window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    window.addEventListener('blur', handleBlur);
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('dragend', handleDragEnd);
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener('blur', handleBlur);
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('dragend', handleDragEnd);
     };
   }, [
     currentPage,
@@ -843,6 +888,7 @@ export default function StackViewer({
     <ViewerShell
       isReorderMode={isReorderMode}
       isPenMode={isPenMode}
+      isNativeInteractionMode={isNativeInteractionMode}
       onDrop={handleFileDrop}
       onUrlDrop={handleUrlDrop}
     >
@@ -867,8 +913,11 @@ export default function StackViewer({
           {!isListMode ? (
             <div
               className="relative w-full h-full"
-              style={{ WebkitTouchCallout: 'none', userSelect: 'none' }}
-              {...viewerContextMenuTriggerProps}
+              style={{
+                WebkitTouchCallout: isNativeInteractionMode ? 'default' : 'none',
+                userSelect: isNativeInteractionMode ? 'auto' : 'none',
+              }}
+              {...(isNativeInteractionMode ? {} : viewerContextMenuTriggerProps)}
             >
               <ImageCarousel
                 ref={imageCarouselRef as any}
@@ -879,6 +928,7 @@ export default function StackViewer({
                 onEditMarkerRequest={(marker, index) => openMarkerEditor(marker as any, index)}
                 gestureTransform={gestureState}
                 translateX={dragOffset}
+                nativeDragEnabled={isNativeInteractionMode}
                 zoomTransform={zoomTransform}
                 uiInsets={{
                   top: 56,
@@ -888,7 +938,7 @@ export default function StackViewer({
                 className="w-full h-full"
               />
               <TapZoneOverlay
-                enabled={!isListMode && !isColorPicker && !isPenMode}
+                enabled={!isListMode && !isColorPicker && !isPenMode && !isNativeInteractionMode}
                 // Leave safe area at bottom so toolbar remains clickable
                 contentArea={{
                   top: 14,
@@ -896,7 +946,7 @@ export default function StackViewer({
                   right: isInfoSidebarOpen ? 320 : 0,
                   bottom: 96,
                 }}
-                disableDrag={isZoomed || isColorPicker || isPenMode}
+                disableDrag={isZoomed || isColorPicker || isPenMode || isNativeInteractionMode}
                 isZoomed={isZoomed}
                 canGoLeft={stack ? currentPage < stack.assets.length - 1 : false}
                 canGoRight={stack ? currentPage > 0 : false}

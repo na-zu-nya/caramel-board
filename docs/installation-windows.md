@@ -115,6 +115,12 @@ git clone https://github.com/na-zu-nya/caramel-board.git caramel-board
 #### アプリの更新(gitでダウンロードした場合のみ)
 
 - update.bat をダブルクリックで実行することで、アプリを最新に更新します
+- 更新時は自動的に `backups` フォルダへ `pre-update-db-YYYYMMDD-HHMMSS.sql` というDBバックアップを作成します
+
+#### DBバックアップ
+
+- backup.bat をダブルクリックで実行することで、DBバックアップを作成します
+- バックアップは `backups` フォルダに `caramel-board-db-YYYYMMDD-HHMMSS.sql` という名前で保存されます
 
 #### 他の端末からアクセスする
 
@@ -131,4 +137,3 @@ git clone https://github.com/na-zu-nya/caramel-board.git caramel-board
   - ドメイン、プライベート にチェックを入れて `次へ`
   - 名前に `CaramelBoard` と入力して `完了`
 - 他の端末から http://<IPアドレス>:6766 にアクセスできることを確認します
-

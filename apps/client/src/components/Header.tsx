@@ -3,7 +3,7 @@ import { useLocation, useNavigate, useParams } from '@tanstack/react-router';
 import { useAtom } from 'jotai';
 import type { LucideIcon } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
-import { Check, ChevronDown, Filter, Menu, Shuffle } from 'lucide-react';
+import { ArrowUpDown, Check, ChevronDown, Filter, Menu, Shuffle } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import {
   DropdownMenu,

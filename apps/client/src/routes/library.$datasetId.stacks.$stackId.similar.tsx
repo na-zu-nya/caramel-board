@@ -177,6 +177,19 @@ function SimilarStacksRoute() {
     ]
   );
 
+  const handleToggleSelection = useCallback(
+    (itemId: string | number) => {
+      if (!selectionMode) setSelectionMode(true);
+      toggleItemSelection(itemId);
+
+      const idx = items.findIndex((item) => item?.id === itemId);
+      if (idx >= 0) {
+        lastClickedIndexRef.current = idx;
+      }
+    },
+    [items, selectionMode, setSelectionMode, toggleItemSelection]
+  );
+
   // Favorite toggle
   const onToggleFavorite = useCallback(
     async (item: MediaGridItem, e: React.MouseEvent) => {

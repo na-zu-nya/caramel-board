@@ -115,6 +115,7 @@ function TagsPage() {
   );
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const loadMoreTriggerRef = useRef<HTMLDivElement>(null);
+  const lastClickedIndexRef = useRef<number | null>(null);
 
   // Info panel and selection mode states
   const [infoSidebarOpen, setInfoSidebarOpen] = useAtom(infoSidebarOpenAtom);

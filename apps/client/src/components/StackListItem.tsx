@@ -57,6 +57,7 @@ export function StackListItem({
   onToggleSelection,
   onClick,
   className = '',
+  selectedItemsSet,
 }: StackItemProps) {
   const likeCount = Number(stack.likeCount ?? stack.liked ?? 0);
   const isFavorited = Boolean(stack.favorited ?? stack.isFavorite);

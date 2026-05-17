@@ -30,6 +30,8 @@ interface ImageCarouselProps {
   onImageClick?: (relativeX: number, relativeY?: number) => void;
   className?: string;
   translateX?: number;
+  /** Cmd押下中など、画像のネイティブドラッグを許可する */
+  nativeDragEnabled?: boolean;
   zoomTransform?: {
     scale: number;
     translateX: number;
@@ -108,6 +110,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
       onImageClick,
       className,
       translateX = 0,
+      nativeDragEnabled = false,
       zoomTransform = { scale: 1, translateX: 0, translateY: 0 },
       uiInsets,
       onEditMarkerRequest,
@@ -597,8 +600,8 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
       const source = getVideoSource(asset);
       const dragStyle: DragImageStyle | undefined = !isVideo
         ? {
-            cursor: 'default',
-            WebkitUserDrag: 'none',
+            cursor: nativeDragEnabled ? 'grab' : 'default',
+            WebkitUserDrag: nativeDragEnabled ? 'element' : 'none',
           }
         : undefined;
       const isCurrentImage = position === 'current' && !isVideo;
@@ -664,7 +667,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
                   src={source || ''}
                   alt={asset.preview || asset.file || asset.url || ''}
                   className="max-w-full max-h-full w-full h-full object-contain select-none"
-                  draggable={false}
+                  draggable={nativeDragEnabled}
                   style={dragStyle}
                 />
               </div>
