@@ -234,7 +234,7 @@ export default function Sidebar() {
     () => (
       <>
         <a
-          href="https://caramel-board.fanbox.cc/"
+          href="https://na-zu-nya.fanbox.cc/"
           target="_blank"
           rel="noreferrer"
           className="inline-flex items-center gap-1 text-gray-300 no-underline transition-colors hover:text-primary-strong"
@@ -243,7 +243,7 @@ export default function Sidebar() {
           <span className="sr-only">Releases</span>
         </a>
         <a
-          href="https://x.com/caramel_board"
+          href="https://x.com/na_zu_nya"
           target="_blank"
           rel="noreferrer"
           className="inline-flex items-center gap-1 text-gray-300 no-underline transition-colors hover:text-primary-strong"

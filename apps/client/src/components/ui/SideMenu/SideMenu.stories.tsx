@@ -54,14 +54,14 @@ export const Default: Story = {
           supportRight={
             <>
               <a
-                href="https://caramel-board.fanbox.cc/"
+                href="https://na-zu-nya.fanbox.cc/"
                 className="inline-flex items-center gap-1 text-gray-300 no-underline transition-colors hover:text-primary-strong"
               >
                 <Megaphone className="h-3.5 w-3.5" aria-hidden="true" />
                 <span className="sr-only">Releases</span>
               </a>
               <a
-                href="https://x.com/caramel_board"
+                href="https://x.com/na_zu_nya"
                 className="inline-flex items-center gap-1 text-gray-300 no-underline transition-colors hover:text-primary-strong"
               >
                 <Twitter className="h-3.5 w-3.5" aria-hidden="true" />
@@ -139,14 +139,14 @@ export const WithTextTitle: Story = {
           supportRight={
             <>
               <a
-                href="https://caramel-board.fanbox.cc/"
+                href="https://na-zu-nya.fanbox.cc/"
                 className="inline-flex items-center gap-1 text-gray-300 no-underline transition-colors hover:text-primary-strong"
               >
                 <Megaphone className="h-3.5 w-3.5" aria-hidden="true" />
                 <span className="sr-only">Releases</span>
               </a>
               <a
-                href="https://x.com/caramel_board"
+                href="https://x.com/na_zu_nya"
                 className="inline-flex items-center gap-1 text-gray-300 no-underline transition-colors hover:text-primary-strong"
               >
                 <Twitter className="h-3.5 w-3.5" aria-hidden="true" />

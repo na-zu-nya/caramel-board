@@ -77,6 +77,9 @@ export function useStackGrid({
   const [rangeStart, setRangeStart] = useState<number>(0);
   const [rangeEnd, setRangeEnd] = useState<number>(50); // Start with some items visible
   const [columnsPerRow, setColumnsPerRowState] = useState(() => readStackGridColumns());
+  const [containerWidth, setContainerWidth] = useState(() =>
+    typeof window === 'undefined' ? 1 : window.innerWidth
+  );
 
   // Animation state
   const isSidebarAnimating = useAnimationState(sidebarOpen);
@@ -100,10 +103,78 @@ export function useStackGrid({
   } = useSelectionMode(isSelectionMode);
 
   // Calculate dynamic columns and item size
-  const containerWidth = getContainerContentWidth(containerRef.current);
   const itemSize = containerWidth / Math.max(columnsPerRow, 1);
   const totalContentHeight = Math.ceil(total / Math.max(columnsPerRow, 1)) * itemSize;
   const disableVirtualization = total <= columnsPerRow * 3;
+  const updateContainerWidth = useCallback(() => {
+    const container = containerRef.current;
+    const nextWidth = getContainerContentWidth(container);
+    if (Math.abs(containerWidth - nextWidth) < 0.5) return;
+
+    const rect = container?.getBoundingClientRect();
+    let visibleTopPx = 0;
+    let visibleHeightPx = window.innerHeight;
+
+    if (useWindowScroll) {
+      if (rect) {
+        const visibleTop = Math.max(rect.top, 0);
+        const visibleBottom = Math.min(rect.bottom, window.innerHeight);
+        visibleTopPx = Math.max(0, visibleTop - rect.top);
+        visibleHeightPx = Math.max(0, visibleBottom - visibleTop) || window.innerHeight;
+      }
+    } else if (container) {
+      visibleTopPx = Math.max(0, container.scrollTop);
+      visibleHeightPx = container.clientHeight;
+    }
+
+    const currentCenterPx = visibleTopPx + visibleHeightPx / 2;
+    const currentRow = Math.max(0, Math.floor(currentCenterPx / Math.max(itemSize, 1)));
+    const currentColumn = Math.min(
+      columnsPerRow - 1,
+      Math.max(0, Math.floor(containerWidth / 2 / Math.max(itemSize, 1)))
+    );
+    const anchorIndex = Math.min(
+      Math.max(0, total - 1),
+      currentRow * columnsPerRow + currentColumn
+    );
+
+    setContainerWidth(nextWidth);
+
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        const currentContainer = containerRef.current;
+        if (!currentContainer) return;
+
+        const nextItemSize =
+          getContainerContentWidth(currentContainer) / Math.max(columnsPerRow, 1);
+        const nextRow = Math.max(0, Math.floor(anchorIndex / columnsPerRow));
+        const nextCenterPx = nextRow * nextItemSize + nextItemSize / 2;
+        const requestedVisibleTopPx = nextCenterPx - visibleHeightPx / 2;
+        const maxVisibleTopPx = Math.max(0, currentContainer.scrollHeight - visibleHeightPx);
+        const nextVisibleTopPx = Math.min(maxVisibleTopPx, Math.max(0, requestedVisibleTopPx));
+
+        if (useWindowScroll) {
+          if (maxVisibleTopPx <= 0) return;
+          const nextRect = currentContainer.getBoundingClientRect();
+          const currentVisibleTopPx = Math.max(0, -nextRect.top);
+          const delta = nextVisibleTopPx - currentVisibleTopPx;
+          if (Math.abs(delta) > 0.5) {
+            window.scrollBy({ top: delta, behavior: 'auto' });
+          }
+          window.dispatchEvent(new Event('scroll'));
+          return;
+        }
+
+        const maxScrollTop = Math.max(
+          0,
+          currentContainer.scrollHeight - currentContainer.clientHeight
+        );
+        if (maxScrollTop <= 0) return;
+        currentContainer.scrollTop = nextVisibleTopPx;
+        currentContainer.dispatchEvent(new Event('scroll'));
+      });
+    });
+  }, [columnsPerRow, containerRef, containerWidth, itemSize, total, useWindowScroll]);
 
   // Create visible items array from the full sparse items array
   const finalVisibleItems: (MediaGridItem | undefined)[] = [];
@@ -279,6 +350,7 @@ export function useStackGrid({
     const container = containerRef.current;
 
     const resizeObserver = new ResizeObserver(() => {
+      updateContainerWidth();
       if (!disableVirtualization) {
         updateBounds();
       }
@@ -298,11 +370,15 @@ export function useStackGrid({
     }
 
     // 初期計算
+    updateContainerWidth();
     if (!disableVirtualization) {
       updateBounds();
     }
 
-    const handleWindowResize = () => updateBounds();
+    const handleWindowResize = () => {
+      updateContainerWidth();
+      updateBounds();
+    };
     window.addEventListener('resize', handleWindowResize);
 
     return () => {
@@ -316,7 +392,7 @@ export function useStackGrid({
       }
       window.removeEventListener('resize', handleWindowResize);
     };
-  }, [updateBounds, containerRef, useWindowScroll, disableVirtualization]);
+  }, [updateBounds, updateContainerWidth, containerRef, useWindowScroll, disableVirtualization]);
 
   const setGridColumns = useCallback(
     (value: number) => {
