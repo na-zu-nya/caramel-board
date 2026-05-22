@@ -13,6 +13,7 @@ interface TapZoneOverlayProps {
   onPinchZoom?: (clientX: number, clientY: number, scaleMultiplier: number) => void;
   onPinchEnd?: () => void;
   onZoomPan?: (deltaX: number, deltaY: number) => void;
+  onDoubleTap?: () => void;
   onContextMenuCancelRequest?: () => void;
   enabled?: boolean;
   contentArea?: {
@@ -60,6 +61,7 @@ export default function TapZoneOverlay({
   onPinchZoom,
   onPinchEnd,
   onZoomPan,
+  onDoubleTap,
   onContextMenuCancelRequest,
   enabled = true,
   contentArea = { top: 0, left: 0, right: 0, bottom: 0 },
@@ -77,9 +79,12 @@ export default function TapZoneOverlay({
   const multiTouchRef = useRef(false);
   const pinchStartDistanceRef = useRef<number | null>(null);
   const pinchLastDistanceRef = useRef<number | null>(null);
+  const lastZoomTapRef = useRef<{ x: number; y: number; time: number } | null>(null);
 
   const TAP_THRESHOLD = 10; // pixels
   const TAP_TIME_THRESHOLD = 300; // milliseconds
+  const DOUBLE_TAP_TIME_THRESHOLD = 320; // milliseconds
+  const DOUBLE_TAP_DISTANCE_THRESHOLD = 32; // pixels
   const DIRECTION_LOCK_THRESHOLD = 6; // pixels - quicker direction lock on touch
   const isDraggingRef = useRef(false);
   const lastDragXRef = useRef(0);
@@ -273,6 +278,33 @@ export default function TapZoneOverlay({
         Math.abs(deltaY) < TAP_THRESHOLD &&
         deltaTime < TAP_TIME_THRESHOLD
       ) {
+        if (isZoomed) {
+          const previousTap = lastZoomTapRef.current;
+          const now = Date.now();
+          const isDoubleTap =
+            previousTap &&
+            now - previousTap.time <= DOUBLE_TAP_TIME_THRESHOLD &&
+            Math.hypot(e.clientX - previousTap.x, e.clientY - previousTap.y) <=
+              DOUBLE_TAP_DISTANCE_THRESHOLD;
+
+          if (isDoubleTap) {
+            lastZoomTapRef.current = null;
+            onDoubleTap?.();
+          } else {
+            lastZoomTapRef.current = { x: e.clientX, y: e.clientY, time: now };
+          }
+
+          try {
+            overlay.releasePointerCapture(e.pointerId);
+          } catch {}
+          activePointerRef.current = null;
+          startPosRef.current = null;
+          isDraggingRef.current = false;
+          dragDirectionRef.current = null;
+          return;
+        }
+
+        lastZoomTapRef.current = null;
         // Tap within overlay: left/right 20% zones
         const rect = overlay.getBoundingClientRect();
         const x = e.clientX - rect.left;
@@ -328,6 +360,7 @@ export default function TapZoneOverlay({
     onPinchZoom,
     onPinchEnd,
     onZoomPan,
+    onDoubleTap,
     onContextMenuCancelRequest,
   ]);
 

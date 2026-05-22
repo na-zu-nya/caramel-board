@@ -33,6 +33,7 @@ const meta: Meta<typeof TapZoneOverlay> = {
     onPinchZoom: (clientX, clientY, scaleMultiplier) =>
       console.log('pinch zoom', clientX, clientY, scaleMultiplier),
     onZoomPan: (deltaX, deltaY) => console.log('zoom pan', deltaX, deltaY),
+    onDoubleTap: () => console.log('double tap reset'),
   },
 };
 

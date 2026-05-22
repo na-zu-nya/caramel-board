@@ -241,7 +241,8 @@ export default function StackViewer({
   const canUseNativeInteraction = canUseImageTools && !isColorPicker && !isPenMode;
   const isNativeInteractionMode = canUseNativeInteraction && isMetaNativeMode;
   const markerDialogPlaybackRef = useRef<{ time: number; wasPlaying: boolean } | null>(null);
-  const canUseImageZoom = canUseImageTools && !isColorPicker && !isPenMode;
+  const canUseImageZoom = canUseImageTools;
+  const canUseImageZoomInteraction = canUseImageZoom && !isColorPicker && !isPenMode;
   const getZoomImageElement = useCallback(
     () => imageCarouselRef.current?.getCurrentImageElement() || null,
     [imageCarouselRef]
@@ -273,17 +274,15 @@ export default function StackViewer({
       if (next) {
         setIsColorPickerAlt(false);
         setIsColorPickerManual(false);
-        resetZoom();
       }
       return next;
     });
-  }, [canUseImageTools, resetZoom]);
+  }, [canUseImageTools]);
   const handleColorPickerToggle = useCallback(() => {
     if (!canUseImageTools) return;
     setIsPenMode(false);
-    resetZoom();
     setIsColorPickerManual((prev) => !prev);
-  }, [canUseImageTools, resetZoom]);
+  }, [canUseImageTools]);
   const handleInfoSidebarToggle = useCallback(() => {
     if (!isInfoSidebarOpen) setSelectionMode(false);
     setIsInfoSidebarOpen(!isInfoSidebarOpen);
@@ -594,6 +593,11 @@ export default function StackViewer({
       if (e.key === 'Meta') {
         setIsMetaNativeMode(true);
       }
+      if (e.key === 'Alt' && canUseImageTools) {
+        e.preventDefault();
+        setIsColorPickerAlt(true);
+        return;
+      }
       if (isColorPicker && e.key === 'Escape') {
         e.stopPropagation();
         e.preventDefault();
@@ -718,9 +722,13 @@ export default function StackViewer({
       if (e.key === 'Meta') {
         setIsMetaNativeMode(false);
       }
+      if (e.key === 'Alt') {
+        setIsColorPickerAlt(false);
+      }
     };
     const handleBlur = () => {
       setIsMetaNativeMode(false);
+      setIsColorPickerAlt(false);
     };
     const handleMouseMove = (e: MouseEvent) => {
       if (!e.metaKey) {
@@ -953,12 +961,21 @@ export default function StackViewer({
                 onLeftTap={onLeftTap}
                 onRightTap={onRightTap}
                 onWheelZoom={
-                  canUseImageZoom && !isViewerContextMenuOpen ? zoomWithWheel : undefined
+                  canUseImageZoomInteraction && !isViewerContextMenuOpen ? zoomWithWheel : undefined
                 }
-                onPinchStart={canUseImageZoom && !isViewerContextMenuOpen ? startPinch : undefined}
-                onPinchZoom={canUseImageZoom && !isViewerContextMenuOpen ? updatePinch : undefined}
-                onPinchEnd={canUseImageZoom && !isViewerContextMenuOpen ? endPinch : undefined}
-                onZoomPan={canUseImageZoom && !isViewerContextMenuOpen ? panBy : undefined}
+                onPinchStart={
+                  canUseImageZoomInteraction && !isViewerContextMenuOpen ? startPinch : undefined
+                }
+                onPinchZoom={
+                  canUseImageZoomInteraction && !isViewerContextMenuOpen ? updatePinch : undefined
+                }
+                onPinchEnd={
+                  canUseImageZoomInteraction && !isViewerContextMenuOpen ? endPinch : undefined
+                }
+                onZoomPan={
+                  canUseImageZoomInteraction && !isViewerContextMenuOpen ? panBy : undefined
+                }
+                onDoubleTap={isZoomed ? resetZoom : undefined}
                 onContextMenuCancelRequest={handleContextMenuCancelRequest}
                 onCenterTap={() => {
                   // Move無しのクリック/タップ: 動画なら再生/停止をトグル
