@@ -1,5 +1,6 @@
 const FPS_KEY = 'viewer.fps';
 const MUTED_KEY = 'viewer.muted';
+const VOLUME_KEY = 'viewer.volume';
 
 export const VIEWER_FPS_OPTIONS = [24, 30, 48, 60] as const;
 export type ViewerFps = (typeof VIEWER_FPS_OPTIONS)[number];
@@ -42,5 +43,20 @@ export function getViewerMuted(): boolean {
 export function setViewerMuted(muted: boolean) {
   try {
     localStorage.setItem(MUTED_KEY, String(muted));
+  } catch {}
+}
+
+export function getViewerVolume(): number {
+  try {
+    const raw = localStorage.getItem(VOLUME_KEY);
+    const num = raw ? Number(raw) : NaN;
+    if (Number.isFinite(num)) return Math.min(Math.max(num, 0), 1);
+  } catch {}
+  return 1;
+}
+
+export function setViewerVolume(volume: number) {
+  try {
+    localStorage.setItem(VOLUME_KEY, String(Math.min(Math.max(volume, 0), 1)));
   } catch {}
 }

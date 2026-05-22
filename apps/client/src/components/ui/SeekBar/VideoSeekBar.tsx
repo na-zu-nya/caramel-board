@@ -1,4 +1,5 @@
 import { SquareStack, Volume2, VolumeX } from 'lucide-react';
+import type { KeyboardEvent, MouseEvent, PointerEvent } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ContextMenu,
@@ -27,6 +28,8 @@ const MARKER_COLOR_OPTIONS = [
   { key: 'bright-violet', hex: '#8B5CF6', label: 'Bright Violet' },
 ] as const;
 
+const VOLUME_DRAG_HEIGHT_PX = 96;
+
 interface VideoSeekBarProps {
   currentTime: number;
   duration: number;
@@ -40,6 +43,10 @@ interface VideoSeekBarProps {
   muted?: boolean;
   /** ミュート切替（video要素を再生成せずに切替） */
   onToggleMute?: () => void;
+  /** 現在の音量（0-1） */
+  volume?: number;
+  /** 音量変更（永続化は呼び出し側で行う） */
+  onVolumeChange?: (volume: number) => void;
   /** 現在の設定FPS表示 */
   fps?: number;
   /** クリックで 24 → 30 → 48 → 60 と切替 */
@@ -65,6 +72,8 @@ export default function VideoSeekBar({
   className,
   muted,
   onToggleMute,
+  volume = 1,
+  onVolumeChange,
   fps,
   onToggleFps,
   markers = [],
@@ -80,10 +89,21 @@ export default function VideoSeekBar({
   );
   const [isMarkerMoveMode, setIsMarkerMoveMode] = useState(false);
   const [contextMenuMarkerIndex, setContextMenuMarkerIndex] = useState<number | null>(null);
+  const [isVolumeBarOpen, setIsVolumeBarOpen] = useState(false);
+  const [isVolumeHover, setIsVolumeHover] = useState(false);
+  const volumeHoverCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dragTimeRef = useRef(0);
   const isDraggingRef = useRef(false);
   const activePointerIdRef = useRef<number | null>(null);
   const markerDragRef = useRef<{ index: number; pointerId: number; time: number } | null>(null);
+  const volumeTrackRef = useRef<HTMLDivElement>(null);
+  const volumeDragRef = useRef<{
+    pointerId: number;
+    startY: number;
+    startVolume: number;
+    moved: boolean;
+    source: 'button' | 'track';
+  } | null>(null);
   // 見た目は細いバーのまま、判定は2倍の高さに拡張
   const seekAreaRef = useRef<HTMLDivElement>(null);
 
@@ -265,26 +285,288 @@ export default function VideoSeekBar({
     [finishMarkerDrag]
   );
 
+  const applyVolumeFromTrackY = useCallback(
+    (clientY: number) => {
+      const rect = volumeTrackRef.current?.getBoundingClientRect();
+      if (!rect || rect.height <= 0) return;
+      const nextVolume = Math.min(Math.max(1 - (clientY - rect.top) / rect.height, 0), 1);
+      onVolumeChange?.(nextVolume);
+    },
+    [onVolumeChange]
+  );
+
+  const handleVolumeButtonPointerDown = useCallback(
+    (e: PointerEvent<HTMLButtonElement>) => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      e.preventDefault();
+      e.stopPropagation();
+      volumeDragRef.current = {
+        pointerId: e.pointerId,
+        startY: e.clientY,
+        startVolume: volume,
+        moved: false,
+        source: 'button',
+      };
+      e.currentTarget.setPointerCapture(e.pointerId);
+    },
+    [volume]
+  );
+
+  const handleVolumeButtonPointerMove = useCallback(
+    (e: PointerEvent<HTMLButtonElement>) => {
+      const active = volumeDragRef.current;
+      if (!active || active.pointerId !== e.pointerId || active.source !== 'button') return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      const deltaY = active.startY - e.clientY;
+      if (Math.abs(deltaY) < 3 && !active.moved) return;
+
+      active.moved = true;
+      setIsVolumeBarOpen(true);
+      const nextVolume = Math.min(
+        Math.max(active.startVolume + deltaY / VOLUME_DRAG_HEIGHT_PX, 0),
+        1
+      );
+      onVolumeChange?.(nextVolume);
+    },
+    [onVolumeChange]
+  );
+
+  const handleVolumeButtonPointerEnd = useCallback(
+    (e: PointerEvent<HTMLButtonElement>) => {
+      const active = volumeDragRef.current;
+      if (!active || active.pointerId !== e.pointerId || active.source !== 'button') return;
+      e.preventDefault();
+      e.stopPropagation();
+      volumeDragRef.current = null;
+
+      if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      }
+
+      if (!active.moved) {
+        onToggleMute?.();
+      }
+      setIsVolumeBarOpen(false);
+    },
+    [onToggleMute]
+  );
+
+  const handleVolumeButtonPointerCancel = useCallback((e: PointerEvent<HTMLButtonElement>) => {
+    const active = volumeDragRef.current;
+    if (!active || active.pointerId !== e.pointerId || active.source !== 'button') return;
+    e.preventDefault();
+    e.stopPropagation();
+    volumeDragRef.current = null;
+    setIsVolumeBarOpen(false);
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    }
+  }, []);
+
+  const handleVolumeTrackPointerDown = useCallback(
+    (e: PointerEvent<HTMLDivElement>) => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setIsVolumeBarOpen(true);
+      volumeDragRef.current = {
+        pointerId: e.pointerId,
+        startY: e.clientY,
+        startVolume: volume,
+        moved: true,
+        source: 'track',
+      };
+      applyVolumeFromTrackY(e.clientY);
+      e.currentTarget.setPointerCapture(e.pointerId);
+    },
+    [applyVolumeFromTrackY, volume]
+  );
+
+  const handleVolumeTrackPointerMove = useCallback(
+    (e: PointerEvent<HTMLDivElement>) => {
+      const active = volumeDragRef.current;
+      if (!active || active.pointerId !== e.pointerId || active.source !== 'track') return;
+      e.preventDefault();
+      e.stopPropagation();
+      applyVolumeFromTrackY(e.clientY);
+    },
+    [applyVolumeFromTrackY]
+  );
+
+  const handleVolumeTrackPointerEnd = useCallback((e: PointerEvent<HTMLDivElement>) => {
+    const active = volumeDragRef.current;
+    if (!active || active.pointerId !== e.pointerId || active.source !== 'track') return;
+    e.preventDefault();
+    e.stopPropagation();
+    volumeDragRef.current = null;
+    setIsVolumeBarOpen(false);
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    }
+  }, []);
+
+  const handleVolumeButtonClick = useCallback((e: MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const stopVolumePointerPropagation = useCallback((e: PointerEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+  }, []);
+
+  const stopVolumeClickPropagation = useCallback((e: MouseEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+  }, []);
+
+  const handleVolumeTrackClick = useCallback((e: MouseEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const handleVolumeTrackLostPointerCapture = useCallback((e: PointerEvent<HTMLDivElement>) => {
+    const active = volumeDragRef.current;
+    if (active?.pointerId === e.pointerId && active.source === 'track') {
+      volumeDragRef.current = null;
+      setIsVolumeBarOpen(false);
+    }
+  }, []);
+
+  const handleVolumeButtonLostPointerCapture = useCallback((e: PointerEvent<HTMLButtonElement>) => {
+    const active = volumeDragRef.current;
+    if (active?.pointerId === e.pointerId && active.source === 'button') {
+      volumeDragRef.current = null;
+      setIsVolumeBarOpen(false);
+    }
+  }, []);
+
+  const cancelVolumeHoverClose = useCallback(() => {
+    if (volumeHoverCloseTimerRef.current) {
+      clearTimeout(volumeHoverCloseTimerRef.current);
+      volumeHoverCloseTimerRef.current = null;
+    }
+  }, []);
+
+  const handleVolumeHoverEnter = useCallback(
+    (e: PointerEvent<HTMLDivElement>) => {
+      if (e.pointerType !== 'mouse') return;
+      cancelVolumeHoverClose();
+      setIsVolumeHover(true);
+    },
+    [cancelVolumeHoverClose]
+  );
+
+  const handleVolumeHoverLeave = useCallback(
+    (e: PointerEvent<HTMLDivElement>) => {
+      if (e.pointerType !== 'mouse') return;
+      cancelVolumeHoverClose();
+      volumeHoverCloseTimerRef.current = setTimeout(() => {
+        setIsVolumeHover(false);
+        volumeHoverCloseTimerRef.current = null;
+      }, 150);
+    },
+    [cancelVolumeHoverClose]
+  );
+
+  useEffect(() => {
+    return () => {
+      cancelVolumeHoverClose();
+    };
+  }, [cancelVolumeHoverClose]);
+
+  const handleVolumeTrackKeyDown = useCallback(
+    (e: KeyboardEvent<HTMLDivElement>) => {
+      if (!onVolumeChange) return;
+      if (e.key === 'ArrowUp' || e.key === 'ArrowRight') {
+        e.preventDefault();
+        onVolumeChange(Math.min(volume + 0.05, 1));
+      } else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') {
+        e.preventDefault();
+        onVolumeChange(Math.max(volume - 0.05, 0));
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        onVolumeChange(0);
+      } else if (e.key === 'End') {
+        e.preventDefault();
+        onVolumeChange(1);
+      }
+    },
+    [onVolumeChange, volume]
+  );
+
+  const volumePercent = Math.min(Math.max(volume, 0), 1) * 100;
+
   return (
     <div className={cn('px-4 py-2', className)}>
       <div className="flex items-center gap-3">
-        {/* Mute toggle button */}
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleMute?.();
-          }}
-          className={cn(
-            'shrink-0 inline-flex items-center justify-center',
-            'w-7 h-7 rounded-full bg-black/40 hover:bg-black/60 transition-colors',
-            'text-white hover:text-primary'
-          )}
-          aria-pressed={!!muted}
-          title={muted ? 'Unmute' : 'Mute'}
+        <div
+          className="relative shrink-0"
+          onPointerDown={stopVolumePointerPropagation}
+          onClick={stopVolumeClickPropagation}
+          onPointerEnter={handleVolumeHoverEnter}
+          onPointerLeave={handleVolumeHoverLeave}
         >
-          {muted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-        </button>
+          {/* Mute toggle button */}
+          <button
+            type="button"
+            onClick={handleVolumeButtonClick}
+            onPointerDown={handleVolumeButtonPointerDown}
+            onPointerMove={handleVolumeButtonPointerMove}
+            onPointerUp={handleVolumeButtonPointerEnd}
+            onPointerCancel={handleVolumeButtonPointerCancel}
+            onLostPointerCapture={handleVolumeButtonLostPointerCapture}
+            className={cn(
+              'shrink-0 inline-flex items-center justify-center',
+              'w-7 h-7 rounded-full bg-black/40 hover:bg-black/60 transition-colors',
+              'text-white hover:text-primary'
+            )}
+            aria-pressed={!!muted}
+            title={muted ? 'Unmute' : 'Mute'}
+          >
+            {muted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+          </button>
+          <div
+            className={cn(
+              'absolute left-1/2 top-7 z-20 -translate-x-1/2 transition-[opacity,transform] duration-200 ease-out',
+              isVolumeBarOpen || isVolumeHover
+                ? 'pointer-events-auto translate-y-0 opacity-100'
+                : 'pointer-events-none -translate-y-5 opacity-0'
+            )}
+          >
+            <div className="rounded-full bg-black/60 px-1 py-2 shadow-lg shadow-black/30 backdrop-blur-md">
+              <div
+                ref={volumeTrackRef}
+                className="relative h-24 w-5 cursor-ns-resize select-none"
+                style={{ touchAction: 'none' }}
+                role="slider"
+                aria-label="Volume"
+                aria-orientation="vertical"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={Math.round(volumePercent)}
+                tabIndex={0}
+                onClick={handleVolumeTrackClick}
+                onKeyDown={handleVolumeTrackKeyDown}
+                onPointerDown={handleVolumeTrackPointerDown}
+                onPointerMove={handleVolumeTrackPointerMove}
+                onPointerUp={handleVolumeTrackPointerEnd}
+                onPointerCancel={handleVolumeTrackPointerEnd}
+                onLostPointerCapture={handleVolumeTrackLostPointerCapture}
+              >
+                <div className="absolute left-1/2 top-0 h-full w-1 -translate-x-1/2 rounded-full bg-white/20" />
+                <div
+                  className="absolute bottom-0 left-1/2 w-1 -translate-x-1/2 rounded-full bg-white"
+                  style={{ height: `${volumePercent}%` }}
+                />
+                <div
+                  className="absolute left-1/2 h-2.5 w-2.5 -translate-x-1/2 rounded-full bg-white shadow-[0_0_6px_rgba(255,255,255,0.65)]"
+                  style={{ bottom: `calc(${volumePercent}% - 0.3125rem)` }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
         {/* Current time */}
         <TimeBadge seconds={isDragging ? dragTime : currentTime} />
 

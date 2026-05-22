@@ -10,6 +10,7 @@ const meta: Meta<typeof VideoSeekBar> = {
     currentTime: 42,
     duration: 180,
     muted: false,
+    volume: 0.8,
     fps: 30,
   },
 };
@@ -31,6 +32,7 @@ export const Default: Story = {
 export const WithMarkerActions: Story = {
   render: (args) => {
     const [currentTime, setCurrentTime] = useState(args.currentTime ?? 42);
+    const [volume, setVolume] = useState(args.volume ?? 0.8);
     const [markers, setMarkers] = useState<VideoMarker[]>([
       { time: 24, color: 'white', label: '' },
       { time: 64, color: 'bright-cyan', label: '' },
@@ -42,6 +44,8 @@ export const WithMarkerActions: Story = {
         <VideoSeekBar
           {...args}
           currentTime={currentTime}
+          volume={volume}
+          onVolumeChange={setVolume}
           markers={markers}
           onSeek={setCurrentTime}
           onEditMarkerRequest={(marker) => setCurrentTime(marker.time)}
