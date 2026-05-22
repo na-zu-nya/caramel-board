@@ -48,6 +48,7 @@ import { SelectionActionBar } from '@/components/ui/selection-action-bar';
 import { useHeaderActions } from '@/hooks/useHeaderActions';
 import { useStackTile } from '@/hooks/useStackTile';
 import { apiClient } from '@/lib/api-client';
+import { getSourceImageFilename, getSourceImageUrl } from '@/lib/stack-drag-data';
 import { cn } from '@/lib/utils';
 import {
   currentFilterAtom,
@@ -576,9 +577,10 @@ function TagsPage() {
       const idx = (allStacks || []).findIndex((s) => s?.id === stack.id);
 
       if (event.metaKey || event.ctrlKey) {
-        event.preventDefault();
-        if (!selectionMode) setSelectionMode(true);
-        handleStackItemSelect(stack.id);
+        if (idx >= 0) lastClickedIndexRef.current = idx;
+        return;
+      }
+      if (event.altKey) {
         if (idx >= 0) lastClickedIndexRef.current = idx;
         return;
       }
@@ -1024,6 +1026,10 @@ function TagsPage() {
                           (stack as any).thumbnail ||
                           (stack as any).thumbnailUrl ||
                           '/no-image.png';
+                        const sourceImageUrl = getSourceImageUrl(stack, thumb);
+                        const sourceImageFilename = sourceImageUrl
+                          ? getSourceImageFilename(stack, sourceImageUrl, `stack-${stack.id}`)
+                          : undefined;
                         const likeCount = Number(
                           (stack as any).likeCount ?? (stack as any).liked ?? 0
                         );
@@ -1046,6 +1052,7 @@ function TagsPage() {
                           <StackTile
                             key={stack.id}
                             thumbnailUrl={thumb}
+                            nativeImageDragUrl={sourceImageUrl}
                             pageCount={pageCount}
                             favorited={isFav}
                             likeCount={likeCount}
@@ -1061,12 +1068,13 @@ function TagsPage() {
                             onAddToScratch={() => onAddToScratch(stack.id)}
                             onToggleFavorite={() => onToggleFavorite(stack.id, isFav)}
                             onLike={() => onLike(stack.id)}
-                            dragHandlers={dragProps(stack.id)}
+                            dragHandlers={dragProps(stack.id, sourceImageUrl, sourceImageFilename)}
                           />
                         ) : (
                           <StackTile
                             key={stack.id}
                             thumbnailUrl={thumb}
+                            nativeImageDragUrl={sourceImageUrl}
                             pageCount={pageCount}
                             favorited={isFav}
                             likeCount={likeCount}
@@ -1079,7 +1087,7 @@ function TagsPage() {
                             onAddToScratch={() => onAddToScratch(stack.id)}
                             onToggleFavorite={() => onToggleFavorite(stack.id, isFav)}
                             onLike={() => onLike(stack.id)}
-                            dragHandlers={dragProps(stack.id)}
+                            dragHandlers={dragProps(stack.id, sourceImageUrl, sourceImageFilename)}
                             asChild
                           >
                             <Link

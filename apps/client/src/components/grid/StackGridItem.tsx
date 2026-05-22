@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from '@tanstack/react-router';
+import { Link, useNavigate } from '@tanstack/react-router';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import {
   Book,
@@ -22,9 +22,19 @@ import {
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
 import { useDrag } from '@/contexts/DragContext';
+import { useNativeImageDragMode } from '@/hooks/useNativeImageDragMode';
 import { useScratch } from '@/hooks/useScratch';
 import { apiClient } from '@/lib/api-client';
 import { removeStackFromCache } from '@/lib/stack-cache';
+import {
+  extractStackIdsFromDataTransfer,
+  getSourceImageFilename,
+  getSourceImageUrl,
+  hasStackDragDataTransfer,
+  setExternalImageDragData,
+  setNativeImageDragPreview,
+  setStackDragData,
+} from '@/lib/stack-drag-data';
 import { cn } from '@/lib/utils';
 import { currentFilterAtom, infoSidebarOpenAtom, selectedItemIdAtom } from '@/stores/ui';
 import type { MediaGridItem } from '@/types';
@@ -69,6 +79,11 @@ export function StackGridItem({
   const currentFavorited = overrideFavorited ?? item.favorited ?? item.isFavorite ?? false;
   const thumbnailUrl = item.thumbnail || item.thumbnailUrl || '/no-image.png';
   const favoriteKind = item.favoriteKind;
+  const getStackId = useCallback(() => item.stackId ?? item.id, [item.id, item.stackId]);
+  const sourceImageUrl = getSourceImageUrl(item, thumbnailUrl);
+  const sourceImageFilename = sourceImageUrl
+    ? getSourceImageFilename(item, sourceImageUrl, `stack-${getStackId()}`)
+    : 'image.jpg';
   const toNumber = useCallback((value: unknown): number | null => {
     if (typeof value === 'number') return value;
     if (typeof value === 'string') {
@@ -77,15 +92,15 @@ export function StackGridItem({
     }
     return null;
   }, []);
-  const getStackId = useCallback(() => item.stackId ?? item.id, [item.id, item.stackId]);
-
   const likeCount = toNumber(item.likeCount) ?? toNumber(item.liked) ?? toNumber(item.likes) ?? 0;
   const assetCount = toNumber(item.assetCount);
   const countAssets = toNumber((item._count as { assets?: unknown } | undefined)?.assets);
   const pageCount = assetCount ?? countAssets ?? 0;
   const [isDragging, setIsDragging] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
-  const { setIsDragging: setGlobalDragging } = useDrag();
+  const [isNativePointerActive, setIsNativePointerActive] = useState(false);
+  const nativeImageDragMode = useNativeImageDragMode();
+  const { dragKind, setDragKind, setIsDragging: setGlobalDragging } = useDrag();
   const [filter] = useAtom(currentFilterAtom);
   const datasetId = (filter?.datasetId as string) || '1';
   const { ensureScratch } = useScratch(datasetId);
@@ -115,7 +130,7 @@ export function StackGridItem({
   // Fade-in animation state
   const [isVisible, setIsVisible] = useState(false);
   const [hasBeenSeen, setHasBeenSeen] = useState(false);
-  const itemRef = useRef<HTMLDivElement>(null);
+  const itemRef = useRef<HTMLAnchorElement>(null);
 
   // Intersection Observer for fade-in animation
   useEffect(() => {
@@ -146,7 +161,10 @@ export function StackGridItem({
   }, [hasBeenSeen]);
 
   const handleRemoveStack = useCallback(async () => {
-    const label = item.title || (item as any).name || 'Untitled';
+    const label =
+      typeof item.title === 'string' && item.title.length > 0
+        ? item.title
+        : item.name || 'Untitled';
     const confirmed = window.confirm(
       `Are you sure you want to remove the stack "${label}"? This action cannot be undone.`
     );
@@ -186,20 +204,36 @@ export function StackGridItem({
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
-        <div
+        <Link
           ref={itemRef}
           key={item.id}
+          to="/library/$datasetId/stacks/$stackId"
+          params={{ datasetId, stackId: String(getStackId()) }}
+          search={
+            favoriteKind === 'asset' && typeof item.favoritePage === 'number'
+              ? { page: item.favoritePage - 1 }
+              : undefined
+          }
           data-item-id={item.id}
           className={cn(
-            'group relative aspect-square overflow-hidden cursor-pointer transition-transform duration-150 box-border',
+            'group relative aspect-square overflow-hidden cursor-pointer transition-transform duration-150 box-border block',
             isInfoSelected && 'ring-2 ring-primary ring-inset',
             isVisible ? 'opacity-100' : 'opacity-0',
-            isDragging ? 'border-8 border-gray-300 scale-95 opacity-50 rounded-lg' : '',
+            isDragging || isNativePointerActive
+              ? 'border-8 border-gray-300 scale-95 opacity-50 rounded-lg'
+              : '',
             isDragOver && 'border-8 border-accent'
           )}
-          onClick={(e) => onItemClick(item, e)}
+          onClick={(e) => {
+            if (e.metaKey || e.ctrlKey || e.altKey || e.button !== 0) {
+              return;
+            }
+            e.preventDefault();
+            onItemClick(item, e);
+          }}
+          draggable={true}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
+            if (e.key === ' ') {
               e.preventDefault();
               onItemClick(item);
             }
@@ -207,38 +241,48 @@ export function StackGridItem({
           onDragEnd={() => {
             console.log('Drag ended for item:', item.id);
             setIsDragging(false);
+            setIsNativePointerActive(false);
             setGlobalDragging(false);
           }}
           onDragStart={(e) => {
+            if ((e.target as HTMLElement | null)?.dataset.nativeImageDrag === 'true') {
+              setIsDragging(true);
+              setIsNativePointerActive(false);
+              setGlobalDragging(true);
+              setDragKind('native-image');
+              setNativeImageDragPreview(e.dataTransfer, e.currentTarget);
+              return;
+            }
+
             console.log('Drag started for item:', item.id);
             setIsDragging(true);
             setGlobalDragging(true);
 
             // Check if this item is part of a selection
+            let dragStackIds: Array<string | number> = [getStackId()];
             if (isSelectionMode && selectedItems && selectedItems.size > 0) {
               // If the dragged item is selected, drag all selected items
               if (selectedItems.has(item.id)) {
-                const selectedIds =
+                dragStackIds =
                   selectedStackIdsInOrder && selectedStackIdsInOrder.length > 0
                     ? selectedStackIdsInOrder
                     : Array.from(selectedItems);
-                e.dataTransfer.setData('text/plain', `stack-items:${selectedIds.join(',')}`);
                 e.dataTransfer.setData(
                   'application/json',
                   JSON.stringify({
                     type: 'multiple-stacks',
-                    stackIds: selectedIds,
-                    count: selectedIds.length,
+                    stackIds: dragStackIds,
+                    count: dragStackIds.length,
                   })
                 );
               } else {
                 // If dragging an unselected item, just drag that item
-                e.dataTransfer.setData('text/plain', `stack-item:${item.id}`);
+                dragStackIds = [item.id];
               }
-            } else {
-              // Not in selection mode, just drag single item
-              e.dataTransfer.setData('text/plain', `stack-item:${getStackId()}`);
             }
+
+            setStackDragData(e.dataTransfer, dragStackIds);
+            setExternalImageDragData(e.dataTransfer, sourceImageUrl, sourceImageFilename);
 
             // Chrome では dropEffect が copy の場合に effectAllowed に copy が含まれていないと
             // ドロップ自体がキャンセルされるため、copy/move の両方を許可する
@@ -247,6 +291,10 @@ export function StackGridItem({
           onDragOver={(e) => {
             // Ignore file drags; let parent DropZone handle uploads
             if (e.dataTransfer?.types?.includes('Files')) return;
+            if (dragKind === 'native-image' || !hasStackDragDataTransfer(e.dataTransfer)) {
+              setIsDragOver(false);
+              return;
+            }
             setIsDragOver(true);
             e.preventDefault();
             try {
@@ -261,34 +309,24 @@ export function StackGridItem({
             console.log('onDrop', e.dataTransfer);
             // Ignore file drops here
             if (e.dataTransfer?.types?.includes('Files')) return;
+            if (dragKind === 'native-image' || !hasStackDragDataTransfer(e.dataTransfer)) {
+              setIsDragOver(false);
+              return;
+            }
             e.preventDefault();
             e.stopPropagation();
             setIsDragOver(false);
 
-            const text = e.dataTransfer.getData('text/plain');
-            if (!text) return;
+            const sourceIdsFromDrag = extractStackIdsFromDataTransfer(e.dataTransfer);
+            if (sourceIdsFromDrag.length === 0) return;
 
             try {
               const targetId =
                 typeof getStackId() === 'string'
                   ? Number.parseInt(getStackId() as string, 10)
                   : (getStackId() as number);
-              let sourceIds: number[] = [];
-
-              if (text.startsWith('stack-item:')) {
-                const idStr = text.replace('stack-item:', '').trim();
-                const idNum = Number.parseInt(idStr, 10);
-                if (!Number.isNaN(idNum)) sourceIds = [idNum];
-              } else if (text.startsWith('stack-items:')) {
-                const idList = text.replace('stack-items:', '').trim();
-                sourceIds = idList
-                  .split(',')
-                  .map((s) => Number.parseInt(s.trim(), 10))
-                  .filter((n) => !Number.isNaN(n));
-              }
-
               // Exclude drop onto itself
-              sourceIds = sourceIds.filter((id) => id !== targetId);
+              const sourceIds = sourceIdsFromDrag.filter((id) => id !== targetId);
               if (sourceIds.length === 0) return;
 
               // Execute merge request
@@ -345,9 +383,7 @@ export function StackGridItem({
               console.error('Drop handling error', err);
             }
           }}
-          draggable={true}
           tabIndex={0}
-          role="button"
           aria-label={`View item: ${item.name}`}
         >
           <img
@@ -355,7 +391,22 @@ export function StackGridItem({
             alt={item.name}
             className="w-full h-full object-cover transition-transform duration-200"
             loading="lazy"
+            data-stack-drag-preview="true"
           />
+          {nativeImageDragMode && sourceImageUrl ? (
+            <img
+              src={sourceImageUrl}
+              alt=""
+              className="absolute inset-0 z-30 h-full w-full object-cover opacity-0"
+              draggable={true}
+              data-native-image-drag="true"
+              onPointerDown={() => setIsNativePointerActive(true)}
+              onPointerUp={() => setIsNativePointerActive(false)}
+              onPointerCancel={() => setIsNativePointerActive(false)}
+              onPointerLeave={() => setIsNativePointerActive(false)}
+              aria-hidden="true"
+            />
+          ) : null}
 
           {/* Black overlay on hover */}
           <div className="absolute inset-0 bg-black opacity-0 group-hover:opacity-10 transition-opacity duration-200" />
@@ -427,7 +478,7 @@ export function StackGridItem({
               <span>{likeCount}</span>
             </div>
           )}
-        </div>
+        </Link>
       </ContextMenuTrigger>
       <ContextMenuContent className="w-48">
         {/* Open */}

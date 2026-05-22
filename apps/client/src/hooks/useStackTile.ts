@@ -6,12 +6,17 @@ import { useDrag } from '@/contexts/DragContext';
 import { useScratch } from '@/hooks/useScratch';
 import { apiClient } from '@/lib/api-client';
 import { removeStackFromCache } from '@/lib/stack-cache';
+import {
+  setExternalImageDragData,
+  setNativeImageDragPreview,
+  setStackDragData,
+} from '@/lib/stack-drag-data';
 import { infoSidebarOpenAtom, selectedItemIdAtom } from '@/stores/ui';
 
 export function useStackTile(datasetId: string) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { setIsDragging } = useDrag();
+  const { setDragKind, setIsDragging } = useDrag();
   const { ensureScratch } = useScratch(datasetId);
   const setInfoOpen = useSetAtom(infoSidebarOpenAtom);
   const setSelectedItemId = useSetAtom(selectedItemIdAtom);
@@ -193,12 +198,24 @@ export function useStackTile(datasetId: string) {
     [invalidateAfterRemoval, queryClient, selectedInfoId, setInfoOpen, setSelectedItemId]
   );
 
-  const dragProps = (stackId: number | string) => ({
+  const dragProps = (
+    stackId: number | string,
+    sourceImageUrl?: string | null,
+    sourceImageFilename = `stack-${stackId}.jpg`
+  ) => ({
     draggable: true as const,
     onDragStart: (e: React.DragEvent) => {
+      if ((e.target as HTMLElement | null)?.dataset.nativeImageDrag === 'true') {
+        setIsDragging(true);
+        setDragKind('native-image');
+        setNativeImageDragPreview(e.dataTransfer, e.currentTarget);
+        return;
+      }
+
       try {
         setIsDragging(true);
-        e.dataTransfer.setData('text/plain', `stack-item:${stackId}`);
+        setStackDragData(e.dataTransfer, [stackId]);
+        setExternalImageDragData(e.dataTransfer, sourceImageUrl ?? null, sourceImageFilename);
         e.dataTransfer.effectAllowed = 'copyMove';
       } catch {}
     },

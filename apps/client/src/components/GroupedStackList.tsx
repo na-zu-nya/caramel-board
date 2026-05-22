@@ -8,6 +8,7 @@ import { MonthSectionHeader } from '@/components/ui/MonthSectionHeader';
 import { StackTile } from '@/components/ui/Stack';
 import { useStackTile } from '@/hooks/useStackTile';
 import { applyScrollbarCompensation, removeScrollbarCompensation } from '@/lib/scrollbar-utils';
+import { getSourceImageFilename, getSourceImageUrl } from '@/lib/stack-drag-data';
 import type { Stack } from '@/types';
 
 export interface GroupedStack {
@@ -141,6 +142,10 @@ export function GroupedStackList({
                       {dateItems.map((item) => {
                         const stack = item.stack;
                         const thumb = stack.thumbnail || stack.thumbnailUrl || '/no-image.png';
+                        const sourceImageUrl = getSourceImageUrl(stack, thumb);
+                        const sourceImageFilename = sourceImageUrl
+                          ? getSourceImageFilename(stack, sourceImageUrl, `stack-${stack.id}`)
+                          : undefined;
                         const likeCount = Number(stack.likeCount ?? stack.liked ?? 0);
                         const pageCount = stack.assetCount || stack.assetsCount || 0;
                         const isFav = stack.favorited || stack.isFavorite || false;
@@ -155,6 +160,7 @@ export function GroupedStackList({
                           <div key={item.id} className={`${itemWidth} relative`}>
                             <StackTile
                               thumbnailUrl={thumb}
+                              nativeImageDragUrl={sourceImageUrl}
                               pageCount={pageCount}
                               favorited={isFav}
                               likeCount={likeCount}
@@ -174,7 +180,11 @@ export function GroupedStackList({
                                   : undefined
                               }
                               onRemoveStack={() => onRemoveStack(stack.id, stack.name)}
-                              dragHandlers={dragProps(stack.id)}
+                              dragHandlers={dragProps(
+                                stack.id,
+                                sourceImageUrl,
+                                sourceImageFilename
+                              )}
                               asChild
                             >
                               <Link

@@ -1108,6 +1108,17 @@ export const createSearchService = (deps: {
           id: { in: stackIds },
           dataSetId,
         },
+        include: {
+          assets: {
+            take: 1,
+            orderBy: { orderInStack: 'asc' },
+            select: {
+              id: true,
+              file: true,
+              thumbnail: true,
+            },
+          },
+        },
       });
 
       const stackMap = new Map(stacks.map((s) => [s.id, s]));

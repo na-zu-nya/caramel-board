@@ -287,7 +287,7 @@ export default function SparseStackGrid({
     onRefreshAll: refreshAll,
   });
 
-  // Cmd/Ctrl + Click and Shift + Click selection support
+  // Cmd/Ctrl/Alt + Click はリンクのネイティブ動作へ委譲し、Shift + Click は範囲選択する
   const lastClickedIndexRef = useRef<number | null>(null);
 
   const onTileClick = useCallback(
@@ -296,9 +296,10 @@ export default function SparseStackGrid({
       const idx = sparseItems.findIndex((it) => it?.id === id);
 
       if (e && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault();
-        setSelectionMode(true);
-        handleToggleSelection(id);
+        lastClickedIndexRef.current = idx >= 0 ? idx : lastClickedIndexRef.current;
+        return;
+      }
+      if (e?.altKey) {
         lastClickedIndexRef.current = idx >= 0 ? idx : lastClickedIndexRef.current;
         return;
       }

@@ -93,9 +93,10 @@ function SimilarStacksRoute() {
       const idx = items.findIndex((it) => it?.id === item.id);
 
       if (event && (event.metaKey || event.ctrlKey)) {
-        event.preventDefault();
-        if (!selectionMode) setSelectionMode(true);
-        toggleItemSelection(item.id);
+        if (idx >= 0) lastClickedIndexRef.current = idx;
+        return;
+      }
+      if (event?.altKey) {
         if (idx >= 0) lastClickedIndexRef.current = idx;
         return;
       }

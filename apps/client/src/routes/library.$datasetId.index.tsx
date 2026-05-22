@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useAtom } from 'jotai';
-import { BookOpen, Film, Image } from 'lucide-react';
+import { BookOpen, Film, Image, type LucideIcon } from 'lucide-react';
 import { useEffect, useMemo } from 'react';
 import { EntityCard } from '@/components/ui/Card/EntityCard';
 import { TagChip } from '@/components/ui/Chip/TagChip';
@@ -13,8 +13,28 @@ import { useHeaderActions } from '@/hooks/useHeaderActions';
 import { isScratchCollection } from '@/hooks/useScratch';
 import { useStackTile } from '@/hooks/useStackTile';
 import { apiClient } from '@/lib/api-client';
+import { getSourceImageFilename, getSourceImageUrl } from '@/lib/stack-drag-data';
 import { currentFilterAtom } from '@/stores/ui';
-import type { MediaType } from '@/types';
+import type { MediaType, Stack } from '@/types';
+
+type StackCardItem = Partial<Stack> & {
+  id: string | number;
+  thumbnail?: string | null;
+  thumbnailUrl?: string | null;
+  likeCount?: string | number | null;
+  liked?: string | number | null;
+  assetCount?: number | null;
+  assetsCount?: number | null;
+  _count?: { assets?: number | null };
+  favorited?: boolean | null;
+  isFavorite?: boolean | null;
+};
+
+function toStackCount(value: string | number | null | undefined): number {
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') return Number(value) || 0;
+  return 0;
+}
 
 export const Route = createFileRoute('/library/$datasetId/')({
   component: DatasetHome,
@@ -36,7 +56,7 @@ function DatasetHome() {
         limit: 1000,
       });
       const scratch = collections.find((c) => isScratchCollection(c));
-      if (!scratch) return null as null | { id: number; stacks: any[]; total: number };
+      if (!scratch) return null as null | { id: number; stacks: Stack[]; total: number };
       const res = await apiClient.getStacks({
         datasetId,
         filter: { collectionId: String(scratch.id) },
@@ -66,7 +86,7 @@ function DatasetHome() {
     setCurrentFilter({ datasetId });
   }, [datasetId, setCurrentFilter]);
 
-  const mediaTypeConfig: Record<MediaType, { label: string; Icon: any }> = {
+  const mediaTypeConfig: Record<MediaType, { label: string; Icon: LucideIcon }> = {
     image: { label: 'Images', Icon: Image },
     comic: { label: 'Comics', Icon: BookOpen },
     video: { label: 'Videos', Icon: Film },
@@ -187,7 +207,7 @@ function DatasetHome() {
             }
           >
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-              {overview.recentLikes.map((item) => {
+              {overview.recentLikes.map((item: StackCardItem) => {
                 const {
                   onOpen,
                   onAddToScratch,
@@ -196,20 +216,24 @@ function DatasetHome() {
                   onLike,
                   dragProps,
                 } = stackTileActions;
-                const thumb =
-                  (item as any).thumbnail || (item as any).thumbnailUrl || '/no-image.png';
-                const likeCount = Number((item as any).likeCount ?? (item as any).liked ?? 0);
+                const thumb = item.thumbnail || item.thumbnailUrl || '/no-image.png';
+                const sourceImageUrl = getSourceImageUrl(item, thumb);
+                const sourceImageFilename = sourceImageUrl
+                  ? getSourceImageFilename(item, sourceImageUrl, `stack-${item.id}`)
+                  : undefined;
+                const likeCount = toStackCount(item.likeCount ?? item.liked);
                 const pageCount =
-                  (item as any).assetCount ??
-                  (item as any)._count?.assets ??
-                  (item as any).assetsCount ??
+                  item.assetCount ??
+                  item._count?.assets ??
+                  item.assetsCount ??
+                  item.assets?.length ??
                   0;
-                const currentFavorited =
-                  (item as any).favorited ?? (item as any).isFavorite ?? false;
+                const currentFavorited = item.favorited ?? item.isFavorite ?? false;
                 return (
                   <StackTile
                     key={item.id}
                     thumbnailUrl={thumb}
+                    nativeImageDragUrl={sourceImageUrl}
                     pageCount={pageCount}
                     favorited={currentFavorited}
                     likeCount={likeCount}
@@ -219,7 +243,7 @@ function DatasetHome() {
                     onAddToScratch={() => onAddToScratch(item.id)}
                     onToggleFavorite={() => onToggleFavorite(item.id, currentFavorited)}
                     onLike={() => onLike(item.id)}
-                    dragHandlers={dragProps(item.id)}
+                    dragHandlers={dragProps(item.id, sourceImageUrl, sourceImageFilename)}
                     asChild
                   >
                     <Link
@@ -248,7 +272,7 @@ function DatasetHome() {
             }
           >
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-              {scratchData.stacks.map((item) => {
+              {scratchData.stacks.map((item: StackCardItem) => {
                 const {
                   onOpen,
                   onAddToScratch,
@@ -257,20 +281,24 @@ function DatasetHome() {
                   onLike,
                   dragProps,
                 } = stackTileActions;
-                const thumb =
-                  (item as any).thumbnail || (item as any).thumbnailUrl || '/no-image.png';
-                const likeCount = Number((item as any).likeCount ?? (item as any).liked ?? 0);
+                const thumb = item.thumbnail || item.thumbnailUrl || '/no-image.png';
+                const sourceImageUrl = getSourceImageUrl(item, thumb);
+                const sourceImageFilename = sourceImageUrl
+                  ? getSourceImageFilename(item, sourceImageUrl, `stack-${item.id}`)
+                  : undefined;
+                const likeCount = toStackCount(item.likeCount ?? item.liked);
                 const pageCount =
-                  (item as any).assetCount ??
-                  (item as any)._count?.assets ??
-                  (item as any).assetsCount ??
+                  item.assetCount ??
+                  item._count?.assets ??
+                  item.assetsCount ??
+                  item.assets?.length ??
                   0;
-                const currentFavorited =
-                  (item as any).favorited ?? (item as any).isFavorite ?? false;
+                const currentFavorited = item.favorited ?? item.isFavorite ?? false;
                 return (
                   <StackTile
                     key={item.id}
                     thumbnailUrl={thumb}
+                    nativeImageDragUrl={sourceImageUrl}
                     pageCount={pageCount}
                     favorited={currentFavorited}
                     likeCount={likeCount}
@@ -280,7 +308,7 @@ function DatasetHome() {
                     onAddToScratch={() => onAddToScratch(item.id)}
                     onToggleFavorite={() => onToggleFavorite(item.id, currentFavorited)}
                     onLike={() => onLike(item.id)}
-                    dragHandlers={dragProps(item.id)}
+                    dragHandlers={dragProps(item.id, sourceImageUrl, sourceImageFilename)}
                     asChild
                   >
                     <Link
@@ -334,14 +362,14 @@ function CollectionCard({
         try {
           const smart = await apiClient.getSmartCollectionStacks(id, { limit: 1, offset: 0 });
           if (smart.total > 0) {
-            s = smart.stacks?.[0] as any;
+            s = smart.stacks?.[0];
             total = smart.total;
           }
         } catch {}
       }
 
-      const t = (s as any)?.thumbnailUrl || (s as any)?.thumbnail || null;
-      return { thumb: t as string | null, total };
+      const t = s?.thumbnailUrl || s?.thumbnail || null;
+      return { thumb: t, total };
     },
     staleTime: 30000,
   });

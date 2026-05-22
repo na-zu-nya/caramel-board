@@ -32,6 +32,7 @@ import { SelectionActionBar } from '@/components/ui/selection-action-bar';
 import { useKeyboardShortcuts } from '@/hooks/features/useKeyboardShortcuts';
 import { useStackTile } from '@/hooks/useStackTile';
 import { apiClient } from '@/lib/api-client';
+import { getSourceImageFilename, getSourceImageUrl } from '@/lib/stack-drag-data';
 import { cn } from '@/lib/utils';
 import {
   currentFilterAtom,
@@ -566,11 +567,10 @@ function AutoTagConfigPage() {
       };
 
       if (event.metaKey || event.ctrlKey) {
-        event.preventDefault();
-        if (!selectionMode) {
-          setSelectionMode(true);
-        }
-        handleItemSelect(stack.id);
+        recordLastClicked();
+        return;
+      }
+      if (event.altKey) {
         recordLastClicked();
         return;
       }
@@ -935,6 +935,10 @@ function AutoTagConfigPage() {
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                     {allStacks.map((stack) => {
                       const thumbnail = stack.thumbnail ?? stack.thumbnailUrl ?? '/no-image.png';
+                      const sourceImageUrl = getSourceImageUrl(stack, thumbnail);
+                      const sourceImageFilename = sourceImageUrl
+                        ? getSourceImageFilename(stack, sourceImageUrl, `stack-${stack.id}`)
+                        : undefined;
                       const likeCount = Number(stack.likeCount ?? stack.liked ?? 0);
                       const pageCount =
                         stack.assetCount ?? stack._count?.assets ?? stack.assetsCount ?? 0;
@@ -945,6 +949,7 @@ function AutoTagConfigPage() {
                           <StackTile
                             key={stack.id}
                             thumbnailUrl={thumbnail}
+                            nativeImageDragUrl={sourceImageUrl}
                             pageCount={pageCount}
                             favorited={favorited}
                             likeCount={likeCount}
@@ -954,7 +959,7 @@ function AutoTagConfigPage() {
                             onAddToScratch={() => onAddToScratch(stack.id)}
                             onToggleFavorite={() => onToggleFavorite(stack.id, favorited)}
                             onLike={() => onLike(stack.id)}
-                            dragHandlers={dragProps(stack.id)}
+                            dragHandlers={dragProps(stack.id, sourceImageUrl, sourceImageFilename)}
                           />
                         );
                       }
@@ -963,6 +968,7 @@ function AutoTagConfigPage() {
                         <StackTile
                           key={stack.id}
                           thumbnailUrl={thumbnail}
+                          nativeImageDragUrl={sourceImageUrl}
                           pageCount={pageCount}
                           favorited={favorited}
                           likeCount={likeCount}
@@ -973,7 +979,7 @@ function AutoTagConfigPage() {
                           onAddToScratch={() => onAddToScratch(stack.id)}
                           onToggleFavorite={() => onToggleFavorite(stack.id, favorited)}
                           onLike={() => onLike(stack.id)}
-                          dragHandlers={dragProps(stack.id)}
+                          dragHandlers={dragProps(stack.id, sourceImageUrl, sourceImageFilename)}
                           asChild
                         >
                           <Link

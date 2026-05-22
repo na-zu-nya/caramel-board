@@ -25,3 +25,27 @@ export const Basic: Story = {
     },
   },
 };
+
+export const AsLink: Story = {
+  args: {
+    asChild: true,
+    thumbnailUrl: 'https://picsum.photos/id/24/320/320',
+    title: 'Linked Stack',
+    pageCount: 8,
+    favorited: true,
+    likeCount: 12,
+    children: <a href="/library/1/stacks/1">Linked Stack</a>,
+    dragHandlers: {
+      draggable: true,
+      onDragStart: (event) => {
+        if (event.metaKey || event.ctrlKey || event.altKey) {
+          return;
+        }
+        event.dataTransfer.setData('text/plain', 'stack-item:1');
+      },
+      onDragEnd: () => {
+        console.log('drag end');
+      },
+    },
+  },
+};

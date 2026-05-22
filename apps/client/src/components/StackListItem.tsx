@@ -12,7 +12,7 @@ import {
   Star,
   Trash2,
 } from 'lucide-react';
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -21,9 +21,17 @@ import {
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
 import { useDrag } from '@/contexts/DragContext';
+import { useNativeImageDragMode } from '@/hooks/useNativeImageDragMode';
 import { useScratch } from '@/hooks/useScratch';
 import { apiClient } from '@/lib/api-client';
 import { removeStackFromCache } from '@/lib/stack-cache';
+import {
+  getSourceImageFilename,
+  getSourceImageUrl,
+  setExternalImageDragData,
+  setNativeImageDragPreview,
+  setStackDragData,
+} from '@/lib/stack-drag-data';
 import { cn } from '@/lib/utils';
 import { navigationStateAtom } from '@/stores/navigation';
 import { infoSidebarOpenAtom, selectedItemIdAtom } from '@/stores/ui';
@@ -61,16 +69,27 @@ export function StackListItem({
 }: StackItemProps) {
   const likeCount = Number(stack.likeCount ?? stack.liked ?? 0);
   const isFavorited = Boolean(stack.favorited ?? stack.isFavorite);
+  const thumbnailSrc = stack.thumbnail || stack.thumbnailUrl || null;
+  const sourceImageUrl = getSourceImageUrl(stack, thumbnailSrc);
+  const sourceImageFilename = sourceImageUrl
+    ? getSourceImageFilename(stack, sourceImageUrl, `stack-${stack.id}`)
+    : 'image.jpg';
+  const nativeImageDragMode = useNativeImageDragMode();
+  const [isNativePointerActive, setIsNativePointerActive] = useState(false);
   const totalAssets =
     (typeof stack.assetCount === 'number' && stack.assetCount >= 0
       ? stack.assetCount
       : undefined) ??
     (typeof stack.assetsCount === 'number' ? stack.assetsCount : undefined) ??
     (Array.isArray(stack.assets) ? stack.assets.length : 0);
-  const { setIsDragging } = useDrag();
+  const { setDragKind, setIsDragging } = useDrag();
   const [, setNavigationState] = useAtom(navigationStateAtom);
 
   const handleClick = (e: React.MouseEvent) => {
+    if (e.metaKey || e.ctrlKey || e.altKey || e.button !== 0) {
+      return;
+    }
+
     if (selectable && e.target instanceof HTMLButtonElement) {
       e.preventDefault();
       e.stopPropagation();
@@ -109,6 +128,14 @@ export function StackListItem({
         onClick: handleClick,
         draggable: true,
         onDragStart: (e: React.DragEvent) => {
+          if ((e.target as HTMLElement | null)?.dataset.nativeImageDrag === 'true') {
+            setIsDragging(true);
+            setDragKind('native-image');
+            setIsNativePointerActive(false);
+            setNativeImageDragPreview(e.dataTransfer, e.currentTarget);
+            return;
+          }
+
           try {
             setIsDragging(true);
             const id = typeof stack.id === 'string' ? stack.id : String(stack.id);
@@ -117,15 +144,15 @@ export function StackListItem({
               selectedItemsSet && selectedItemsSet.size > 0 && selectedItemsSet.has(stack.id)
                 ? Array.from(selectedItemsSet)
                 : [];
-            if (selectedIds.length > 1) {
-              e.dataTransfer.setData('text/plain', `stack-items:${selectedIds.join(',')}`);
-            } else {
-              e.dataTransfer.setData('text/plain', `stack-item:${id}`);
-            }
+            setStackDragData(e.dataTransfer, selectedIds.length > 1 ? selectedIds : [id]);
+            setExternalImageDragData(e.dataTransfer, sourceImageUrl, sourceImageFilename);
             e.dataTransfer.effectAllowed = 'copyMove';
           } catch {}
         },
-        onDragEnd: () => setIsDragging(false),
+        onDragEnd: () => {
+          setIsDragging(false);
+          setIsNativePointerActive(false);
+        },
       }
     : {
         to: '/library/$datasetId/stacks/$stackId',
@@ -134,6 +161,14 @@ export function StackListItem({
         onClick: handleClick,
         draggable: true,
         onDragStart: (e: React.DragEvent) => {
+          if ((e.target as HTMLElement | null)?.dataset.nativeImageDrag === 'true') {
+            setIsDragging(true);
+            setDragKind('native-image');
+            setIsNativePointerActive(false);
+            setNativeImageDragPreview(e.dataTransfer, e.currentTarget);
+            return;
+          }
+
           try {
             setIsDragging(true);
             const id = typeof stack.id === 'string' ? stack.id : String(stack.id);
@@ -141,15 +176,15 @@ export function StackListItem({
               selectedItemsSet && selectedItemsSet.size > 0 && selectedItemsSet.has(stack.id)
                 ? Array.from(selectedItemsSet)
                 : [];
-            if (selectedIds.length > 1) {
-              e.dataTransfer.setData('text/plain', `stack-items:${selectedIds.join(',')}`);
-            } else {
-              e.dataTransfer.setData('text/plain', `stack-item:${id}`);
-            }
+            setStackDragData(e.dataTransfer, selectedIds.length > 1 ? selectedIds : [id]);
+            setExternalImageDragData(e.dataTransfer, sourceImageUrl, sourceImageFilename);
             e.dataTransfer.effectAllowed = 'copyMove';
           } catch {}
         },
-        onDragEnd: () => setIsDragging(false),
+        onDragEnd: () => {
+          setIsDragging(false);
+          setIsNativePointerActive(false);
+        },
       };
 
   const queryClient = useQueryClient();
@@ -219,27 +254,46 @@ export function StackListItem({
           <div
             className={cn(
               'aspect-square relative overflow-hidden rounded-lg bg-gray-100 mb-2 border border-gray-200 group-hover:border-gray-300 transition-all',
+              isNativePointerActive && 'scale-95 opacity-50',
               selected && 'ring-2 ring-blue-500'
             )}
           >
-            {stack.thumbnail ? (
+            {thumbnailSrc ? (
               <img
-                src={getThumbnailPath(stack.thumbnail)}
+                src={getThumbnailPath(thumbnailSrc)}
                 alt={stack.title || stack.name || 'Stack'}
                 className={cn(
                   'w-full h-full object-cover group-hover:scale-105 transition-transform duration-300',
                   selected && 'opacity-75'
                 )}
                 loading="lazy"
+                data-stack-drag-preview="true"
                 onError={(e) => {
                   e.currentTarget.src = '/no-image.png';
                 }}
               />
             ) : (
-              <div className="w-full h-full flex items-center justify-center text-gray-400 bg-gray-50">
+              <div
+                className="w-full h-full flex items-center justify-center text-gray-400 bg-gray-50"
+                data-stack-drag-preview="true"
+              >
                 <Image size={40} className="opacity-20" />
               </div>
             )}
+            {nativeImageDragMode && sourceImageUrl ? (
+              <img
+                src={sourceImageUrl}
+                alt=""
+                className="absolute inset-0 z-30 h-full w-full object-cover opacity-0"
+                draggable={true}
+                data-native-image-drag="true"
+                onPointerDown={() => setIsNativePointerActive(true)}
+                onPointerUp={() => setIsNativePointerActive(false)}
+                onPointerCancel={() => setIsNativePointerActive(false)}
+                onPointerLeave={() => setIsNativePointerActive(false)}
+                aria-hidden="true"
+              />
+            ) : null}
 
             {/* Selection overlay */}
             {selectable && selected && (

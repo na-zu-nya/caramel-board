@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { useDrag } from '@/contexts/DragContext';
+import { STACK_IDS_MIME } from '@/lib/stack-drag-data';
 import { cn } from '@/lib/utils';
 
 interface FileSystemEntryBase {
@@ -434,6 +436,7 @@ export function DropZone({
   overlayClassName,
   disabled = false,
 }: DropZoneProps) {
+  const { dragKind } = useDrag();
   const [isDragActive, setIsDragActive] = useState(false);
   const dragCounter = useRef(0);
   const dropZoneRef = useRef<HTMLDivElement>(null);
@@ -448,7 +451,9 @@ export function DropZone({
     }
 
     const isFileLikeDrag = (event: DragEvent) => {
+      if (dragKind === 'native-image') return false;
       const types = Array.from(event.dataTransfer?.types ?? []);
+      if (types.includes(STACK_IDS_MIME)) return false;
       return types.includes('Files') || types.includes('text/uri-list');
     };
 
@@ -483,6 +488,8 @@ export function DropZone({
 
     const handleDrop = (e: DragEvent) => {
       const dataTransfer = e.dataTransfer ?? null;
+      if (dragKind === 'native-image') return;
+      if (Array.from(dataTransfer?.types ?? []).includes(STACK_IDS_MIME)) return;
       debugLogDroppedDataTransfer(dataTransfer);
       const urls = extractUrlsFromDataTransfer(dataTransfer);
       const fileHandler = onDrop ?? onFilesDrop;
@@ -553,7 +560,7 @@ export function DropZone({
       element.removeEventListener('drop', handleDrop);
       dragCounter.current = 0;
     };
-  }, [onDrop, onFilesDrop, onUrlDrop, accept, multiple, disabled]);
+  }, [onDrop, onFilesDrop, onUrlDrop, accept, multiple, disabled, dragKind]);
 
   return (
     <div ref={dropZoneRef} className={cn('relative', className)}>

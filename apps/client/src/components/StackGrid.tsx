@@ -222,11 +222,12 @@ export default function StackGrid({
       const id = item.id;
       const idx = findIndexById(id);
 
-      // Cmd/Ctrl + Click → toggle select and ensure selection mode
+      // Cmd/Ctrl/Alt + Click はリンクのネイティブ動作へ委譲する
       if (e && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault();
-        setSelectionMode(true);
-        handleToggleSelection(id);
+        lastClickedIndexRef.current = idx >= 0 ? idx : lastClickedIndexRef.current;
+        return;
+      }
+      if (e?.altKey) {
         lastClickedIndexRef.current = idx >= 0 ? idx : lastClickedIndexRef.current;
         return;
       }

@@ -356,12 +356,12 @@ export class CollectionService {
       const firstAssets = await this.prisma.asset.findMany({
         where: { stackId: { in: ids } },
         orderBy: [{ stackId: 'asc' }, { orderInStack: 'asc' }],
-        select: { stackId: true, thumbnail: true },
+        select: { stackId: true, file: true, thumbnail: true },
       });
       // Only keep first by stackId
       for (const fa of firstAssets) {
         if (!firstAssetMap.has(fa.stackId))
-          firstAssetMap.set(fa.stackId, fa.thumbnail || undefined);
+          firstAssetMap.set(fa.stackId, fa.thumbnail || fa.file || undefined);
       }
     }
 

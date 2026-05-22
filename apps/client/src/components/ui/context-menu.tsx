@@ -4,7 +4,13 @@ import * as React from 'react';
 
 import { cn } from '@/lib/utils';
 
-const ContextMenu = ContextMenuPrimitive.Root;
+const ContextMenu = ({
+  modal = false,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof ContextMenuPrimitive.Root>) => (
+  <ContextMenuPrimitive.Root modal={modal} {...props} />
+);
+ContextMenu.displayName = ContextMenuPrimitive.Root.displayName;
 
 const ContextMenuTrigger = ContextMenuPrimitive.Trigger;
 

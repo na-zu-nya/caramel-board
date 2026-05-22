@@ -9,6 +9,7 @@ export interface StackWithAssets {
   dataSetId?: number;
   assets?: Array<{
     id: number;
+    file?: string | null;
     thumbnail?: string | null;
   }>;
   [key: string]: unknown;
@@ -51,6 +52,7 @@ export const STACK_THUMBNAIL_INCLUDE = {
     orderBy: { createdAt: 'asc' as const },
     select: {
       id: true,
+      file: true,
       thumbnail: true,
     },
   },

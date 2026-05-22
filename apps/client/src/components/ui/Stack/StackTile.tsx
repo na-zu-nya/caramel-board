@@ -8,7 +8,7 @@ import {
   Star,
   Trash2,
 } from 'lucide-react';
-import { cloneElement, isValidElement } from 'react';
+import { cloneElement, isValidElement, type ReactElement, useState } from 'react';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -16,6 +16,7 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
+import { useNativeImageDragMode } from '@/hooks/useNativeImageDragMode';
 import { cn } from '@/lib/utils';
 import { getThumbnailPath } from '@/utils/thumbnailPath';
 
@@ -23,6 +24,7 @@ export interface StackTileProps extends React.HTMLAttributes<HTMLDivElement> {
   asChild?: boolean;
   // Visual data
   thumbnailUrl?: string | null;
+  nativeImageDragUrl?: string | null;
   title?: string;
   pageCount?: number;
   favorited?: boolean;
@@ -47,6 +49,7 @@ export interface StackTileProps extends React.HTMLAttributes<HTMLDivElement> {
 export function StackTile({
   asChild,
   thumbnailUrl,
+  nativeImageDragUrl,
   title,
   pageCount,
   favorited,
@@ -64,10 +67,24 @@ export function StackTile({
   children,
   ...divProps
 }: StackTileProps) {
+  const nativeImageDragMode = useNativeImageDragMode();
+  const [isNativePointerActive, setIsNativePointerActive] = useState(false);
+  const resolvedThumbnailUrl = thumbnailUrl
+    ? thumbnailUrl.startsWith('http')
+      ? thumbnailUrl
+      : getThumbnailPath(thumbnailUrl)
+    : null;
+  const resolvedNativeImageDragUrl = nativeImageDragUrl
+    ? nativeImageDragUrl.startsWith('http')
+      ? nativeImageDragUrl
+      : getThumbnailPath(nativeImageDragUrl)
+    : resolvedThumbnailUrl;
+
   const body = (
     <div
       className={cn(
         'group relative aspect-square overflow-hidden rounded-lg border border-gray-200 bg-gray-100',
+        isNativePointerActive && 'scale-95 opacity-50',
         className
       )}
       {...dragHandlers}
@@ -75,19 +92,39 @@ export function StackTile({
     >
       {thumbnailUrl ? (
         <img
-          src={thumbnailUrl.startsWith('http') ? thumbnailUrl : getThumbnailPath(thumbnailUrl)}
+          src={resolvedThumbnailUrl ?? undefined}
           alt={title || 'stack'}
           className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
           loading="lazy"
+          data-stack-drag-preview="true"
           onError={(e) => {
             e.currentTarget.src = '/no-image.png';
           }}
         />
       ) : (
-        <div className="w-full h-full flex items-center justify-center text-gray-400 bg-gray-50">
+        <div
+          className="w-full h-full flex items-center justify-center text-gray-400 bg-gray-50"
+          data-stack-drag-preview="true"
+        >
           No Image
         </div>
       )}
+      {nativeImageDragMode && resolvedNativeImageDragUrl ? (
+        <img
+          src={resolvedNativeImageDragUrl}
+          alt=""
+          className="absolute inset-0 z-30 h-full w-full object-cover opacity-0"
+          draggable={true}
+          data-native-image-drag="true"
+          onPointerDown={() => setIsNativePointerActive(true)}
+          onPointerUp={() => setIsNativePointerActive(false)}
+          onPointerCancel={() => setIsNativePointerActive(false)}
+          onPointerLeave={() => setIsNativePointerActive(false)}
+          onDragStart={() => setIsNativePointerActive(true)}
+          onDragEnd={() => setIsNativePointerActive(false)}
+          aria-hidden="true"
+        />
+      ) : null}
 
       {/* Page count (right-top) */}
       {pageCount && pageCount > 1 && (
@@ -139,7 +176,9 @@ export function StackTile({
     <ContextMenu>
       <ContextMenuTrigger asChild>
         {asChild && isValidElement(children)
-          ? cloneElement(children as any, { children: body })
+          ? cloneElement(children as ReactElement<{ children?: React.ReactNode }>, {
+              children: body,
+            })
           : body}
       </ContextMenuTrigger>
       <ContextMenuContent className="w-48">

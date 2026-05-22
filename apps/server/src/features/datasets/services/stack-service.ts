@@ -513,6 +513,7 @@ export const createStackService = (deps: {
             orderBy: { createdAt: 'asc' },
             select: {
               id: true,
+              file: true,
               thumbnail: true,
             },
           },
@@ -1218,6 +1219,7 @@ export const createStackService = (deps: {
           orderBy: { orderInStack: 'asc' },
           select: {
             id: true,
+            file: true,
             thumbnail: true,
           },
         },

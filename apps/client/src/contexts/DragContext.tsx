@@ -1,4 +1,4 @@
-import { createContext, type ReactNode, useContext, useEffect, useState } from 'react';
+import { createContext, type ReactNode, useCallback, useContext, useEffect, useState } from 'react';
 import { useDisableTextSelection } from '@/hooks/useDisableTextSelection';
 
 interface DraggedStackInfo {
@@ -6,11 +6,15 @@ interface DraggedStackInfo {
   collectionIds: number[];
 }
 
+type DragKind = 'stack' | 'native-image' | null;
+
 interface DragContextType {
   draggedStack: DraggedStackInfo | null;
   setDraggedStack: (stack: DraggedStackInfo | null) => void;
   isDragging: boolean;
   setIsDragging: (dragging: boolean) => void;
+  dragKind: DragKind;
+  setDragKind: (kind: DragKind) => void;
 }
 
 const DragContext = createContext<DragContextType | undefined>(undefined);
@@ -18,7 +22,17 @@ const DragContext = createContext<DragContextType | undefined>(undefined);
 export function DragProvider({ children }: { children: ReactNode }) {
   const [draggedStack, setDraggedStack] = useState<DraggedStackInfo | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [dragKind, setDragKind] = useState<DragKind>(null);
   const { setDragging } = useDisableTextSelection();
+
+  const setDraggingState = useCallback((dragging: boolean) => {
+    setIsDragging(dragging);
+    if (!dragging) {
+      setDragKind(null);
+      return;
+    }
+    setDragKind((current) => current ?? 'stack');
+  }, []);
 
   // Update text selection state when dragging changes
   useEffect(() => {
@@ -31,7 +45,9 @@ export function DragProvider({ children }: { children: ReactNode }) {
         draggedStack,
         setDraggedStack,
         isDragging,
-        setIsDragging,
+        setIsDragging: setDraggingState,
+        dragKind,
+        setDragKind,
       }}
     >
       {children}

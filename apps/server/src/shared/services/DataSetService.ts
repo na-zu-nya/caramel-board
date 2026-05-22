@@ -41,6 +41,7 @@ interface RecentLikeRaw {
   createdAt: Date;
   updatedAt: Date;
   asset_id: number | null;
+  asset_file: string | null;
   asset_thumbnail: string | null;
 }
 
@@ -284,6 +285,7 @@ export class DataSetService {
     const recentLikesRaw = await prisma.$queryRaw<RecentLikeRaw[]>`
       SELECT s.*, 
              a.id as "asset_id",
+             a.file as "asset_file",
              a.thumbnail as "asset_thumbnail"
       FROM "Stack" s
       LEFT JOIN LATERAL (
@@ -292,7 +294,7 @@ export class DataSetService {
         WHERE la."stackId" = s.id
       ) l ON TRUE
       LEFT JOIN LATERAL (
-        SELECT id, thumbnail
+        SELECT id, file, thumbnail
         FROM "Asset" a
         WHERE a."stackId" = s.id
         ORDER BY a."orderInStack" ASC
@@ -310,6 +312,7 @@ export class DataSetService {
         ? [
             {
               id: row.asset_id,
+              file: row.asset_file,
               thumbnail: row.asset_thumbnail,
             },
           ]

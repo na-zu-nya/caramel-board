@@ -102,6 +102,11 @@ class ApiClient {
       id: string | number;
       name: string;
       thumbnail: string | null;
+      assets?: Array<{
+        id?: string | number;
+        file?: string | null;
+        thumbnail?: string | null;
+      }>;
       likeCount: number;
       mediaType: string;
     }>;
