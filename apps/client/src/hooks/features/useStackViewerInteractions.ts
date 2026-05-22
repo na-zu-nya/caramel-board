@@ -10,7 +10,21 @@ export interface ImageCarouselBridge {
   updateVerticalTransform: (y: number, scale: number, opacity: number, bg?: number) => void;
   getViewportWidth: () => number;
   getCurrentImageElement: () => HTMLImageElement | null;
+  getCurrentZoomMediaElement: () => HTMLImageElement | HTMLVideoElement | null;
   getCurrentImageSurfaceElement: () => HTMLDivElement | null;
+  isCurrentVideo: () => boolean;
+  toggleVideo: () => void;
+  pauseVideo: () => void;
+  playVideo: () => void;
+  seekBySeconds: (delta: number, preservePlaying?: boolean) => void;
+  seekTo: (time: number, preservePlaying?: boolean) => void;
+  stepFrame: (n: number) => void;
+  seekToStart: (preservePlaying?: boolean) => void;
+  seekToEnd: (preservePlaying?: boolean) => void;
+  getCurrentTime: () => number;
+  getIsPlaying: () => boolean;
+  downloadCurrentVideoFrame: () => Promise<boolean>;
+  requestRestorePlayback: (payload?: { time: number; wasPlaying: boolean }) => void;
 }
 
 export function useStackViewerInteractions(params: {
@@ -128,10 +142,10 @@ export function useStackViewerInteractions(params: {
       const d = currentDragOffsetRef.current;
       const startOffset = direction === 1 ? d - viewportW : d + viewportW;
       requestAnimationFrame(() => {
+        currentDragOffsetRef.current = startOffset;
+        setDragOffset(startOffset);
         setCurrentPage((p) => p + direction);
         requestAnimationFrame(() => {
-          currentDragOffsetRef.current = startOffset;
-          setDragOffset(startOffset);
           imageCarouselRef.current?.updateTranslateX(startOffset);
           const step = () => {
             const cur = currentDragOffsetRef.current;
@@ -161,6 +175,8 @@ export function useStackViewerInteractions(params: {
       const d = currentDragOffsetRef.current;
       const startOffset = direction === 1 ? d - viewportW : d + viewportW;
       skipResetOnceRef.current = true;
+      currentDragOffsetRef.current = startOffset;
+      setDragOffset(startOffset);
       if (ctx) moveIndex(direction);
       navigate({
         to: '/library/$datasetId/stacks/$stackId',
@@ -169,8 +185,6 @@ export function useStackViewerInteractions(params: {
         replace: true,
       });
       requestAnimationFrame(() => {
-        currentDragOffsetRef.current = startOffset;
-        setDragOffset(startOffset);
         imageCarouselRef.current?.updateTranslateX(startOffset);
         const step = () => {
           const cur = currentDragOffsetRef.current;

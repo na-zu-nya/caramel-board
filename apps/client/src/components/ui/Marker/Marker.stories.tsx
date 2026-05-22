@@ -5,13 +5,14 @@ const meta: Meta<typeof Marker> = {
   title: 'Components/Marker',
   component: Marker,
   args: {
-    color: 'bright-blue',
+    color: 'white',
     size: 12,
   },
   argTypes: {
     color: {
       control: 'select',
       options: [
+        'white',
         'light-gray',
         'bright-red',
         'bright-orange',
@@ -47,12 +48,13 @@ export const HoverScale: Story = {
       </div>
     </div>
   ),
-  args: { color: 'bright-yellow' },
+  args: { color: 'white' },
 };
 
 export const Palette: Story = {
   render: () => {
     const colors = [
+      'white',
       'light-gray',
       'bright-red',
       'bright-orange',

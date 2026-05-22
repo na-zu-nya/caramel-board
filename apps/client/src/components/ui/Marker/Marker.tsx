@@ -2,6 +2,7 @@ import * as React from 'react';
 import { cn } from '@/lib/utils';
 
 export type MarkerColorKey =
+  | 'white'
   | 'light-gray'
   | 'bright-red'
   | 'bright-orange'
@@ -17,7 +18,7 @@ export type MarkerColorKey =
   | 'skyblue';
 
 export interface MarkerProps extends React.SVGAttributes<SVGElement> {
-  /** Accepts palette key or #hex. Defaults to 'hard-pink'. */
+  /** Accepts palette key or #hex. Defaults to 'white'. */
   color?: MarkerColorKey | string;
   /** Height in px. Width scales with the icon ratio. Default: 12 */
   size?: number;
@@ -54,9 +55,11 @@ const darkenHex = (hex: string, percent: number) => {
 };
 
 const mapColor = (key?: string): string => {
-  if (!key) return '#EE0874';
+  if (!key) return '#FFFFFF';
   if (/^#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$/.test(key)) return key;
   switch (key) {
+    case 'white':
+      return '#FFFFFF';
     case 'light-gray':
       return '#E5E7EB';
     case 'bright-red':
@@ -82,7 +85,7 @@ const mapColor = (key?: string): string => {
     case 'skyblue':
       return '#55D7ED';
     default:
-      return '#EE0874';
+      return '#FFFFFF';
   }
 };
 
@@ -91,7 +94,7 @@ const mapColor = (key?: string): string => {
  * No external spacing; animations are controlled by parent via className.
  */
 export const Marker = React.memo(function Marker({
-  color = 'hard-pink',
+  color = 'white',
   size = 12,
   className,
   ...rest

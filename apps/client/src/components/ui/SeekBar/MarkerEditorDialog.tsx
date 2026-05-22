@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { cn } from '@/lib/utils';
 
 type ColorKey =
+  | 'white'
   | 'light-gray'
   | 'bright-red'
   | 'bright-orange'
@@ -14,6 +15,7 @@ type ColorKey =
   | 'bright-violet';
 
 const COLOR_PALETTE: { key: ColorKey; hex: string; label: string }[] = [
+  { key: 'white', hex: '#FFFFFF', label: 'White' },
   { key: 'light-gray', hex: '#E5E7EB', label: 'Light Gray' },
   { key: 'bright-red', hex: '#EF4444', label: 'Bright Red' },
   { key: 'bright-orange', hex: '#F97316', label: 'Bright Orange' },
@@ -55,7 +57,7 @@ export default function MarkerEditorDialog({
       setError('Please enter a valid non-negative number.');
       return;
     }
-    onSave({ time: parsed, color: (localColor as ColorKey) || 'bright-blue' });
+    onSave({ time: parsed, color: (localColor as ColorKey) || 'white' });
   };
 
   return (

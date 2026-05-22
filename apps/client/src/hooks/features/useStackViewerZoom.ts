@@ -17,7 +17,7 @@ interface ZoomGeometry {
 interface UseStackViewerZoomProps {
   enabled: boolean;
   assetKey?: string | number | null;
-  getImageElement: () => HTMLImageElement | null;
+  getMediaElement: () => HTMLImageElement | HTMLVideoElement | null;
   getSurfaceElement: () => HTMLDivElement | null;
   minScale?: number;
   maxScale?: number;
@@ -36,7 +36,7 @@ const clamp = (value: number, min: number, max: number) => Math.min(Math.max(val
 export function useStackViewerZoom({
   enabled,
   assetKey,
-  getImageElement,
+  getMediaElement,
   getSurfaceElement,
   minScale = 1,
   maxScale = 10,
@@ -62,15 +62,21 @@ export function useStackViewerZoom({
   }, []);
 
   const getZoomGeometry = useCallback((): ZoomGeometry | null => {
-    const image = getImageElement();
+    const media = getMediaElement();
     const surface = getSurfaceElement();
-    if (!image || !surface) return null;
+    if (!media || !surface) return null;
 
     const surfaceRect = surface.getBoundingClientRect();
     if (surfaceRect.width <= 0 || surfaceRect.height <= 0) return null;
 
-    const naturalWidth = image.naturalWidth || image.clientWidth || surfaceRect.width;
-    const naturalHeight = image.naturalHeight || image.clientHeight || surfaceRect.height;
+    const naturalWidth =
+      media instanceof HTMLVideoElement
+        ? media.videoWidth || media.clientWidth || surfaceRect.width
+        : media.naturalWidth || media.clientWidth || surfaceRect.width;
+    const naturalHeight =
+      media instanceof HTMLVideoElement
+        ? media.videoHeight || media.clientHeight || surfaceRect.height
+        : media.naturalHeight || media.clientHeight || surfaceRect.height;
     if (naturalWidth <= 0 || naturalHeight <= 0) return null;
 
     const fitScale = Math.min(surfaceRect.width / naturalWidth, surfaceRect.height / naturalHeight);
@@ -81,7 +87,7 @@ export function useStackViewerZoom({
       renderedWidth: naturalWidth * fitScale,
       renderedHeight: naturalHeight * fitScale,
     };
-  }, [getImageElement, getSurfaceElement]);
+  }, [getMediaElement, getSurfaceElement]);
 
   const clampTransform = useCallback(
     (transform: ZoomTransform) => {

@@ -1,7 +1,15 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import { GalleryVerticalEnd, Info, NotebookText, PenTool, Pipette, Trash2 } from 'lucide-react';
+import {
+  Download,
+  GalleryVerticalEnd,
+  Info,
+  NotebookText,
+  PenTool,
+  Pipette,
+  Trash2,
+} from 'lucide-react';
 import MersenneTwister from 'mersenne-twister';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -17,6 +25,7 @@ import { useHeaderActions } from '@/hooks/useHeaderActions';
 import { useScratch } from '@/hooks/useScratch';
 import { useViewContext } from '@/hooks/useViewContext';
 import { apiClient } from '@/lib/api-client';
+import { downloadAssetOriginals, downloadStackOriginals } from '@/lib/download-originals';
 import { isVideoAsset } from '@/lib/media';
 import { cn } from '@/lib/utils';
 import {
@@ -241,10 +250,10 @@ export default function StackViewer({
   const canUseNativeInteraction = canUseImageTools && !isColorPicker && !isPenMode;
   const isNativeInteractionMode = canUseNativeInteraction && isMetaNativeMode;
   const markerDialogPlaybackRef = useRef<{ time: number; wasPlaying: boolean } | null>(null);
-  const canUseImageZoom = canUseImageTools;
-  const canUseImageZoomInteraction = canUseImageZoom && !isColorPicker && !isPenMode;
-  const getZoomImageElement = useCallback(
-    () => imageCarouselRef.current?.getCurrentImageElement() || null,
+  const canUseZoom = !!currentAsset && !isListMode;
+  const canUseZoomInteraction = canUseZoom && !isColorPicker && !isPenMode;
+  const getZoomMediaElement = useCallback(
+    () => imageCarouselRef.current?.getCurrentZoomMediaElement() || null,
     [imageCarouselRef]
   );
   const getZoomSurfaceElement = useCallback(
@@ -261,9 +270,9 @@ export default function StackViewer({
     endPinch,
     panBy,
   } = useStackViewerZoom({
-    enabled: canUseImageZoom,
+    enabled: canUseZoom,
     assetKey: currentAsset?.id ?? null,
-    getImageElement: getZoomImageElement,
+    getMediaElement: getZoomMediaElement,
     getSurfaceElement: getZoomSurfaceElement,
     maxScale: 10,
   });
@@ -454,6 +463,29 @@ export default function StackViewer({
     setSelectedItemId(stack.id);
     setIsInfoSidebarOpen(true);
   }, [closeViewerContextMenu, setIsInfoSidebarOpen, setSelectedItemId, stack]);
+  const handleContextMenuDownloadCurrent = useCallback(() => {
+    if (!currentAsset) return;
+    closeViewerContextMenu();
+    downloadAssetOriginals(datasetId, [currentAsset.id]);
+  }, [closeViewerContextMenu, currentAsset, datasetId]);
+  const handleContextMenuDownloadAll = useCallback(() => {
+    if (!stack) return;
+    closeViewerContextMenu();
+    downloadStackOriginals(datasetId, [stack.id]);
+  }, [closeViewerContextMenu, datasetId, stack]);
+  const handleDownloadCurrentVideoFrame = useCallback(async () => {
+    const success = await imageCarouselRef.current?.downloadCurrentVideoFrame();
+    if (!success) {
+      addNotification({
+        type: 'error',
+        message: '現在のフレームをダウンロードできませんでした。',
+      });
+    }
+  }, [addNotification, imageCarouselRef]);
+  const handleContextMenuDownloadCurrentFrame = useCallback(() => {
+    closeViewerContextMenu();
+    void handleDownloadCurrentVideoFrame();
+  }, [closeViewerContextMenu, handleDownloadCurrentVideoFrame]);
   const handleContextMenuFindSimilar = useCallback(async () => {
     if (!stack) return;
     closeViewerContextMenu();
@@ -496,14 +528,14 @@ export default function StackViewer({
   const openMarkerEditor = useCallback(
     (marker: TVideoMarker, index: number) => {
       // Capture current playback at moment of open (after any seek move)
-      const refAny = imageCarouselRef.current as any;
-      if (refAny?.isCurrentVideo?.()) {
+      const carousel = imageCarouselRef.current;
+      if (carousel?.isCurrentVideo()) {
         markerDialogPlaybackRef.current = {
-          time: Number(refAny?.getCurrentTime?.() ?? 0) || 0,
-          wasPlaying: !!refAny?.getIsPlaying?.(),
+          time: Number(carousel.getCurrentTime() ?? 0) || 0,
+          wasPlaying: carousel.getIsPlaying(),
         };
         // Ensure the player keeps its state (robust to reflows)
-        refAny?.requestRestorePlayback?.(markerDialogPlaybackRef.current);
+        carousel.requestRestorePlayback(markerDialogPlaybackRef.current);
       } else {
         markerDialogPlaybackRef.current = null;
       }
@@ -511,10 +543,82 @@ export default function StackViewer({
         open: true,
         index,
         time: marker.time,
-        color: marker.color || 'bright-blue',
+        color: marker.color || 'white',
       });
     },
     [imageCarouselRef.current]
+  );
+  const getCurrentVideoPlayback = useCallback(() => {
+    const carousel = imageCarouselRef.current;
+    if (!carousel?.isCurrentVideo()) return null;
+    return {
+      time: Number(carousel.getCurrentTime() ?? 0) || 0,
+      wasPlaying: carousel.getIsPlaying(),
+    };
+  }, [imageCarouselRef]);
+  const saveMarkersForCurrentAsset = useCallback(
+    (nextMarkers: VideoMarker[], playback = getCurrentVideoPlayback()) => {
+      const asset = currentAsset;
+      if (!asset) return;
+
+      setOptimisticMarkers((prev) => ({ ...prev, [asset.id]: nextMarkers }));
+      if (playback) {
+        imageCarouselRef.current?.requestRestorePlayback(playback);
+      }
+
+      apiClient
+        .updateAssetMeta({
+          datasetId,
+          stackId,
+          assetId: asset.id,
+          meta: { ...(asset.meta || {}), markers: nextMarkers },
+        })
+        .then(async () => {
+          await refetch();
+          if (playback) {
+            imageCarouselRef.current?.requestRestorePlayback(playback);
+          }
+        })
+        .catch((err) => console.error('Failed to update markers:', err));
+    },
+    [currentAsset, datasetId, getCurrentVideoPlayback, imageCarouselRef, refetch, stackId]
+  );
+  const handleMoveMarker = useCallback(
+    (index: number, time: number) => {
+      const asset = currentAsset;
+      if (!asset) return;
+      const markers = getMarkersFor(asset).slice();
+      if (index < 0 || index >= markers.length) return;
+      const next = markers
+        .map((marker, markerIndex) => (markerIndex === index ? { ...marker, time } : marker))
+        .sort((left, right) => left.time - right.time);
+      saveMarkersForCurrentAsset(next);
+    },
+    [currentAsset, getMarkersFor, saveMarkersForCurrentAsset]
+  );
+  const handleDeleteMarker = useCallback(
+    (index: number) => {
+      const asset = currentAsset;
+      if (!asset) return;
+      const markers = getMarkersFor(asset).slice();
+      if (index < 0 || index >= markers.length) return;
+      markers.splice(index, 1);
+      saveMarkersForCurrentAsset(markers);
+    },
+    [currentAsset, getMarkersFor, saveMarkersForCurrentAsset]
+  );
+  const handleChangeMarkerColor = useCallback(
+    (index: number, color: string) => {
+      const asset = currentAsset;
+      if (!asset) return;
+      const markers = getMarkersFor(asset).slice();
+      if (index < 0 || index >= markers.length) return;
+      const next = markers.map((marker, markerIndex) =>
+        markerIndex === index ? { ...marker, color } : marker
+      );
+      saveMarkersForCurrentAsset(next);
+    },
+    [currentAsset, getMarkersFor, saveMarkersForCurrentAsset]
   );
   const closeMarkerEditor = useCallback(
     () => setMarkerEditor((p) => (p ? { ...p, open: false } : p)),
@@ -588,8 +692,8 @@ export default function StackViewer({
       );
       if (dialogOpen) return;
       const hasModifier = e.metaKey || e.ctrlKey || e.altKey || e.shiftKey;
-      const refAny = imageCarouselRef.current as any;
-      const isCurrentVideo = !!refAny?.isCurrentVideo?.();
+      const carousel = imageCarouselRef.current;
+      const isCurrentVideo = carousel?.isCurrentVideo() ?? false;
       if (e.key === 'Meta') {
         setIsMetaNativeMode(true);
       }
@@ -611,47 +715,52 @@ export default function StackViewer({
         // Space: toggle play/pause
         if (e.key === ' ') {
           e.preventDefault();
-          refAny?.toggleVideo?.();
+          carousel?.toggleVideo();
           return;
         }
         // Frame step: '.' next, ',' prev (then pause)
         if (e.key === '.') {
           e.preventDefault();
-          refAny?.stepFrame?.(1);
+          carousel?.stepFrame(1);
           return;
         }
         if (e.key === ',') {
           e.preventDefault();
-          refAny?.stepFrame?.(-1);
+          carousel?.stepFrame(-1);
           return;
         }
         const lower = e.key.toLowerCase();
         // J/K: -1s / +1s (preserve playing state)
         if (lower === 'j') {
-          refAny?.seekBySeconds?.(-1, true);
+          carousel?.seekBySeconds(-1, true);
           return;
         }
         if (lower === 'k') {
-          refAny?.seekBySeconds?.(1, true);
+          carousel?.seekBySeconds(1, true);
           return;
         }
         // h/l: to start / to last frame (preserve playing state)
         if (lower === 'h') {
-          refAny?.seekToStart?.(true);
+          carousel?.seekToStart(true);
           return;
         }
         if (lower === 'l') {
-          refAny?.seekToEnd?.(true);
+          carousel?.seekToEnd(true);
           return;
         }
-        // m: add/edit marker at current time
-        if (lower === 'm') {
+        if (lower === 'f') {
           e.preventDefault();
-          const t = Number(refAny?.getCurrentTime?.() ?? 0) || 0;
+          void handleDownloadCurrentVideoFrame();
+          return;
+        }
+        // m / Numpad *: add/edit marker at current time
+        if (lower === 'm' || e.code === 'NumpadMultiply') {
+          e.preventDefault();
+          const t = Number(carousel?.getCurrentTime() ?? 0) || 0;
           const asset = currentAsset;
           if (!asset) return;
           // Preserve current playback state across updates
-          const pb = { time: t, wasPlaying: !!refAny?.getIsPlaying?.() };
+          const pb = { time: t, wasPlaying: carousel?.getIsPlaying() ?? false };
           const arr = getMarkersFor(asset);
           // 近接判定: ±0.15s 以内を「同一点」とみなして編集モードへ
           const threshold = 0.15;
@@ -659,16 +768,16 @@ export default function StackViewer({
           if (hitIndex >= 0) {
             openMarkerEditor(arr[hitIndex], hitIndex);
             // Keep playback state when editor opens
-            (imageCarouselRef.current as any)?.requestRestorePlayback?.(pb);
+            imageCarouselRef.current?.requestRestorePlayback(pb);
             return;
           }
           // 近接無し → 追加して即保存（従来どおり）
           const existing = arr.slice();
-          const newMarker: VideoMarker = { time: t, color: 'hard-pink', label: '' };
+          const newMarker: VideoMarker = { time: t, color: 'white', label: '' };
           const nextMarkers = [...existing, newMarker].sort((a, b) => a.time - b.time);
           setOptimisticMarkers((prev) => ({ ...prev, [asset.id]: nextMarkers }));
           // Immediate restore (guard against any incidental re-render)
-          (imageCarouselRef.current as any)?.requestRestorePlayback?.(pb);
+          imageCarouselRef.current?.requestRestorePlayback(pb);
           apiClient
             .updateAssetMeta({
               datasetId,
@@ -678,7 +787,7 @@ export default function StackViewer({
             })
             .then(async () => {
               await refetch();
-              (imageCarouselRef.current as any)?.requestRestorePlayback?.(pb);
+              imageCarouselRef.current?.requestRestorePlayback(pb);
             })
             .catch((err) => console.error('Failed to update markers:', err));
           return;
@@ -773,6 +882,7 @@ export default function StackViewer({
     refetch,
     getMarkersFor,
     openMarkerEditor,
+    handleDownloadCurrentVideoFrame,
   ]);
 
   // pointerup はオーバーレイ側でコピー処理を実行するため、ここでは扱わない
@@ -928,12 +1038,15 @@ export default function StackViewer({
               {...(isNativeInteractionMode ? {} : viewerContextMenuTriggerProps)}
             >
               <ImageCarousel
-                ref={imageCarouselRef as any}
+                ref={imageCarouselRef}
                 currentAsset={currentAsset}
                 nextAsset={nextAsset}
                 prevAsset={prevAsset}
                 markers={getMarkersFor(currentAsset)}
-                onEditMarkerRequest={(marker, index) => openMarkerEditor(marker as any, index)}
+                onEditMarkerRequest={openMarkerEditor}
+                onMoveMarkerRequest={handleMoveMarker}
+                onDeleteMarkerRequest={handleDeleteMarker}
+                onChangeMarkerColorRequest={handleChangeMarkerColor}
                 gestureTransform={gestureState}
                 translateX={dragOffset}
                 nativeDragEnabled={isNativeInteractionMode}
@@ -961,27 +1074,25 @@ export default function StackViewer({
                 onLeftTap={onLeftTap}
                 onRightTap={onRightTap}
                 onWheelZoom={
-                  canUseImageZoomInteraction && !isViewerContextMenuOpen ? zoomWithWheel : undefined
+                  canUseZoomInteraction && !isViewerContextMenuOpen ? zoomWithWheel : undefined
                 }
                 onPinchStart={
-                  canUseImageZoomInteraction && !isViewerContextMenuOpen ? startPinch : undefined
+                  canUseZoomInteraction && !isViewerContextMenuOpen ? startPinch : undefined
                 }
                 onPinchZoom={
-                  canUseImageZoomInteraction && !isViewerContextMenuOpen ? updatePinch : undefined
+                  canUseZoomInteraction && !isViewerContextMenuOpen ? updatePinch : undefined
                 }
                 onPinchEnd={
-                  canUseImageZoomInteraction && !isViewerContextMenuOpen ? endPinch : undefined
+                  canUseZoomInteraction && !isViewerContextMenuOpen ? endPinch : undefined
                 }
-                onZoomPan={
-                  canUseImageZoomInteraction && !isViewerContextMenuOpen ? panBy : undefined
-                }
+                onZoomPan={canUseZoomInteraction && !isViewerContextMenuOpen ? panBy : undefined}
                 onDoubleTap={isZoomed ? resetZoom : undefined}
                 onContextMenuCancelRequest={handleContextMenuCancelRequest}
                 onCenterTap={() => {
                   // Move無しのクリック/タップ: 動画なら再生/停止をトグル
-                  const ref = imageCarouselRef.current as any;
-                  if (ref && typeof ref.isCurrentVideo === 'function' && ref.isCurrentVideo()) {
-                    if (typeof ref.toggleVideo === 'function') ref.toggleVideo();
+                  const carousel = imageCarouselRef.current;
+                  if (carousel?.isCurrentVideo()) {
+                    carousel.toggleVideo();
                   }
                 }}
                 onDrag={(dx) => {
@@ -1177,6 +1288,35 @@ export default function StackViewer({
               <button
                 type="button"
                 className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-left text-[13px] outline-none transition-colors hover:bg-gray-100 hover:text-gray-700"
+                onClick={handleContextMenuDownloadCurrent}
+                role="menuitem"
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Download Page
+              </button>
+              {isCurrentVideoAsset && (
+                <button
+                  type="button"
+                  className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-left text-[13px] outline-none transition-colors hover:bg-gray-100 hover:text-gray-700"
+                  onClick={handleContextMenuDownloadCurrentFrame}
+                  role="menuitem"
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  Download Frame
+                </button>
+              )}
+              <button
+                type="button"
+                className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-left text-[13px] outline-none transition-colors hover:bg-gray-100 hover:text-gray-700"
+                onClick={handleContextMenuDownloadAll}
+                role="menuitem"
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Download All
+              </button>
+              <button
+                type="button"
+                className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-left text-[13px] outline-none transition-colors hover:bg-gray-100 hover:text-gray-700"
                 onClick={() => void handleContextMenuFindSimilar()}
                 role="menuitem"
               >
@@ -1297,9 +1437,7 @@ export default function StackViewer({
             if (!o) closeMarkerEditor();
             // When dialog visibility changes, re-apply saved playback (if any)
             if (!o && markerDialogPlaybackRef.current) {
-              (imageCarouselRef.current as any)?.requestRestorePlayback?.(
-                markerDialogPlaybackRef.current
-              );
+              imageCarouselRef.current?.requestRestorePlayback(markerDialogPlaybackRef.current);
             }
           }}
           onDelete={async () => {
@@ -1322,9 +1460,7 @@ export default function StackViewer({
             } finally {
               closeMarkerEditor();
               if (markerDialogPlaybackRef.current) {
-                (imageCarouselRef.current as any)?.requestRestorePlayback?.(
-                  markerDialogPlaybackRef.current
-                );
+                imageCarouselRef.current?.requestRestorePlayback(markerDialogPlaybackRef.current);
               }
             }
           }}
@@ -1334,7 +1470,7 @@ export default function StackViewer({
             const arr = getMarkersFor(asset).slice();
             const i = markerEditor.index;
             if (i < 0 || i >= arr.length) return;
-            const updated: TVideoMarker = { ...(arr[i] as any), time, color };
+            const updated: TVideoMarker = { ...arr[i], time, color };
             const next = arr
               .map((m, idx) => (idx === i ? updated : m))
               .sort((a, b) => a.time - b.time);
@@ -1352,9 +1488,7 @@ export default function StackViewer({
             } finally {
               closeMarkerEditor();
               if (markerDialogPlaybackRef.current) {
-                (imageCarouselRef.current as any)?.requestRestorePlayback?.(
-                  markerDialogPlaybackRef.current
-                );
+                imageCarouselRef.current?.requestRestorePlayback(markerDialogPlaybackRef.current);
               }
             }
           }}

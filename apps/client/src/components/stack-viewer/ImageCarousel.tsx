@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useImperativeHandle,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -41,6 +42,12 @@ interface ImageCarouselProps {
   uiInsets?: { top: number; left: number; right: number };
   /** マーカー編集リクエスト（SeekBar のダブルクリックから） */
   onEditMarkerRequest?: (marker: VideoMarker, index: number) => void;
+  /** マーカー位置変更リクエスト */
+  onMoveMarkerRequest?: (index: number, time: number) => void;
+  /** マーカー削除リクエスト */
+  onDeleteMarkerRequest?: (index: number) => void;
+  /** マーカー色変更リクエスト */
+  onChangeMarkerColorRequest?: (index: number, color: string) => void;
 }
 
 export interface ImageCarouselRef {
@@ -54,6 +61,8 @@ export interface ImageCarouselRef {
   getViewportWidth: () => number;
   /** 現在表示中の画像要素（画像時のみ）。動画の場合は null */
   getCurrentImageElement: () => HTMLImageElement | null;
+  /** 現在表示中のズーム対象メディア要素 */
+  getCurrentZoomMediaElement: () => HTMLImageElement | HTMLVideoElement | null;
   /** 現在表示中の画像のズーム対象面（画像時のみ）。動画の場合は null */
   getCurrentImageSurfaceElement: () => HTMLDivElement | null;
   /** 現在のアセットが動画なら true */
@@ -77,6 +86,8 @@ export interface ImageCarouselRef {
   getCurrentTime: () => number;
   /** 現在の動画が再生中かどうか */
   getIsPlaying: () => boolean;
+  /** 現在の動画フレームをPNGとして保存 */
+  downloadCurrentVideoFrame: () => Promise<boolean>;
   requestRestorePlayback: (payload?: { time: number; wasPlaying: boolean }) => void;
 }
 
@@ -99,6 +110,23 @@ const stripUrlParams = (src: string): string => {
   return src.slice(0, Math.min(...cuts));
 };
 
+const getAssetFilenameBase = (asset?: Asset | null) => {
+  const source = asset?.originalName || asset?.file || asset?.url || 'video-frame';
+  const clean = stripUrlParams(source);
+  const filename = clean.split(/[\\/]/).pop() || 'video-frame';
+  const withoutExt = filename.replace(/\.[^.]+$/, '');
+  return withoutExt.replace(/[^\w.-]+/g, '_') || 'video-frame';
+};
+
+const getFrameFilename = (asset: Asset | undefined, time: number) => {
+  const seconds = Number.isFinite(time) ? Math.max(0, time) : 0;
+  const timeLabel = seconds.toFixed(3).replace('.', '_');
+  return `${getAssetFilenameBase(asset)}-frame-${timeLabel}s.png`;
+};
+
+const canvasToPngBlob = (canvas: HTMLCanvasElement) =>
+  new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+
 const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
   (
     {
@@ -114,6 +142,9 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
       zoomTransform = { scale: 1, translateX: 0, translateY: 0 },
       uiInsets,
       onEditMarkerRequest,
+      onMoveMarkerRequest,
+      onDeleteMarkerRequest,
+      onChangeMarkerColorRequest,
     },
     ref
   ) => {
@@ -127,6 +158,9 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
     const [fps, setFps] = useState<number>(getViewerFps());
     const [_isScrubbing, setIsScrubbing] = useState(false);
     const wasPlayingBeforeScrubRef = useRef<boolean>(false);
+    const isScrubbingRef = useRef(false);
+    const pendingSeekTimeRef = useRef<number | null>(null);
+    const resumeAfterSeekTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const backgroundRef = containerRef; // Use container as background ref
     const currentAssetRef = useRef<HTMLDivElement>(null);
@@ -136,6 +170,8 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
     const currentVideoRef = useRef<HTMLVideoElement | null>(null);
     const currentVideoHostRef = useRef<HTMLDivElement | null>(null);
     const ownedVideoRef = useRef<HTMLVideoElement | null>(null);
+    const currentVideoSrcRef = useRef<string | null>(null);
+    const autoplayVideoKeyRef = useRef<string | null>(null);
     const lastPlaybackRef = useRef<{ time: number; wasPlaying: boolean }>({
       time: 0,
       wasPlaying: false,
@@ -267,6 +303,11 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
           const el = currentAssetRef.current?.querySelector('img');
           return (el as HTMLImageElement) || null;
         },
+        getCurrentZoomMediaElement: () => {
+          if (currentVideoRef.current) return currentVideoRef.current;
+          const el = currentAssetRef.current?.querySelector('img');
+          return (el as HTMLImageElement) || null;
+        },
         getCurrentImageSurfaceElement: () => currentImageSurfaceRef.current,
         isCurrentVideo: () => !!currentVideoRef.current,
         toggleVideo: () => {
@@ -355,6 +396,40 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
           const v = currentVideoRef.current;
           return v ? !v.paused : !!videoState.isPlaying;
         },
+        downloadCurrentVideoFrame: async () => {
+          const v = currentVideoRef.current;
+          if (!v || v.readyState < 2) return false;
+
+          const width = v.videoWidth;
+          const height = v.videoHeight;
+          if (width <= 0 || height <= 0) return false;
+
+          try {
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const context = canvas.getContext('2d');
+            if (!context) return false;
+
+            context.drawImage(v, 0, 0, width, height);
+            const blob = await canvasToPngBlob(canvas);
+            if (!blob) return false;
+
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = getFrameFilename(currentAsset, v.currentTime);
+            link.rel = 'noopener';
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+            return true;
+          } catch (error) {
+            console.error('Failed to download current video frame:', error);
+            return false;
+          }
+        },
         requestRestorePlayback: (payload) => {
           pendingRestoreRef.current = payload ?? { ...lastPlaybackRef.current };
           const v = currentVideoRef.current;
@@ -376,6 +451,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
         fps,
         backgroundRef.current,
         currentAsset?.file,
+        currentAsset,
         handleVideoToggle,
         videoState.currentTime,
         videoState.isPlaying,
@@ -431,6 +507,14 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
       updateDOMTransforms(translateX);
     }, [translateX, updateDOMTransforms]);
 
+    const assetTransformKey = `${currentAsset?.id ?? 'none'}:${nextAsset?.id ?? 'none'}:${prevAsset?.id ?? 'none'}`;
+
+    // ページが切り替わった直後にも、再利用されたDOMへ現在の位置を同期する
+    useLayoutEffect(() => {
+      if (!assetTransformKey) return;
+      updateDOMTransforms(currentTranslateXRef.current);
+    }, [assetTransformKey, updateDOMTransforms]);
+
     // Recompute transforms on container resize to keep offsets correct with side panels
     useEffect(() => {
       if (!containerRef.current) return;
@@ -441,27 +525,47 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
       return () => ro.disconnect();
     }, [updateDOMTransforms]);
 
-    // Auto-play video when current asset (id or file) changes
+    const currentVideoAutoplayKey = useMemo(() => {
+      if (!currentAsset || !isVideoAsset(currentAsset)) return null;
+      const src = getVideoSource(currentAsset);
+      return `${currentAsset.id}:${src ? stripUrlParams(src) : ''}`;
+    }, [
+      currentAsset?.id,
+      currentAsset?.preview,
+      currentAsset?.file,
+      currentAsset?.url,
+      currentAsset,
+      getVideoSource,
+    ]);
+
+    // Auto-play only when the displayed video identity changes.
     useEffect(() => {
-      // Guard: only reset when the actual asset identity changes (id/file)
       setVideoState((prev) => ({
         ...prev,
         currentTime: prev.currentTime ?? 0,
         duration: prev.duration ?? 0,
       }));
 
-      if (currentAsset && isVideoAsset(currentAsset)) {
-        // Give browser time to render the video element
-        setTimeout(() => {
-          const videoElement = currentAssetRef.current?.querySelector('video');
-          if (videoElement?.paused) {
-            videoElement.play().catch((err) => {
-              console.log('Video autoplay failed:', err);
-            });
-          }
-        }, 100);
+      if (!currentVideoAutoplayKey) {
+        autoplayVideoKeyRef.current = null;
+        return;
       }
-    }, [currentAsset?.id, currentAsset?.file, currentAsset?.preview, currentAsset]);
+
+      if (autoplayVideoKeyRef.current === currentVideoAutoplayKey) return;
+      autoplayVideoKeyRef.current = currentVideoAutoplayKey;
+
+      const timerId = setTimeout(() => {
+        if (pendingRestoreRef.current) return;
+        const videoElement = currentVideoRef.current;
+        if (videoElement?.paused) {
+          videoElement.play().catch((err) => {
+            console.log('Video autoplay failed:', err);
+          });
+        }
+      }, 100);
+
+      return () => clearTimeout(timerId);
+    }, [currentVideoAutoplayKey]);
 
     // ミュート切り替え（video要素の再生成を避ける）
     const handleToggleMute = useCallback(() => {
@@ -486,7 +590,13 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
         const v = currentVideoRef.current;
         if (v) {
           const dur = Number.isFinite(v.duration) ? v.duration : 0;
-          const ct = Number.isFinite(v.currentTime) ? v.currentTime : 0;
+          const pendingSeekTime = pendingSeekTimeRef.current;
+          const ct =
+            isScrubbingRef.current && pendingSeekTime !== null
+              ? pendingSeekTime
+              : Number.isFinite(v.currentTime)
+                ? v.currentTime
+                : 0;
           setVideoState((prev) => {
             if (
               prev.currentTime === ct &&
@@ -503,7 +613,10 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
               muted: v.muted,
             };
           });
-          lastPlaybackRef.current = { time: v.currentTime || 0, wasPlaying: !v.paused };
+          lastPlaybackRef.current = {
+            time: isScrubbingRef.current ? ct : v.currentTime || 0,
+            wasPlaying: isScrubbingRef.current ? wasPlayingBeforeScrubRef.current : !v.paused,
+          };
         }
         rafId = requestAnimationFrame(loop);
       };
@@ -544,14 +657,95 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
     }, []);
 
     // Handle seek to specific time
-    const handleSeek = useCallback((seekTime: number) => {
-      if (currentVideoRef.current) {
-        currentVideoRef.current.currentTime = seekTime;
-        setVideoState((prev) => ({
-          ...prev,
-          currentTime: seekTime,
-        }));
+    const seekVideoTo = useCallback(
+      (seekTime: number) => {
+        const video = currentVideoRef.current;
+        if (video) {
+          const duration = Number.isFinite(video.duration) ? video.duration : videoState.duration;
+          const clamped = Math.min(Math.max(seekTime, 0), Math.max(0, duration || 0));
+          pendingSeekTimeRef.current = clamped;
+          video.currentTime = clamped;
+          setVideoState((prev) => ({
+            ...prev,
+            currentTime: clamped,
+            duration: Number.isFinite(duration) ? duration : prev.duration,
+          }));
+        }
+      },
+      [videoState.duration]
+    );
+
+    const handleSeek = useCallback(
+      (seekTime: number) => {
+        seekVideoTo(seekTime);
+      },
+      [seekVideoTo]
+    );
+
+    const handleScrubStart = useCallback(() => {
+      const video = currentVideoRef.current;
+      if (!video) return;
+      if (resumeAfterSeekTimerRef.current) {
+        clearTimeout(resumeAfterSeekTimerRef.current);
+        resumeAfterSeekTimerRef.current = null;
       }
+      wasPlayingBeforeScrubRef.current = !video.paused;
+      isScrubbingRef.current = true;
+      pendingSeekTimeRef.current = Number.isFinite(video.currentTime) ? video.currentTime : 0;
+      if (!video.paused) video.pause();
+      setIsScrubbing(true);
+    }, []);
+
+    const handleScrubEnd = useCallback(
+      (time: number) => {
+        const video = currentVideoRef.current;
+        if (!video) {
+          isScrubbingRef.current = false;
+          pendingSeekTimeRef.current = null;
+          setIsScrubbing(false);
+          return;
+        }
+
+        seekVideoTo(time);
+        const shouldResume = wasPlayingBeforeScrubRef.current;
+        const resumePlayback = () => {
+          if (currentVideoRef.current !== video) return;
+          isScrubbingRef.current = false;
+          pendingSeekTimeRef.current = null;
+          setIsScrubbing(false);
+          if (shouldResume) {
+            void video.play().catch(() => {});
+          }
+        };
+
+        if (resumeAfterSeekTimerRef.current) {
+          clearTimeout(resumeAfterSeekTimerRef.current);
+        }
+
+        let resumed = false;
+        const finish = () => {
+          if (resumed) return;
+          resumed = true;
+          video.removeEventListener('seeked', finish);
+          if (resumeAfterSeekTimerRef.current) {
+            clearTimeout(resumeAfterSeekTimerRef.current);
+            resumeAfterSeekTimerRef.current = null;
+          }
+          resumePlayback();
+        };
+
+        video.addEventListener('seeked', finish);
+        resumeAfterSeekTimerRef.current = setTimeout(finish, 180);
+      },
+      [seekVideoTo]
+    );
+
+    useEffect(() => {
+      return () => {
+        if (resumeAfterSeekTimerRef.current) {
+          clearTimeout(resumeAfterSeekTimerRef.current);
+        }
+      };
     }, []);
 
     // Calculate initial styles (transforms will be handled by direct DOM manipulation)
@@ -577,6 +771,18 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
           };
       }
     };
+
+    const releaseOwnedVideo = useCallback(() => {
+      const video = ownedVideoRef.current;
+      if (video?.parentElement) {
+        try {
+          video.parentElement.removeChild(video);
+        } catch {}
+      }
+      ownedVideoRef.current = null;
+      currentVideoRef.current = null;
+      currentVideoSrcRef.current = null;
+    }, []);
 
     // Keep a stable ref callback for hosting the current video element
     const setCurrentVideoHost = useCallback((el: HTMLDivElement | null) => {
@@ -605,7 +811,8 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
           }
         : undefined;
       const isCurrentImage = position === 'current' && !isVideo;
-      const zoomStyle: CSSProperties | undefined = isCurrentImage
+      const isCurrentZoomTarget = position === 'current';
+      const zoomStyle: CSSProperties | undefined = isCurrentZoomTarget
         ? {
             transform: `translate3d(${zoomTransform.translateX}px, ${zoomTransform.translateY}px, 0) scale(${zoomTransform.scale})`,
             transformOrigin: 'center center',
@@ -633,7 +840,16 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
             className="absolute inset-0 flex items-center justify-center"
             style={style}
           >
-            <div ref={setCurrentVideoHost} className="max-w-full max-h-full w-full h-full" />
+            <div
+              ref={currentImageSurfaceRef}
+              className="max-w-full max-h-full w-full h-full flex items-center justify-center"
+            >
+              <div
+                ref={setCurrentVideoHost}
+                className="max-w-full max-h-full w-full h-full"
+                style={zoomStyle}
+              />
+            </div>
           </div>
         );
       }
@@ -699,28 +915,23 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
       getVideoSource,
     ]);
 
-    const currentVideoSrcRef = useRef<string | null>(null);
-
     // 現在動画のホストに、ネイティブ video 要素を安定配置（再レンダで破棄しない）
     useEffect(() => {
       const asset = currentAsset;
-      if (!asset) return;
-      const isVideo = isVideoAsset(asset);
-      const host = currentVideoHostRef.current;
-      if (!host) return;
-
-      // 非動画になったら解放
-      if (!isVideo) {
-        if (ownedVideoRef.current && ownedVideoRef.current.parentElement === host) {
-          try {
-            host.removeChild(ownedVideoRef.current);
-          } catch {}
-        }
-        ownedVideoRef.current = null;
-        currentVideoRef.current = null;
-        currentVideoSrcRef.current = null;
+      if (!asset) {
+        releaseOwnedVideo();
         return;
       }
+      const isVideo = isVideoAsset(asset);
+
+      // 非動画になったら、ホストの有無に関係なく保持中の video を解放する
+      if (!isVideo) {
+        releaseOwnedVideo();
+        return;
+      }
+
+      const host = currentVideoHostRef.current;
+      if (!host) return;
 
       const rawSrc = getVideoSource(asset);
       const normalizedSrc = rawSrc ? stripUrlParams(rawSrc) : '';
@@ -812,9 +1023,15 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
         }));
       };
       const onSeeked = () => {
+        const pendingSeekTime = pendingSeekTimeRef.current;
         setVideoState((prev) => ({
           ...prev,
-          currentTime: Number.isFinite(v.currentTime) ? v.currentTime : prev.currentTime,
+          currentTime:
+            isScrubbingRef.current && pendingSeekTime !== null
+              ? pendingSeekTime
+              : Number.isFinite(v.currentTime)
+                ? v.currentTime
+                : prev.currentTime,
         }));
       };
       const onPlay = () => {
@@ -867,6 +1084,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
       getVideoSource,
       handleVideoLoadedMetadata,
       handleVideoToggle,
+      releaseOwnedVideo,
       videoState.duration,
     ]);
 
@@ -904,26 +1122,17 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
                 currentTime={videoState.currentTime}
                 duration={videoState.duration}
                 onSeek={handleSeek}
-                onScrubStart={() => {
-                  const v = currentVideoRef.current;
-                  if (!v) return;
-                  wasPlayingBeforeScrubRef.current = !v.paused;
-                  if (!v.paused) v.pause();
-                  setIsScrubbing(true);
-                }}
-                onScrubEnd={() => {
-                  const v = currentVideoRef.current;
-                  setIsScrubbing(false);
-                  if (v && wasPlayingBeforeScrubRef.current) {
-                    v.play().catch(() => {});
-                  }
-                }}
+                onScrubStart={handleScrubStart}
+                onScrubEnd={handleScrubEnd}
                 muted={videoState.muted}
                 onToggleMute={handleToggleMute}
                 fps={fps}
                 onToggleFps={handleToggleFps}
                 markers={markers ?? (currentAsset?.meta?.markers || [])}
                 onEditMarkerRequest={onEditMarkerRequest}
+                onMoveMarkerRequest={onMoveMarkerRequest}
+                onDeleteMarkerRequest={onDeleteMarkerRequest}
+                onChangeMarkerColorRequest={onChangeMarkerColorRequest}
               />
             </div>,
             document.body

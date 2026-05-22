@@ -105,7 +105,8 @@ const FavoriteListQuerySchema = z.object({
 
 const DownloadOriginalsQuerySchema = z.object({
   dataSetId: z.coerce.number().int().positive(),
-  stackIds: z.union([z.string(), z.array(z.string())]),
+  stackIds: z.union([z.string(), z.array(z.string())]).optional(),
+  assetIds: z.union([z.string(), z.array(z.string())]).optional(),
 });
 
 export const stacksRoute = new Hono();
@@ -199,6 +200,8 @@ const parseStackIds = (value: string | string[]) => {
   return ids;
 };
 
+const parseAssetIds = parseStackIds;
+
 // Helper: build plain object from search params
 function getQueryObject(c: Context): Record<string, string | string[]> {
   const sp = new URL(c.req.url).searchParams;
@@ -217,8 +220,11 @@ stacksRoute.get('/download-originals', async (c) => {
   if (!parse.success) return c.json({ error: 'Invalid query', details: parse.error }, 400);
 
   const { dataSetId } = parse.data;
-  const stackIds = parseStackIds(parse.data.stackIds);
-  if (stackIds.length === 0) return c.json({ error: 'No stack ids specified' }, 400);
+  const stackIds = parse.data.stackIds ? parseStackIds(parse.data.stackIds) : [];
+  const assetIds = parse.data.assetIds ? parseAssetIds(parse.data.assetIds) : [];
+  if (stackIds.length === 0 && assetIds.length === 0) {
+    return c.json({ error: 'No stack or asset ids specified' }, 400);
+  }
 
   const auth = await (await import('../utils/dataset-protection')).ensureDatasetAuthorized(
     c,
@@ -228,24 +234,46 @@ stacksRoute.get('/download-originals', async (c) => {
 
   const prisma = usePrisma(c);
   const dataStorage = useDataStorage(c);
-  const stacks = await prisma.stack.findMany({
-    where: { id: { in: stackIds }, dataSetId },
-    select: {
-      id: true,
-      assets: {
-        orderBy: { orderInStack: 'asc' },
-        select: {
-          id: true,
-          file: true,
-          fileType: true,
-          originalName: true,
-        },
-      },
-    },
-  });
-  type OriginalAsset = (typeof stacks)[number]['assets'][number];
+  const stacks =
+    stackIds.length > 0
+      ? await prisma.stack.findMany({
+          where: { id: { in: stackIds }, dataSetId },
+          select: {
+            id: true,
+            assets: {
+              orderBy: { orderInStack: 'asc' },
+              select: {
+                id: true,
+                file: true,
+                fileType: true,
+                originalName: true,
+              },
+            },
+          },
+        })
+      : [];
+  const selectedAssets =
+    assetIds.length > 0
+      ? await prisma.asset.findMany({
+          where: { id: { in: assetIds }, stack: { dataSetId } },
+          select: {
+            id: true,
+            file: true,
+            fileType: true,
+            originalName: true,
+          },
+        })
+      : [];
+  const assetMap = new Map(selectedAssets.map((asset) => [asset.id, asset]));
+  type OriginalAsset = (typeof stacks)[number]['assets'][number] | (typeof selectedAssets)[number];
   const stackMap = new Map(stacks.map((stack) => [stack.id, stack]));
   const orderedAssets: OriginalAsset[] = [];
+
+  for (const assetId of assetIds) {
+    const asset = assetMap.get(assetId);
+    if (!asset) continue;
+    orderedAssets.push(asset);
+  }
 
   for (const stackId of stackIds) {
     const stack = stackMap.get(stackId);
@@ -295,7 +323,9 @@ stacksRoute.get('/download-originals', async (c) => {
   });
   const zip = createZipArchive(zipEntries);
   const zipFilename =
-    stackIds.length === 1 ? `stack-${stackIds[0]}-originals.zip` : 'stack-originals.zip';
+    stackIds.length === 1 && assetIds.length === 0
+      ? `stack-${stackIds[0]}-originals.zip`
+      : 'originals.zip';
 
   return new Response(toResponseBody(zip), {
     headers: {

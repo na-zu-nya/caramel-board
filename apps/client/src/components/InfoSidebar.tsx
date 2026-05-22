@@ -7,6 +7,7 @@ import {
   ChevronUp,
   Clapperboard,
   Copy,
+  Download,
   GalleryVerticalEnd,
   Hash,
   Heart,
@@ -37,6 +38,7 @@ import { useSwipeClose } from '@/hooks/features/useSwipeClose';
 import { useScratch } from '@/hooks/useScratch';
 import { apiClient } from '@/lib/api-client';
 import { copyText } from '@/lib/clipboard';
+import { downloadStackOriginals } from '@/lib/download-originals';
 import { removeStackFromCache } from '@/lib/stack-cache';
 import { cn, hexForCopy } from '@/lib/utils';
 import {
@@ -1026,6 +1028,18 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
                 >
                   <GalleryVerticalEnd size={16} />
                   Find similar
+                </button>
+                <button
+                  type="button"
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                  onClick={() => {
+                    if (!selectedItem) return;
+                    downloadStackOriginals(datasetId, [selectedItem.id]);
+                  }}
+                  disabled={!selectedItem}
+                >
+                  <Download size={16} />
+                  Download All
                 </button>
                 <button
                   type="button"
