@@ -112,15 +112,23 @@ export default function HeaderContainer() {
   const [isCompactMode, setIsCompactMode] = useState(false);
   useEffect(() => {
     const checkCompactMode = () => {
-      const totalPins = navigationPins.length;
-      const estimatedWidth = totalPins * 100 + 200; // Rough estimate
-      const availableWidth = window.innerWidth;
-      setIsCompactMode(availableWidth < 768 || estimatedWidth > availableWidth * 0.6);
+      const headerWidth = window.innerWidth - (withSidebar ? 320 : 0);
+      const pinButtonWidth = 40;
+      const pinGap = 8;
+      const horizontalPadding = 32;
+      const reservedActionsWidth = 280;
+      const pinsWidth =
+        navigationPins.length > 0
+          ? navigationPins.length * pinButtonWidth + (navigationPins.length - 1) * pinGap
+          : 0;
+      const availablePinsWidth = headerWidth - reservedActionsWidth - horizontalPadding;
+
+      setIsCompactMode(headerWidth < 520 || pinsWidth > availablePinsWidth);
     };
     checkCompactMode();
     window.addEventListener('resize', checkCompactMode);
     return () => window.removeEventListener('resize', checkCompactMode);
-  }, [navigationPins.length]);
+  }, [navigationPins.length, withSidebar]);
 
   const left = (
     <>

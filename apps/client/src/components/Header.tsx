@@ -125,19 +125,24 @@ export default function Header() {
   // Check if we need to use compact mode
   useEffect(() => {
     const checkCompactMode = () => {
-      // Calculate total width needed for pins
-      const totalPins = navigationPins.length;
-      const estimatedWidth = totalPins * 100 + 200; // Rough estimate
-      const availableWidth = window.innerWidth;
+      const headerWidth = window.innerWidth - (sidebarOpen ? 320 : 0);
+      const pinButtonWidth = 40;
+      const pinGap = 8;
+      const horizontalPadding = 32;
+      const reservedActionsWidth = 280;
+      const pinsWidth =
+        navigationPins.length > 0
+          ? navigationPins.length * pinButtonWidth + (navigationPins.length - 1) * pinGap
+          : 0;
+      const availablePinsWidth = headerWidth - reservedActionsWidth - horizontalPadding;
 
-      // Switch to compact mode if not enough space
-      setIsCompactMode(availableWidth < 768 || estimatedWidth > availableWidth * 0.6);
+      setIsCompactMode(headerWidth < 520 || pinsWidth > availablePinsWidth);
     };
 
     checkCompactMode();
     window.addEventListener('resize', checkCompactMode);
     return () => window.removeEventListener('resize', checkCompactMode);
-  }, [navigationPins.length]);
+  }, [navigationPins.length, sidebarOpen]);
 
   return (
     <header
