@@ -5,6 +5,7 @@ import { useCallback } from 'react';
 import { useDrag } from '@/contexts/DragContext';
 import { useScratch } from '@/hooks/useScratch';
 import { apiClient } from '@/lib/api-client';
+import { downloadStackOriginals } from '@/lib/download-originals';
 import { removeStackFromCache } from '@/lib/stack-cache';
 import {
   setExternalImageDragData,
@@ -16,7 +17,7 @@ import { infoSidebarOpenAtom, selectedItemIdAtom } from '@/stores/ui';
 export function useStackTile(datasetId: string) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { setDragKind, setIsDragging } = useDrag();
+  const { setDraggedStack, setDragKind, setIsDragging } = useDrag();
   const { ensureScratch } = useScratch(datasetId);
   const setInfoOpen = useSetAtom(infoSidebarOpenAtom);
   const setSelectedItemId = useSetAtom(selectedItemIdAtom);
@@ -68,6 +69,13 @@ export function useStackTile(datasetId: string) {
     await queryClient.invalidateQueries({ queryKey: ['stacks'] });
     await queryClient.invalidateQueries({ queryKey: ['library-counts', datasetId] });
   };
+
+  const onDownload = useCallback(
+    (stackId: number | string) => {
+      downloadStackOriginals(datasetId, [stackId]);
+    },
+    [datasetId]
+  );
 
   const onInfo = (stackId: number | string) => {
     try {
@@ -208,12 +216,14 @@ export function useStackTile(datasetId: string) {
       if ((e.target as HTMLElement | null)?.dataset.nativeImageDrag === 'true') {
         setIsDragging(true);
         setDragKind('native-image');
+        setDraggedStack({ stackId, collectionIds: [] });
         setNativeImageDragPreview(e.dataTransfer, e.currentTarget);
         return;
       }
 
       try {
         setIsDragging(true);
+        setDraggedStack({ stackId, collectionIds: [] });
         setStackDragData(e.dataTransfer, [stackId]);
         setExternalImageDragData(e.dataTransfer, sourceImageUrl ?? null, sourceImageFilename);
         e.dataTransfer.effectAllowed = 'copyMove';
@@ -362,6 +372,7 @@ export function useStackTile(datasetId: string) {
     onOpen,
     onFindSimilar,
     onAddToScratch,
+    onDownload,
     onToggleFavorite,
     onLike,
     onInfo,

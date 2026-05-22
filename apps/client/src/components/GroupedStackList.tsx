@@ -88,6 +88,7 @@ export function GroupedStackList({
     onOpen,
     onFindSimilar,
     onAddToScratch,
+    onDownload,
     onToggleFavorite,
     onLike,
     onInfo,
@@ -168,6 +169,7 @@ export function GroupedStackList({
                               onInfo={() => onInfo(stack.id)}
                               onFindSimilar={() => onFindSimilar(stack.id)}
                               onAddToScratch={() => onAddToScratch(stack.id)}
+                              onDownload={() => onDownload(stack.id)}
                               onToggleFavorite={() => onToggleFavorite(stack.id, isFav)}
                               onLike={() => onLike(stack.id)}
                               onRemoveLike={

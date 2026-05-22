@@ -4,6 +4,7 @@ import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import {
   Book,
   Check,
+  Download,
   GalleryVerticalEnd,
   Heart,
   Image,
@@ -21,9 +22,9 @@ import {
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
 import { useDrag } from '@/contexts/DragContext';
-import { useNativeImageDragMode } from '@/hooks/useNativeImageDragMode';
 import { useScratch } from '@/hooks/useScratch';
 import { apiClient } from '@/lib/api-client';
+import { downloadStackOriginals } from '@/lib/download-originals';
 import { removeStackFromCache } from '@/lib/stack-cache';
 import {
   getSourceImageFilename,
@@ -74,7 +75,6 @@ export function StackListItem({
   const sourceImageFilename = sourceImageUrl
     ? getSourceImageFilename(stack, sourceImageUrl, `stack-${stack.id}`)
     : 'image.jpg';
-  const nativeImageDragMode = useNativeImageDragMode();
   const [isNativePointerActive, setIsNativePointerActive] = useState(false);
   const totalAssets =
     (typeof stack.assetCount === 'number' && stack.assetCount >= 0
@@ -82,7 +82,7 @@ export function StackListItem({
       : undefined) ??
     (typeof stack.assetsCount === 'number' ? stack.assetsCount : undefined) ??
     (Array.isArray(stack.assets) ? stack.assets.length : 0);
-  const { setDragKind, setIsDragging } = useDrag();
+  const { setDraggedStack, setDragKind, setIsDragging } = useDrag();
   const [, setNavigationState] = useAtom(navigationStateAtom);
 
   const handleClick = (e: React.MouseEvent) => {
@@ -131,7 +131,8 @@ export function StackListItem({
           if ((e.target as HTMLElement | null)?.dataset.nativeImageDrag === 'true') {
             setIsDragging(true);
             setDragKind('native-image');
-            setIsNativePointerActive(false);
+            setDraggedStack({ stackId: stack.id, collectionIds: [] });
+            setIsNativePointerActive(true);
             setNativeImageDragPreview(e.dataTransfer, e.currentTarget);
             return;
           }
@@ -139,6 +140,7 @@ export function StackListItem({
           try {
             setIsDragging(true);
             const id = typeof stack.id === 'string' ? stack.id : String(stack.id);
+            setDraggedStack({ stackId: id, collectionIds: [] });
             // If multiple items are selected and this item is among them, drag all
             const selectedIds =
               selectedItemsSet && selectedItemsSet.size > 0 && selectedItemsSet.has(stack.id)
@@ -164,7 +166,8 @@ export function StackListItem({
           if ((e.target as HTMLElement | null)?.dataset.nativeImageDrag === 'true') {
             setIsDragging(true);
             setDragKind('native-image');
-            setIsNativePointerActive(false);
+            setDraggedStack({ stackId: stack.id, collectionIds: [] });
+            setIsNativePointerActive(true);
             setNativeImageDragPreview(e.dataTransfer, e.currentTarget);
             return;
           }
@@ -172,6 +175,7 @@ export function StackListItem({
           try {
             setIsDragging(true);
             const id = typeof stack.id === 'string' ? stack.id : String(stack.id);
+            setDraggedStack({ stackId: id, collectionIds: [] });
             const selectedIds =
               selectedItemsSet && selectedItemsSet.size > 0 && selectedItemsSet.has(stack.id)
                 ? Array.from(selectedItemsSet)
@@ -211,6 +215,14 @@ export function StackListItem({
       queryClient.invalidateQueries({ queryKey: ['dataset-overview', datasetId] }),
     ]);
   }, [datasetId, queryClient]);
+
+  const handleDownloadOriginals = useCallback(() => {
+    const stackIds =
+      selectedItemsSet && selectedItemsSet.size > 0 && selectedItemsSet.has(stack.id)
+        ? Array.from(selectedItemsSet)
+        : [stack.id];
+    downloadStackOriginals(datasetId, stackIds);
+  }, [datasetId, selectedItemsSet, stack.id]);
 
   const handleRemoveFromDataset = useCallback(async () => {
     const stackLabel = stack.title || stack.name || 'Untitled';
@@ -280,17 +292,13 @@ export function StackListItem({
                 <Image size={40} className="opacity-20" />
               </div>
             )}
-            {nativeImageDragMode && sourceImageUrl ? (
+            {sourceImageUrl ? (
               <img
                 src={sourceImageUrl}
                 alt=""
-                className="absolute inset-0 z-30 h-full w-full object-cover opacity-0"
+                className="absolute inset-0 z-[5] h-full w-full object-cover opacity-0"
                 draggable={true}
                 data-native-image-drag="true"
-                onPointerDown={() => setIsNativePointerActive(true)}
-                onPointerUp={() => setIsNativePointerActive(false)}
-                onPointerCancel={() => setIsNativePointerActive(false)}
-                onPointerLeave={() => setIsNativePointerActive(false)}
                 aria-hidden="true"
               />
             ) : null}
@@ -374,6 +382,10 @@ export function StackListItem({
           }}
         >
           Open
+        </ContextMenuItem>
+        <ContextMenuItem onClick={handleDownloadOriginals}>
+          <Download className="w-4 h-4 mr-2" />
+          Download
         </ContextMenuItem>
         <ContextMenuSeparator />
 

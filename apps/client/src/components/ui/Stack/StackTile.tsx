@@ -1,5 +1,6 @@
 import {
   Book,
+  Download,
   GalleryVerticalEnd,
   Heart,
   HeartOff,
@@ -16,7 +17,6 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
-import { useNativeImageDragMode } from '@/hooks/useNativeImageDragMode';
 import { cn } from '@/lib/utils';
 import { getThumbnailPath } from '@/utils/thumbnailPath';
 
@@ -34,6 +34,7 @@ export interface StackTileProps extends React.HTMLAttributes<HTMLDivElement> {
   onInfo?: () => void;
   onFindSimilar?: () => void;
   onAddToScratch?: () => void;
+  onDownload?: () => void;
   onToggleFavorite?: () => void;
   onLike?: () => void;
   onRemoveLike?: () => void;
@@ -58,6 +59,7 @@ export function StackTile({
   onInfo,
   onFindSimilar,
   onAddToScratch,
+  onDownload,
   onToggleFavorite,
   onLike,
   onRemoveLike,
@@ -67,7 +69,6 @@ export function StackTile({
   children,
   ...divProps
 }: StackTileProps) {
-  const nativeImageDragMode = useNativeImageDragMode();
   const [isNativePointerActive, setIsNativePointerActive] = useState(false);
   const resolvedThumbnailUrl = thumbnailUrl
     ? thumbnailUrl.startsWith('http')
@@ -109,17 +110,13 @@ export function StackTile({
           No Image
         </div>
       )}
-      {nativeImageDragMode && resolvedNativeImageDragUrl ? (
+      {resolvedNativeImageDragUrl ? (
         <img
           src={resolvedNativeImageDragUrl}
           alt=""
-          className="absolute inset-0 z-30 h-full w-full object-cover opacity-0"
+          className="absolute inset-0 z-[5] h-full w-full object-cover opacity-0"
           draggable={true}
           data-native-image-drag="true"
-          onPointerDown={() => setIsNativePointerActive(true)}
-          onPointerUp={() => setIsNativePointerActive(false)}
-          onPointerCancel={() => setIsNativePointerActive(false)}
-          onPointerLeave={() => setIsNativePointerActive(false)}
           onDragStart={() => setIsNativePointerActive(true)}
           onDragEnd={() => setIsNativePointerActive(false)}
           aria-hidden="true"
@@ -183,6 +180,12 @@ export function StackTile({
       </ContextMenuTrigger>
       <ContextMenuContent className="w-48">
         <ContextMenuItem onClick={() => onOpen?.()}>Open</ContextMenuItem>
+        {onDownload ? (
+          <ContextMenuItem onClick={() => onDownload()}>
+            <Download className="w-4 h-4 mr-2" />
+            Download
+          </ContextMenuItem>
+        ) : null}
         <ContextMenuSeparator />
         <ContextMenuItem onClick={() => onInfo?.()}>
           <Info className="w-4 h-4 mr-2" />

@@ -15,6 +15,10 @@ export const Basic: Story = {
     pageCount: 12,
     favorited: false,
     likeCount: 3,
+    onDownload: () => {
+      // Storybook用のダミー動作
+      console.log('download originals');
+    },
     onRemoveLike: () => {
       // Storybook用のダミー動作
       console.log('unlike stack');
@@ -34,6 +38,10 @@ export const AsLink: Story = {
     pageCount: 8,
     favorited: true,
     likeCount: 12,
+    onDownload: () => {
+      // Storybook用のダミー動作
+      console.log('download linked stack originals');
+    },
     children: <a href="/library/1/stacks/1">Linked Stack</a>,
     dragHandlers: {
       draggable: true,

@@ -5,6 +5,7 @@ import {
   Book,
   Bookmark,
   Check,
+  Download,
   GalleryVerticalEnd,
   GitMerge,
   Heart,
@@ -22,15 +23,15 @@ import {
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
 import { useDrag } from '@/contexts/DragContext';
-import { useNativeImageDragMode } from '@/hooks/useNativeImageDragMode';
 import { useScratch } from '@/hooks/useScratch';
 import { apiClient } from '@/lib/api-client';
+import { downloadStackOriginals } from '@/lib/download-originals';
 import { removeStackFromCache } from '@/lib/stack-cache';
 import {
-  extractStackIdsFromDataTransfer,
+  extractStackIdsFromDragPayload,
   getSourceImageFilename,
   getSourceImageUrl,
-  hasStackDragDataTransfer,
+  hasStackDragPayload,
   setExternalImageDragData,
   setNativeImageDragPreview,
   setStackDragData,
@@ -98,9 +99,12 @@ export function StackGridItem({
   const pageCount = assetCount ?? countAssets ?? 0;
   const [isDragging, setIsDragging] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
-  const [isNativePointerActive, setIsNativePointerActive] = useState(false);
-  const nativeImageDragMode = useNativeImageDragMode();
-  const { dragKind, setDragKind, setIsDragging: setGlobalDragging } = useDrag();
+  const {
+    draggedStack,
+    setDraggedStack,
+    setDragKind,
+    setIsDragging: setGlobalDragging,
+  } = useDrag();
   const [filter] = useAtom(currentFilterAtom);
   const datasetId = (filter?.datasetId as string) || '1';
   const { ensureScratch } = useScratch(datasetId);
@@ -114,6 +118,18 @@ export function StackGridItem({
     (selectedStackIdsInOrder?.length ?? 0) >= 2 &&
     !!selectedItems?.has(item.id) &&
     typeof onMergeStacks === 'function';
+  const getDownloadStackIds = useCallback((): Array<string | number> => {
+    if (isSelectionMode && selectedItems?.has(item.id)) {
+      if (selectedStackIdsInOrder && selectedStackIdsInOrder.length > 0) {
+        return selectedStackIdsInOrder;
+      }
+      return Array.from(selectedItems);
+    }
+    return [getStackId()];
+  }, [getStackId, isSelectionMode, item.id, selectedItems, selectedStackIdsInOrder]);
+  const handleDownloadOriginals = useCallback(() => {
+    downloadStackOriginals(datasetId, getDownloadStackIds());
+  }, [datasetId, getDownloadStackIds]);
   const invalidateStackData = useCallback(() => {
     void Promise.allSettled([
       queryClient.invalidateQueries({ queryKey: ['stack'] }),
@@ -219,9 +235,7 @@ export function StackGridItem({
             'group relative aspect-square overflow-hidden cursor-pointer transition-transform duration-150 box-border block',
             isInfoSelected && 'ring-2 ring-primary ring-inset',
             isVisible ? 'opacity-100' : 'opacity-0',
-            isDragging || isNativePointerActive
-              ? 'border-8 border-gray-300 scale-95 opacity-50 rounded-lg'
-              : '',
+            isDragging ? 'border-8 border-gray-300 scale-95 opacity-50 rounded-lg' : '',
             isDragOver && 'border-8 border-accent'
           )}
           onClick={(e) => {
@@ -241,15 +255,14 @@ export function StackGridItem({
           onDragEnd={() => {
             console.log('Drag ended for item:', item.id);
             setIsDragging(false);
-            setIsNativePointerActive(false);
             setGlobalDragging(false);
           }}
           onDragStart={(e) => {
             if ((e.target as HTMLElement | null)?.dataset.nativeImageDrag === 'true') {
               setIsDragging(true);
-              setIsNativePointerActive(false);
               setGlobalDragging(true);
               setDragKind('native-image');
+              setDraggedStack({ stackId: getStackId(), collectionIds: [] });
               setNativeImageDragPreview(e.dataTransfer, e.currentTarget);
               return;
             }
@@ -257,6 +270,7 @@ export function StackGridItem({
             console.log('Drag started for item:', item.id);
             setIsDragging(true);
             setGlobalDragging(true);
+            setDraggedStack({ stackId: getStackId(), collectionIds: [] });
 
             // Check if this item is part of a selection
             let dragStackIds: Array<string | number> = [getStackId()];
@@ -290,8 +304,8 @@ export function StackGridItem({
           }}
           onDragOver={(e) => {
             // Ignore file drags; let parent DropZone handle uploads
-            if (e.dataTransfer?.types?.includes('Files')) return;
-            if (dragKind === 'native-image' || !hasStackDragDataTransfer(e.dataTransfer)) {
+            if (e.dataTransfer?.types?.includes('Files') && !draggedStack?.stackId) return;
+            if (!hasStackDragPayload(e.dataTransfer, draggedStack?.stackId)) {
               setIsDragOver(false);
               return;
             }
@@ -308,8 +322,8 @@ export function StackGridItem({
           onDrop={(e) => {
             console.log('onDrop', e.dataTransfer);
             // Ignore file drops here
-            if (e.dataTransfer?.types?.includes('Files')) return;
-            if (dragKind === 'native-image' || !hasStackDragDataTransfer(e.dataTransfer)) {
+            if (e.dataTransfer?.types?.includes('Files') && !draggedStack?.stackId) return;
+            if (!hasStackDragPayload(e.dataTransfer, draggedStack?.stackId)) {
               setIsDragOver(false);
               return;
             }
@@ -317,7 +331,10 @@ export function StackGridItem({
             e.stopPropagation();
             setIsDragOver(false);
 
-            const sourceIdsFromDrag = extractStackIdsFromDataTransfer(e.dataTransfer);
+            const sourceIdsFromDrag = extractStackIdsFromDragPayload(
+              e.dataTransfer,
+              draggedStack?.stackId
+            );
             if (sourceIdsFromDrag.length === 0) return;
 
             try {
@@ -393,17 +410,13 @@ export function StackGridItem({
             loading="lazy"
             data-stack-drag-preview="true"
           />
-          {nativeImageDragMode && sourceImageUrl ? (
+          {sourceImageUrl ? (
             <img
               src={sourceImageUrl}
               alt=""
-              className="absolute inset-0 z-30 h-full w-full object-cover opacity-0"
+              className="absolute inset-0 z-[5] h-full w-full object-cover opacity-0"
               draggable={true}
               data-native-image-drag="true"
-              onPointerDown={() => setIsNativePointerActive(true)}
-              onPointerUp={() => setIsNativePointerActive(false)}
-              onPointerCancel={() => setIsNativePointerActive(false)}
-              onPointerLeave={() => setIsNativePointerActive(false)}
               aria-hidden="true"
             />
           ) : null}
@@ -498,6 +511,10 @@ export function StackGridItem({
           }}
         >
           Open
+        </ContextMenuItem>
+        <ContextMenuItem onClick={handleDownloadOriginals}>
+          <Download className="w-4 h-4 mr-2" />
+          Download
         </ContextMenuItem>
         <ContextMenuSeparator />
 

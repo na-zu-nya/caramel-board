@@ -1,7 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 import { useDrag } from '@/contexts/DragContext';
-import { extractStackIdsFromDataTransfer, hasStackDragDataTransfer } from '@/lib/stack-drag-data';
+import { extractStackIdsFromDragPayload, hasStackDragPayload } from '@/lib/stack-drag-data';
 
 export interface UseSidebarDropOptions {
   acceptDrop?: boolean;
@@ -9,14 +9,14 @@ export interface UseSidebarDropOptions {
 }
 
 export function useSidebarDrop({ acceptDrop = true, onDrop }: UseSidebarDropOptions) {
-  const { dragKind, isDragging } = useDrag();
+  const { draggedStack, dragKind, isDragging } = useDrag();
   const queryClient = useQueryClient();
   const [isDragOver, setIsDragOver] = useState(false);
 
   const handleDragOver = useCallback<React.DragEventHandler>(
     (e) => {
       if (!acceptDrop || !onDrop) return;
-      if (dragKind === 'native-image' || !hasStackDragDataTransfer(e.dataTransfer)) {
+      if (!hasStackDragPayload(e.dataTransfer, draggedStack?.stackId)) {
         setIsDragOver(false);
         return;
       }
@@ -28,12 +28,12 @@ export function useSidebarDrop({ acceptDrop = true, onDrop }: UseSidebarDropOpti
       } catch {}
       setIsDragOver(true);
     },
-    [acceptDrop, dragKind, onDrop]
+    [acceptDrop, draggedStack?.stackId, onDrop]
   );
 
   const handleDragLeave = useCallback<React.DragEventHandler>(
     (e) => {
-      if (dragKind === 'native-image' || !hasStackDragDataTransfer(e.dataTransfer)) {
+      if (!hasStackDragPayload(e.dataTransfer, draggedStack?.stackId)) {
         setIsDragOver(false);
         return;
       }
@@ -41,12 +41,12 @@ export function useSidebarDrop({ acceptDrop = true, onDrop }: UseSidebarDropOpti
       e.stopPropagation();
       setIsDragOver(false);
     },
-    [dragKind]
+    [draggedStack?.stackId]
   );
 
   const handleDrop = useCallback<React.DragEventHandler>(
     async (e) => {
-      if (dragKind === 'native-image' || !hasStackDragDataTransfer(e.dataTransfer)) {
+      if (!hasStackDragPayload(e.dataTransfer, draggedStack?.stackId)) {
         setIsDragOver(false);
         return;
       }
@@ -55,7 +55,7 @@ export function useSidebarDrop({ acceptDrop = true, onDrop }: UseSidebarDropOpti
       setIsDragOver(false);
       if (!acceptDrop || !onDrop) return;
 
-      const stackIds = extractStackIdsFromDataTransfer(e.dataTransfer);
+      const stackIds = extractStackIdsFromDragPayload(e.dataTransfer, draggedStack?.stackId);
       if (stackIds.length === 0) return;
 
       await onDrop?.(stackIds);
@@ -67,14 +67,14 @@ export function useSidebarDrop({ acceptDrop = true, onDrop }: UseSidebarDropOpti
         queryClient.invalidateQueries({ queryKey: ['collection-folders'] }),
       ]);
     },
-    [acceptDrop, dragKind, onDrop, queryClient]
+    [acceptDrop, draggedStack?.stackId, onDrop, queryClient]
   );
 
   const showDropIndicator = !!(
     acceptDrop &&
     onDrop &&
     isDragging &&
-    dragKind === 'stack' &&
+    (dragKind === 'stack' || dragKind === 'native-image') &&
     isDragOver
   );
 

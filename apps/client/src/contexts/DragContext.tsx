@@ -2,7 +2,7 @@ import { createContext, type ReactNode, useCallback, useContext, useEffect, useS
 import { useDisableTextSelection } from '@/hooks/useDisableTextSelection';
 
 interface DraggedStackInfo {
-  stackId: number;
+  stackId: number | string;
   collectionIds: number[];
 }
 
@@ -29,6 +29,7 @@ export function DragProvider({ children }: { children: ReactNode }) {
     setIsDragging(dragging);
     if (!dragging) {
       setDragKind(null);
+      setDraggedStack(null);
       return;
     }
     setDragKind((current) => current ?? 'stack');

@@ -22,6 +22,7 @@ import { AutoTagService } from '../shared/services/AutoTagService';
 import { CollectionService } from '../shared/services/CollectionService';
 import { ensureSuperUser } from '../shared/services/UserService';
 import { toPublicAssetPath, withPublicAssetArray } from '../utils/assetPath';
+import { createZipArchive } from '../utils/zip';
 
 type StackAssetSummary = {
   id?: number;
@@ -102,7 +103,101 @@ const FavoriteListQuerySchema = z.object({
   offset: z.coerce.number().int().min(0).optional().default(0),
 });
 
+const DownloadOriginalsQuerySchema = z.object({
+  dataSetId: z.coerce.number().int().positive(),
+  stackIds: z.union([z.string(), z.array(z.string())]),
+});
+
 export const stacksRoute = new Hono();
+
+const getAttachmentDisposition = (filename: string) => {
+  const fallback = filename.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
+  const encoded = encodeURIComponent(filename).replace(
+    /['()*]/g,
+    (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`
+  );
+  return `attachment; filename="${fallback}"; filename*=UTF-8''${encoded}`;
+};
+
+const getContentType = (filename: string, fileType?: string | null) => {
+  if (fileType?.startsWith('image/')) return fileType;
+  const ext = path.extname(filename).toLowerCase();
+  const types: Record<string, string> = {
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.png': 'image/png',
+    '.webp': 'image/webp',
+    '.gif': 'image/gif',
+    '.avif': 'image/avif',
+    '.bmp': 'image/bmp',
+    '.tif': 'image/tiff',
+    '.tiff': 'image/tiff',
+  };
+  return types[ext] ?? fileType ?? 'application/octet-stream';
+};
+
+const toResponseBody = (buffer: Buffer): ArrayBuffer =>
+  buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer;
+
+const getDownloadFilename = (originalName: string | null | undefined, file: string) => {
+  const name = originalName?.trim() || path.basename(file);
+  const withoutPathSeparators = name.replace(/[\\/]/g, '_');
+  const sanitized = Array.from(withoutPathSeparators)
+    .map((char) => {
+      const codePoint = char.codePointAt(0) ?? 0;
+      return codePoint < 32 || codePoint === 127 ? '_' : char;
+    })
+    .join('');
+  return sanitized || 'download';
+};
+
+const getUniqueFilename = (filename: string, usedNames: Map<string, number>) => {
+  const usedCount = usedNames.get(filename) ?? 0;
+  usedNames.set(filename, usedCount + 1);
+  if (usedCount === 0) return filename;
+
+  const ext = path.extname(filename);
+  const base = path.basename(filename, ext);
+  const candidate = `${base} (${usedCount + 1})${ext}`;
+  return getUniqueFilename(candidate, usedNames);
+};
+
+const resolveStoredFilePath = (
+  file: string,
+  dataStorage: ReturnType<typeof useDataStorage>
+): string | null => {
+  const normalized = file.replace(/^\/files\//, '').replace(/^files\//, '');
+  const raw = file.startsWith('/') ? file.slice(1) : file;
+  const candidates = Array.from(new Set([normalized, raw]));
+
+  for (const candidate of candidates) {
+    const fullPath = dataStorage.getPath(candidate);
+    try {
+      if (fs.existsSync(fullPath) && fs.statSync(fullPath).isFile()) {
+        return fullPath;
+      }
+    } catch {}
+  }
+
+  return null;
+};
+
+const parseStackIds = (value: string | string[]) => {
+  const rawValues = Array.isArray(value) ? value : [value];
+  const ids: number[] = [];
+  const seen = new Set<number>();
+
+  for (const rawValue of rawValues) {
+    for (const part of rawValue.split(',')) {
+      const parsed = Number.parseInt(part.trim(), 10);
+      if (!Number.isFinite(parsed) || parsed <= 0 || seen.has(parsed)) continue;
+      seen.add(parsed);
+      ids.push(parsed);
+    }
+  }
+
+  return ids;
+};
 
 // Helper: build plain object from search params
 function getQueryObject(c: Context): Record<string, string | string[]> {
@@ -114,6 +209,103 @@ function getQueryObject(c: Context): Record<string, string | string[]> {
   }
   return obj;
 }
+
+// GET /stacks/download-originals
+stacksRoute.get('/download-originals', async (c) => {
+  const queryObj = getQueryObject(c);
+  const parse = DownloadOriginalsQuerySchema.safeParse(queryObj);
+  if (!parse.success) return c.json({ error: 'Invalid query', details: parse.error }, 400);
+
+  const { dataSetId } = parse.data;
+  const stackIds = parseStackIds(parse.data.stackIds);
+  if (stackIds.length === 0) return c.json({ error: 'No stack ids specified' }, 400);
+
+  const auth = await (await import('../utils/dataset-protection')).ensureDatasetAuthorized(
+    c,
+    dataSetId
+  );
+  if (auth) return auth;
+
+  const prisma = usePrisma(c);
+  const dataStorage = useDataStorage(c);
+  const stacks = await prisma.stack.findMany({
+    where: { id: { in: stackIds }, dataSetId },
+    select: {
+      id: true,
+      assets: {
+        orderBy: { orderInStack: 'asc' },
+        select: {
+          id: true,
+          file: true,
+          fileType: true,
+          originalName: true,
+        },
+      },
+    },
+  });
+  type OriginalAsset = (typeof stacks)[number]['assets'][number];
+  const stackMap = new Map(stacks.map((stack) => [stack.id, stack]));
+  const orderedAssets: OriginalAsset[] = [];
+
+  for (const stackId of stackIds) {
+    const stack = stackMap.get(stackId);
+    if (!stack) continue;
+    for (const asset of stack.assets) {
+      orderedAssets.push(asset);
+    }
+  }
+
+  if (orderedAssets.length === 0) {
+    return c.json({ error: 'Original files not found' }, 404);
+  }
+
+  const downloadableAssets: Array<OriginalAsset & { filePath: string }> = [];
+  for (const asset of orderedAssets) {
+    const filePath = resolveStoredFilePath(asset.file, dataStorage);
+    if (!filePath) {
+      return c.json({ error: 'Original file missing', assetId: asset.id }, 404);
+    }
+    downloadableAssets.push({ ...asset, filePath });
+  }
+
+  if (downloadableAssets.length === 1) {
+    const asset = downloadableAssets[0];
+    const filename = getDownloadFilename(asset.originalName, asset.file);
+    const data = fs.readFileSync(asset.filePath);
+    return new Response(toResponseBody(data), {
+      headers: {
+        'Content-Type': getContentType(filename, asset.fileType),
+        'Content-Disposition': getAttachmentDisposition(filename),
+        'Content-Length': data.length.toString(),
+        'Cache-Control': 'no-store',
+      },
+    });
+  }
+
+  const usedNames = new Map<string, number>();
+  const zipEntries = downloadableAssets.map((asset) => {
+    const filename = getUniqueFilename(
+      getDownloadFilename(asset.originalName, asset.file),
+      usedNames
+    );
+    return {
+      name: filename,
+      data: fs.readFileSync(asset.filePath),
+    };
+  });
+  const zip = createZipArchive(zipEntries);
+  const zipFilename =
+    stackIds.length === 1 ? `stack-${stackIds[0]}-originals.zip` : 'stack-originals.zip';
+
+  return new Response(toResponseBody(zip), {
+    headers: {
+      'Content-Type': 'application/zip',
+      'Content-Disposition': getAttachmentDisposition(zipFilename),
+      'Content-Length': zip.length.toString(),
+      'Cache-Control': 'no-store',
+    },
+  });
+});
 
 // GET /stacks/paginated
 stacksRoute.get('/paginated', async (c) => {

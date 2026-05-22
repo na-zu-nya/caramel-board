@@ -153,6 +153,20 @@ export function hasStackDragDataTransfer(dataTransfer: DataTransfer | null): boo
   return Array.from(dataTransfer?.types ?? []).includes(STACK_IDS_MIME);
 }
 
+function toStackId(value: string | number | null | undefined): number | null {
+  if (typeof value === 'number') return Number.isFinite(value) && value > 0 ? value : null;
+  if (typeof value !== 'string') return null;
+  const parsed = Number(value.trim());
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+export function hasStackDragPayload(
+  dataTransfer: DataTransfer | null,
+  stackId?: string | number | null
+): boolean {
+  return hasStackDragDataTransfer(dataTransfer) || toStackId(stackId) !== null;
+}
+
 export function setNativeImageDragPreview(
   dataTransfer: DataTransfer,
   container: EventTarget | null
@@ -194,4 +208,15 @@ export function extractStackIdsFromDataTransfer(dataTransfer: DataTransfer): num
 
   const legacyId = Number(text);
   return Number.isFinite(legacyId) && legacyId > 0 ? [legacyId] : [];
+}
+
+export function extractStackIdsFromDragPayload(
+  dataTransfer: DataTransfer,
+  stackId?: string | number | null
+): number[] {
+  const transferIds = extractStackIdsFromDataTransfer(dataTransfer);
+  if (transferIds.length > 0) return transferIds;
+
+  const contextId = toStackId(stackId);
+  return contextId === null ? [] : [contextId];
 }

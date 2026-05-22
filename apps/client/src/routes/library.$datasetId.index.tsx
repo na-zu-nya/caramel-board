@@ -211,6 +211,7 @@ function DatasetHome() {
                 const {
                   onOpen,
                   onAddToScratch,
+                  onDownload,
                   onFindSimilar,
                   onToggleFavorite,
                   onLike,
@@ -241,6 +242,7 @@ function DatasetHome() {
                     onInfo={undefined}
                     onFindSimilar={() => onFindSimilar(item.id)}
                     onAddToScratch={() => onAddToScratch(item.id)}
+                    onDownload={() => onDownload(item.id)}
                     onToggleFavorite={() => onToggleFavorite(item.id, currentFavorited)}
                     onLike={() => onLike(item.id)}
                     dragHandlers={dragProps(item.id, sourceImageUrl, sourceImageFilename)}
@@ -276,6 +278,7 @@ function DatasetHome() {
                 const {
                   onOpen,
                   onAddToScratch,
+                  onDownload,
                   onFindSimilar,
                   onToggleFavorite,
                   onLike,
@@ -306,6 +309,7 @@ function DatasetHome() {
                     onInfo={undefined}
                     onFindSimilar={() => onFindSimilar(item.id)}
                     onAddToScratch={() => onAddToScratch(item.id)}
+                    onDownload={() => onDownload(item.id)}
                     onToggleFavorite={() => onToggleFavorite(item.id, currentFavorited)}
                     onLike={() => onLike(item.id)}
                     dragHandlers={dragProps(item.id, sourceImageUrl, sourceImageFilename)}

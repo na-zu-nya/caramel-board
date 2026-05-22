@@ -1044,6 +1044,7 @@ function TagsPage() {
                           onOpen,
                           onFindSimilar,
                           onAddToScratch,
+                          onDownload,
                           onToggleFavorite,
                           onLike,
                           dragProps,
@@ -1066,6 +1067,7 @@ function TagsPage() {
                             }}
                             onFindSimilar={() => onFindSimilar(stack.id)}
                             onAddToScratch={() => onAddToScratch(stack.id)}
+                            onDownload={() => onDownload(stack.id)}
                             onToggleFavorite={() => onToggleFavorite(stack.id, isFav)}
                             onLike={() => onLike(stack.id)}
                             dragHandlers={dragProps(stack.id, sourceImageUrl, sourceImageFilename)}
@@ -1085,6 +1087,7 @@ function TagsPage() {
                             }}
                             onFindSimilar={() => onFindSimilar(stack.id)}
                             onAddToScratch={() => onAddToScratch(stack.id)}
+                            onDownload={() => onDownload(stack.id)}
                             onToggleFavorite={() => onToggleFavorite(stack.id, isFav)}
                             onLike={() => onLike(stack.id)}
                             dragHandlers={dragProps(stack.id, sourceImageUrl, sourceImageFilename)}

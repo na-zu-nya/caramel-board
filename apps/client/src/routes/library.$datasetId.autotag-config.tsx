@@ -101,8 +101,16 @@ function AutoTagConfigPage() {
   const { datasetId } = Route.useParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const { onOpen, onFindSimilar, onAddToScratch, onToggleFavorite, onLike, onInfo, dragProps } =
-    useStackTile(datasetId);
+  const {
+    onOpen,
+    onFindSimilar,
+    onAddToScratch,
+    onDownload,
+    onToggleFavorite,
+    onLike,
+    onInfo,
+    dragProps,
+  } = useStackTile(datasetId);
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
@@ -957,6 +965,7 @@ function AutoTagConfigPage() {
                             onInfo={() => onInfo(stack.id)}
                             onFindSimilar={() => onFindSimilar(stack.id)}
                             onAddToScratch={() => onAddToScratch(stack.id)}
+                            onDownload={() => onDownload(stack.id)}
                             onToggleFavorite={() => onToggleFavorite(stack.id, favorited)}
                             onLike={() => onLike(stack.id)}
                             dragHandlers={dragProps(stack.id, sourceImageUrl, sourceImageFilename)}
@@ -977,6 +986,7 @@ function AutoTagConfigPage() {
                           onInfo={() => onInfo(stack.id)}
                           onFindSimilar={() => onFindSimilar(stack.id)}
                           onAddToScratch={() => onAddToScratch(stack.id)}
+                          onDownload={() => onDownload(stack.id)}
                           onToggleFavorite={() => onToggleFavorite(stack.id, favorited)}
                           onLike={() => onLike(stack.id)}
                           dragHandlers={dragProps(stack.id, sourceImageUrl, sourceImageFilename)}
