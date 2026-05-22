@@ -1379,6 +1379,11 @@ stacksRoute.post('/', async (c) => {
     const explicitMediaType = (formData.get('mediaType') as string | null) || undefined;
     const author = (formData.get('author') as string | null) || undefined;
     const tags = formData.getAll('tags[]').map((t) => String(t));
+    const collectionRaw = formData.get('collectionId') as string | null;
+    const collectionId = collectionRaw ? Number.parseInt(collectionRaw, 10) : undefined;
+    if (collectionRaw && (!collectionId || collectionId <= 0)) {
+      return c.json({ error: 'collectionId must be a positive integer' }, 400);
+    }
 
     const finalMediaType = (() => {
       if (explicitMediaType && explicitMediaType.length > 0) {
@@ -1400,6 +1405,17 @@ stacksRoute.post('/', async (c) => {
 
     // Compose services
     const prisma = usePrisma(c);
+    if (collectionId) {
+      const collection = await prisma.collection.findUnique({
+        where: { id: collectionId },
+        select: { dataSetId: true },
+      });
+      if (!collection) return c.json({ error: 'Collection not found' }, 404);
+      if (collection.dataSetId !== dataSetId) {
+        return c.json({ error: 'Collection does not belong to provided dataset' }, 400);
+      }
+    }
+
     const colorSearch = createColorSearchService({ prisma, dataSetId });
     const stackService = createStackService({ prisma, colorSearch, dataSetId });
 
@@ -1416,6 +1432,14 @@ stacksRoute.post('/', async (c) => {
         size: file.size,
       },
     });
+
+    if (collectionId) {
+      try {
+        await new CollectionService(prisma).addStackToCollection(collectionId, Number(stack.id));
+      } catch (collectionError) {
+        console.warn('Failed to add uploaded stack to collection', collectionError);
+      }
+    }
 
     return c.json(stack, 201);
   } catch (error: unknown) {

@@ -100,18 +100,11 @@ export async function uploadFolderAsSingleStack(
     mediaType: defaults.collectionId ? 'image' : defaults.mediaType,
     tags: defaults.tags,
     author: defaults.author,
+    collectionId: defaults.collectionId,
   });
 
   const createdStackId = Number(stack.id);
   const assetIds: number[] = [];
-
-  if (defaults.collectionId) {
-    try {
-      await apiClient.addStackToCollection(defaults.collectionId, createdStackId);
-    } catch (error) {
-      console.warn('Failed to add stack to collection after single-stack import', error);
-    }
-  }
 
   const sequential = async () => {
     for (const file of rest) {

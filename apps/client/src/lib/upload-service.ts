@@ -61,19 +61,11 @@ export class UploadService {
               mediaType: batch.metadata?.collectionId ? 'image' : batch.metadata?.mediaType,
               tags: batch.metadata?.tags,
               author: batch.metadata?.author,
+              collectionId: batch.metadata?.collectionId,
               onProgress: (progress) => {
                 updateProgress(file.id, progress, 'uploading');
               },
             });
-
-            // If a collectionId is provided, add the new stack to that collection
-            if (batch.metadata?.collectionId && stack?.id) {
-              try {
-                await apiClient.addStackToCollection(batch.metadata.collectionId, Number(stack.id));
-              } catch (e) {
-                console.warn('Failed to add stack to collection after upload', e);
-              }
-            }
 
             updateProgress(file.id, 100, 'completed');
             file.result = {

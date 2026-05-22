@@ -1117,6 +1117,7 @@ class ApiClient {
       mediaType?: string;
       tags?: string[];
       author?: string;
+      collectionId?: number;
       onProgress?: (progress: number) => void;
     }
   ): Promise<Stack> {
@@ -1126,6 +1127,7 @@ class ApiClient {
     if (options?.datasetId) formData.append('dataSetId', options.datasetId);
     if (options?.mediaType) formData.append('mediaType', options.mediaType);
     if (options?.author) formData.append('author', options.author);
+    if (options?.collectionId) formData.append('collectionId', String(options.collectionId));
     if (options?.tags) {
       for (const tag of options.tags) {
         formData.append('tags[]', tag);

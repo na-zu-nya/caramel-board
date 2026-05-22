@@ -92,7 +92,7 @@ export default function SparseStackGrid({
       return null;
     }
 
-    const collectionMatch = window.location.pathname.match(/collections\/(\d+)/);
+    const collectionMatch = window.location.pathname.match(/(?:collections|scratch)\/(\d+)/);
     const collectionId = collectionMatch ? Number.parseInt(collectionMatch[1], 10) : undefined;
     const targetMediaType = collectionId ? 'image' : mediaType || undefined;
 
@@ -494,7 +494,7 @@ export default function SparseStackGrid({
         return;
       }
 
-      const collectionMatch = window.location.pathname.match(/collections\/(\d+)/);
+      const collectionMatch = window.location.pathname.match(/(?:collections|scratch)\/(\d+)/);
       const collectionId = collectionMatch ? Number.parseInt(collectionMatch[1], 10) : undefined;
       const targetMediaType = collectionId ? 'image' : mediaType || undefined;
 
