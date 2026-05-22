@@ -6,6 +6,7 @@ import { createPortal } from 'react-dom';
 import { StackGridItem } from '@/components/grid/StackGridItem.tsx';
 import { FolderDropDialog } from '@/components/modals/FolderDropDialog.tsx';
 import { DropZone } from '@/components/ui/DropZone';
+import { GridColumnSlider } from '@/components/ui/GridColumnSlider';
 import { HeaderIconButton } from '@/components/ui/Header/HeaderIconButton';
 import { SelectionActionBar } from '@/components/ui/selection-action-bar';
 import { useStackGrid } from '@/hooks/features/useStackGrid';
@@ -266,6 +267,7 @@ export default function SparseStackGrid({
     setIsEditPanelOpen,
     itemsPerRow,
     itemSize,
+    setGridColumns,
     favoriteStates,
     favoriteOverrides,
     handleItemClick,
@@ -389,10 +391,9 @@ export default function SparseStackGrid({
 
     const scrollTop = container.scrollTop;
     const clientHeight = container.clientHeight;
-    const headerOffset = 56;
 
     // Calculate visible area
-    const visibleTop = scrollTop - headerOffset;
+    const visibleTop = scrollTop;
     const visibleBottom = visibleTop + clientHeight;
 
     // Calculate which items should be visible
@@ -436,6 +437,10 @@ export default function SparseStackGrid({
     container.addEventListener('scroll', handleScroll);
     return () => container.removeEventListener('scroll', handleScroll);
   }, [containerRef, handleScroll]);
+
+  useEffect(() => {
+    handleScroll();
+  }, [handleScroll]);
 
   // Initial load
   useEffect(() => {
@@ -605,10 +610,10 @@ export default function SparseStackGrid({
         ref={containerRef}
         className={cn(
           // Smoothly follow sidebar/InfoPanel without reflow jumps
-          'h-full overflow-auto transition-[padding] duration-300 ease-in-out',
+          'h-full overflow-y-scroll overscroll-contain transition-[padding] duration-300 ease-in-out',
           infoSidebarOpen ? 'pr-80' : 'pr-0'
         )}
-        style={{ scrollBehavior: 'smooth' }}
+        style={{ scrollbarGutter: 'stable' }}
       >
         {/* Loading progress indicator */}
         {isLoading && (
@@ -738,6 +743,15 @@ export default function SparseStackGrid({
           infoSidebarOpen ? 'bg-blue-500 text-white' : 'text-white hover:bg-white/20'
         )}
       />
+
+      {createPortal(
+        <GridColumnSlider
+          value={itemsPerRow}
+          className={cn(infoSidebarOpen || isEditPanelOpen ? 'right-[21.25rem]' : 'right-5')}
+          onChange={setGridColumns}
+        />,
+        document.body
+      )}
 
       {/* Info Sidebar moved to root for persistent mounting */}
 

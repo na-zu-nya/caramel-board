@@ -305,7 +305,7 @@ export default function FilterPanel({
         ref={setPanelRef}
         data-filter-panel-root="true"
         className={cn(
-          'fixed top-16 right-4 h-[calc(100vh-5rem)] w-96 bg-white border border-gray-200 rounded-lg shadow-xl z-50 transform transition-transform duration-300 ease-in-out',
+          'fixed top-16 right-4 bottom-[68px] w-96 bg-white border border-gray-200 rounded-lg shadow-xl z-50 transform transition-transform duration-300 ease-in-out',
           isOpen ? 'translate-x-0' : 'translate-x-[calc(100%+1rem)]'
         )}
         style={{ touchAction: 'pan-y' }}

@@ -6,6 +6,7 @@ import { createPortal } from 'react-dom';
 import { StackGridItem } from '@/components/grid/StackGridItem.tsx';
 import { FolderDropDialog } from '@/components/modals/FolderDropDialog.tsx';
 import { DropZone } from '@/components/ui/DropZone';
+import { GridColumnSlider } from '@/components/ui/GridColumnSlider';
 import { HeaderIconButton } from '@/components/ui/Header/HeaderIconButton';
 import { SelectionActionBar } from '@/components/ui/selection-action-bar';
 import { useStackGrid } from '@/hooks/features/useStackGrid';
@@ -169,10 +170,12 @@ export default function StackGrid({
     isEditPanelOpen,
     setIsEditPanelOpen,
     finalVisibleItems,
+    totalContentHeight,
     topSpacerHeight,
     bottomSpacerHeight,
     itemSize,
     itemsPerRow,
+    setGridColumns,
     favoriteStates,
     favoriteOverrides,
     handleItemClick,
@@ -897,10 +900,8 @@ export default function StackGrid({
         {/* Virtual scrolling container */}
         <div
           style={{
-            minHeight: Math.max(
-              (finalVisibleItems?.length || 0) * itemSize + 56,
-              window.innerHeight - 56
-            ),
+            height: totalContentHeight,
+            minHeight: 0,
           }}
         >
           {/* Top spacer */}
@@ -913,6 +914,7 @@ export default function StackGrid({
             className="grid gap-0"
             style={{
               gridTemplateColumns: `repeat(${itemsPerRow}, 1fr)`,
+              gridAutoRows: `${itemSize}px`,
             }}
           >
             {(finalVisibleItems || []).map((item, index) => {
@@ -1070,6 +1072,15 @@ export default function StackGrid({
             : []
         }
       />
+
+      {createPortal(
+        <GridColumnSlider
+          value={itemsPerRow}
+          className={cn(infoSidebarOpen || isEditPanelOpen ? 'right-[21.25rem]' : 'right-5')}
+          onChange={setGridColumns}
+        />,
+        document.body
+      )}
 
       {activeFolder && (
         <FolderDropDialog
