@@ -107,6 +107,17 @@ interface VideoState {
   volume: number;
 }
 
+interface VideoFrameMetadata {
+  mediaTime: number;
+}
+
+interface VideoFrameCallbackVideoElement extends HTMLVideoElement {
+  requestVideoFrameCallback?: (
+    callback: (now: number, metadata: VideoFrameMetadata) => void
+  ) => number;
+  cancelVideoFrameCallback?: (handle: number) => void;
+}
+
 type DragImageStyle = CSSProperties & {
   WebkitUserDrag?: 'none' | 'auto' | 'element';
 };
@@ -168,6 +179,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
       volume: getViewerVolume(),
     });
     const [fps, setFps] = useState<number>(getViewerFps());
+    const [isTransportHovered, setIsTransportHovered] = useState(false);
     const [_isScrubbing, setIsScrubbing] = useState(false);
     const wasPlayingBeforeScrubRef = useRef<boolean>(false);
     const isScrubbingRef = useRef(false);
@@ -176,6 +188,9 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
     const shuttleAnimationFrameRef = useRef<number | null>(null);
     const shuttleLastTimestampRef = useRef<number | null>(null);
     const shuttleRestoreMutedRef = useRef<boolean | null>(null);
+    const displayedVideoTimeRef = useRef(0);
+    const frameStepTargetTimeRef = useRef<number | null>(null);
+    const videoFrameCallbackIdRef = useRef<number | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const backgroundRef = containerRef; // Use container as background ref
     const currentAssetRef = useRef<HTMLDivElement>(null);
@@ -288,6 +303,8 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
     }, []);
 
     const stopVideoShuttle = useCallback(() => {
+      const hadActiveShuttle =
+        shuttleAnimationFrameRef.current !== null || shuttleRestoreMutedRef.current !== null;
       if (shuttleAnimationFrameRef.current !== null) {
         cancelAnimationFrame(shuttleAnimationFrameRef.current);
         shuttleAnimationFrameRef.current = null;
@@ -297,6 +314,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
       const video = currentVideoRef.current;
       const restoreMuted = shuttleRestoreMutedRef.current;
       shuttleRestoreMutedRef.current = null;
+      if (!hadActiveShuttle) return;
       if (!video) return;
 
       if (restoreMuted !== null) {
@@ -366,12 +384,21 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
 
         const duration = Number.isFinite(video.duration) ? video.duration : videoState.duration;
         const frameStep = 1 / (fps || 30);
+        const currentTime = Number.isFinite(video.currentTime)
+          ? video.currentTime
+          : videoState.currentTime;
+        const displayedTime = displayedVideoTimeRef.current;
+        const displayedTimeIsUsable =
+          Number.isFinite(displayedTime) && Math.abs(displayedTime - currentTime) <= frameStep * 4;
+        const baseTime =
+          frameStepTargetTimeRef.current ?? (displayedTimeIsUsable ? displayedTime : currentTime);
         const nextTime = Math.min(
-          Math.max((video.currentTime || 0) + direction * frameStep, 0),
+          Math.max(baseTime + direction * frameStep, 0),
           Math.max(0, duration || 0)
         );
 
         video.pause();
+        frameStepTargetTimeRef.current = nextTime;
         video.currentTime = nextTime;
         setVideoState((prev) => ({
           ...prev,
@@ -380,7 +407,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
           isPlaying: false,
         }));
       },
-      [fps, stopVideoShuttle, videoState.duration]
+      [fps, stopVideoShuttle, videoState.currentTime, videoState.duration]
     );
 
     const handleTransportPlay = useCallback(() => {
@@ -388,8 +415,8 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
 
       const video = currentVideoRef.current;
       if (!video) return;
-      void video.play().catch(() => {});
-    }, [stopVideoShuttle]);
+      handleVideoToggle(video, currentAsset?.file || '');
+    }, [currentAsset, handleVideoToggle, stopVideoShuttle]);
 
     const handleTransportStepBackward = useCallback(() => {
       handleVideoStepFrame(-1);
@@ -457,7 +484,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
           const v = currentVideoRef.current;
           if (!v) return;
           const wasPlaying = !v.paused;
-          const dur = Number.isFinite(v.duration) ? v.duration : videoState.duration;
+          const dur = Number.isFinite(v.duration) ? v.duration : 0;
           const nt = Math.min(Math.max((v.currentTime || 0) + delta, 0), Math.max(0, dur));
           v.currentTime = nt;
           // UIの即時反映
@@ -471,7 +498,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
           const v = currentVideoRef.current;
           if (!v) return;
           const wasPlaying = !v.paused;
-          const dur = Number.isFinite(v.duration) ? v.duration : videoState.duration;
+          const dur = Number.isFinite(v.duration) ? v.duration : 0;
           const nt = Math.min(Math.max(time, 0), Math.max(0, dur));
           v.currentTime = nt;
           setVideoState((prev) => ({ ...prev, currentTime: nt, duration: dur }));
@@ -498,7 +525,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
           const v = currentVideoRef.current;
           if (!v) return;
           const wasPlaying = !v.paused;
-          const dur = Number.isFinite(v.duration) ? v.duration : videoState.duration;
+          const dur = Number.isFinite(v.duration) ? v.duration : 0;
           const frameStep = 1 / (fps || 30);
           const endTime = Math.max(0, dur - frameStep);
           v.currentTime = endTime;
@@ -555,7 +582,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
           const v = currentVideoRef.current;
           if (v && v.readyState >= 1) {
             // メタデータがあれば即適用（pendingは残し、後続の予期せぬ再レンダにも対応）
-            const dur = Number.isFinite(v.duration) ? v.duration : videoState.duration;
+            const dur = Number.isFinite(v.duration) ? v.duration : 0;
             const pl = pendingRestoreRef.current!;
             const clamped = Math.min(Math.max(pl.time, 0), Math.max(0, dur));
             v.currentTime = clamped;
@@ -573,7 +600,6 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
       }),
       [
         updateDOMTransforms,
-        videoState.duration,
         fps,
         backgroundRef.current,
         currentAsset?.file,
@@ -765,6 +791,10 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
             time: isScrubbingRef.current ? ct : v.currentTime || 0,
             wasPlaying: isScrubbingRef.current ? wasPlayingBeforeScrubRef.current : !v.paused,
           };
+          const frameCallbackVideo = v as VideoFrameCallbackVideoElement;
+          if (typeof frameCallbackVideo.requestVideoFrameCallback !== 'function') {
+            displayedVideoTimeRef.current = ct;
+          }
         }
         rafId = requestAnimationFrame(loop);
       };
@@ -1108,7 +1138,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
         // 可能なら直ちに再生状態を復元（pending → last の順で優先）
         const payload = pendingRestoreRef.current ?? lastPlaybackRef.current;
         if (payload) {
-          const dur = Number.isFinite(v.duration) ? v.duration : videoState.duration;
+          const dur = Number.isFinite(v.duration) ? v.duration : 0;
           const clamped = Math.min(Math.max(payload.time || 0, 0), Math.max(0, dur));
           if (Number.isFinite(clamped)) {
             v.currentTime = clamped;
@@ -1145,7 +1175,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
         // pending restore 優先
         const payload = pendingRestoreRef.current;
         if (payload && v.readyState >= 1) {
-          const dur = Number.isFinite(v.duration) ? v.duration : videoState.duration;
+          const dur = Number.isFinite(v.duration) ? v.duration : 0;
           const clamped = Math.min(Math.max(payload.time, 0), Math.max(0, dur));
           v.currentTime = clamped;
           setVideoState((prev) => ({
@@ -1162,7 +1192,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
           // pending が無い場合は、直近の再生状態に合わせる（初回の自動再生は別エフェクトで実行）
           const last = lastPlaybackRef.current;
           if (last) {
-            const dur = Number.isFinite(v.duration) ? v.duration : videoState.duration;
+            const dur = Number.isFinite(v.duration) ? v.duration : 0;
             const clamped = Math.min(Math.max(last.time || 0, 0), Math.max(0, dur));
             if (Number.isFinite(clamped)) {
               v.currentTime = clamped;
@@ -1195,6 +1225,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
       };
       const onSeeked = () => {
         const pendingSeekTime = pendingSeekTimeRef.current;
+        frameStepTargetTimeRef.current = null;
         setVideoState((prev) => ({
           ...prev,
           currentTime:
@@ -1206,6 +1237,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
         }));
       };
       const onPlay = () => {
+        frameStepTargetTimeRef.current = null;
         setVideoState((prev) => ({ ...prev, isPlaying: true, muted: v.muted, volume: v.volume }));
       };
       const onPause = () =>
@@ -1234,6 +1266,15 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
       v.addEventListener('click', onClick);
       v.addEventListener('touchend', onTouchEnd);
 
+      const frameCallbackVideo = v as VideoFrameCallbackVideoElement;
+      const watchVideoFrame = (_now: number, metadata: VideoFrameMetadata) => {
+        displayedVideoTimeRef.current = metadata.mediaTime;
+        videoFrameCallbackIdRef.current =
+          frameCallbackVideo.requestVideoFrameCallback?.(watchVideoFrame) ?? null;
+      };
+      videoFrameCallbackIdRef.current =
+        frameCallbackVideo.requestVideoFrameCallback?.(watchVideoFrame) ?? null;
+
       // 古い要素を除去して差し替え
       if (ownedVideoRef.current && ownedVideoRef.current.parentElement === host) {
         try {
@@ -1254,6 +1295,13 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
         v.removeEventListener('pause', onPause);
         v.removeEventListener('click', onClick);
         v.removeEventListener('touchend', onTouchEnd);
+        if (
+          videoFrameCallbackIdRef.current !== null &&
+          typeof frameCallbackVideo.cancelVideoFrameCallback === 'function'
+        ) {
+          frameCallbackVideo.cancelVideoFrameCallback(videoFrameCallbackIdRef.current);
+          videoFrameCallbackIdRef.current = null;
+        }
       };
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [
@@ -1263,7 +1311,6 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
       handleVideoToggle,
       releaseOwnedVideo,
       stopVideoShuttle,
-      videoState.duration,
     ]);
 
     return (
@@ -1327,14 +1374,20 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
 
         {isCurrentVideo && (
           <div
-            className={cn(
-              'absolute left-1/2 z-30 -translate-x-1/2',
-              videoState.isPlaying ? 'pointer-events-none' : 'pointer-events-auto'
-            )}
+            className="pointer-events-auto absolute left-1/2 z-30 -translate-x-1/2"
             style={{ bottom: 'max(4rem, calc(env(safe-area-inset-bottom) + 3rem))' }}
+            onPointerEnter={(e) => {
+              if (e.pointerType !== 'mouse') return;
+              setIsTransportHovered(true);
+            }}
+            onPointerLeave={(e) => {
+              if (e.pointerType !== 'mouse') return;
+              setIsTransportHovered(false);
+            }}
           >
             <VideoTransportControls
-              hidden={videoState.isPlaying}
+              hidden={videoState.isPlaying && !isTransportHovered}
+              isPlaying={videoState.isPlaying}
               onPlay={handleTransportPlay}
               onStepBackward={handleTransportStepBackward}
               onStepForward={handleTransportStepForward}

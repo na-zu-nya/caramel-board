@@ -1,4 +1,4 @@
-import { FastForward, Play, Rewind, StepBack, StepForward } from 'lucide-react';
+import { FastForward, Pause, Play, Rewind, StepBack, StepForward } from 'lucide-react';
 import type { MouseEvent, PointerEvent, ReactNode } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 interface VideoTransportControlsProps {
   className?: string;
   hidden?: boolean;
+  isPlaying?: boolean;
   onPlay: () => void;
   onStepBackward: () => void;
   onStepForward: () => void;
@@ -105,6 +106,7 @@ function HoldButton({
 export function VideoTransportControls({
   className,
   hidden = false,
+  isPlaying = false,
   onPlay,
   onStepBackward,
   onStepForward,
@@ -231,8 +233,8 @@ export function VideoTransportControls({
       </button>
       <button
         type="button"
-        aria-label="Play"
-        title="Play"
+        aria-label={isPlaying ? 'Pause' : 'Play'}
+        title={isPlaying ? 'Pause' : 'Play'}
         className={cn(
           baseButtonClassName,
           'w-12',
@@ -240,7 +242,11 @@ export function VideoTransportControls({
         )}
         onClick={handlePlay}
       >
-        <Play className="h-5 w-5 fill-current" aria-hidden />
+        {isPlaying ? (
+          <Pause className="h-5 w-5 fill-current" aria-hidden />
+        ) : (
+          <Play className="h-5 w-5 fill-current" aria-hidden />
+        )}
       </button>
       <button
         type="button"
