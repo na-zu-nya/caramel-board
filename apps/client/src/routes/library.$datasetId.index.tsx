@@ -60,7 +60,7 @@ function DatasetHome() {
       const res = await apiClient.getStacks({
         datasetId,
         filter: { collectionId: String(scratch.id) },
-        sort: { field: 'updatedAt', order: 'desc' },
+        sort: { field: 'updated', order: 'desc' },
         limit: 10,
         offset: 0,
       });
@@ -354,7 +354,7 @@ function CollectionCard({
       const res = await apiClient.getStacks({
         datasetId,
         filter: { collectionId: String(id) },
-        sort: { field: 'updatedAt', order: 'desc' },
+        sort: { field: 'updated', order: 'desc' },
         limit: 1,
         offset: 0,
       });

@@ -18,6 +18,7 @@ import {
 } from '../schemas/index.js';
 import { SearchQuerySchema } from '../schemas/search-schema.js';
 import { AutoTagService } from '../shared/services/AutoTagService';
+import { CollectionService } from '../shared/services/CollectionService';
 import { DataSetService } from '../shared/services/DataSetService';
 import { toPublicAssetPath, withPublicAssetArray } from '../utils/assetPath';
 
@@ -196,6 +197,94 @@ app.get(
     } catch (error) {
       console.error('Error fetching similar stacks:', error);
       return c.json({ error: 'Failed to fetch similar stacks' }, 500);
+    }
+  }
+);
+
+// コレクション全体のタグ/AutoTag プロファイルから類似スタックを取得
+app.get(
+  '/:dataSetId/collections/:collectionId/similar',
+  zValidator(
+    'param',
+    z.object({
+      dataSetId: z.coerce.number().int().positive(),
+      collectionId: z.coerce.number().int().positive(),
+    })
+  ),
+  zValidator(
+    'query',
+    z.object({
+      limit: z.coerce.number().int().min(1).max(100).optional().default(50),
+      offset: z.coerce.number().int().min(0).optional().default(0),
+      threshold: z.coerce.number().min(0).max(1).optional(),
+    })
+  ),
+  async (c) => {
+    try {
+      const dataSetId = c.get('dataSetId') as number;
+      const { collectionId } = c.req.valid('param');
+      const { limit, offset, threshold } = c.req.valid('query');
+
+      const collection = await prisma.collection.findUnique({
+        where: { id: collectionId },
+        select: { id: true, dataSetId: true, type: true },
+      });
+
+      if (!collection || collection.dataSetId !== dataSetId) {
+        return c.json({ error: 'Collection not found' }, 404);
+      }
+
+      const searchService = c.get('searchService');
+      if (!searchService) return c.json({ error: 'Search service not available' }, 500);
+
+      let sourceStackIds: number[] = [];
+      if (collection.type === 'SMART') {
+        const collectionService = new CollectionService(prisma);
+        const smartStacks = await collectionService.getStacksByFilter(collectionId, 5000, 0);
+        sourceStackIds = smartStacks.stacks.map((stack) => stack.id);
+      } else {
+        const rows = await prisma.collectionStack.findMany({
+          where: { collectionId },
+          select: { stackId: true },
+        });
+        sourceStackIds = rows.map((row) => row.stackId);
+      }
+
+      const result = await searchService.searchSimilarByStackIds(sourceStackIds, {
+        limit,
+        offset,
+        threshold,
+      });
+
+      const ids = result.stacks.map((stack) => stack.id);
+      let assetCountMap = new Map<number, number>();
+      if (ids.length > 0) {
+        const counts = await prisma.asset.groupBy({
+          by: ['stackId'],
+          where: { stackId: { in: ids } },
+          _count: { stackId: true },
+        });
+        assetCountMap = new Map(counts.map((count) => [count.stackId, count._count.stackId]));
+      }
+
+      const stacks = result.stacks.map((stack) => {
+        const stackWithAssets = stack as StackWithAssets;
+        const assets = Array.isArray(stackWithAssets.assets)
+          ? withPublicAssetArray(stackWithAssets.assets, dataSetId)
+          : [];
+
+        return {
+          ...stack,
+          assets,
+          thumbnail: toPublicAssetPath(stack.thumbnail, dataSetId),
+          assetCount: assetCountMap.get(stack.id) ?? 0,
+        };
+      });
+
+      return c.json({ stacks, total: result.total, limit: result.limit, offset: result.offset });
+    } catch (error) {
+      console.error('Error fetching similar stacks for collection:', error);
+      return c.json({ error: 'Failed to fetch collection similar stacks' }, 500);
     }
   }
 );

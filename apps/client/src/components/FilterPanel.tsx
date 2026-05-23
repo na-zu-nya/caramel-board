@@ -36,7 +36,6 @@ import {
 } from '@/components/ui/select';
 import { SuggestInput } from '@/components/ui/suggest-input';
 import { useSwipeClose } from '@/hooks/features/useSwipeClose';
-import { useDebounce } from '@/hooks/utils/useDebounce';
 import { apiClient } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 import { customColorAtom, filterOpenAtom, selectionModeAtom } from '@/stores/ui';
@@ -91,11 +90,6 @@ export default function FilterPanel({
   const datasetId = (params as { datasetId?: string }).datasetId;
   const queryClient = useQueryClient();
 
-  // カラー類似度閾値状態
-  const [_colorSimilarityThreshold, setColorSimilarityThreshold] = useState(
-    localFilter.colorFilter?.similarityThreshold || 85
-  );
-
   // Smart collection dialog state
   const [isSmartCollectionDialogOpen, setIsSmartCollectionDialogOpen] = useState(false);
   const [smartCollectionName, setSmartCollectionName] = useState('');
@@ -119,23 +113,9 @@ export default function FilterPanel({
     [swipeRef]
   );
 
-  // デバウンスされた類似度閾値更新
-  const _debouncedSimilarityUpdate = useDebounce((threshold: number) => {
-    updateFilter(
-      {
-        colorFilter: {
-          ...localFilter.colorFilter,
-          similarityThreshold: threshold,
-        },
-      },
-      true
-    );
-  }, 150);
-
   // Update local filter when props change
   useEffect(() => {
     setLocalFilter(currentFilter);
-    setColorSimilarityThreshold(currentFilter.colorFilter?.similarityThreshold || 85);
   }, [currentFilter]);
 
   // Convert filter to config format
@@ -220,6 +200,25 @@ export default function FilterPanel({
     },
     [localFilter, onFilterChange, debouncedFilterChange]
   );
+
+  const updateColorSimilarityThreshold = useCallback(
+    (value: number) => {
+      const threshold = Math.max(0, Math.min(100, value));
+      updateFilter(
+        {
+          colorFilter: {
+            ...localFilter.colorFilter,
+            similarityThreshold: threshold > 0 ? threshold : undefined,
+          },
+        },
+        false
+      );
+    },
+    [localFilter.colorFilter, updateFilter]
+  );
+
+  const colorSimilarityThreshold = localFilter.colorFilter?.similarityThreshold ?? 0;
+  const hasHueSelection = Boolean(localFilter.colorFilter?.hueCategories?.length);
 
   const clearFilter = () => {
     if (isSmartCollection && originalFilterConfig) {
@@ -643,7 +642,7 @@ export default function FilterPanel({
 
               {/* Color Categories */}
               <div className="space-y-2">
-                <div className="text-xs font-medium text-gray-600">色味 (Color)</div>
+                <div className="text-xs font-medium text-gray-600">Color</div>
                 <div className="flex gap-2 justify-between">
                   {HUE_CATEGORIES.map((hue) => {
                     const isSelected =
@@ -659,8 +658,9 @@ export default function FilterPanel({
                               colorFilter: {
                                 ...localFilter.colorFilter,
                                 hueCategories: nextCategories,
-                                // 類似度は一旦無効化
-                                similarityThreshold: undefined,
+                                similarityThreshold: nextCategories
+                                  ? localFilter.colorFilter?.similarityThreshold
+                                  : undefined,
                                 // カスタムカラーは排他
                                 customColor: undefined,
                               },
@@ -732,86 +732,35 @@ export default function FilterPanel({
                     />
                   </div>
                 </div>
-                {/* Selected color badges */}
-                {((localFilter.colorFilter?.hueCategories &&
-                  localFilter.colorFilter.hueCategories.length > 0) ||
-                  localFilter.colorFilter?.customColor) && (
-                  <div className="flex flex-wrap gap-1">
-                    {/* Hue category badges */}
-                    {localFilter.colorFilter?.hueCategories?.map((categoryId) => {
-                      const category = HUE_CATEGORIES.find((h) => h.id === categoryId);
-                      return category ? (
-                        <Badge
-                          key={categoryId}
-                          variant="secondary"
-                          className="text-xs cursor-pointer bg-gray-200 text-gray-700 hover:bg-red-100 hover:text-red-700 transition-colors"
-                          onClick={() => {
-                            const newCategories = undefined; // 単色モード: バッジクリックで解除
-                            updateFilter(
-                              {
-                                colorFilter: {
-                                  ...localFilter.colorFilter,
-                                  hueCategories: newCategories,
-                                  similarityThreshold: undefined,
-                                },
-                              },
-                              true
-                            );
-                          }}
-                        >
-                          {category.name}
-                          <X size={10} className="ml-1" />
-                        </Badge>
-                      ) : null;
-                    })}
-
-                    {/* Custom color badge */}
-                    {localFilter.colorFilter?.customColor && (
-                      <Badge
-                        variant="secondary"
-                        className="text-xs cursor-pointer bg-gray-200 text-gray-700 hover:bg-red-100 hover:text-red-700 transition-colors flex items-center gap-1"
-                        onClick={() => {
-                          updateFilter(
-                            {
-                              colorFilter: {
-                                ...localFilter.colorFilter,
-                                customColor: undefined,
-                                // カスタムカラーがなくなったら類似度閾値もクリア
-                                similarityThreshold:
-                                  localFilter.colorFilter?.hueCategories &&
-                                  localFilter.colorFilter.hueCategories.length > 0
-                                    ? localFilter.colorFilter?.similarityThreshold
-                                    : undefined,
-                              },
-                            },
-                            true
-                          );
-                        }}
-                      >
-                        <div
-                          className="w-2 h-2 rounded-full border border-gray-400"
-                          style={{ backgroundColor: localFilter.colorFilter.customColor }}
-                        />
-                        カスタム
-                        <X size={10} className="ml-1" />
-                      </Badge>
-                    )}
+                {hasHueSelection && (
+                  <div className="flex items-center gap-2 pt-1 text-xs text-gray-600">
+                    <span className="shrink-0">Match</span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      value={colorSimilarityThreshold}
+                      onChange={(event) =>
+                        updateColorSimilarityThreshold(Number(event.currentTarget.value))
+                      }
+                      className="flex-1 accent-primary"
+                    />
+                    <span className="tabular-nums w-8 text-right">{colorSimilarityThreshold}</span>
                   </div>
                 )}
               </div>
 
-              {/* 類似度は一時無効化中 */}
-
               {/* Clear Color Filter */}
               {(localFilter.colorFilter?.hueCategories?.length ||
                 localFilter.colorFilter?.tonePoint ||
+                localFilter.colorFilter?.toneSaturation !== undefined ||
+                localFilter.colorFilter?.toneLightness !== undefined ||
                 localFilter.colorFilter?.similarityThreshold ||
                 localFilter.colorFilter?.customColor) && (
                 <button
                   type="button"
                   onClick={() => {
                     updateFilter({ colorFilter: undefined }, true);
-                    setColorSimilarityThreshold(85);
                   }}
                   className="text-xs text-red-600 hover:text-red-800 underline"
                 >
@@ -869,10 +818,10 @@ export default function FilterPanel({
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="recommended">Recommended</SelectItem>
-                      <SelectItem value="id">Date Added</SelectItem>
+                      <SelectItem value="dateAdded">Date Added</SelectItem>
                       <SelectItem value="name">Name</SelectItem>
-                      <SelectItem value="liked">Most Liked</SelectItem>
-                      <SelectItem value="updatedAt">Recently Updated</SelectItem>
+                      <SelectItem value="likes">Most Liked</SelectItem>
+                      <SelectItem value="updated">Recently Updated</SelectItem>
                     </SelectContent>
                   </Select>
                   <div className="flex gap-2">

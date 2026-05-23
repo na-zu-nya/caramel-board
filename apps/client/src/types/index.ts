@@ -34,6 +34,8 @@ export interface DominantColor {
 export interface ColorFilter {
   hueCategories?: string[];
   tonePoint?: { saturation: number; lightness: number };
+  toneSaturation?: number;
+  toneLightness?: number;
   toneTolerance?: number;
   similarityThreshold?: number; // 0-100 (選択した色相に対する類似度のパーセンテージ)
   customColor?: string; // カスタムカラー (hex形式)
@@ -343,12 +345,10 @@ export interface StackFilter {
 
 export type SortField =
   | 'recommended'
-  | 'likeCount'
-  | 'createdAt'
-  | 'updatedAt'
+  | 'dateAdded'
+  | 'likes'
+  | 'updated'
   | 'name'
-  | 'updateAt'
-  | 'liked'
   | 'favorited'
   | 'assetCount';
 export type SortOrder = 'asc' | 'desc';

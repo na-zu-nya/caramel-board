@@ -73,14 +73,13 @@ function FavoritesPage() {
       switch (currentSort.field) {
         case 'name':
           return direction * String(left.name ?? '').localeCompare(String(right.name ?? ''));
-        case 'liked':
+        case 'likes':
           return (
             direction *
             (Number(left.likeCount ?? left.liked ?? 0) -
               Number(right.likeCount ?? right.liked ?? 0))
           );
-        case 'updatedAt':
-        case 'updateAt':
+        case 'updated':
           return (
             direction *
             (new Date(String(left.updatedAt ?? 0)).getTime() -

@@ -15,6 +15,47 @@ import type {
 
 const API_BASE_URL = '';
 
+const API_SORT_FIELDS = ['recommended', 'dateAdded', 'name', 'likes', 'updated'] as const;
+type ApiSortField = (typeof API_SORT_FIELDS)[number];
+type ApiSortOrder = 'asc' | 'desc';
+type StackWire = Stack & {
+  updateAt?: string;
+  liked?: unknown;
+  likeCount?: unknown;
+  favorited?: unknown;
+  isFavorite?: unknown;
+  assetCount?: unknown;
+  assetsCount?: unknown;
+};
+
+const LEGACY_SORT_FIELD_MAP: Record<string, ApiSortField> = {
+  id: 'dateAdded',
+  createdAt: 'dateAdded',
+  liked: 'likes',
+  likeCount: 'likes',
+  updatedAt: 'updated',
+  updateAt: 'updated',
+};
+
+function normalizeSortField(field: string | undefined): ApiSortField {
+  if (!field) return 'recommended';
+  if ((API_SORT_FIELDS as readonly string[]).includes(field)) return field as ApiSortField;
+  return LEGACY_SORT_FIELD_MAP[field] ?? 'recommended';
+}
+
+function normalizeSortOrder(order: string | undefined): ApiSortOrder {
+  return order === 'asc' ? 'asc' : 'desc';
+}
+
+function appendSortParams(
+  queryParams: URLSearchParams,
+  sort: { field?: string; order?: string } | undefined
+) {
+  if (!sort) return;
+  queryParams.append('sort', normalizeSortField(sort.field));
+  queryParams.append('order', normalizeSortOrder(sort.order));
+}
+
 class ApiClient {
   private baseUrl: string;
 
@@ -191,18 +232,26 @@ class ApiClient {
             // 色域フィルタをクエリパラメータに変換
             const colorFilter = value as any;
             if (colorFilter.hueCategories && colorFilter.hueCategories.length > 0) {
-              colorFilter.hueCategories.forEach((hue: string) => {
+              for (const hue of colorFilter.hueCategories) {
                 queryParams.append('hueCategories', hue);
-              });
+              }
             }
             if (colorFilter.tonePoint) {
               queryParams.append('toneSaturation', String(colorFilter.tonePoint.saturation));
               queryParams.append('toneLightness', String(colorFilter.tonePoint.lightness));
             }
+            if (colorFilter.toneSaturation !== undefined && colorFilter.tonePoint === undefined) {
+              queryParams.append('toneSaturation', String(colorFilter.toneSaturation));
+            }
+            if (colorFilter.toneLightness !== undefined && colorFilter.tonePoint === undefined) {
+              queryParams.append('toneLightness', String(colorFilter.toneLightness));
+            }
             if (colorFilter.toneTolerance !== undefined) {
               queryParams.append('toneTolerance', String(colorFilter.toneTolerance));
             }
-            // similarityThreshold 一時無効化
+            if (colorFilter.similarityThreshold !== undefined) {
+              queryParams.append('similarityThreshold', String(colorFilter.similarityThreshold));
+            }
             if (colorFilter.customColor !== undefined) {
               queryParams.append('customColor', String(colorFilter.customColor));
             }
@@ -222,10 +271,7 @@ class ApiClient {
       }
     }
 
-    if (params.sort && params.sort.field !== 'recommended') {
-      queryParams.append('sort', params.sort.field);
-      queryParams.append('order', params.sort.order);
-    }
+    appendSortParams(queryParams, params.sort);
 
     if (params.limit) queryParams.append('limit', String(params.limit));
     if (params.offset) queryParams.append('offset', String(params.offset));
@@ -259,8 +305,8 @@ class ApiClient {
       search: params.search,
       hasNoTags: params.hasNoTags,
       hasNoAuthor: params.hasNoAuthor,
-      sort: params.sort,
-      order: params.order,
+      sort: params.sort ? normalizeSortField(String(params.sort)) : undefined,
+      order: params.order ? normalizeSortOrder(String(params.order)) : undefined,
     };
 
     // Convert clean parameters to query string
@@ -306,6 +352,26 @@ class ApiClient {
     if (threshold !== undefined) query.append('threshold', String(threshold));
     const response = await this.fetch<StackPaginatedResponse>(
       `/api/v1/datasets/${datasetId}/stacks/${stackId}/similar${
+        query.toString() ? `?${query}` : ''
+      }`
+    );
+    return this.normalizeStackResponse(response);
+  }
+
+  async getCollectionSimilarStacks(params: {
+    datasetId: string | number;
+    collectionId: string | number;
+    limit?: number;
+    offset?: number;
+    threshold?: number;
+  }): Promise<StackPaginatedResponse> {
+    const { datasetId, collectionId, limit, offset, threshold } = params;
+    const query = new URLSearchParams();
+    if (limit !== undefined) query.append('limit', String(limit));
+    if (offset !== undefined) query.append('offset', String(offset));
+    if (threshold !== undefined) query.append('threshold', String(threshold));
+    const response = await this.fetch<StackPaginatedResponse>(
+      `/api/v1/datasets/${datasetId}/collections/${collectionId}/similar${
         query.toString() ? `?${query}` : ''
       }`
     );
@@ -1389,24 +1455,25 @@ class ApiClient {
   }
 
   private normalizeStack(stack: Stack): Stack {
-    const likedRaw = (stack as any).liked ?? (stack as any).likeCount ?? 0;
+    const wire = stack as StackWire;
+    const likedRaw = wire.liked ?? wire.likeCount ?? 0;
     const liked = typeof likedRaw === 'number' ? likedRaw : Number(likedRaw) || 0;
 
-    const likeCountRaw = (stack as any).likeCount ?? liked;
+    const likeCountRaw = wire.likeCount ?? liked;
     const likeCount = typeof likeCountRaw === 'number' ? likeCountRaw : Number(likeCountRaw) || 0;
 
-    const favoritedRaw = (stack as any).favorited ?? (stack as any).isFavorite ?? false;
+    const favoritedRaw = wire.favorited ?? wire.isFavorite ?? false;
     const favorited = Boolean(favoritedRaw);
 
     const assetCountRaw =
-      (stack as any).assetCount ??
-      (stack as any).assetsCount ??
-      (Array.isArray((stack as any).assets) ? (stack as any).assets.length : undefined);
+      wire.assetCount ?? wire.assetsCount ?? (Array.isArray(wire.assets) ? wire.assets.length : 0);
     const assetCount =
       typeof assetCountRaw === 'number' ? assetCountRaw : Number(assetCountRaw) || 0;
+    const updatedAt = wire.updatedAt ?? wire.updateAt ?? wire.createdAt;
 
     return {
       ...stack,
+      updatedAt,
       liked,
       likeCount,
       favorited,

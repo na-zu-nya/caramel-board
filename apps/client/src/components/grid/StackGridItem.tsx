@@ -41,6 +41,11 @@ import { navigationStateAtom } from '@/stores/navigation';
 import { currentFilterAtom, infoSidebarOpenAtom, selectedItemIdAtom } from '@/stores/ui';
 import type { MediaGridItem } from '@/types';
 
+const getCurrentReturnTo = () => {
+  if (typeof window === 'undefined') return undefined;
+  return `${window.location.pathname}${window.location.search}${window.location.hash}`;
+};
+
 interface StackGridItemProps {
   item: MediaGridItem;
   isSelected: boolean;
@@ -121,6 +126,14 @@ export function StackGridItem({
     (selectedStackIdsInOrder?.length ?? 0) >= 2 &&
     !!selectedItems?.has(item.id) &&
     typeof onMergeStacks === 'function';
+  const returnTo = getCurrentReturnTo();
+  const stackLinkSearch = {
+    ...(favoriteKind === 'asset' && typeof item.favoritePage === 'number'
+      ? { page: item.favoritePage - 1 }
+      : {}),
+    ...(item.mediaType ? { mediaType: item.mediaType } : {}),
+    ...(returnTo ? { returnTo } : {}),
+  };
   const getDownloadStackIds = useCallback((): Array<string | number> => {
     if (isSelectionMode && selectedItems?.has(item.id)) {
       if (selectedStackIdsInOrder && selectedStackIdsInOrder.length > 0) {
@@ -260,11 +273,7 @@ export function StackGridItem({
           key={item.id}
           to="/library/$datasetId/stacks/$stackId"
           params={{ datasetId, stackId: String(getStackId()) }}
-          search={
-            favoriteKind === 'asset' && typeof item.favoritePage === 'number'
-              ? { page: item.favoritePage - 1 }
-              : undefined
-          }
+          search={stackLinkSearch}
           data-item-id={item.id}
           className={cn(
             'group relative aspect-square overflow-hidden cursor-pointer transition-transform duration-150 box-border block',

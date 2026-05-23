@@ -8,7 +8,11 @@ interface UseStackNavigationProps {
   currentPage?: number;
   singleStack?: boolean;
   createLink?: (stackId: string) => string;
+  returnTo?: string;
 }
+
+const isInternalReturnTo = (value?: string): value is string =>
+  typeof value === 'string' && value.startsWith('/') && !value.startsWith('//');
 
 export function useStackNavigation({
   currentStackId,
@@ -16,6 +20,7 @@ export function useStackNavigation({
   currentPage = 0,
   singleStack = false,
   createLink,
+  returnTo,
 }: UseStackNavigationProps) {
   const navigate = useNavigate();
   const router = useRouter();
@@ -53,10 +58,10 @@ export function useStackNavigation({
     (stackId: string | number, page = 0) => {
       if (createLink) {
         const link = createLink(String(stackId));
-        navigate({ to: link, search: { page } });
+        navigate({ to: link, search: { page, returnTo } });
       }
     },
-    [createLink, navigate]
+    [createLink, navigate, returnTo]
   );
 
   // Navigate to the next asset or stack
@@ -86,6 +91,11 @@ export function useStackNavigation({
 
   // Navigate back to the list
   const navigateBack = useCallback(() => {
+    if (isInternalReturnTo(returnTo)) {
+      navigate({ to: returnTo, replace: true });
+      return;
+    }
+
     const state = router.state;
     const previousLocation = state.location;
     const searchParams = new URLSearchParams(previousLocation.search);
@@ -120,7 +130,7 @@ export function useStackNavigation({
         }
       }
     }
-  }, [navigate, router]);
+  }, [navigate, returnTo, router]);
 
   // Shuffle navigation
   const navigateShuffle = useCallback(() => {

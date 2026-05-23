@@ -265,7 +265,7 @@ export const createSearchService = (deps: {
 
   const fetchAutoCandidates = async (
     tags: string[],
-    referenceStackId: number
+    excludedStackIds: number[]
   ): Promise<Array<{ stackId: number; shared: number }>> => {
     if (!tags.length) return [];
 
@@ -279,7 +279,7 @@ export const createSearchService = (deps: {
         JOIN "Stack" s ON s.id = agg."stackId"
         JOIN LATERAL jsonb_array_elements(agg."topTags"::jsonb) elem ON TRUE
        WHERE s."dataSetId" = $1
-         AND agg."stackId" <> $3
+         AND NOT (agg."stackId" = ANY($3::int[]))
          AND LOWER(elem->>'tag') = ANY($2::text[])
          AND (elem->>'score')::float >= $4
        GROUP BY agg."stackId"
@@ -292,7 +292,7 @@ export const createSearchService = (deps: {
       query,
       dataSetId,
       tags,
-      referenceStackId,
+      excludedStackIds,
       SIMILAR_CONFIG.autoMinScore,
       overlap,
       SIMILAR_CONFIG.candidateLimit
@@ -301,7 +301,7 @@ export const createSearchService = (deps: {
 
   const fetchManualCandidates = async (
     tags: string[],
-    referenceStackId: number
+    excludedStackIds: number[]
   ): Promise<Array<{ stackId: number; shared: number }>> => {
     if (!tags.length) return [];
 
@@ -315,7 +315,7 @@ export const createSearchService = (deps: {
         JOIN "Tag" t ON t.id = tos."tagId"
         JOIN "Stack" s ON s.id = tos."stackId"
        WHERE s."dataSetId" = $1
-         AND tos."stackId" <> $3
+         AND NOT (tos."stackId" = ANY($3::int[]))
          AND LOWER(t.title) = ANY($2::text[])
        GROUP BY tos."stackId"
       HAVING COUNT(*) >= $4
@@ -327,7 +327,7 @@ export const createSearchService = (deps: {
       query,
       dataSetId,
       tags,
-      referenceStackId,
+      excludedStackIds,
       overlap,
       SIMILAR_CONFIG.candidateLimit
     );
@@ -355,52 +355,95 @@ export const createSearchService = (deps: {
     return hasManual ? weight * SIMILAR_CONFIG.manualWeightMultiplierOnIdf : weight;
   };
 
-  const runSimilarSearch = async (request: SearchRequest): Promise<SimilarSearchResult> => {
-    if (!request.referenceStackId) {
-      throw new Error('referenceStackId is required for similar search');
+  const buildReferenceVectors = async (
+    stackIds: number[],
+    stopTags: Set<string>
+  ): Promise<SimilarVectors> => {
+    const uniqueStackIds = Array.from(new Set(stackIds)).filter((id) => Number.isFinite(id));
+    if (!uniqueStackIds.length) {
+      return { auto: new Map(), manual: new Set() };
     }
 
-    const stopTags = await getStopTags();
-
-    const refAggregate = await prisma.stackAutoTagAggregate.findUnique({
-      where: { stackId: request.referenceStackId },
-      select: { topTags: true },
-    });
-
-    if (!refAggregate?.topTags) {
-      return { stackIds: [], scores: new Map() };
-    }
-
-    const refAuto = extractAutoTagVector(refAggregate.topTags, {
-      limit: SIMILAR_CONFIG.autoTopN,
-      minScore: SIMILAR_CONFIG.autoMinScore,
-      stopTags,
-    });
-
-    const refManualMap = await fetchManualTagSets([request.referenceStackId], stopTags);
-    const refManual = refManualMap.get(request.referenceStackId) ?? new Set<string>();
-
-    if (refAuto.size === 0 && refManual.size === 0) {
-      return { stackIds: [], scores: new Map() };
-    }
-
-    const autoProbe = Array.from(refAuto.keys()).slice(0, SIMILAR_CONFIG.autoProbeCount);
-    const manualProbe = Array.from(refManual.values());
-
-    const [autoCandidates, manualCandidates] = await Promise.all([
-      fetchAutoCandidates(autoProbe, request.referenceStackId),
-      fetchManualCandidates(manualProbe, request.referenceStackId),
+    const [aggregates, manualMap] = await Promise.all([
+      prisma.stackAutoTagAggregate.findMany({
+        where: { stackId: { in: uniqueStackIds } },
+        select: { stackId: true, topTags: true },
+      }),
+      fetchManualTagSets(uniqueStackIds, stopTags),
     ]);
 
+    const autoScores = new Map<string, number>();
+    for (const aggregate of aggregates) {
+      const vector = extractAutoTagVector(aggregate.topTags, {
+        limit: SIMILAR_CONFIG.autoTopN,
+        minScore: SIMILAR_CONFIG.autoMinScore,
+        stopTags,
+      });
+      for (const [tag, score] of vector) {
+        autoScores.set(tag, (autoScores.get(tag) ?? 0) + score);
+      }
+    }
+
+    const sourceCount = Math.max(uniqueStackIds.length, 1);
+    const auto = new Map(
+      Array.from(autoScores.entries())
+        .map(([tag, score]) => [tag, Math.min(1, score / sourceCount)] as const)
+        .filter(([, score]) => score > 0)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, SIMILAR_CONFIG.autoTopN)
+    );
+
+    const manualCounts = new Map<string, number>();
+    for (const stackId of uniqueStackIds) {
+      const tags = manualMap.get(stackId);
+      if (!tags) continue;
+      for (const tag of tags) {
+        manualCounts.set(tag, (manualCounts.get(tag) ?? 0) + 1);
+      }
+    }
+
+    const manual = new Set(
+      Array.from(manualCounts.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, SIMILAR_CONFIG.manualTopN)
+        .map(([tag]) => tag)
+    );
+
+    return { auto, manual };
+  };
+
+  const runSimilarSearchFromVectors = async (
+    reference: SimilarVectors,
+    excludedStackIds: number[],
+    thresholdValue?: number
+  ): Promise<SimilarSearchResult> => {
+    if (reference.auto.size === 0 && reference.manual.size === 0) {
+      return { stackIds: [], scores: new Map() };
+    }
+
+    const autoProbe = Array.from(reference.auto.keys()).slice(0, SIMILAR_CONFIG.autoProbeCount);
+    const manualProbe = Array.from(reference.manual.values());
+
+    const [autoCandidates, manualCandidates] = await Promise.all([
+      fetchAutoCandidates(autoProbe, excludedStackIds),
+      fetchManualCandidates(manualProbe, excludedStackIds),
+    ]);
+
+    const excluded = new Set(excludedStackIds);
     const candidateIdSet = new Set<number>();
-    for (const row of autoCandidates) candidateIdSet.add(row.stackId);
-    for (const row of manualCandidates) candidateIdSet.add(row.stackId);
+    for (const row of autoCandidates) {
+      if (!excluded.has(row.stackId)) candidateIdSet.add(row.stackId);
+    }
+    for (const row of manualCandidates) {
+      if (!excluded.has(row.stackId)) candidateIdSet.add(row.stackId);
+    }
 
     if (!candidateIdSet.size) {
       return { stackIds: [], scores: new Map() };
     }
 
     const candidateIds = Array.from(candidateIdSet);
+    const stopTags = await getStopTags();
 
     const [candidateAggregates, candidateManualMap] = await Promise.all([
       prisma.stackAutoTagAggregate.findMany({
@@ -409,20 +452,26 @@ export const createSearchService = (deps: {
       }),
       fetchManualTagSets(candidateIds, stopTags),
     ]);
+    const aggregateMap = new Map(
+      candidateAggregates.map((aggregate) => [aggregate.stackId, aggregate])
+    );
 
     const candidates: CandidateVectors[] = [];
-    const autoUniverse = new Set<string>(refAuto.keys());
-    const manualUniverse = new Set<string>(refManual);
+    const autoUniverse = new Set<string>(reference.auto.keys());
+    const manualUniverse = new Set<string>(reference.manual);
 
-    for (const agg of candidateAggregates) {
-      const auto = extractAutoTagVector(agg.topTags, {
-        limit: SIMILAR_CONFIG.autoTopN,
-        minScore: SIMILAR_CONFIG.autoMinScore,
-        stopTags,
-      });
-      const manual = candidateManualMap.get(agg.stackId) ?? new Set<string>();
+    for (const candidateId of candidateIds) {
+      const aggregate = aggregateMap.get(candidateId);
+      const auto = aggregate
+        ? extractAutoTagVector(aggregate.topTags, {
+            limit: SIMILAR_CONFIG.autoTopN,
+            minScore: SIMILAR_CONFIG.autoMinScore,
+            stopTags,
+          })
+        : new Map<string, number>();
+      const manual = candidateManualMap.get(candidateId) ?? new Set<string>();
       if (auto.size === 0 && manual.size === 0) continue;
-      candidates.push({ stackId: agg.stackId, auto, manual });
+      candidates.push({ stackId: candidateId, auto, manual });
       for (const key of auto.keys()) autoUniverse.add(key);
       for (const key of manual) manualUniverse.add(key);
     }
@@ -448,9 +497,9 @@ export const createSearchService = (deps: {
 
     for (const candidate of candidates) {
       const union = new Set<string>([
-        ...refAuto.keys(),
+        ...reference.auto.keys(),
         ...candidate.auto.keys(),
-        ...refManual,
+        ...reference.manual,
         ...candidate.manual,
       ]);
 
@@ -458,9 +507,9 @@ export const createSearchService = (deps: {
       let denominator = 0;
 
       for (const tag of union) {
-        const refAutoVal = refAuto.get(tag) ?? 0;
+        const refAutoVal = reference.auto.get(tag) ?? 0;
         const candAutoVal = candidate.auto.get(tag) ?? 0;
-        const refManualVal = refManual.has(tag) ? 1 : 0;
+        const refManualVal = reference.manual.has(tag) ? 1 : 0;
         const candManualVal = candidate.manual.has(tag) ? 1 : 0;
 
         if (!refAutoVal && !candAutoVal && !refManualVal && !candManualVal) continue;
@@ -489,7 +538,7 @@ export const createSearchService = (deps: {
       }
     }
 
-    const threshold = clamp01(request.similar?.threshold ?? 0);
+    const threshold = clamp01(thresholdValue ?? 0);
 
     const sorted = Array.from(scores.entries())
       .filter(([, score]) => score >= threshold)
@@ -502,7 +551,90 @@ export const createSearchService = (deps: {
     };
   };
 
+  const runSimilarSearch = async (request: SearchRequest): Promise<SimilarSearchResult> => {
+    if (!request.referenceStackId) {
+      throw new Error('referenceStackId is required for similar search');
+    }
+
+    const stopTags = await getStopTags();
+    const reference = await buildReferenceVectors([request.referenceStackId], stopTags);
+    return runSimilarSearchFromVectors(
+      reference,
+      [request.referenceStackId],
+      request.similar?.threshold
+    );
+  };
+
+  const getStacksByIds = async (stackIds: number[]): Promise<Stack[]> => {
+    if (stackIds.length === 0) {
+      return [];
+    }
+
+    const stacks = await prisma.stack.findMany({
+      where: {
+        id: { in: stackIds },
+        dataSetId,
+      },
+      include: {
+        assets: {
+          take: 1,
+          orderBy: { orderInStack: 'asc' },
+          select: {
+            id: true,
+            file: true,
+            thumbnail: true,
+          },
+        },
+      },
+    });
+
+    const stackMap = new Map(stacks.map((stack) => [stack.id, stack]));
+    return stackIds
+      .map((id) => stackMap.get(id))
+      .filter((stack): stack is Stack => stack !== undefined);
+  };
+
+  const searchSimilarByStackIds = async (
+    sourceStackIds: number[],
+    options: { limit: number; offset: number; threshold?: number }
+  ): Promise<SearchResult> => {
+    const uniqueStackIds = Array.from(new Set(sourceStackIds)).filter((id) => Number.isFinite(id));
+    if (uniqueStackIds.length === 0) {
+      return { stacks: [], total: 0, limit: options.limit, offset: options.offset };
+    }
+
+    const sourceStacks = await prisma.stack.findMany({
+      where: { id: { in: uniqueStackIds }, dataSetId },
+      select: { id: true },
+    });
+    const verifiedSourceIds = sourceStacks.map((stack) => stack.id);
+    if (verifiedSourceIds.length === 0) {
+      return { stacks: [], total: 0, limit: options.limit, offset: options.offset };
+    }
+
+    const stopTags = await getStopTags();
+    const reference = await buildReferenceVectors(verifiedSourceIds, stopTags);
+    const result = await runSimilarSearchFromVectors(
+      reference,
+      verifiedSourceIds,
+      options.threshold
+    );
+
+    const total = result.stackIds.length;
+    const paginated = result.stackIds.slice(options.offset, options.offset + options.limit);
+    const stacks = await getStacksByIds(paginated);
+
+    return {
+      stacks,
+      total,
+      limit: options.limit,
+      offset: options.offset,
+    };
+  };
+
   return {
+    searchSimilarByStackIds,
+
     async search(request: SearchRequest): Promise<SearchResult> {
       // データセットIDの検証
       if (request.datasetId !== dataSetId) {
@@ -1076,13 +1208,13 @@ export const createSearchService = (deps: {
           orderBy = { name: sort.order };
           break;
         case 'likes':
-          orderBy = { likes: sort.order };
+          orderBy = { liked: sort.order };
           break;
         case 'updated':
-          orderBy = { updatedAt: sort.order };
+          orderBy = { updateAt: sort.order };
           break;
         default:
-          orderBy = { createdAt: 'desc' };
+          orderBy = { createdAt: sort.order };
       }
 
       const sorted = await prisma.stack.findMany({
@@ -1098,31 +1230,7 @@ export const createSearchService = (deps: {
     },
 
     async getStacksByIds(stackIds: number[]): Promise<Stack[]> {
-      if (stackIds.length === 0) {
-        return [];
-      }
-
-      // 順序を保持するためにIDでマップを作成
-      const stacks = await prisma.stack.findMany({
-        where: {
-          id: { in: stackIds },
-          dataSetId,
-        },
-        include: {
-          assets: {
-            take: 1,
-            orderBy: { orderInStack: 'asc' },
-            select: {
-              id: true,
-              file: true,
-              thumbnail: true,
-            },
-          },
-        },
-      });
-
-      const stackMap = new Map(stacks.map((s) => [s.id, s]));
-      return stackIds.map((id) => stackMap.get(id)).filter(Boolean) as Stack[];
+      return getStacksByIds(stackIds);
     },
 
     hexToHue(hex: string): number {

@@ -53,6 +53,7 @@ interface StackViewerProps {
   mediaType: string;
   stackId: string;
   listToken?: string;
+  returnTo?: string;
 }
 
 interface ViewerShellProps {
@@ -147,6 +148,7 @@ export default function StackViewer({
   mediaType,
   stackId,
   listToken,
+  returnTo,
 }: StackViewerProps) {
   const [isInfoSidebarOpen, setIsInfoSidebarOpen] = useAtom(infoSidebarOpenAtom);
   const [, setSelectedItemId] = useAtom(selectedItemIdAtom);
@@ -192,6 +194,7 @@ export default function StackViewer({
     mediaType,
     stackId,
     listToken,
+    returnTo,
     stack,
     currentPage,
     setCurrentPage,
@@ -224,7 +227,7 @@ export default function StackViewer({
   );
 
   // Navigation
-  const { navigateBack } = useStackNavigation({ currentStackId: stackId, currentPage });
+  const { navigateBack } = useStackNavigation({ currentStackId: stackId, currentPage, returnTo });
   const { ctx, update } = useViewContext();
   const navigate = useNavigate();
   // vertical drag state (local to component)
@@ -392,7 +395,12 @@ export default function StackViewer({
       void navigate({
         to: '/library/$datasetId/stacks/$stackId',
         params: { datasetId: String(baseDatasetId), stackId: String(item.id) },
-        search: { page: 0, mediaType: String(baseMediaType), listToken: token || undefined },
+        search: {
+          page: 0,
+          mediaType: String(baseMediaType),
+          listToken: token || undefined,
+          returnTo,
+        },
         replace: true,
       });
       // Ensure single-image mode for gestures
@@ -400,7 +408,7 @@ export default function StackViewer({
     } catch (e) {
       console.error('Shuffle in viewer failed:', e);
     }
-  }, [ctx, datasetId, mediaType, listToken, update, navigate, setIsListMode]);
+  }, [ctx, datasetId, mediaType, listToken, returnTo, update, navigate, setIsListMode]);
 
   const handleSeparateAsset = useCallback(
     async (assetId: string | number) => {

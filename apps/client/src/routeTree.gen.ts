@@ -27,6 +27,7 @@ import { Route as LibraryDatasetIdCollectionsCollectionIdRouteImport } from './r
 import { Route as LibraryDatasetIdAutotagAutoTagKeyRouteImport } from './routes/library.$datasetId.autotag.$autoTagKey'
 import { Route as LibraryDatasetIdAuthorAuthorNameRouteImport } from './routes/library.$datasetId.author.$authorName'
 import { Route as LibraryDatasetIdStacksStackIdSimilarRouteImport } from './routes/library.$datasetId.stacks.$stackId.similar'
+import { Route as LibraryDatasetIdCollectionsCollectionIdSimilarRouteImport } from './routes/library.$datasetId.collections.$collectionId.similar'
 
 const SetupRoute = SetupRouteImport.update({
   id: '/setup',
@@ -128,6 +129,12 @@ const LibraryDatasetIdStacksStackIdSimilarRoute =
     path: '/similar',
     getParentRoute: () => LibraryDatasetIdStacksStackIdRoute,
   } as any)
+const LibraryDatasetIdCollectionsCollectionIdSimilarRoute =
+  LibraryDatasetIdCollectionsCollectionIdSimilarRouteImport.update({
+    id: '/similar',
+    path: '/similar',
+    getParentRoute: () => LibraryDatasetIdCollectionsCollectionIdRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -142,11 +149,12 @@ export interface FileRoutesByFullPath {
   '/library/$datasetId/': typeof LibraryDatasetIdIndexRoute
   '/library/$datasetId/author/$authorName': typeof LibraryDatasetIdAuthorAuthorNameRoute
   '/library/$datasetId/autotag/$autoTagKey': typeof LibraryDatasetIdAutotagAutoTagKeyRoute
-  '/library/$datasetId/collections/$collectionId': typeof LibraryDatasetIdCollectionsCollectionIdRoute
+  '/library/$datasetId/collections/$collectionId': typeof LibraryDatasetIdCollectionsCollectionIdRouteWithChildren
   '/library/$datasetId/media-type/$mediaType': typeof LibraryDatasetIdMediaTypeMediaTypeRoute
   '/library/$datasetId/scratch/$scratchId': typeof LibraryDatasetIdScratchScratchIdRoute
   '/library/$datasetId/stacks/$stackId': typeof LibraryDatasetIdStacksStackIdRouteWithChildren
   '/library/$datasetId/tag/$tagName': typeof LibraryDatasetIdTagTagNameRoute
+  '/library/$datasetId/collections/$collectionId/similar': typeof LibraryDatasetIdCollectionsCollectionIdSimilarRoute
   '/library/$datasetId/stacks/$stackId/similar': typeof LibraryDatasetIdStacksStackIdSimilarRoute
 }
 export interface FileRoutesByTo {
@@ -161,11 +169,12 @@ export interface FileRoutesByTo {
   '/library/$datasetId': typeof LibraryDatasetIdIndexRoute
   '/library/$datasetId/author/$authorName': typeof LibraryDatasetIdAuthorAuthorNameRoute
   '/library/$datasetId/autotag/$autoTagKey': typeof LibraryDatasetIdAutotagAutoTagKeyRoute
-  '/library/$datasetId/collections/$collectionId': typeof LibraryDatasetIdCollectionsCollectionIdRoute
+  '/library/$datasetId/collections/$collectionId': typeof LibraryDatasetIdCollectionsCollectionIdRouteWithChildren
   '/library/$datasetId/media-type/$mediaType': typeof LibraryDatasetIdMediaTypeMediaTypeRoute
   '/library/$datasetId/scratch/$scratchId': typeof LibraryDatasetIdScratchScratchIdRoute
   '/library/$datasetId/stacks/$stackId': typeof LibraryDatasetIdStacksStackIdRouteWithChildren
   '/library/$datasetId/tag/$tagName': typeof LibraryDatasetIdTagTagNameRoute
+  '/library/$datasetId/collections/$collectionId/similar': typeof LibraryDatasetIdCollectionsCollectionIdSimilarRoute
   '/library/$datasetId/stacks/$stackId/similar': typeof LibraryDatasetIdStacksStackIdSimilarRoute
 }
 export interface FileRoutesById {
@@ -182,11 +191,12 @@ export interface FileRoutesById {
   '/library/$datasetId/': typeof LibraryDatasetIdIndexRoute
   '/library/$datasetId/author/$authorName': typeof LibraryDatasetIdAuthorAuthorNameRoute
   '/library/$datasetId/autotag/$autoTagKey': typeof LibraryDatasetIdAutotagAutoTagKeyRoute
-  '/library/$datasetId/collections/$collectionId': typeof LibraryDatasetIdCollectionsCollectionIdRoute
+  '/library/$datasetId/collections/$collectionId': typeof LibraryDatasetIdCollectionsCollectionIdRouteWithChildren
   '/library/$datasetId/media-type/$mediaType': typeof LibraryDatasetIdMediaTypeMediaTypeRoute
   '/library/$datasetId/scratch/$scratchId': typeof LibraryDatasetIdScratchScratchIdRoute
   '/library/$datasetId/stacks/$stackId': typeof LibraryDatasetIdStacksStackIdRouteWithChildren
   '/library/$datasetId/tag/$tagName': typeof LibraryDatasetIdTagTagNameRoute
+  '/library/$datasetId/collections/$collectionId/similar': typeof LibraryDatasetIdCollectionsCollectionIdSimilarRoute
   '/library/$datasetId/stacks/$stackId/similar': typeof LibraryDatasetIdStacksStackIdSimilarRoute
 }
 export interface FileRouteTypes {
@@ -209,6 +219,7 @@ export interface FileRouteTypes {
     | '/library/$datasetId/scratch/$scratchId'
     | '/library/$datasetId/stacks/$stackId'
     | '/library/$datasetId/tag/$tagName'
+    | '/library/$datasetId/collections/$collectionId/similar'
     | '/library/$datasetId/stacks/$stackId/similar'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -228,6 +239,7 @@ export interface FileRouteTypes {
     | '/library/$datasetId/scratch/$scratchId'
     | '/library/$datasetId/stacks/$stackId'
     | '/library/$datasetId/tag/$tagName'
+    | '/library/$datasetId/collections/$collectionId/similar'
     | '/library/$datasetId/stacks/$stackId/similar'
   id:
     | '__root__'
@@ -248,6 +260,7 @@ export interface FileRouteTypes {
     | '/library/$datasetId/scratch/$scratchId'
     | '/library/$datasetId/stacks/$stackId'
     | '/library/$datasetId/tag/$tagName'
+    | '/library/$datasetId/collections/$collectionId/similar'
     | '/library/$datasetId/stacks/$stackId/similar'
   fileRoutesById: FileRoutesById
 }
@@ -386,8 +399,30 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LibraryDatasetIdStacksStackIdSimilarRouteImport
       parentRoute: typeof LibraryDatasetIdStacksStackIdRoute
     }
+    '/library/$datasetId/collections/$collectionId/similar': {
+      id: '/library/$datasetId/collections/$collectionId/similar'
+      path: '/similar'
+      fullPath: '/library/$datasetId/collections/$collectionId/similar'
+      preLoaderRoute: typeof LibraryDatasetIdCollectionsCollectionIdSimilarRouteImport
+      parentRoute: typeof LibraryDatasetIdCollectionsCollectionIdRoute
+    }
   }
 }
+
+interface LibraryDatasetIdCollectionsCollectionIdRouteChildren {
+  LibraryDatasetIdCollectionsCollectionIdSimilarRoute: typeof LibraryDatasetIdCollectionsCollectionIdSimilarRoute
+}
+
+const LibraryDatasetIdCollectionsCollectionIdRouteChildren: LibraryDatasetIdCollectionsCollectionIdRouteChildren =
+  {
+    LibraryDatasetIdCollectionsCollectionIdSimilarRoute:
+      LibraryDatasetIdCollectionsCollectionIdSimilarRoute,
+  }
+
+const LibraryDatasetIdCollectionsCollectionIdRouteWithChildren =
+  LibraryDatasetIdCollectionsCollectionIdRoute._addFileChildren(
+    LibraryDatasetIdCollectionsCollectionIdRouteChildren,
+  )
 
 interface LibraryDatasetIdStacksStackIdRouteChildren {
   LibraryDatasetIdStacksStackIdSimilarRoute: typeof LibraryDatasetIdStacksStackIdSimilarRoute
@@ -413,7 +448,7 @@ interface LibraryDatasetIdRouteChildren {
   LibraryDatasetIdIndexRoute: typeof LibraryDatasetIdIndexRoute
   LibraryDatasetIdAuthorAuthorNameRoute: typeof LibraryDatasetIdAuthorAuthorNameRoute
   LibraryDatasetIdAutotagAutoTagKeyRoute: typeof LibraryDatasetIdAutotagAutoTagKeyRoute
-  LibraryDatasetIdCollectionsCollectionIdRoute: typeof LibraryDatasetIdCollectionsCollectionIdRoute
+  LibraryDatasetIdCollectionsCollectionIdRoute: typeof LibraryDatasetIdCollectionsCollectionIdRouteWithChildren
   LibraryDatasetIdMediaTypeMediaTypeRoute: typeof LibraryDatasetIdMediaTypeMediaTypeRoute
   LibraryDatasetIdScratchScratchIdRoute: typeof LibraryDatasetIdScratchScratchIdRoute
   LibraryDatasetIdStacksStackIdRoute: typeof LibraryDatasetIdStacksStackIdRouteWithChildren
@@ -431,7 +466,7 @@ const LibraryDatasetIdRouteChildren: LibraryDatasetIdRouteChildren = {
   LibraryDatasetIdAutotagAutoTagKeyRoute:
     LibraryDatasetIdAutotagAutoTagKeyRoute,
   LibraryDatasetIdCollectionsCollectionIdRoute:
-    LibraryDatasetIdCollectionsCollectionIdRoute,
+    LibraryDatasetIdCollectionsCollectionIdRouteWithChildren,
   LibraryDatasetIdMediaTypeMediaTypeRoute:
     LibraryDatasetIdMediaTypeMediaTypeRoute,
   LibraryDatasetIdScratchScratchIdRoute: LibraryDatasetIdScratchScratchIdRoute,

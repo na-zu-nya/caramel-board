@@ -1,6 +1,6 @@
 import type { LucideIcon } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
-import { Pencil, Pin, PinOff, Trash2 } from 'lucide-react';
+import { Pencil, Pin, PinOff, Search, Trash2 } from 'lucide-react';
 import type { FormEvent, ReactNode } from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -42,6 +42,7 @@ interface CollectionContextMenuProps {
   onPin?: (iconName: string, name: string) => void;
   onUnpin?: () => void;
   onOpen?: () => void;
+  onFindSimilar?: () => void;
 }
 
 export function CollectionContextMenu({
@@ -53,6 +54,7 @@ export function CollectionContextMenu({
   onPin,
   onUnpin,
   onOpen,
+  onFindSimilar,
 }: CollectionContextMenuProps) {
   const [showRenameDialog, setShowRenameDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -203,6 +205,11 @@ export function CollectionContextMenu({
     setShowPinDialog(true);
   };
 
+  const handleFindSimilar = useCallback(() => {
+    closeMenu();
+    onFindSimilar?.();
+  }, [closeMenu, onFindSimilar]);
+
   // Helper function to render Lucide icons dynamically
   const renderIcon = (iconName: string) => {
     /* biome-ignore lint/performance/noDynamicNamespaceImportAccess: dynamic icon lookup for user-selected pin icons */
@@ -219,21 +226,25 @@ export function CollectionContextMenu({
     <>
       <ContextMenu open={menuOpen} onOpenChange={handleMenuOpenChange}>
         <ContextMenuTrigger>{children}</ContextMenuTrigger>
-        <ContextMenuContent className="w-36">
-          <ContextMenuItem onClick={onOpen}>Open</ContextMenuItem>
+        <ContextMenuContent className="w-44">
+          <ContextMenuItem onSelect={onOpen}>Open</ContextMenuItem>
+          <ContextMenuItem onSelect={handleFindSimilar}>
+            <Search className="w-4 h-4 mr-2" />
+            Find similar
+          </ContextMenuItem>
           <ContextMenuSeparator />
-          <ContextMenuItem onClick={openRenameDialog}>
+          <ContextMenuItem onSelect={openRenameDialog}>
             <Pencil className="w-4 h-4 mr-2" />
             Edit
           </ContextMenuItem>
           <ContextMenuSeparator />
           {isPinned ? (
-            <ContextMenuItem onClick={onUnpin}>
+            <ContextMenuItem onSelect={onUnpin}>
               <PinOff className="w-4 h-4 mr-2" />
               Unpin
             </ContextMenuItem>
           ) : (
-            <ContextMenuItem onClick={openPinDialog}>
+            <ContextMenuItem onSelect={openPinDialog}>
               <Pin className="w-4 h-4 mr-2" />
               Pin
             </ContextMenuItem>
@@ -241,7 +252,7 @@ export function CollectionContextMenu({
           <ContextMenuSeparator />
           <ContextMenuItem
             className="text-red-600 focus:text-red-600 hover:text-red-600"
-            onClick={() => {
+            onSelect={() => {
               closeMenu();
               setShowDeleteDialog(true);
             }}

@@ -39,6 +39,11 @@ import { infoSidebarOpenAtom, selectedItemIdAtom } from '@/stores/ui';
 import type { Stack } from '@/types';
 import { getThumbnailPath } from '@/utils/thumbnailPath';
 
+const getCurrentReturnTo = () => {
+  if (typeof window === 'undefined') return undefined;
+  return `${window.location.pathname}${window.location.search}${window.location.hash}`;
+};
+
 export type StackItemVariant = 'thumbnail' | 'with-title' | 'with-description';
 
 interface StackItemProps {
@@ -130,6 +135,7 @@ export function StackListItem({
       setIsNativeDragReady(false);
     }
   }, [isNativePointerActive]);
+  const returnTo = getCurrentReturnTo();
 
   // If onClick is provided, render as div, otherwise as Link
   const WrapperComponent = onClick ? 'div' : Link;
@@ -175,6 +181,10 @@ export function StackListItem({
     : {
         to: '/library/$datasetId/stacks/$stackId',
         params: { datasetId, stackId: String(stack.id) },
+        search: {
+          ...(stack.mediaType ? { mediaType: stack.mediaType } : {}),
+          ...(returnTo ? { returnTo } : {}),
+        },
         className: cn('group cursor-pointer block', className),
         onClick: handleClick,
         draggable: true,

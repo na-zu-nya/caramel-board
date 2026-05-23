@@ -1,6 +1,6 @@
-import { Prisma, type PrismaClient } from '@prisma/client';
+import type { Prisma, PrismaClient } from '@prisma/client';
 import { ColorSearchService as StackColorService } from '../../../shared/services/ColorSearchService-fix';
-import { ColorExtractor } from '../../../utils/colorExtractor';
+import { ColorExtractor, type DominantColor } from '../../../utils/colorExtractor';
 
 export interface ColorSearchOptions {
   color: { r: number; g: number; b: number };
@@ -14,7 +14,6 @@ export interface ColorFilterOptions {
   hueCategories?: string[];
   tonePoint?: { saturation: number; lightness: number };
   toneTolerance?: number;
-  // similarityThreshold is currently ignored for performance/simplicity
   similarityThreshold?: number;
   customColor?: string; // カスタムカラー (hex形式)
   mediaType?: string;
@@ -39,6 +38,151 @@ function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
     : null;
 }
 
+type SearchableColor = Pick<
+  DominantColor,
+  'r' | 'g' | 'b' | 'hex' | 'percentage' | 'hue' | 'saturation' | 'lightness' | 'hueCategory'
+>;
+
+type StackColorRow = SearchableColor & { orderIndex?: number };
+
+const HUE_CATEGORY_TARGETS: Record<string, { hue: number; radius: number }> = {
+  red: { hue: 0, radius: 15 },
+  orange: { hue: 30, radius: 15 },
+  yellow: { hue: 60, radius: 15 },
+  green: { hue: 105, radius: 30 },
+  cyan: { hue: 165, radius: 30 },
+  blue: { hue: 225, radius: 30 },
+  violet: { hue: 300, radius: 45 },
+  gray: { hue: 0, radius: 180 },
+};
+
+function isSearchableColor(value: unknown): value is SearchableColor {
+  if (typeof value !== 'object' || value === null) return false;
+  const color = value as Partial<SearchableColor>;
+  return (
+    typeof color.r === 'number' &&
+    typeof color.g === 'number' &&
+    typeof color.b === 'number' &&
+    typeof color.hex === 'string' &&
+    typeof color.hue === 'number' &&
+    typeof color.saturation === 'number' &&
+    typeof color.lightness === 'number' &&
+    typeof color.hueCategory === 'string'
+  );
+}
+
+function getDominantColorArray(value: Prisma.JsonValue | null): SearchableColor[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter(isSearchableColor).slice(0, 3);
+}
+
+function getTopThreeColors(tableColors: StackColorRow[], jsonColors: Prisma.JsonValue | null) {
+  const fromTable = tableColors
+    .slice()
+    .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0))
+    .slice(0, 3);
+  if (fromTable.length > 0) return fromTable;
+  return getDominantColorArray(jsonColors);
+}
+
+function hueDistance(a: number, b: number) {
+  const diff = Math.abs(a - b) % 360;
+  return Math.min(diff, 360 - diff);
+}
+
+function hslDistance(color: SearchableColor, target: { h: number; s: number; l: number }): number {
+  const normalizedHue = hueDistance(color.hue, target.h) / 1.8;
+  return Math.sqrt(
+    normalizedHue ** 2 + (color.saturation - target.s) ** 2 + (color.lightness - target.l) ** 2
+  );
+}
+
+function toneDistance(
+  color: SearchableColor,
+  tonePoint: { saturation: number; lightness: number }
+) {
+  return Math.sqrt(
+    (color.saturation - tonePoint.saturation) ** 2 + (color.lightness - tonePoint.lightness) ** 2
+  );
+}
+
+function getHueCategoryMatchScore(
+  color: SearchableColor,
+  hueCategories: string[] | undefined,
+  similarityThreshold: number | undefined
+): number | null {
+  if (!hueCategories || hueCategories.length === 0) return null;
+  if (!hueCategories.includes(color.hueCategory)) return null;
+
+  const threshold = similarityThreshold ?? 0;
+  if (threshold <= 0) {
+    return 0;
+  }
+
+  let bestDistance: number | null = null;
+  for (const category of hueCategories) {
+    if (category !== color.hueCategory) continue;
+    const target = HUE_CATEGORY_TARGETS[category];
+    if (!target) return 0;
+
+    const distance = hueDistance(color.hue, target.hue);
+    const allowedDistance = Math.max(2, target.radius * (1 - threshold / 100));
+    if (distance > allowedDistance) continue;
+    bestDistance = bestDistance === null ? distance : Math.min(bestDistance, distance);
+  }
+
+  return bestDistance;
+}
+
+function getCustomColorTarget(
+  customColor: string | undefined,
+  tonePoint: { saturation: number; lightness: number } | undefined
+) {
+  if (!customColor) return null;
+  const customRgb = hexToRgb(customColor);
+  if (!customRgb) return null;
+  const hsl = ColorExtractor.rgbToHsl(customRgb.r, customRgb.g, customRgb.b);
+  return {
+    h: hsl.h,
+    s: tonePoint?.saturation ?? hsl.s,
+    l: tonePoint?.lightness ?? hsl.l,
+  };
+}
+
+function getColorMatchScore(color: SearchableColor, options: ColorFilterOptions): number | null {
+  const {
+    hueCategories,
+    tonePoint,
+    toneTolerance = 20,
+    customColor,
+    similarityThreshold,
+  } = options;
+  const target = getCustomColorTarget(customColor, tonePoint);
+  const hueScore = getHueCategoryMatchScore(color, hueCategories, similarityThreshold);
+
+  if (hueCategories && hueCategories.length > 0 && hueScore === null) {
+    return null;
+  }
+
+  if (target) {
+    const customSimilarityThreshold = similarityThreshold ?? 85;
+    const tolerance = Math.max(8, (100 - customSimilarityThreshold) * 1.5);
+    const distance = hslDistance(color, target);
+    return distance <= tolerance ? distance : null;
+  }
+
+  if (tonePoint) {
+    const distance = toneDistance(color, tonePoint);
+    return distance <= toneTolerance ? distance : null;
+  }
+
+  if (hueCategories && hueCategories.length > 0) {
+    return hueScore;
+  }
+
+  return null;
+}
+
 export const createColorSearchService = (deps: { prisma: PrismaClient; dataSetId: number }) => {
   const { prisma, dataSetId } = deps;
   const stackColorService = new StackColorService(prisma);
@@ -47,136 +191,48 @@ export const createColorSearchService = (deps: { prisma: PrismaClient; dataSetId
    * 色フィルタでマッチするスタックIDのみを取得
    */
   async function getColorMatchingStackIds(options: ColorFilterOptions): Promise<number[]> {
-    const {
-      hueCategories,
-      tonePoint,
-      toneTolerance = 10,
-      customColor,
-      similarityThreshold: _similarityThreshold = 85,
-      additionalWhere,
-    } = options;
+    const { hueCategories, tonePoint, customColor, mediaType, liked, additionalWhere } = options;
 
-    // 基本的なクエリビルダー
-    const conditions: string[] = [];
-
-    // データセットIDは必ず含める
-    conditions.push(`s."dataSetId" = ${dataSetId}`);
-
-    // 追加のWhere条件を適用
-    if (additionalWhere) {
-      // Prismaのwhere条件をSQL文字列に変換（簡易版）
-      if (additionalWhere.mediaType) {
-        conditions.push(`s."mediaType" = '${additionalWhere.mediaType}'`);
-      }
-      if (additionalWhere.liked !== undefined) {
-        if (typeof additionalWhere.liked === 'object' && 'gt' in additionalWhere.liked) {
-          conditions.push(`s.liked > 0`);
-        } else {
-          conditions.push(`s.liked = 0`);
-        }
-      }
-      // タグやコレクションフィルタは後で別途処理
-    }
-
-    // 色条件
-    const colorConditions: string[] = [];
-
-    if (hueCategories && hueCategories.length > 0) {
-      const hue = hueCategories[0];
-      colorConditions.push(`sc."hueCategory" = '${hue}'`);
-    }
-
-    if (tonePoint && toneTolerance < 100) {
-      colorConditions.push(`SQRT(
-        POWER(sc.saturation - ${tonePoint.saturation}, 2) + 
-        POWER(sc.lightness - ${tonePoint.lightness}, 2)
-      ) <= ${toneTolerance}`);
-    }
-
-    if (customColor) {
-      const customRgb = hexToRgb(customColor);
-      if (customRgb) {
-        // 類似度は使わず、カスタムカラーの色相カテゴリに限定（高速化）
-        const customHsl = ColorExtractor.rgbToHsl(customRgb.r, customRgb.g, customRgb.b);
-        const hueCat = ColorExtractor.getHueCategory(customHsl.h);
-        colorConditions.push(`sc."hueCategory" = '${hueCat}'`);
-      }
-    }
-
-    if (colorConditions.length === 0) {
-      // 色条件がない場合は空配列を返す
+    if (!hueCategories?.length && !tonePoint && !customColor) {
       return [];
     }
 
-    const whereClause = [...conditions, ...colorConditions].join(' AND ');
+    const where: Prisma.StackWhereInput = {
+      dataSetId,
+      ...(additionalWhere ?? {}),
+      ...(mediaType ? { mediaType } : {}),
+      ...(liked !== undefined ? { liked: liked ? { gt: 0 } : 0 } : {}),
+    };
 
-    const queryString = `
-      SELECT DISTINCT s.id
-      FROM "Stack" s
-      INNER JOIN "StackColor" sc ON s.id = sc."stackId"
-      WHERE ${whereClause}
-    `;
-
-    let results = await prisma.$queryRawUnsafe<Array<{ id: number }>>(queryString);
-    let stackIds = results.map((r) => r.id);
-
-    // Fallback: If StackColor is empty or returned no rows, try dominantColors JSON on Stack
-    if (stackIds.length === 0) {
-      const jsonConds: string[] = [];
-      if (hueCategories && hueCategories.length > 0) {
-        const hue = hueCategories[0];
-        jsonConds.push(`(dc->>'hueCategory') = '${hue}'`);
-      }
-      if (tonePoint && toneTolerance < 100) {
-        jsonConds.push(`SQRT(
-          POWER(((dc->>'saturation')::int) - ${tonePoint.saturation}, 2) + 
-          POWER(((dc->>'lightness')::int) - ${tonePoint.lightness}, 2)
-        ) <= ${toneTolerance}`);
-      }
-      if (customColor) {
-        const customRgb = hexToRgb(customColor);
-        if (customRgb) {
-          const customHsl = ColorExtractor.rgbToHsl(customRgb.r, customRgb.g, customRgb.b);
-          const hueCat = ColorExtractor.getHueCategory(customHsl.h);
-          jsonConds.push(`(dc->>'hueCategory') = '${hueCat}'`);
-        }
-      }
-
-      if (jsonConds.length > 0) {
-        const jsonWhere = [
-          `s."dataSetId" = ${dataSetId}`,
-          `s."dominantColors" IS NOT NULL`,
-          `EXISTS (SELECT 1 FROM jsonb_array_elements(s."dominantColors"::jsonb) dc WHERE ${jsonConds.join(
-            ' AND '
-          )})`,
-        ].join(' AND ');
-
-        const sqlJson = `
-          SELECT DISTINCT s.id
-          FROM "Stack" s
-          WHERE ${jsonWhere}
-        `;
-        results = await prisma.$queryRawUnsafe<Array<{ id: number }>>(sqlJson);
-        stackIds = results.map((r) => r.id);
-      }
-    }
-
-    // タグやコレクションなどの追加フィルタを適用
-    if (
-      additionalWhere &&
-      (additionalWhere.tags || additionalWhere.collectionStacks || additionalWhere.author)
-    ) {
-      const filteredStacks = await prisma.stack.findMany({
-        where: {
-          id: { in: stackIds },
-          ...additionalWhere,
+    const stacks = await prisma.stack.findMany({
+      where,
+      select: {
+        id: true,
+        dominantColors: true,
+        colors: {
+          orderBy: { orderIndex: 'asc' },
+          take: 3,
         },
-        select: { id: true },
-      });
-      return filteredStacks.map((s) => s.id);
-    }
+      },
+    });
 
-    return stackIds;
+    const matched = stacks
+      .map((stack) => {
+        const colors = getTopThreeColors(stack.colors, stack.dominantColors);
+        let bestScore: number | null = null;
+
+        for (const color of colors) {
+          const score = getColorMatchScore(color, options);
+          if (score === null) continue;
+          bestScore = bestScore === null ? score : Math.min(bestScore, score);
+        }
+
+        return bestScore === null ? null : { id: stack.id, score: bestScore };
+      })
+      .filter((result): result is { id: number; score: number } => result !== null)
+      .sort((a, b) => a.score - b.score);
+
+    return matched.map((result) => result.id);
   }
 
   /**
@@ -185,53 +241,14 @@ export const createColorSearchService = (deps: { prisma: PrismaClient; dataSetId
   async function searchByColor(options: ColorSearchOptions) {
     const { color, threshold = 0.8, mediaType, limit = 50, offset = 0 } = options;
 
-    // RGBをHSLに変換
-    const targetHsl = ColorExtractor.rgbToHsl(color.r, color.g, color.b);
-    const hueCategory = ColorExtractor.getHueCategory(targetHsl.h);
+    const hex = ColorExtractor.rgbToHex(color.r, color.g, color.b);
+    const allMatchedIds = await getColorMatchingStackIds({
+      customColor: hex,
+      similarityThreshold: Math.round(threshold * 100),
+      mediaType,
+    });
+    const stackIds = allMatchedIds.slice(offset, offset + limit);
 
-    // 色の距離閾値を計算（0-1を0-100に変換）
-    const maxDistance = (1 - threshold) * 100;
-
-    // SQLクエリを構築
-    const where: Prisma.StackWhereInput = {};
-    where.dataSetId = dataSetId;
-    if (mediaType) where.mediaType = mediaType;
-
-    // まず色相カテゴリで絞り込み、その後距離計算
-    const stacks = await prisma.$queryRaw<Array<{ id: number; min_distance: number }>>`
-      WITH filtered_stacks AS (
-        SELECT DISTINCT s.*
-        FROM "Stack" s
-        INNER JOIN "StackColor" sc ON s.id = sc."stackId"
-        WHERE sc."hueCategory" = ${hueCategory}
-          AND s."dataSetId" = ${dataSetId}
-          ${mediaType ? Prisma.sql`AND s."mediaType" = ${mediaType}` : Prisma.empty}
-      ),
-      color_distances AS (
-        SELECT 
-          fs.*,
-          MIN(
-            SQRT(
-              POWER(sc.hue - ${targetHsl.h}, 2) + 
-              POWER(sc.saturation - ${targetHsl.s}, 2) + 
-              POWER(sc.lightness - ${targetHsl.l}, 2)
-            )
-          ) as min_distance
-        FROM filtered_stacks fs
-        INNER JOIN "StackColor" sc ON fs.id = sc."stackId"
-        GROUP BY fs.id, fs.name, fs.thumbnail, fs."createdAt", fs."updateAt", 
-                 fs.meta, fs."mediaType", fs.liked,
-                 fs."authorId", fs."dataSetId", fs."dominantColors"
-      )
-      SELECT * FROM color_distances
-      WHERE min_distance <= ${maxDistance}
-      ORDER BY min_distance ASC
-      LIMIT ${limit}
-      OFFSET ${offset}
-    `;
-
-    // 関連データを取得
-    const stackIds = stacks.map((s) => s.id);
     const stacksWithRelations = await prisma.stack.findMany({
       where: { id: { in: stackIds } },
       include: {
@@ -251,17 +268,16 @@ export const createColorSearchService = (deps: { prisma: PrismaClient; dataSetId
       },
     });
 
-    // 元の順序を保持
     const idToStack = new Map(stacksWithRelations.map((s) => [s.id, s]));
-    const orderedStacks = stacks.map((s) => idToStack.get(s.id)).filter((s) => s);
+    const orderedStacks = stackIds.map((id) => idToStack.get(id)).filter((s) => s);
 
     return {
       stacks: orderedStacks,
-      total: await getColorSearchCount(targetHsl, hueCategory, maxDistance, mediaType),
+      total: allMatchedIds.length,
       searchColor: {
         rgb: color,
-        hsl: targetHsl,
-        hex: `#${((1 << 24) + (color.r << 16) + (color.g << 8) + color.b).toString(16).slice(1)}`,
+        hsl: ColorExtractor.rgbToHsl(color.r, color.g, color.b),
+        hex,
       },
     };
   }
@@ -270,74 +286,10 @@ export const createColorSearchService = (deps: { prisma: PrismaClient; dataSetId
    * 色フィルタ検索（DB最適化版 - 修正版）
    */
   async function searchByColorFilter(options: ColorFilterOptions) {
-    const {
-      hueCategories,
-      tonePoint,
-      toneTolerance = 10,
-      customColor,
-      mediaType,
-      liked,
-      additionalWhere,
-      limit = 50,
-      offset = 0,
-    } = options;
+    const { additionalWhere, limit = 50, offset = 0 } = options;
+    const allMatchedIds = await getColorMatchingStackIds(options);
+    const stackIds = allMatchedIds.slice(offset, offset + limit);
 
-    // 基本的なクエリビルダー
-    const conditions: string[] = [];
-
-    conditions.push(`s."dataSetId" = ${dataSetId}`);
-    if (mediaType) {
-      conditions.push(`s."mediaType" = '${mediaType}'`);
-    }
-    if (liked !== undefined) {
-      if (liked) {
-        conditions.push(`s.liked > 0`);
-      } else {
-        conditions.push(`s.liked = 0`);
-      }
-    }
-    if (hueCategories && hueCategories.length > 0) {
-      conditions.push(`sc."hueCategory" IN (${hueCategories.map((h) => `'${h}'`).join(', ')})`);
-    }
-    if (tonePoint && toneTolerance < 100) {
-      conditions.push(`SQRT(
-        POWER(sc.saturation - ${tonePoint.saturation}, 2) + 
-        POWER(sc.lightness - ${tonePoint.lightness}, 2)
-      ) <= ${toneTolerance}`);
-    }
-    if (customColor) {
-      const customRgb = hexToRgb(customColor);
-      if (customRgb) {
-        const customHsl = ColorExtractor.rgbToHsl(customRgb.r, customRgb.g, customRgb.b);
-        conditions.push(`SQRT(
-          POWER(sc.hue - ${customHsl.h}, 2) + 
-          POWER(sc.saturation - ${customHsl.s}, 2) + 
-          POWER(sc.lightness - ${customHsl.l}, 2)
-        ) <= 30`);
-      }
-    }
-
-    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-
-    // シンプルなクエリに変更
-    const queryString = `
-      WITH color_filtered AS (
-        SELECT DISTINCT s.id
-        FROM "Stack" s
-        INNER JOIN "StackColor" sc ON s.id = sc."stackId"
-        ${whereClause}
-      )
-      SELECT s.* FROM "Stack" s
-      INNER JOIN color_filtered cf ON s.id = cf.id
-      ORDER BY s."createdAt" DESC
-      LIMIT ${limit}
-      OFFSET ${offset}
-    `;
-
-    const stacks = await prisma.$queryRawUnsafe<Array<{ id: number }>>(queryString);
-
-    // 関連データを取得
-    const stackIds = stacks.map((s) => s.id);
     const stacksWithRelations = await prisma.stack.findMany({
       where: {
         id: { in: stackIds },
@@ -360,13 +312,12 @@ export const createColorSearchService = (deps: { prisma: PrismaClient; dataSetId
       },
     });
 
-    // 元の順序を保持
     const idToStack = new Map(stacksWithRelations.map((s) => [s.id, s]));
-    const orderedStacks = stacks.map((s) => idToStack.get(s.id)).filter((s) => s);
+    const orderedStacks = stackIds.map((id) => idToStack.get(id)).filter((s) => s);
 
     return {
       stacks: orderedStacks,
-      total: await getColorFilterCount(options),
+      total: allMatchedIds.length,
       limit,
       offset,
     };
@@ -474,91 +425,6 @@ export const createColorSearchService = (deps: { prisma: PrismaClient; dataSetId
         migrationComplete: assetsWithJson === assetsWithTable.length,
       },
     };
-  }
-
-  /**
-   * 色検索の総件数取得
-   */
-  async function getColorSearchCount(
-    targetHsl: { h: number; s: number; l: number },
-    hueCategory: string,
-    maxDistance: number,
-    mediaType?: string
-  ): Promise<number> {
-    const result = await prisma.$queryRaw<Array<{ count: bigint }>>`
-      WITH filtered_stacks AS (
-        SELECT DISTINCT s.id
-        FROM "Stack" s
-        INNER JOIN "StackColor" sc ON s.id = sc."stackId"
-        WHERE sc."hueCategory" = ${hueCategory}
-          AND s."dataSetId" = ${dataSetId}
-          ${mediaType ? Prisma.sql`AND s."mediaType" = ${mediaType}` : Prisma.empty}
-      ),
-      color_distances AS (
-        SELECT 
-          fs.id,
-          MIN(
-            SQRT(
-              POWER(sc.hue - ${targetHsl.h}, 2) + 
-              POWER(sc.saturation - ${targetHsl.s}, 2) + 
-              POWER(sc.lightness - ${targetHsl.l}, 2)
-            )
-          ) as min_distance
-        FROM filtered_stacks fs
-        INNER JOIN "StackColor" sc ON fs.id = sc."stackId"
-        GROUP BY fs.id
-      )
-      SELECT COUNT(*)::int as count FROM color_distances
-      WHERE min_distance <= ${maxDistance}
-    `;
-
-    return Number(result[0]?.count || 0);
-  }
-
-  /**
-   * 色フィルタの総件数取得（修正版）
-   */
-  async function getColorFilterCount(options: ColorFilterOptions): Promise<number> {
-    const { hueCategories, tonePoint, toneTolerance = 10, customColor, mediaType } = options;
-
-    const conditions: string[] = [];
-
-    conditions.push(`s."dataSetId" = ${dataSetId}`);
-    if (mediaType) {
-      conditions.push(`s."mediaType" = '${mediaType}'`);
-    }
-    if (hueCategories && hueCategories.length > 0) {
-      conditions.push(`sc."hueCategory" IN (${hueCategories.map((h) => `'${h}'`).join(', ')})`);
-    }
-    if (tonePoint && toneTolerance < 100) {
-      conditions.push(`SQRT(
-        POWER(sc.saturation - ${tonePoint.saturation}, 2) + 
-        POWER(sc.lightness - ${tonePoint.lightness}, 2)
-      ) <= ${toneTolerance}`);
-    }
-    if (customColor) {
-      const customRgb = hexToRgb(customColor);
-      if (customRgb) {
-        const customHsl = ColorExtractor.rgbToHsl(customRgb.r, customRgb.g, customRgb.b);
-        conditions.push(`SQRT(
-          POWER(sc.hue - ${customHsl.h}, 2) + 
-          POWER(sc.saturation - ${customHsl.s}, 2) + 
-          POWER(sc.lightness - ${customHsl.l}, 2)
-        ) <= 30`);
-      }
-    }
-
-    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-
-    const queryString = `
-      SELECT COUNT(DISTINCT s.id)::int as count
-      FROM "Stack" s
-      INNER JOIN "StackColor" sc ON s.id = sc."stackId"
-      ${whereClause}
-    `;
-
-    const result = await prisma.$queryRawUnsafe<Array<{ count: bigint }>>(queryString);
-    return Number(result[0]?.count || 0);
   }
 
   return {

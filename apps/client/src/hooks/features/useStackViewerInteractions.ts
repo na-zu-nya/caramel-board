@@ -32,11 +32,13 @@ export function useStackViewerInteractions(params: {
   mediaType: string;
   stackId: string;
   listToken?: string;
+  returnTo?: string;
   stack?: Stack;
   currentPage: number;
   setCurrentPage: (fn: (p: number) => number | number) => void;
 }) {
-  const { datasetId, mediaType, stackId, listToken, stack, currentPage, setCurrentPage } = params;
+  const { datasetId, mediaType, stackId, listToken, returnTo, stack, currentPage, setCurrentPage } =
+    params;
   const { ctx, restore, prefetchAround, moveIndex } = useViewContext();
   const navigate = useNavigate();
 
@@ -181,7 +183,7 @@ export function useStackViewerInteractions(params: {
       navigate({
         to: '/library/$datasetId/stacks/$stackId',
         params: { datasetId, stackId: String(targetStackId) },
-        search: { page: 0, mediaType, listToken },
+        search: { page: 0, mediaType, listToken, returnTo },
         replace: true,
       });
       requestAnimationFrame(() => {
@@ -203,7 +205,7 @@ export function useStackViewerInteractions(params: {
         animationFrameRef.current = requestAnimationFrame(step);
       });
     },
-    [ctx, moveIndex, navigate, datasetId, mediaType, listToken, lerp]
+    [ctx, moveIndex, navigate, datasetId, mediaType, listToken, returnTo, lerp]
   );
 
   // Drag handlers

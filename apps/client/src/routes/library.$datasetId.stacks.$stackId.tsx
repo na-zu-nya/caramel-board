@@ -7,7 +7,11 @@ export const Route = createFileRoute('/library/$datasetId/stacks/$stackId')({
 
 function StackViewerPage() {
   const { datasetId, stackId } = Route.useParams();
-  const searchParams = Route.useSearch() as { mediaType?: string; listToken?: string };
+  const searchParams = Route.useSearch() as {
+    mediaType?: string;
+    listToken?: string;
+    returnTo?: string;
+  };
   const mediaType = searchParams.mediaType || 'image';
   const location = useLocation();
   const isSimilar = location.pathname.endsWith('/similar');
@@ -22,6 +26,7 @@ function StackViewerPage() {
       mediaType={mediaType as string}
       stackId={stackId}
       listToken={searchParams.listToken}
+      returnTo={searchParams.returnTo}
     />
   );
 }

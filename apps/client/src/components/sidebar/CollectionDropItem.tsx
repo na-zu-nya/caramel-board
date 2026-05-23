@@ -204,6 +204,17 @@ export function CollectionDropItem({
     });
   }, [collection.id, getDatasetIdFromPath, navigate]);
 
+  const handleFindSimilar = useCallback(() => {
+    const datasetId = getDatasetIdFromPath();
+    navigate({
+      to: '/library/$datasetId/collections/$collectionId/similar',
+      params: () => ({
+        datasetId: String(datasetId),
+        collectionId: String(collection.id),
+      }),
+    });
+  }, [collection.id, getDatasetIdFromPath, navigate]);
+
   const combinedRef = useCallback((node: HTMLDivElement | null) => {
     dropElementRef.current = node;
   }, []);
@@ -217,6 +228,7 @@ export function CollectionDropItem({
       onPin={onPin}
       onUnpin={onUnpin}
       onOpen={handleCollectionClick}
+      onFindSimilar={handleFindSimilar}
     >
       <div
         ref={combinedRef}

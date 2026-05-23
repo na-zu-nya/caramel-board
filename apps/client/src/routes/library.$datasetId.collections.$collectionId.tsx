@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { createFileRoute, useNavigate } from '@tanstack/react-router';
+import { createFileRoute, Outlet, useLocation, useNavigate } from '@tanstack/react-router';
 import { useAtom } from 'jotai';
 import { Eraser } from 'lucide-react';
 import MersenneTwister from 'mersenne-twister';
@@ -32,6 +32,17 @@ export const Route = createFileRoute('/library/$datasetId/collections/$collectio
 const SMART_PAGE_SIZE = 100;
 
 function CollectionView() {
+  const location = useLocation();
+  const isSimilar = location.pathname.endsWith('/similar');
+
+  if (isSimilar) {
+    return <Outlet />;
+  }
+
+  return <CollectionViewContent />;
+}
+
+function CollectionViewContent() {
   console.log('CollectionView');
 
   const { datasetId, collectionId } = Route.useParams();
@@ -331,6 +342,20 @@ function CollectionView() {
         if (currentFilter.colorFilter) {
           if ((currentFilter.colorFilter.hueCategories?.length ?? 0) > 0)
             filterParams.hueCategories = currentFilter.colorFilter.hueCategories;
+          if (currentFilter.colorFilter.tonePoint) {
+            filterParams.toneSaturation = currentFilter.colorFilter.tonePoint.saturation;
+            filterParams.toneLightness = currentFilter.colorFilter.tonePoint.lightness;
+          }
+          if (
+            currentFilter.colorFilter.toneSaturation !== undefined &&
+            currentFilter.colorFilter.tonePoint === undefined
+          )
+            filterParams.toneSaturation = currentFilter.colorFilter.toneSaturation;
+          if (
+            currentFilter.colorFilter.toneLightness !== undefined &&
+            currentFilter.colorFilter.tonePoint === undefined
+          )
+            filterParams.toneLightness = currentFilter.colorFilter.toneLightness;
           if (currentFilter.colorFilter.toneTolerance !== undefined)
             filterParams.toneTolerance = currentFilter.colorFilter.toneTolerance;
           if (currentFilter.colorFilter.similarityThreshold !== undefined)
