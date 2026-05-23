@@ -37,6 +37,7 @@ import {
   setStackDragData,
 } from '@/lib/stack-drag-data';
 import { cn } from '@/lib/utils';
+import { navigationStateAtom } from '@/stores/navigation';
 import { currentFilterAtom, infoSidebarOpenAtom, selectedItemIdAtom } from '@/stores/ui';
 import type { MediaGridItem } from '@/types';
 
@@ -99,6 +100,7 @@ export function StackGridItem({
   const pageCount = assetCount ?? countAssets ?? 0;
   const [isDragging, setIsDragging] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [isNativeDragReady, setIsNativeDragReady] = useState(false);
   const {
     draggedStack,
     setDraggedStack,
@@ -111,6 +113,7 @@ export function StackGridItem({
   const navigate = useNavigate();
   const setInfoOpen = useSetAtom(infoSidebarOpenAtom);
   const setSelectedItemId = useSetAtom(selectedItemIdAtom);
+  const setNavigationState = useSetAtom(navigationStateAtom);
   const selectedInfoId = useAtomValue(selectedItemIdAtom);
   const queryClient = useQueryClient();
   const canMergeSelectedStacks =
@@ -130,6 +133,38 @@ export function StackGridItem({
   const handleDownloadOriginals = useCallback(() => {
     downloadStackOriginals(datasetId, getDownloadStackIds());
   }, [datasetId, getDownloadStackIds]);
+  const saveNavigationPosition = useCallback(() => {
+    setNavigationState({
+      scrollPosition: window.scrollY,
+      total: 0,
+      items: [],
+      lastPath: window.location.pathname,
+    });
+  }, [setNavigationState]);
+  const handleContextOpen = useCallback(async () => {
+    saveNavigationPosition();
+    const ds = datasetId || '1';
+    const stackId = getStackId();
+    const id = typeof stackId === 'string' ? Number.parseInt(stackId, 10) : stackId;
+    await navigate({
+      to: '/library/$datasetId/stacks/$stackId',
+      params: { datasetId: ds, stackId: String(id) },
+      search:
+        favoriteKind === 'asset' && typeof item.favoritePage === 'number'
+          ? { page: item.favoritePage - 1 }
+          : undefined,
+    });
+  }, [datasetId, favoriteKind, getStackId, item.favoritePage, navigate, saveNavigationPosition]);
+  const enableNativeImageDrag = useCallback(() => {
+    if (sourceImageUrl) {
+      setIsNativeDragReady(true);
+    }
+  }, [sourceImageUrl]);
+  const disableNativeImageDrag = useCallback(() => {
+    if (!isDragging) {
+      setIsNativeDragReady(false);
+    }
+  }, [isDragging]);
   const invalidateStackData = useCallback(() => {
     void Promise.allSettled([
       queryClient.invalidateQueries({ queryKey: ['stack'] }),
@@ -252,10 +287,15 @@ export function StackGridItem({
               onItemClick(item);
             }
           }}
+          onPointerEnter={enableNativeImageDrag}
+          onPointerLeave={disableNativeImageDrag}
+          onFocus={enableNativeImageDrag}
+          onBlur={disableNativeImageDrag}
           onDragEnd={() => {
             console.log('Drag ended for item:', item.id);
             setIsDragging(false);
             setGlobalDragging(false);
+            setIsNativeDragReady(false);
           }}
           onDragStart={(e) => {
             if ((e.target as HTMLElement | null)?.dataset.nativeImageDrag === 'true') {
@@ -410,7 +450,7 @@ export function StackGridItem({
             loading="lazy"
             data-stack-drag-preview="true"
           />
-          {sourceImageUrl ? (
+          {isNativeDragReady && sourceImageUrl ? (
             <img
               src={sourceImageUrl}
               alt=""
@@ -495,23 +535,7 @@ export function StackGridItem({
       </ContextMenuTrigger>
       <ContextMenuContent className="w-48">
         {/* Open */}
-        <ContextMenuItem
-          onClick={async () => {
-            const ds = datasetId || '1';
-            const stackId = getStackId();
-            const id = typeof stackId === 'string' ? Number.parseInt(stackId, 10) : stackId;
-            await navigate({
-              to: '/library/$datasetId/stacks/$stackId',
-              params: { datasetId: ds, stackId: String(id) },
-              search:
-                favoriteKind === 'asset' && typeof item.favoritePage === 'number'
-                  ? { page: item.favoritePage - 1 }
-                  : undefined,
-            });
-          }}
-        >
-          Open
-        </ContextMenuItem>
+        <ContextMenuItem onClick={handleContextOpen}>Open</ContextMenuItem>
         <ContextMenuItem onClick={handleDownloadOriginals}>
           <Download className="w-4 h-4 mr-2" />
           Download

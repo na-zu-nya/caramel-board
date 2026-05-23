@@ -76,6 +76,7 @@ export function StackListItem({
     ? getSourceImageFilename(stack, sourceImageUrl, `stack-${stack.id}`)
     : 'image.jpg';
   const [isNativePointerActive, setIsNativePointerActive] = useState(false);
+  const [isNativeDragReady, setIsNativeDragReady] = useState(false);
   const totalAssets =
     (typeof stack.assetCount === 'number' && stack.assetCount >= 0
       ? stack.assetCount
@@ -119,6 +120,16 @@ export function StackListItem({
       onToggleSelection(stack.id);
     }
   };
+  const enableNativeImageDrag = useCallback(() => {
+    if (sourceImageUrl) {
+      setIsNativeDragReady(true);
+    }
+  }, [sourceImageUrl]);
+  const disableNativeImageDrag = useCallback(() => {
+    if (!isNativePointerActive) {
+      setIsNativeDragReady(false);
+    }
+  }, [isNativePointerActive]);
 
   // If onClick is provided, render as div, otherwise as Link
   const WrapperComponent = onClick ? 'div' : Link;
@@ -127,6 +138,10 @@ export function StackListItem({
         className: cn('group cursor-pointer block', className),
         onClick: handleClick,
         draggable: true,
+        onPointerEnter: enableNativeImageDrag,
+        onPointerLeave: disableNativeImageDrag,
+        onFocus: enableNativeImageDrag,
+        onBlur: disableNativeImageDrag,
         onDragStart: (e: React.DragEvent) => {
           if ((e.target as HTMLElement | null)?.dataset.nativeImageDrag === 'true') {
             setIsDragging(true);
@@ -154,6 +169,7 @@ export function StackListItem({
         onDragEnd: () => {
           setIsDragging(false);
           setIsNativePointerActive(false);
+          setIsNativeDragReady(false);
         },
       }
     : {
@@ -162,6 +178,10 @@ export function StackListItem({
         className: cn('group cursor-pointer block', className),
         onClick: handleClick,
         draggable: true,
+        onPointerEnter: enableNativeImageDrag,
+        onPointerLeave: disableNativeImageDrag,
+        onFocus: enableNativeImageDrag,
+        onBlur: disableNativeImageDrag,
         onDragStart: (e: React.DragEvent) => {
           if ((e.target as HTMLElement | null)?.dataset.nativeImageDrag === 'true') {
             setIsDragging(true);
@@ -188,6 +208,7 @@ export function StackListItem({
         onDragEnd: () => {
           setIsDragging(false);
           setIsNativePointerActive(false);
+          setIsNativeDragReady(false);
         },
       };
 
@@ -223,6 +244,22 @@ export function StackListItem({
         : [stack.id];
     downloadStackOriginals(datasetId, stackIds);
   }, [datasetId, selectedItemsSet, stack.id]);
+  const saveNavigationPosition = useCallback(() => {
+    setNavigationState({
+      scrollPosition: window.scrollY,
+      total: 0,
+      items: [],
+      lastPath: window.location.pathname,
+    });
+  }, [setNavigationState]);
+  const handleContextOpen = useCallback(async () => {
+    saveNavigationPosition();
+    const id = typeof stack.id === 'string' ? Number.parseInt(stack.id, 10) : stack.id;
+    await navigate({
+      to: '/library/$datasetId/stacks/$stackId',
+      params: { datasetId, stackId: String(id) },
+    });
+  }, [datasetId, navigate, saveNavigationPosition, stack.id]);
 
   const handleRemoveFromDataset = useCallback(async () => {
     const stackLabel = stack.title || stack.name || 'Untitled';
@@ -292,7 +329,7 @@ export function StackListItem({
                 <Image size={40} className="opacity-20" />
               </div>
             )}
-            {sourceImageUrl ? (
+            {isNativeDragReady && sourceImageUrl ? (
               <img
                 src={sourceImageUrl}
                 alt=""
@@ -372,17 +409,7 @@ export function StackListItem({
       </ContextMenuTrigger>
       <ContextMenuContent className="w-56">
         {/* Open */}
-        <ContextMenuItem
-          onClick={async () => {
-            const id = typeof stack.id === 'string' ? Number.parseInt(stack.id, 10) : stack.id;
-            await navigate({
-              to: '/library/$datasetId/stacks/$stackId',
-              params: { datasetId, stackId: String(id) },
-            });
-          }}
-        >
-          Open
-        </ContextMenuItem>
+        <ContextMenuItem onClick={handleContextOpen}>Open</ContextMenuItem>
         <ContextMenuItem onClick={handleDownloadOriginals}>
           <Download className="w-4 h-4 mr-2" />
           Download

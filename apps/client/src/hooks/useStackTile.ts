@@ -12,6 +12,7 @@ import {
   setNativeImageDragPreview,
   setStackDragData,
 } from '@/lib/stack-drag-data';
+import { navigationStateAtom } from '@/stores/navigation';
 import { infoSidebarOpenAtom, selectedItemIdAtom } from '@/stores/ui';
 
 export function useStackTile(datasetId: string) {
@@ -21,6 +22,7 @@ export function useStackTile(datasetId: string) {
   const { ensureScratch } = useScratch(datasetId);
   const setInfoOpen = useSetAtom(infoSidebarOpenAtom);
   const setSelectedItemId = useSetAtom(selectedItemIdAtom);
+  const setNavigationState = useSetAtom(navigationStateAtom);
   const selectedInfoId = useAtomValue(selectedItemIdAtom);
 
   const invalidateAfterRemoval = useCallback(() => {
@@ -41,6 +43,13 @@ export function useStackTile(datasetId: string) {
       stackId: number | string,
       options?: { page?: number; mediaType?: string; listToken?: string }
     ) => {
+      setNavigationState({
+        scrollPosition: window.scrollY,
+        total: 0,
+        items: [],
+        lastPath: window.location.pathname,
+      });
+
       const search = {
         ...(typeof options?.page === 'number' && options.page > 0 ? { page: options.page } : {}),
         ...(options?.mediaType ? { mediaType: options.mediaType } : {}),
@@ -53,7 +62,7 @@ export function useStackTile(datasetId: string) {
         search,
       });
     },
-    [datasetId, navigate]
+    [datasetId, navigate, setNavigationState]
   );
 
   const onFindSimilar = async (stackId: number | string) => {

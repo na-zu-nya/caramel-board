@@ -34,6 +34,7 @@ export const AsLink: Story = {
   args: {
     asChild: true,
     thumbnailUrl: 'https://picsum.photos/id/24/320/320',
+    nativeImageDragUrl: 'https://picsum.photos/id/24/1600/1600',
     title: 'Linked Stack',
     pageCount: 8,
     favorited: true,

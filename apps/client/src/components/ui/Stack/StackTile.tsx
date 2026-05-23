@@ -9,7 +9,7 @@ import {
   Star,
   Trash2,
 } from 'lucide-react';
-import { cloneElement, isValidElement, type ReactElement, useState } from 'react';
+import { cloneElement, isValidElement, type ReactElement, useCallback, useState } from 'react';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -70,6 +70,7 @@ export function StackTile({
   ...divProps
 }: StackTileProps) {
   const [isNativePointerActive, setIsNativePointerActive] = useState(false);
+  const [isNativeDragReady, setIsNativeDragReady] = useState(false);
   const resolvedThumbnailUrl = thumbnailUrl
     ? thumbnailUrl.startsWith('http')
       ? thumbnailUrl
@@ -80,6 +81,16 @@ export function StackTile({
       ? nativeImageDragUrl
       : getThumbnailPath(nativeImageDragUrl)
     : resolvedThumbnailUrl;
+  const enableNativeImageDrag = useCallback(() => {
+    if (resolvedNativeImageDragUrl) {
+      setIsNativeDragReady(true);
+    }
+  }, [resolvedNativeImageDragUrl]);
+  const disableNativeImageDrag = useCallback(() => {
+    if (!isNativePointerActive) {
+      setIsNativeDragReady(false);
+    }
+  }, [isNativePointerActive]);
 
   const body = (
     <div
@@ -90,6 +101,10 @@ export function StackTile({
       )}
       {...dragHandlers}
       {...divProps}
+      onPointerEnter={enableNativeImageDrag}
+      onPointerLeave={disableNativeImageDrag}
+      onFocus={enableNativeImageDrag}
+      onBlur={disableNativeImageDrag}
     >
       {thumbnailUrl ? (
         <img
@@ -110,7 +125,7 @@ export function StackTile({
           No Image
         </div>
       )}
-      {resolvedNativeImageDragUrl ? (
+      {isNativeDragReady && resolvedNativeImageDragUrl ? (
         <img
           src={resolvedNativeImageDragUrl}
           alt=""
@@ -118,7 +133,10 @@ export function StackTile({
           draggable={true}
           data-native-image-drag="true"
           onDragStart={() => setIsNativePointerActive(true)}
-          onDragEnd={() => setIsNativePointerActive(false)}
+          onDragEnd={() => {
+            setIsNativePointerActive(false);
+            setIsNativeDragReady(false);
+          }}
           aria-hidden="true"
         />
       ) : null}
