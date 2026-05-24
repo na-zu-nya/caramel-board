@@ -1,6 +1,6 @@
 {
   "name": "caramel-board",
-  "version": "0.4.7",
+  "version": "0.4.8",
   "private": true,
   "packageManager": "npm@10.9.2",
   "workspaces": [
