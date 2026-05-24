@@ -230,6 +230,7 @@ export default function StackViewer({
   const { navigateBack } = useStackNavigation({ currentStackId: stackId, currentPage, returnTo });
   const { ctx, update } = useViewContext();
   const navigate = useNavigate();
+  const shuffleInFlightRef = useRef(false);
   // vertical drag state (local to component)
   const currentVerticalOffsetRef = useRef(0);
   const verticalAnimRef = useRef<number | null>(null);
@@ -319,13 +320,39 @@ export default function StackViewer({
   // Shuffle navigation (uses original list context if available)
   const mtRef = useRef<MersenneTwister | null>(null);
   if (!mtRef.current) mtRef.current = new MersenneTwister();
+  const shuffleStateRef = useRef<{
+    ctx: typeof ctx;
+    datasetId: string;
+    mediaType: string;
+    listToken?: string;
+    returnTo?: string;
+    update: typeof update;
+    navigate: typeof navigate;
+    setIsListMode: typeof setIsListMode;
+  } | null>(null);
+  shuffleStateRef.current = {
+    ctx,
+    datasetId,
+    mediaType,
+    listToken,
+    returnTo,
+    update,
+    navigate,
+    setIsListMode,
+  };
 
   const handleShuffle = useCallback(async () => {
+    if (shuffleInFlightRef.current) return;
+    shuffleInFlightRef.current = true;
+
     try {
-      const baseDatasetId = ctx?.datasetId ?? datasetId;
-      const baseMediaType = ctx?.mediaType ?? (mediaType as any);
-      const baseFilter = ctx?.filters;
-      const baseSort = ctx?.sort;
+      const state = shuffleStateRef.current;
+      if (!state) return;
+
+      const baseDatasetId = state.ctx?.datasetId ?? state.datasetId;
+      const baseMediaType = state.ctx?.mediaType ?? (state.mediaType as any);
+      const baseFilter = state.ctx?.filters;
+      const baseSort = state.ctx?.sort;
 
       const countResp = await apiClient.getStacks({
         datasetId: baseDatasetId,
@@ -364,9 +391,9 @@ export default function StackViewer({
         .reverse();
       const targetId =
         typeof item.id === 'string' ? Number.parseInt(item.id, 10) : (item.id as number);
-      const token = listToken || (ctx?.token ?? '');
+      const token = state.listToken || (state.ctx?.token ?? '');
       if (token && pageIds.length > 0) {
-        update((prev) => {
+        state.update((prev) => {
           const base =
             prev && prev.token === token
               ? prev
@@ -392,23 +419,25 @@ export default function StackViewer({
         });
       }
 
-      void navigate({
+      void state.navigate({
         to: '/library/$datasetId/stacks/$stackId',
         params: { datasetId: String(baseDatasetId), stackId: String(item.id) },
         search: {
           page: 0,
           mediaType: String(baseMediaType),
           listToken: token || undefined,
-          returnTo,
+          returnTo: state.returnTo,
         },
         replace: true,
       });
       // Ensure single-image mode for gestures
-      setIsListMode(false);
+      state.setIsListMode(false);
     } catch (e) {
       console.error('Shuffle in viewer failed:', e);
+    } finally {
+      shuffleInFlightRef.current = false;
     }
-  }, [ctx, datasetId, mediaType, listToken, returnTo, update, navigate, setIsListMode]);
+  }, []);
 
   const handleSeparateAsset = useCallback(
     async (assetId: string | number) => {

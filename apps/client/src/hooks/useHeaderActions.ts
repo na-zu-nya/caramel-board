@@ -14,7 +14,13 @@ export function useHeaderActions(config: HeaderActionsConfig) {
   const setHeaderActions = useSetAtom(headerActionsAtom);
 
   useEffect(() => {
-    setHeaderActions(config);
+    setHeaderActions({
+      showShuffle: config.showShuffle,
+      showFilter: config.showFilter,
+      showSelection: config.showSelection,
+      showReorder: config.showReorder,
+      onShuffle: config.onShuffle ?? null,
+    });
   }, [
     setHeaderActions,
     config.showShuffle,
@@ -22,7 +28,6 @@ export function useHeaderActions(config: HeaderActionsConfig) {
     config.showSelection,
     config.showReorder,
     config.onShuffle,
-    config,
   ]);
 
   // Clean up only when component actually unmounts

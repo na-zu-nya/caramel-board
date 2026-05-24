@@ -91,7 +91,7 @@ tagsRoute.get('/search', async (c) => {
 tagsRoute.post('/', zValidator('json', CreateTagSchema), async (c) => {
   try {
     const data = c.req.valid('json');
-    const dataSetId = getDataSetIdFromQuery(c);
+    const dataSetId = data.dataSetId ?? getDataSetIdFromQuery(c);
     const auth = await ensureAuthorized(c, dataSetId);
     if (auth) return auth;
     const service = makeService(c, dataSetId);

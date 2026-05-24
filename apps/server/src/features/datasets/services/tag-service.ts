@@ -132,7 +132,7 @@ export const createTagService = (deps: { prisma: PrismaClient; dataSetId: number
         dataSetId,
         title: {
           contains: key,
-          mode: Prisma.QueryMode.insensitive,
+          mode: 'insensitive',
         },
       },
       take: 10,

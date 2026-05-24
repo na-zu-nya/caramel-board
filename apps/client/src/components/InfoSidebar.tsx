@@ -54,6 +54,15 @@ interface InfoSidebarProps {
   hideThumbnails?: boolean;
 }
 
+type StackTagValue = string | { name?: string; displayName?: string; title?: string };
+
+const getStackTagName = (tag: StackTagValue) => {
+  if (typeof tag === 'string') {
+    return tag;
+  }
+  return tag.name || tag.displayName || tag.title || '';
+};
+
 export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps) {
   const [isOpen, setIsOpen] = useAtom(infoSidebarOpenAtom);
   const [selectedItemId, setSelectedItemId] = useAtom(selectedItemIdAtom);
@@ -344,22 +353,43 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
     },
   });
 
-  const handleAddTag = (tag: string) => {
-    if (tag && selectedItem) {
-      // Check if tag already exists (handle both string and object tags)
-      const tagExists = selectedItem.tags?.some((existingTag) => {
-        const tagName = typeof existingTag === 'string' ? existingTag : existingTag.name;
-        return tagName === tag;
-      });
-
-      if (!tagExists) {
-        addTagMutation.mutate({ stackId: Number(selectedItem.id), tag });
-        setTagInput('');
-        // Add to recent tags
-        setRecentTags((prev) => [tag, ...prev.filter((t) => t !== tag)].slice(0, 10));
+  const currentTagNames = useMemo(() => {
+    const names = new Set<string>();
+    for (const tag of selectedItem?.tags || []) {
+      const tagName = getStackTagName(tag);
+      if (tagName) {
+        names.add(tagName);
       }
     }
-  };
+    return names;
+  }, [selectedItem?.tags]);
+
+  const suggestedTags = useMemo(() => {
+    const suggestions: string[] = [];
+    const seen = new Set<string>();
+    for (const autoTag of selectedItem?.autoTags || []) {
+      const tagTitle = autoTag.mappedTag?.title;
+      if (!tagTitle || currentTagNames.has(tagTitle) || seen.has(tagTitle)) {
+        continue;
+      }
+      seen.add(tagTitle);
+      suggestions.push(tagTitle);
+    }
+    return suggestions;
+  }, [currentTagNames, selectedItem?.autoTags]);
+
+  const handleAddTag = useCallback(
+    (tag: string) => {
+      if (tag && selectedItem) {
+        if (!currentTagNames.has(tag)) {
+          addTagMutation.mutate({ stackId: Number(selectedItem.id), tag });
+          setTagInput('');
+          setRecentTags((prev) => [tag, ...prev.filter((t) => t !== tag)].slice(0, 10));
+        }
+      }
+    },
+    [addTagMutation, currentTagNames, selectedItem]
+  );
 
   const _handleCopyTag = async (tag: string) => {
     const ok = await copyText(tag);
@@ -836,6 +866,23 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
                         type="button"
                         onClick={() => handleAddTag(tag)}
                         className="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded transition-colors"
+                      >
+                        {tag}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {suggestedTags.length > 0 && (
+                <div className="mt-2">
+                  <p className="text-xs text-gray-500 mb-1">Suggested tags:</p>
+                  <div className="flex flex-wrap gap-1">
+                    {suggestedTags.map((tag) => (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => handleAddTag(tag)}
+                        className="px-2 py-1 text-xs bg-blue-50 text-blue-700 hover:bg-blue-100 rounded transition-colors"
                       >
                         {tag}
                       </button>

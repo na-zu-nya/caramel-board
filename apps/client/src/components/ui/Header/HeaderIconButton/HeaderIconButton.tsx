@@ -27,7 +27,7 @@ const HeaderIconButton = forwardRef<HTMLButtonElement, HeaderIconButtonProps>(
         ref={ref}
         type="button"
         className={cn(
-          'p-2 rounded-md transition-all duration-200 relative',
+          'p-2 rounded-md transition-all duration-200 relative touch-manipulation',
           effectiveVariant === 'active'
             ? 'text-black hover:bg-black/10'
             : effectiveVariant === 'highlight'
