@@ -20,7 +20,7 @@ import {
   selectionModeAtom,
 } from '@/stores/ui';
 import { genListToken, saveViewContext } from '@/stores/view-context';
-import type { MediaGridItem } from '@/types';
+import type { MediaGridItem, StackPaginatedResponse } from '@/types';
 
 export const Route = createFileRoute('/library/$datasetId/stacks/$stackId/similar')({
   component: SimilarStacksRoute,
@@ -35,6 +35,7 @@ function SimilarStacksRoute() {
   const [_currentFilter, setCurrentFilter] = useAtom(currentFilterAtom);
   const [infoSidebarOpen, setInfoSidebarOpen] = useAtom(infoSidebarOpenAtom);
   const [selectedItemId, setSelectedItemId] = useAtom(selectedItemIdAtom);
+  const [favoritePending, setFavoritePending] = useState<Set<string | number>>(() => new Set());
   const lastClickedIndexRef = useRef<number | null>(null);
   const {
     selectedItems,
@@ -192,20 +193,65 @@ function SimilarStacksRoute() {
   );
 
   // Favorite toggle
+  const similarQueryKey = useMemo(
+    () => ['similar-stacks', datasetId, stackId, limit] as const,
+    [datasetId, stackId, limit]
+  );
+
+  const setFavoritePendingForItem = useCallback((itemId: string | number, pending: boolean) => {
+    setFavoritePending((current) => {
+      const next = new Set(current);
+      if (pending) {
+        next.add(itemId);
+      } else {
+        next.delete(itemId);
+      }
+      return next;
+    });
+  }, []);
+
+  const patchSimilarFavorite = useCallback(
+    (itemId: string | number, favorited: boolean) => {
+      queryClient.setQueryData<StackPaginatedResponse>(similarQueryKey, (current) => {
+        if (!current) return current;
+        return {
+          ...current,
+          stacks: current.stacks.map((stack) =>
+            String(stack.id) === String(itemId)
+              ? { ...stack, favorited, isFavorite: favorited }
+              : stack
+          ),
+        };
+      });
+    },
+    [queryClient, similarQueryKey]
+  );
+
   const onToggleFavorite = useCallback(
     async (item: MediaGridItem, e: React.MouseEvent) => {
+      e.preventDefault();
       e.stopPropagation();
+      const currentFavorited = Boolean(item.favorited ?? item.isFavorite);
+      const nextFavorited = !currentFavorited;
+      const itemId = item.id;
+      setFavoritePendingForItem(itemId, true);
+      patchSimilarFavorite(itemId, nextFavorited);
+
       try {
-        const currentFavorited = (item as any).favorited ?? (item as any).isFavorite ?? false;
-        await apiClient.toggleStackFavorite(item.id, !currentFavorited);
-        // Invalidate local caches
-        queryClient.invalidateQueries({ queryKey: ['similar-stacks', datasetId, stackId, limit] });
-        queryClient.invalidateQueries({ queryKey: ['library-counts', datasetId] });
+        await apiClient.toggleStackFavorite(itemId, nextFavorited);
+        await Promise.allSettled([
+          queryClient.invalidateQueries({ queryKey: similarQueryKey }),
+          queryClient.invalidateQueries({ queryKey: ['favorite-items', datasetId] }),
+          queryClient.invalidateQueries({ queryKey: ['library-counts', datasetId] }),
+        ]);
       } catch (err) {
+        patchSimilarFavorite(itemId, currentFavorited);
         console.error('Failed to toggle favorite', err);
+      } finally {
+        setFavoritePendingForItem(itemId, false);
       }
     },
-    [datasetId, stackId, limit, queryClient]
+    [datasetId, patchSimilarFavorite, queryClient, setFavoritePendingForItem, similarQueryKey]
   );
 
   // Bulk edit handlers
@@ -335,7 +381,7 @@ function SimilarStacksRoute() {
             isSelected={selectedItems.has(it.id)}
             isInfoSelected={selectedItemId === it.id}
             isSelectionMode={selectionMode}
-            isFavoritePending={false}
+            isFavoritePending={favoritePending.has(it.id)}
             onItemClick={handleItemClick}
             onToggleSelection={handleToggleSelection}
             onToggleFavorite={onToggleFavorite}

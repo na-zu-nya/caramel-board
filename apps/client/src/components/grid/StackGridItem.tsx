@@ -503,7 +503,11 @@ export function StackGridItem({
           {!isSelectionMode && (
             <button
               type="button"
-              onClick={(e) => onToggleFavorite(item, e)}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onToggleFavorite(item, e);
+              }}
               className={`absolute bottom-2 left-2 p-1 rounded-full transition-all duration-200 z-10 ${
                 currentFavorited
                   ? favoriteKind === 'asset'

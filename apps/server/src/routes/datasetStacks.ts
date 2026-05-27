@@ -20,6 +20,7 @@ import { SearchQuerySchema } from '../schemas/search-schema.js';
 import { AutoTagService } from '../shared/services/AutoTagService';
 import { CollectionService } from '../shared/services/CollectionService';
 import { DataSetService } from '../shared/services/DataSetService';
+import { ensureSuperUser } from '../shared/services/UserService';
 import { toPublicAssetPath, withPublicAssetArray } from '../utils/assetPath';
 
 const app = new Hono();
@@ -34,6 +35,27 @@ type StackWithAssets = Stack & {
 function buildStackService(dataSetId: number) {
   const colorSearch = createColorSearchService({ prisma, dataSetId });
   return createStackService({ prisma, colorSearch, dataSetId });
+}
+
+async function getStackFavoriteSet(stackIds: number[]) {
+  if (stackIds.length === 0) {
+    return new Set<number>();
+  }
+
+  try {
+    const userId = await ensureSuperUser(prisma);
+    const favorites = await prisma.stackFavorite.findMany({
+      where: {
+        userId,
+        stackId: { in: stackIds },
+      },
+      select: { stackId: true },
+    });
+    return new Set(favorites.map((favorite) => favorite.stackId));
+  } catch (error) {
+    console.error('[datasetStacks] Failed to resolve favorites', error);
+    return new Set<number>();
+  }
 }
 
 // Middleware to validate dataset exists
@@ -170,6 +192,7 @@ app.get(
 
       const ids = result.stacks.map((stack) => stack.id);
       let assetCountMap = new Map<number, number>();
+      const favoriteSet = await getStackFavoriteSet(ids);
       if (ids.length > 0) {
         const counts = await prisma.asset.groupBy({
           by: ['stackId'],
@@ -190,6 +213,9 @@ app.get(
           assets,
           thumbnail: toPublicAssetPath(stack.thumbnail, dataSetId),
           assetCount: assetCountMap.get(stack.id) ?? 0,
+          assetsCount: assetCountMap.get(stack.id) ?? 0,
+          favorited: favoriteSet.has(stack.id),
+          isFavorite: favoriteSet.has(stack.id),
         };
       });
 
@@ -258,6 +284,7 @@ app.get(
 
       const ids = result.stacks.map((stack) => stack.id);
       let assetCountMap = new Map<number, number>();
+      const favoriteSet = await getStackFavoriteSet(ids);
       if (ids.length > 0) {
         const counts = await prisma.asset.groupBy({
           by: ['stackId'],
@@ -278,6 +305,9 @@ app.get(
           assets,
           thumbnail: toPublicAssetPath(stack.thumbnail, dataSetId),
           assetCount: assetCountMap.get(stack.id) ?? 0,
+          assetsCount: assetCountMap.get(stack.id) ?? 0,
+          favorited: favoriteSet.has(stack.id),
+          isFavorite: favoriteSet.has(stack.id),
         };
       });
 
