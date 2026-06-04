@@ -24,6 +24,8 @@
     "docker:logs": "docker-compose logs -f",
     "db:backup": "./serve.sh backup",
     "db:restore": "docker-compose -f docker-compose.dev.yml exec -T postgres psql -U caramel_user -d caramel_board_db < backup.sql",
+    "standalone:export": "npm run -w @caramelboard/server export:standalone --",
+    "standalone:import": "npm run -w @caramelboard/server import:standalone --",
     "db:push": "npm run -w @caramelboard/server db:push",
     "prisma:push": "npm run db:push",
     "prisma:generate": "npm run -w @caramelboard/server db:generate",

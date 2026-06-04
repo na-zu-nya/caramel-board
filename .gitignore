@@ -73,6 +73,7 @@ externals/
 # Backup files
 backups/*.sql.gz
 backups/*.sql
+exports/
 
 # Test coverage
 coverage/
