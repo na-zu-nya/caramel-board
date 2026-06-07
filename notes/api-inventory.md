@@ -27,9 +27,9 @@
 | datasets | 部分 | `GET /datasets`, `GET /datasets/:id`, `POST /datasets`, `PUT /datasets/:id`, `DELETE /datasets/:id`, `GET /datasets/:id/overview`, protection/auth/default 系 | `POST /datasets/:id/refresh-all` は standalone SQLite で 501 |
 | authors | 完了 | `GET /authors`, `GET /authors/search` | なし |
 | tags | 完了 | `GET /tags`, `GET /tags/management`, `GET /tags/search`, `POST /tags`, `PUT /tags/:id`, `POST /tags/merge`, `POST /tags/tag-stack`, `GET /tags/:id/stacks`, `DELETE /tags/:id` | なし |
-| stacks | 部分 | `GET /stacks/paginated`, `GET /stacks/:id`, `GET /stacks/favorites/list`, `GET /stacks/search/autotag`, `POST /stacks/:id/aggregate-tags`, `POST /stacks/:id/like`, `PUT /stacks/:id/favorite`, `POST /stacks/:id/tags`, `DELETE /stacks/:id/tags/:tag`, `PUT /stacks/:id/author`, `DELETE /stacks/:id` | upload / URL import / download originals は未移行。thumbnail refresh / stack asset追加 / bulk edit / merge は 501 |
+| stacks | 部分 | `GET /stacks/paginated`, `GET /stacks/:id`, `GET /stacks/favorites/list`, `GET /stacks/search/autotag`, `POST /stacks/:id/aggregate-tags`, `POST /stacks/:id/refresh-thumbnail`, `POST /stacks/bulk/tags`, `PUT /stacks/bulk/author`, `PUT /stacks/bulk/media-type`, `PUT /stacks/bulk/favorite`, `POST /stacks/bulk/refresh-thumbnails`, `POST /stacks/merge`, `DELETE /stacks/bulk/remove`, `POST /stacks/:id/like`, `PUT /stacks/:id/favorite`, `POST /stacks/:id/tags`, `DELETE /stacks/:id/tags/:tag`, `PUT /stacks/:id/author`, `DELETE /stacks/:id` | upload / URL import / download originals / stack asset追加 は未移行 |
 | dataset assets | 完了 | `GET /datasets/:dataSetId/stacks/:id/assets`, `PUT /datasets/:dataSetId/stacks/:id/assets/:assetId/meta` | なし |
-| assets-lite | 部分 | `DELETE /assets/:assetId`, `PUT /assets/:assetId/order`, `PUT /assets/:assetId/favorite`, `POST /assets/:assetId/like` | `POST /assets/:assetId/separate` は 501 |
+| assets-lite | 完了 | `DELETE /assets/:assetId`, `POST /assets/:assetId/separate`, `PUT /assets/:assetId/order`, `PUT /assets/:assetId/favorite`, `POST /assets/:assetId/like` | なし |
 | collections | 部分 | `GET /collections`, `GET /collections/:id`, `POST /collections`, `PUT /collections/:id`, `DELETE /collections/:id`, stack add/remove/bulk/reorder, `GET /collections/:id/stacks`, `GET /collections/:id/smart-stacks`, `GET /stacks/:id/collections` | smart-stacks は検索/タグ/作者/fav/liked/mediaType を SQLite stack query に変換。colorFilter は colors API 移行時に精度合わせ |
 | collection-folders | 完了 | `GET /collection-folders`, `GET /collection-folders/tree`, `GET /collection-folders/:id`, `POST /collection-folders`, `PUT /collection-folders/:id`, `DELETE /collection-folders/:id`, reorder, move | なし |
 | activities | 完了 | `GET /activities`, `GET /activities/likes`, `GET /activities/likes/yearly`, `DELETE /activities/likes/:id` | なし |
@@ -51,6 +51,7 @@
 - `exports/imported-reference-check.sqlite` を参照して colors stats/search/search-multi/filter/update-all-colors を確認。
 - colors stack update は既存 asset colors を集約して stack colors を更新する実装。検証時に `exports/imported-reference-check.sqlite` の stack 79 を更新済み。
 - `/tmp/caramel-board-autotag-write-check.sqlite` のコピーDBで auto-tag statistics(raw/aggregate)/strict, mappings list/create/update/delete, stack auto-tag search, stack aggregate-tags, tag stacks を確認。
+- `/tmp/caramel-board-stack-maintenance-check.sqlite` のコピーDBで asset separate, thumbnail refresh, bulk tags/author/media-type/favorite/refresh/remove, stack merge を確認。
 
 ## 結論
 

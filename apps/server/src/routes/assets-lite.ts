@@ -48,7 +48,9 @@ assetsLiteRoute.post('/:assetId/separate', async (c) => {
     return c.json({ error: 'Invalid asset id' }, 400);
   }
   if (isStandaloneSqliteEnabled()) {
-    return c.json({ error: 'Asset separation is not implemented for standalone SQLite yet' }, 501);
+    const stack = new StandaloneStackRepository().separateAsset(assetId);
+    if (!stack) return c.json({ error: 'Asset not found' }, 404);
+    return c.json({ success: true, stack });
   }
 
   const prisma = usePrisma(c);

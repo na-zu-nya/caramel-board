@@ -878,7 +878,9 @@ stacksRoute.put('/:id{[0-9]+}/favorite', async (c) => {
 stacksRoute.post('/:id{[0-9]+}/refresh-thumbnail', async (c) => {
   const id = Number.parseInt(c.req.param('id'), 10);
   if (isStandaloneSqliteEnabled()) {
-    return c.json({ error: 'Thumbnail refresh is not implemented for standalone SQLite yet' }, 501);
+    const ok = new StandaloneStackRepository().refreshStackThumbnail(id);
+    if (!ok) return c.json({ error: 'Stack not found' }, 404);
+    return c.json({ success: true, message: 'Thumbnail refreshed successfully' });
   }
   const prisma = usePrisma(c);
   const ds = await resolveDatasetId(prisma, id);
@@ -1280,12 +1282,14 @@ async function withStackServiceForIds(c: Context, ids: number[] | number) {
 
 // POST /stacks/bulk/tags
 stacksRoute.post('/bulk/tags', async (c) => {
-  if (isStandaloneSqliteEnabled()) {
-    return c.json({ error: 'Bulk tags is not implemented for standalone SQLite yet' }, 501);
-  }
   const body: unknown = await c.req.json().catch(() => ({}));
   const parse = BulkTagsSchema.safeParse(body);
   if (!parse.success) return c.json({ error: 'Invalid body', details: parse.error }, 400);
+  if (isStandaloneSqliteEnabled()) {
+    return c.json(
+      new StandaloneStackRepository().bulkAddTags(parse.data.stackIds, parse.data.tags)
+    );
+  }
   const { stackService, sanitizedIds } = await withStackServiceForIds(c, parse.data.stackIds);
   const res = await stackService.bulkAddTags(sanitizedIds, parse.data.tags);
   return c.json(res);
@@ -1293,12 +1297,14 @@ stacksRoute.post('/bulk/tags', async (c) => {
 
 // PUT /stacks/bulk/author
 stacksRoute.put('/bulk/author', async (c) => {
-  if (isStandaloneSqliteEnabled()) {
-    return c.json({ error: 'Bulk author is not implemented for standalone SQLite yet' }, 501);
-  }
   const body: unknown = await c.req.json().catch(() => ({}));
   const parse = BulkAuthorSchema.safeParse(body);
   if (!parse.success) return c.json({ error: 'Invalid body', details: parse.error }, 400);
+  if (isStandaloneSqliteEnabled()) {
+    return c.json(
+      new StandaloneStackRepository().bulkSetAuthor(parse.data.stackIds, parse.data.author)
+    );
+  }
   const { stackService, sanitizedIds } = await withStackServiceForIds(c, parse.data.stackIds);
   const res = await stackService.bulkSetAuthor(sanitizedIds, parse.data.author);
   return c.json(res);
@@ -1306,12 +1312,14 @@ stacksRoute.put('/bulk/author', async (c) => {
 
 // PUT /stacks/bulk/media-type
 stacksRoute.put('/bulk/media-type', async (c) => {
-  if (isStandaloneSqliteEnabled()) {
-    return c.json({ error: 'Bulk media type is not implemented for standalone SQLite yet' }, 501);
-  }
   const body: unknown = await c.req.json().catch(() => ({}));
   const parse = BulkMediaTypeSchema.safeParse(body);
   if (!parse.success) return c.json({ error: 'Invalid body', details: parse.error }, 400);
+  if (isStandaloneSqliteEnabled()) {
+    return c.json(
+      new StandaloneStackRepository().bulkSetMediaType(parse.data.stackIds, parse.data.mediaType)
+    );
+  }
   const { stackService, sanitizedIds } = await withStackServiceForIds(c, parse.data.stackIds);
   const res = await stackService.bulkSetMediaType(sanitizedIds, parse.data.mediaType);
   return c.json(res);
@@ -1319,12 +1327,14 @@ stacksRoute.put('/bulk/media-type', async (c) => {
 
 // PUT /stacks/bulk/favorite
 stacksRoute.put('/bulk/favorite', async (c) => {
-  if (isStandaloneSqliteEnabled()) {
-    return c.json({ error: 'Bulk favorite is not implemented for standalone SQLite yet' }, 501);
-  }
   const body: unknown = await c.req.json().catch(() => ({}));
   const parse = BulkFavoriteSchema.safeParse(body);
   if (!parse.success) return c.json({ error: 'Invalid body', details: parse.error }, 400);
+  if (isStandaloneSqliteEnabled()) {
+    return c.json(
+      new StandaloneStackRepository().bulkSetFavorite(parse.data.stackIds, parse.data.favorited)
+    );
+  }
   const { stackService, sanitizedIds } = await withStackServiceForIds(c, parse.data.stackIds);
   const res = await stackService.bulkSetFavorite(sanitizedIds, parse.data.favorited);
   return c.json(res);
@@ -1332,15 +1342,12 @@ stacksRoute.put('/bulk/favorite', async (c) => {
 
 // POST /stacks/bulk/refresh-thumbnails
 stacksRoute.post('/bulk/refresh-thumbnails', async (c) => {
-  if (isStandaloneSqliteEnabled()) {
-    return c.json(
-      { error: 'Bulk thumbnail refresh is not implemented for standalone SQLite yet' },
-      501
-    );
-  }
   const body: unknown = await c.req.json().catch(() => ({}));
   const parse = BulkRefreshThumbsSchema.safeParse(body);
   if (!parse.success) return c.json({ error: 'Invalid body', details: parse.error }, 400);
+  if (isStandaloneSqliteEnabled()) {
+    return c.json(new StandaloneStackRepository().bulkRefreshThumbnails(parse.data.stackIds));
+  }
   const { stackService, sanitizedIds } = await withStackServiceForIds(c, parse.data.stackIds);
   const res = await stackService.bulkRefreshThumbnails(sanitizedIds);
   return c.json(res);
@@ -1348,15 +1355,22 @@ stacksRoute.post('/bulk/refresh-thumbnails', async (c) => {
 
 // POST /stacks/merge - merge source stacks into target
 stacksRoute.post('/merge', async (c) => {
-  if (isStandaloneSqliteEnabled()) {
-    return c.json({ error: 'Stack merge is not implemented for standalone SQLite yet' }, 501);
-  }
   const body: unknown = await c.req.json().catch(() => ({}));
   const parse = MergeStacksSchema.safeParse(body);
   if (!parse.success) return c.json({ error: 'Invalid body', details: parse.error }, 400);
   const { targetId, sourceIds } = parse.data;
   const sanitized = sanitizeStackIds([targetId, ...sourceIds]);
   const [sanitizedTarget, ...sanitizedSources] = sanitized;
+  if (isStandaloneSqliteEnabled()) {
+    const stack = new StandaloneStackRepository().mergeStacks(sanitizedTarget, sanitizedSources);
+    if (!stack) return c.json({ error: 'Stack not found' }, 404);
+    return c.json({
+      success: true,
+      targetId: sanitizedTarget,
+      merged: sanitizedSources.length,
+      stack,
+    });
+  }
   const { stackService, prisma } = await withStackServiceForIds(c, sanitized);
   const updated = await stackService.mergeStacks(sanitizedTarget, sanitizedSources);
   const assetCount = await prisma.asset.count({ where: { stackId: sanitizedTarget } });
@@ -1370,12 +1384,12 @@ stacksRoute.post('/merge', async (c) => {
 
 // DELETE /stacks/bulk/remove
 stacksRoute.delete('/bulk/remove', async (c) => {
-  if (isStandaloneSqliteEnabled()) {
-    return c.json({ error: 'Bulk stack remove is not implemented for standalone SQLite yet' }, 501);
-  }
   const body: unknown = await c.req.json().catch(() => ({}));
   const parse = BulkRemoveSchema.safeParse(body);
   if (!parse.success) return c.json({ error: 'Invalid body', details: parse.error }, 400);
+  if (isStandaloneSqliteEnabled()) {
+    return c.json(new StandaloneStackRepository().bulkRemoveStacks(parse.data.stackIds));
+  }
   const { stackService, sanitizedIds } = await withStackServiceForIds(c, parse.data.stackIds);
   const res = await stackService.bulkRemoveStacks(sanitizedIds);
   return c.json(res);

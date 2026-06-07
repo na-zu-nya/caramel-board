@@ -452,6 +452,228 @@ export class StandaloneStackRepository {
     return true;
   }
 
+  separateAsset(assetId: number) {
+    const asset = this.db
+      .prepare(
+        `SELECT assets.*, s.dataset_id, s.author_id, s.name AS stack_name, s.media_type
+         FROM assets
+         JOIN stacks s ON s.id = assets.stack_id
+         WHERE assets.id = ?`
+      )
+      .get(assetId) as
+      | (AssetRow & {
+          dataset_id: number;
+          author_id: number | null;
+          stack_name: string;
+          media_type: string;
+        })
+      | undefined;
+    if (!asset) return null;
+
+    const baseName = asset.original_name.replace(/\.[^./]+$/, '').trim();
+    const name = baseName.length
+      ? baseName
+      : asset.stack_name.length
+        ? `${asset.stack_name} (Separated)`
+        : 'Separated asset';
+    const now = nowIso();
+
+    this.db.exec('BEGIN');
+    try {
+      const created = this.db
+        .prepare(
+          `INSERT INTO stacks
+             (dataset_id, author_id, name, thumbnail, media_type, liked, meta_json, dominant_colors_json, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`
+        )
+        .run(
+          asset.dataset_id,
+          asset.author_id,
+          name,
+          asset.thumbnail,
+          asset.media_type,
+          '{}',
+          asset.dominant_colors_json,
+          now,
+          now
+        );
+      const newStackId = Number(created.lastInsertRowid);
+
+      this.db
+        .prepare('UPDATE assets SET stack_id = ?, order_in_stack = 0, updated_at = ? WHERE id = ?')
+        .run(newStackId, now, assetId);
+
+      const remaining = this.db
+        .prepare(
+          `SELECT id
+           FROM assets
+           WHERE stack_id = ?
+           ORDER BY order_in_stack ASC, id ASC`
+        )
+        .all(asset.stack_id) as Array<{ id: number }>;
+      const updateOrder = this.db.prepare(
+        'UPDATE assets SET order_in_stack = ?, updated_at = ? WHERE id = ?'
+      );
+      remaining.forEach((row, index) => {
+        updateOrder.run(index, now, row.id);
+      });
+
+      this.refreshStackThumbnail(asset.stack_id);
+      this.db.exec('COMMIT');
+      return this.getById(newStackId);
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+
+  bulkAddTags(stackIds: number[], tags: string[]) {
+    let updated = 0;
+    for (const stackId of stackIds) {
+      let changed = false;
+      for (const tag of tags) {
+        if (this.addTag(stackId, tag)) changed = true;
+      }
+      if (changed) updated++;
+    }
+    return { success: true, updated };
+  }
+
+  bulkSetAuthor(stackIds: number[], author: string) {
+    let updated = 0;
+    for (const stackId of stackIds) {
+      if (this.updateAuthor(stackId, author)) updated++;
+    }
+    return { success: true, updated };
+  }
+
+  bulkSetMediaType(stackIds: number[], mediaType: 'image' | 'comic' | 'video') {
+    if (stackIds.length === 0) return { success: true, updated: 0 };
+    const result = this.db
+      .prepare(
+        `UPDATE stacks
+         SET media_type = ?, updated_at = ?
+         WHERE id IN (${placeholders(stackIds)})`
+      )
+      .run(mediaType, nowIso(), ...stackIds);
+    return { success: true, updated: result.changes };
+  }
+
+  bulkSetFavorite(stackIds: number[], favorited: boolean) {
+    let updated = 0;
+    for (const stackId of stackIds) {
+      if (this.toggleStackFavorite(stackId, favorited)) updated++;
+    }
+    return { success: true, updated };
+  }
+
+  bulkRefreshThumbnails(stackIds: number[]) {
+    let updated = 0;
+    const errors: string[] = [];
+    for (const stackId of stackIds) {
+      if (this.refreshStackThumbnail(stackId)) {
+        updated++;
+      } else {
+        errors.push(`Stack ${stackId} not found`);
+      }
+    }
+    return { success: errors.length === 0, updated, errors };
+  }
+
+  bulkRemoveStacks(stackIds: number[]) {
+    let removed = 0;
+    const errors: string[] = [];
+    for (const stackId of stackIds) {
+      if (this.deleteStack(stackId)) {
+        removed++;
+      } else {
+        errors.push(`Stack ${stackId} not found`);
+      }
+    }
+    return { success: errors.length === 0, removed, errors };
+  }
+
+  mergeStacks(targetId: number, sourceIds: number[]) {
+    const target = this.getStackDataset(targetId);
+    if (!target) return null;
+    const sources = sourceIds
+      .map((sourceId) => this.getStackDataset(sourceId))
+      .filter((source): source is { id: number; dataset_id: number } => Boolean(source));
+    if (sources.length !== sourceIds.length) return null;
+    if (sources.some((source) => source.dataset_id !== target.dataset_id)) {
+      throw new Error('Stacks belong to multiple datasets');
+    }
+
+    const now = nowIso();
+    this.db.exec('BEGIN');
+    try {
+      const maxOrder =
+        (
+          this.db
+            .prepare(
+              'SELECT COALESCE(MAX(order_in_stack), -1) AS count FROM assets WHERE stack_id = ?'
+            )
+            .get(targetId) as CountRow | undefined
+        )?.count ?? -1;
+      let nextOrder = maxOrder + 1;
+      const sourceAssetRows = this.db
+        .prepare(
+          `SELECT id
+           FROM assets
+           WHERE stack_id IN (${placeholders(sourceIds)})
+           ORDER BY stack_id ASC, order_in_stack ASC, id ASC`
+        )
+        .all(...sourceIds) as Array<{ id: number }>;
+      const updateAsset = this.db.prepare(
+        'UPDATE assets SET stack_id = ?, order_in_stack = ?, updated_at = ? WHERE id = ?'
+      );
+      for (const asset of sourceAssetRows) {
+        updateAsset.run(targetId, nextOrder, now, asset.id);
+        nextOrder++;
+      }
+
+      const sourceTagRows = this.db
+        .prepare(
+          `SELECT DISTINCT tag_id
+           FROM stack_tags
+           WHERE stack_id IN (${placeholders(sourceIds)})`
+        )
+        .all(...sourceIds) as Array<{ tag_id: number }>;
+      const insertTag = this.db.prepare(
+        'INSERT OR IGNORE INTO stack_tags (stack_id, tag_id) VALUES (?, ?)'
+      );
+      for (const row of sourceTagRows) {
+        insertTag.run(targetId, row.tag_id);
+      }
+
+      const sourceCollectionRows = this.db
+        .prepare(
+          `SELECT DISTINCT collection_id
+           FROM collection_stacks
+           WHERE stack_id IN (${placeholders(sourceIds)})`
+        )
+        .all(...sourceIds) as Array<{ collection_id: number }>;
+      const insertCollection = this.db.prepare(
+        `INSERT OR IGNORE INTO collection_stacks (collection_id, stack_id, added_at, order_index)
+         VALUES (?, ?, ?, 0)`
+      );
+      for (const row of sourceCollectionRows) {
+        insertCollection.run(row.collection_id, targetId, now);
+      }
+
+      this.db
+        .prepare(`DELETE FROM stacks WHERE id IN (${placeholders(sourceIds)})`)
+        .run(...sourceIds);
+      this.refreshStackThumbnail(targetId);
+      this.db.prepare('UPDATE stacks SET updated_at = ? WHERE id = ?').run(now, targetId);
+      this.db.exec('COMMIT');
+      return this.getById(targetId);
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+
   getCollectionIdsByStackId(stackId: number) {
     const rows = this.db
       .prepare(
@@ -666,7 +888,7 @@ export class StandaloneStackRepository {
       .get(assetId) as { id: number; stack_id: number; dataset_id: number } | undefined;
   }
 
-  private refreshStackThumbnail(stackId: number) {
+  refreshStackThumbnail(stackId: number) {
     const asset = this.db
       .prepare(
         `SELECT thumbnail
@@ -676,8 +898,9 @@ export class StandaloneStackRepository {
          LIMIT 1`
       )
       .get(stackId) as { thumbnail: string } | undefined;
-    this.db
+    const result = this.db
       .prepare('UPDATE stacks SET thumbnail = ?, updated_at = ? WHERE id = ?')
       .run(asset?.thumbnail ?? '', nowIso(), stackId);
+    return result.changes > 0;
   }
 }
