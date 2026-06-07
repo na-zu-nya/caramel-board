@@ -9,6 +9,7 @@
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev --parallel",
+    "dev:next": "turbo run dev:next --parallel",
     "dev:db": "docker-compose -f docker-compose.dev.yml up -d postgres",
     "dev:db:down": "docker-compose -f docker-compose.dev.yml down",
     "lint": "turbo run lint",

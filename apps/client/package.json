@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "bash ./scripts/dev-with-storybook.sh",
+    "dev:next": "VITE_API_URL=${VITE_API_URL:-http://localhost:9000} vite --port 3000 --host",
     "dev:vite": "vite --port 3000 --host",
     "start": "vite --port 3000",
     "build": "vite build",

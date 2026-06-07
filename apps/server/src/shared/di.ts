@@ -5,10 +5,17 @@
 //  - ランタイムごとに差し替えたいもの（Prisma 接続先など）はここで if分岐
 // ----------------------------------------------------------------------------
 
-import { PrismaClient } from '@prisma/client';
+import { type DataSet, PrismaClient } from '@prisma/client';
 import type { Context } from 'hono';
 import { createFactory } from 'hono/factory';
-// ColorSearchService is now dataset-scoped - removed global import
+import type { createAssetService } from '../features/datasets/services/asset-service';
+import type { createColorSearchService } from '../features/datasets/services/color-search-service';
+import type { createFileService } from '../features/datasets/services/file-service';
+import type { createSearchService } from '../features/datasets/services/search-service';
+import type { createStackService } from '../features/datasets/services/stack-service';
+import type { createStacksService } from '../features/datasets/services/stacks-service';
+import type { createTagService } from '../features/datasets/services/tag-service';
+import type { createTagStatsService } from '../features/datasets/services/tag-stats-service';
 import { type AutoTagClient, getAutoTagClient } from '../lib/AutoTagClient';
 import { createDataStorageService, type DataStorageService } from './services/DataStorageService';
 
@@ -24,6 +31,16 @@ declare module 'hono' {
     prisma: PrismaClient;
     stacksAI: AutoTagClient;
     dataStorage: DataStorageService;
+    dataSetId: number;
+    dataSet: DataSet;
+    stacksService: ReturnType<typeof createStacksService>;
+    searchService: ReturnType<typeof createSearchService>;
+    fileService: ReturnType<typeof createFileService>;
+    colorSearchService: ReturnType<typeof createColorSearchService>;
+    tagService: ReturnType<typeof createTagService>;
+    stackService: ReturnType<typeof createStackService>;
+    assetService: ReturnType<typeof createAssetService>;
+    tagStatsService: ReturnType<typeof createTagStatsService>;
   }
 }
 

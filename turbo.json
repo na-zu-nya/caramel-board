@@ -6,6 +6,9 @@
     "PORT",
     "DATABASE_URL",
     "FILES_STORAGE",
+    "SQLITE_DB_PATH",
+    "STANDALONE_SQLITE_PATH",
+    "VITE_API_URL",
     "JOYTAG_SERVER_URL",
     "CARAMELBOARD_CDN_URL"
   ],
@@ -16,6 +19,11 @@
       "env": ["NODE_ENV"]
     },
     "dev": {
+      "cache": false,
+      "persistent": true,
+      "dependsOn": ["^build"]
+    },
+    "dev:next": {
       "cache": false,
       "persistent": true,
       "dependsOn": ["^build"]

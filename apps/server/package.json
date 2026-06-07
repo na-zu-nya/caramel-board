@@ -7,6 +7,7 @@
     "start": "nodemon dist/entry.node.mjs",
     "start:prod": "node dist/entry.node.mjs",
     "dev": "npm run build && nodemon --watch src --ext ts --exec 'npm run build && node dist/entry.node.mjs'",
+    "dev:next": "npm run build && STANDALONE_SQLITE_PATH=${STANDALONE_SQLITE_PATH:-../../exports/imported-reference-check.sqlite} PORT=${PORT:-9000} nodemon --watch src --ext ts --exec 'npm run build && node dist/entry.node.mjs'",
     "build": "esbuild src/entry.node.ts --sourcemap --bundle --platform=node --format=esm '--external:@prisma/client' '--external:sharp' '--external:dotenv' '--external:fs-extra' '--external:form-data' '--external:dayjs' '--external:url-join' '--external:axios' --outfile=dist/entry.node.mjs",
     "watch": "npm run build -- --watch",
     "db:pull": "prisma db pull",

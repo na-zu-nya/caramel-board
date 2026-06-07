@@ -3,14 +3,12 @@ import type { Context } from 'hono';
 import { Hono } from 'hono';
 import { PaginationSchema } from '../schemas/index.js';
 import { AuthorService } from '../shared/services/AuthorService';
+import { ensureDatasetAuthorizedForCurrentStore } from '../standalone/auth';
+import { StandaloneMetadataRepository } from '../standalone/metadata-repository';
+import { isStandaloneSqliteEnabled } from '../standalone/sqlite';
 
 export const authorsRoute = new Hono();
 const authorService = new AuthorService();
-
-const ensureAuthorized = async (c: Context, dataSetId: number) => {
-  const { ensureDatasetAuthorized } = await import('../utils/dataset-protection');
-  return ensureDatasetAuthorized(c, dataSetId);
-};
 
 function getDataSetId(c: Context): number {
   const ds = c.req.query('datasetId') || c.req.query('dataSetId') || '1';
@@ -23,8 +21,13 @@ authorsRoute.get('/', zValidator('query', PaginationSchema), async (c) => {
   try {
     const { limit, offset } = c.req.valid('query');
     const dataSetId = getDataSetId(c);
-    const auth = await ensureAuthorized(c, dataSetId);
+    const auth = await ensureDatasetAuthorizedForCurrentStore(c, dataSetId);
     if (auth) return auth;
+    if (isStandaloneSqliteEnabled()) {
+      return c.json(
+        new StandaloneMetadataRepository().getAuthors({ limit, offset, datasetId: dataSetId })
+      );
+    }
     const result = await authorService.getAll({ limit, offset, dataSetId });
     return c.json(result);
   } catch (error) {
@@ -38,8 +41,11 @@ authorsRoute.get('/search', async (c) => {
   try {
     const key = c.req.query('key') || '';
     const dataSetId = getDataSetId(c);
-    const auth = await ensureAuthorized(c, dataSetId);
+    const auth = await ensureDatasetAuthorizedForCurrentStore(c, dataSetId);
     if (auth) return auth;
+    if (isStandaloneSqliteEnabled()) {
+      return c.json(new StandaloneMetadataRepository().searchAuthors(key, dataSetId));
+    }
     const authors = await authorService.search(key, dataSetId);
     return c.json(authors);
   } catch (error) {

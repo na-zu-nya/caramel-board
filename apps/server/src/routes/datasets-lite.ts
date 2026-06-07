@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 import { Hono } from 'hono';
 import { createColorSearchService } from '../features/datasets/services/color-search-service';
 import { createFileService } from '../features/datasets/services/file-service';
@@ -10,12 +11,12 @@ import {
   DatasetNotFoundError,
 } from '../shared/services/DataSetService';
 import {
-  ensureDatasetAuthorized,
-  hashPassword,
-  isDatasetAuthorized,
-  setDatasetAuthCookie,
-  verifyPassword,
-} from '../utils/dataset-protection';
+  ensureDatasetAuthorizedForCurrentStore,
+  isDatasetAuthorizedForCurrentStore,
+} from '../standalone/auth';
+import { StandaloneDatasetRepository } from '../standalone/dataset-repository';
+import { isStandaloneSqliteEnabled } from '../standalone/sqlite';
+import { hashPassword, setDatasetAuthCookie, verifyPassword } from '../utils/dataset-protection';
 
 // Minimal datasets router to satisfy client needs without heavy deps
 const app = new Hono();
@@ -24,6 +25,9 @@ const STORAGE_PREFIXES_TO_PRUNE = ['library/', 'files/'] as const;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const toInputJsonObject = (value: unknown): Prisma.InputJsonObject | undefined =>
+  isRecord(value) ? (value as Prisma.InputJsonObject) : undefined;
 
 const isErrnoException = (error: unknown): error is NodeJS.ErrnoException =>
   typeof error === 'object' &&
@@ -37,8 +41,13 @@ const getErrorCode = (error: unknown): string | undefined => {
   return typeof record.code === 'string' ? record.code : undefined;
 };
 
+const getStandaloneDatasetRepository = () => new StandaloneDatasetRepository();
+
 // List datasets
 app.get('/', async (c) => {
+  if (isStandaloneSqliteEnabled()) {
+    return c.json(getStandaloneDatasetRepository().getAll());
+  }
   const dataSets = await dataSetService.getAll();
   return c.json(dataSets);
 });
@@ -47,6 +56,12 @@ app.get('/', async (c) => {
 app.get('/:id', async (c) => {
   const id = Number.parseInt(c.req.param('id'), 10);
   const includePins = c.req.query('includePins') === 'true';
+  if (isStandaloneSqliteEnabled()) {
+    const ds = getStandaloneDatasetRepository().getById(id);
+    if (!ds) return c.json({ error: 'DataSet not found' }, 404);
+    const authorized = await isDatasetAuthorizedForCurrentStore(c, id);
+    return c.json({ ...ds, authorized });
+  }
   const ds = await dataSetService.getById(id, includePins);
   if (!ds) return c.json({ error: 'DataSet not found' }, 404);
   // Include authorized flag for client gating
@@ -57,8 +72,13 @@ app.get('/:id', async (c) => {
 // Overview data
 app.get('/:id/overview', async (c) => {
   const id = Number.parseInt(c.req.param('id'), 10);
-  const auth = await ensureDatasetAuthorized(c, id);
+  const auth = await ensureDatasetAuthorizedForCurrentStore(c, id);
   if (auth) return auth;
+  if (isStandaloneSqliteEnabled()) {
+    const ds = getStandaloneDatasetRepository().getById(id);
+    if (!ds) return c.json({ error: 'DataSet not found' }, 404);
+    return c.json(getStandaloneDatasetRepository().getOverview(id));
+  }
   const overview = await dataSetService.getOverview(id);
   return c.json(overview);
 });
@@ -70,6 +90,17 @@ app.post('/:id/auth', async (c) => {
   const data = isRecord(body) ? body : {};
   const password = typeof data.password === 'string' ? data.password : '';
   if (!password) return c.json({ error: 'Password required' }, 400);
+  if (isStandaloneSqliteEnabled()) {
+    const ds = getStandaloneDatasetRepository().getById(id);
+    if (!ds) return c.json({ error: 'DataSet not found' }, 404);
+    if (!ds.isProtected || !ds.passwordHash || !ds.passwordSalt) {
+      return c.json({ error: 'Dataset is not protected' }, 400);
+    }
+    const ok = verifyPassword(password, ds.passwordSalt, ds.passwordHash);
+    if (!ok) return c.json({ error: 'Invalid password' }, 401);
+    setDatasetAuthCookie(c, id, ds.passwordHash);
+    return c.json({ success: true });
+  }
   const ds = await dataSetService.getById(id);
   if (!ds) return c.json({ error: 'DataSet not found' }, 404);
   if (!ds.isProtected || !ds.passwordHash || !ds.passwordSalt) {
@@ -89,6 +120,37 @@ app.post('/:id/protection', async (c) => {
   const enable = Boolean(data.enable);
   const password = typeof data.password === 'string' ? data.password : '';
   const currentPassword = typeof data.currentPassword === 'string' ? data.currentPassword : '';
+
+  if (isStandaloneSqliteEnabled()) {
+    const repository = getStandaloneDatasetRepository();
+    const ds = repository.getById(id);
+    if (!ds) return c.json({ error: 'DataSet not found' }, 404);
+
+    if (enable) {
+      if (!password) return c.json({ error: 'Password required to enable protection' }, 400);
+      const { salt, hash } = hashPassword(password);
+      repository.setProtection(id, {
+        isProtected: true,
+        passwordSalt: salt,
+        passwordHash: hash,
+      });
+      setDatasetAuthCookie(c, id, hash);
+      return c.json({ success: true, isProtected: true });
+    }
+
+    if (!currentPassword)
+      return c.json({ error: 'Current password required to disable protection' }, 400);
+    if (!ds.passwordHash || !ds.passwordSalt)
+      return c.json({ error: 'Dataset was not protected' }, 400);
+    const ok = verifyPassword(currentPassword, ds.passwordSalt, ds.passwordHash);
+    if (!ok) return c.json({ error: 'Invalid password' }, 401);
+    repository.setProtection(id, {
+      isProtected: false,
+      passwordHash: null,
+      passwordSalt: null,
+    });
+    return c.json({ success: true, isProtected: false });
+  }
 
   const prisma = getPrisma();
   const ds = await prisma.dataSet.findUnique({
@@ -127,6 +189,12 @@ app.post('/:id/protection', async (c) => {
 // Protection status for client gating
 app.get('/:id/protection-status', async (c) => {
   const id = Number.parseInt(c.req.param('id'), 10);
+  if (isStandaloneSqliteEnabled()) {
+    const ds = getStandaloneDatasetRepository().getById(id);
+    if (!ds) return c.json({ error: 'DataSet not found' }, 404);
+    const authorized = await isDatasetAuthorizedForCurrentStore(c, id);
+    return c.json({ isProtected: ds.isProtected, authorized });
+  }
   const ds = await dataSetService.getById(id);
   if (!ds) return c.json({ error: 'DataSet not found' }, 404);
   const authorized = await isDatasetAuthorized(c, id);
@@ -137,6 +205,11 @@ app.get('/:id/protection-status', async (c) => {
 app.post('/:id/set-default', async (c) => {
   const id = Number.parseInt(c.req.param('id'), 10);
   try {
+    if (isStandaloneSqliteEnabled()) {
+      const ok = getStandaloneDatasetRepository().setDefault(id);
+      if (!ok) return c.json({ error: 'DataSet not found' }, 404);
+      return c.json({ success: true });
+    }
     await dataSetService.setDefault(id);
     return c.json({ success: true });
   } catch (error: unknown) {
@@ -153,12 +226,22 @@ app.post('/', async (c) => {
     return c.json({ error: 'Name is required' }, 400);
   }
   try {
+    if (isStandaloneSqliteEnabled()) {
+      const ds = getStandaloneDatasetRepository().create({
+        name: body.name,
+        icon: typeof body.icon === 'string' ? body.icon : undefined,
+        themeColor: typeof body.themeColor === 'string' ? body.themeColor : undefined,
+        description: typeof body.description === 'string' ? body.description : undefined,
+        settings: isRecord(body.settings) ? body.settings : undefined,
+      });
+      return c.json(ds, 201);
+    }
     const ds = await dataSetService.create({
       name: body.name,
       icon: typeof body.icon === 'string' ? body.icon : undefined,
       themeColor: typeof body.themeColor === 'string' ? body.themeColor : undefined,
       description: typeof body.description === 'string' ? body.description : undefined,
-      settings: isRecord(body.settings) ? body.settings : undefined,
+      settings: toInputJsonObject(body.settings),
     });
     return c.json(ds, 201);
   } catch (error: unknown) {
@@ -176,12 +259,23 @@ app.put('/:id', async (c) => {
   }
 
   try {
+    if (isStandaloneSqliteEnabled()) {
+      const updated = getStandaloneDatasetRepository().update(id, {
+        name: typeof body.name === 'string' ? body.name : undefined,
+        icon: typeof body.icon === 'string' ? body.icon : undefined,
+        themeColor: typeof body.themeColor === 'string' ? body.themeColor : undefined,
+        description: typeof body.description === 'string' ? body.description : undefined,
+        settings: isRecord(body.settings) ? body.settings : undefined,
+      });
+      if (!updated) return c.json({ error: 'DataSet not found' }, 404);
+      return c.json(updated);
+    }
     const updated = await dataSetService.update(id, {
       name: typeof body.name === 'string' ? body.name : undefined,
       icon: typeof body.icon === 'string' ? body.icon : undefined,
       themeColor: typeof body.themeColor === 'string' ? body.themeColor : undefined,
       description: typeof body.description === 'string' ? body.description : undefined,
-      settings: isRecord(body.settings) ? body.settings : undefined,
+      settings: toInputJsonObject(body.settings),
     });
     return c.json(updated);
   } catch (error: unknown) {
@@ -201,7 +295,17 @@ app.delete('/:id', async (c) => {
   }
 
   try {
-    await dataSetService.delete(id);
+    if (isStandaloneSqliteEnabled()) {
+      const result = getStandaloneDatasetRepository().delete(id);
+      if (result === 'not_found') {
+        return c.json({ error: 'DataSet not found' }, 404);
+      }
+      if (result === 'is_default') {
+        return c.json({ error: 'Default dataset cannot be deleted' }, 400);
+      }
+    } else {
+      await dataSetService.delete(id);
+    }
   } catch (error) {
     if (error instanceof DatasetNotFoundError) {
       return c.json({ error: 'DataSet not found' }, 404);
@@ -258,6 +362,11 @@ app.post('/:id/refresh-all', async (c) => {
   const id = Number.parseInt(c.req.param('id'), 10);
   const forceRegenerate = c.req.query('forceRegenerate') === 'true';
   try {
+    if (isStandaloneSqliteEnabled()) {
+      const ds = getStandaloneDatasetRepository().getById(id);
+      if (!ds) return c.json({ error: 'DataSet not found' }, 404);
+      return c.json({ error: 'Refresh all is not implemented for standalone SQLite yet' }, 501);
+    }
     const prisma = getPrisma();
     const dataStorage = useDataStorage(c);
 

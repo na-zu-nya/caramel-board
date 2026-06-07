@@ -6,6 +6,8 @@ import { createColorSearchService } from '../features/datasets/services/color-se
 import { createStackService } from '../features/datasets/services/stack-service';
 import { useDataStorage, usePrisma } from '../shared/di';
 import { ensureSuperUser } from '../shared/services/UserService';
+import { isStandaloneSqliteEnabled } from '../standalone/sqlite';
+import { StandaloneStackRepository } from '../standalone/stack-repository';
 
 export const assetsLiteRoute = new Hono();
 
@@ -27,6 +29,11 @@ async function resolveDatasetIdByAsset(prisma: PrismaClient, assetId: number): P
 // DELETE /assets/:assetId
 assetsLiteRoute.delete('/:assetId', async (c) => {
   const assetId = Number.parseInt(c.req.param('assetId'), 10);
+  if (isStandaloneSqliteEnabled()) {
+    const ok = new StandaloneStackRepository().deleteAsset(assetId);
+    if (!ok) return c.json({ error: 'Asset not found' }, 404);
+    return c.json({ success: true });
+  }
   const prisma = usePrisma(c);
   const dataSetId = await resolveDatasetIdByAsset(prisma, assetId);
   const assetService = createAssetService({ prisma, dataStorage: useDataStorage(c), dataSetId });
@@ -39,6 +46,9 @@ assetsLiteRoute.post('/:assetId/separate', async (c) => {
   const assetId = Number.parseInt(c.req.param('assetId'), 10);
   if (Number.isNaN(assetId)) {
     return c.json({ error: 'Invalid asset id' }, 400);
+  }
+  if (isStandaloneSqliteEnabled()) {
+    return c.json({ error: 'Asset separation is not implemented for standalone SQLite yet' }, 501);
   }
 
   const prisma = usePrisma(c);
@@ -134,6 +144,11 @@ assetsLiteRoute.put('/:assetId/order', async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const parse = z.object({ order: z.number().int().min(0) }).safeParse(body);
   if (!parse.success) return c.json({ error: 'Invalid body', details: parse.error }, 400);
+  if (isStandaloneSqliteEnabled()) {
+    const ok = new StandaloneStackRepository().updateAssetOrder(assetId, parse.data.order);
+    if (!ok) return c.json({ error: 'Asset not found' }, 404);
+    return c.json({ success: true });
+  }
   const prisma = usePrisma(c);
   const dataSetId = await resolveDatasetIdByAsset(prisma, assetId);
   const assetService = createAssetService({ prisma, dataStorage: useDataStorage(c), dataSetId });
@@ -149,6 +164,12 @@ assetsLiteRoute.put('/:assetId/favorite', async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const parse = z.object({ favorited: z.boolean() }).safeParse(body);
   if (!parse.success) return c.json({ error: 'Invalid body', details: parse.error }, 400);
+
+  if (isStandaloneSqliteEnabled()) {
+    const ok = new StandaloneStackRepository().toggleAssetFavorite(assetId, parse.data.favorited);
+    if (!ok) return c.json({ error: 'Asset not found' }, 404);
+    return c.json({ success: true, favorited: parse.data.favorited });
+  }
 
   const prisma = usePrisma(c);
   const userId = await ensureSuperUser(prisma);
@@ -188,6 +209,17 @@ assetsLiteRoute.put('/:assetId/favorite', async (c) => {
 assetsLiteRoute.post('/:assetId/like', async (c) => {
   const assetId = Number.parseInt(c.req.param('assetId'), 10);
   if (Number.isNaN(assetId)) return c.json({ error: 'Invalid asset id' }, 400);
+
+  if (isStandaloneSqliteEnabled()) {
+    const result = new StandaloneStackRepository().likeAsset(assetId);
+    if (!result) return c.json({ error: 'Asset not found' }, 404);
+    return c.json({
+      success: true,
+      liked: result.liked,
+      stackId: result.stackId,
+      assetId: result.assetId,
+    });
+  }
 
   const prisma = usePrisma(c);
   const asset = await prisma.asset.findUnique({

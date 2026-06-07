@@ -10,6 +10,41 @@
 - サーバールート定義: `apps/server/src/routes/**/*.ts`, `apps/server/src/features/datasets/routes/**/*.ts`
 - クライアント呼び出し: `apps/client/src/lib/api-client.ts`, `apps/client/src/**/*.tsx`, `apps/client/src/**/*.ts`
 
+## SQLite 移行状況
+
+更新日: 2026-06-07
+
+凡例:
+
+- `完了`: standalone SQLite 有効時に SQLite repository を参照する
+- `部分`: 主要な現行 UI 経路は SQLite 化済みだが、同一 route group 内に Prisma 経路または 501 が残る
+- `501`: standalone SQLite では明示的に未実装レスポンスを返す
+- `未移行`: standalone SQLite でも Prisma/service 経路のまま
+- `削除`: dead route / dead wrapper として削除済み
+
+| 領域 | 状態 | SQLite 化済み | 未完了・保留 |
+| --- | --- | --- | --- |
+| datasets | 部分 | `GET /datasets`, `GET /datasets/:id`, `POST /datasets`, `PUT /datasets/:id`, `DELETE /datasets/:id`, `GET /datasets/:id/overview`, protection/auth/default 系 | `POST /datasets/:id/refresh-all` は standalone SQLite で 501 |
+| authors | 完了 | `GET /authors`, `GET /authors/search` | なし |
+| tags | 部分 | `GET /tags`, `GET /tags/management`, `GET /tags/search`, `POST /tags`, `PUT /tags/:id`, `POST /tags/merge`, `POST /tags/tag-stack`, `DELETE /tags/:id` | `GET /tags/:id/stacks` は standalone SQLite で 501 |
+| stacks | 部分 | `GET /stacks/paginated`, `GET /stacks/:id`, `POST /stacks/:id/like`, `PUT /stacks/:id/favorite`, `POST /stacks/:id/tags`, `DELETE /stacks/:id/tags/:tag`, `PUT /stacks/:id/author`, `DELETE /stacks/:id` | favorites list / auto-tag search / upload / URL import / download originals は未移行。thumbnail refresh / aggregate-tags / stack asset追加 / bulk edit / merge は 501 |
+| dataset assets | 完了 | `GET /datasets/:dataSetId/stacks/:id/assets`, `PUT /datasets/:dataSetId/stacks/:id/assets/:assetId/meta` | なし |
+| assets-lite | 部分 | `DELETE /assets/:assetId`, `PUT /assets/:assetId/order`, `PUT /assets/:assetId/favorite`, `POST /assets/:assetId/like` | `POST /assets/:assetId/separate` は 501 |
+| collections | 未移行 | なし | collections / stack add-remove / bulk add / reorder / smart-stacks |
+| collection-folders | 未移行 | なし | tree / CRUD / move |
+| activities | 未移行 | なし | yearly likes / like activity delete / legacy一覧 |
+| navigation-pins | 未移行 | なし | dataset scoped list / CRUD / order |
+| auto-tags | 未移行 | なし | health / statistics / mappings / stack auto-tag search |
+| colors | 未移行 | なし | stats / search / stack update |
+| upload/defaults | 未移行 | なし | 起動設定 UI へ統合するか要判断 |
+| dead APIs | 削除 | `routes/pictures.ts`, `PictureService`, 未マウント `features/datasets/routes/*`, client の embedding / AI analysis / 存在しない asset meta fallback wrapper | なし |
+
+直近の検証:
+
+- `exports/imported-reference-check.sqlite` を参照して `GET /api/v1/stacks/paginated?dataSetId=1&limit=3&offset=0` が `total: 100` を返すことを確認。
+- `GET /api/v1/stacks/81?dataSetId=1`, `GET /api/v1/datasets/1/stacks/81/assets`, tag filter 付き stack list を確認。
+- `/tmp/caramel-board-stack-write-check.sqlite` のコピーDBで stack/asset favorite, like, asset meta, order, stack tag add/remove, author update, asset delete, stack delete を確認。
+
 ## 結論
 
 SQLite 版サーバーへ移す前に、まず削除または無効化確認しやすいのは次のグループです。

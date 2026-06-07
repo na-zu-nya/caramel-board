@@ -21,6 +21,9 @@ import { prisma, useDataStorage, usePrisma } from '../shared/di';
 import { AutoTagService } from '../shared/services/AutoTagService';
 import { CollectionService } from '../shared/services/CollectionService';
 import { ensureSuperUser } from '../shared/services/UserService';
+import { ensureDatasetAuthorizedForCurrentStore } from '../standalone/auth';
+import { isStandaloneSqliteEnabled } from '../standalone/sqlite';
+import { StandaloneStackRepository } from '../standalone/stack-repository';
 import { toPublicAssetPath, withPublicAssetArray } from '../utils/assetPath';
 import { createZipArchive } from '../utils/zip';
 
@@ -367,11 +370,28 @@ stacksRoute.get('/paginated', async (c) => {
   } = parse.data;
 
   // Enforce dataset protection
-  const auth = await (await import('../utils/dataset-protection')).ensureDatasetAuthorized(
-    c,
-    dataSetId
-  );
+  const auth = await ensureDatasetAuthorizedForCurrentStore(c, dataSetId);
   if (auth) return auth;
+
+  if (isStandaloneSqliteEnabled()) {
+    const result = new StandaloneStackRepository().getPaginated({
+      dataSetId,
+      collection,
+      mediaType,
+      tag,
+      author,
+      fav,
+      liked,
+      hasNoTags,
+      hasNoAuthor,
+      search,
+      sort,
+      order,
+      limit,
+      offset,
+    });
+    return c.json(result);
+  }
 
   // Build filters compatible with the feature search service
   const filters: SearchFilters = {};
@@ -804,6 +824,11 @@ stacksRoute.get('/search/autotag', async (c) => {
 // POST /stacks/:id/like
 stacksRoute.post('/:id{[0-9]+}/like', async (c) => {
   const id = Number.parseInt(c.req.param('id'), 10);
+  if (isStandaloneSqliteEnabled()) {
+    const result = new StandaloneStackRepository().likeStack(id);
+    if (!result) return c.json({ error: 'Stack not found' }, 404);
+    return c.json({ success: true, liked: result.liked });
+  }
   const prisma = usePrisma(c);
   const ds = await resolveDatasetId(prisma, id);
   const colorSearch = createColorSearchService({ prisma, dataSetId: ds });
@@ -818,6 +843,11 @@ stacksRoute.put('/:id{[0-9]+}/favorite', async (c) => {
   const id = Number.parseInt(c.req.param('id'), 10);
   const body = await c.req.json().catch(() => ({}));
   const favorited = Boolean(body?.favorited);
+  if (isStandaloneSqliteEnabled()) {
+    const ok = new StandaloneStackRepository().toggleStackFavorite(id, favorited);
+    if (!ok) return c.json({ error: 'Stack not found' }, 404);
+    return c.json({ success: true });
+  }
   const prisma = usePrisma(c);
   const ds = await resolveDatasetId(prisma, id);
   const colorSearch = createColorSearchService({ prisma, dataSetId: ds });
@@ -829,6 +859,9 @@ stacksRoute.put('/:id{[0-9]+}/favorite', async (c) => {
 // POST /stacks/:id/refresh-thumbnail
 stacksRoute.post('/:id{[0-9]+}/refresh-thumbnail', async (c) => {
   const id = Number.parseInt(c.req.param('id'), 10);
+  if (isStandaloneSqliteEnabled()) {
+    return c.json({ error: 'Thumbnail refresh is not implemented for standalone SQLite yet' }, 501);
+  }
   const prisma = usePrisma(c);
   const ds = await resolveDatasetId(prisma, id);
   const colorSearch = createColorSearchService({ prisma, dataSetId: ds });
@@ -840,6 +873,12 @@ stacksRoute.post('/:id{[0-9]+}/refresh-thumbnail', async (c) => {
 // POST /stacks/:id/aggregate-tags
 stacksRoute.post('/:id{[0-9]+}/aggregate-tags', async (c) => {
   const id = Number.parseInt(c.req.param('id'), 10);
+  if (isStandaloneSqliteEnabled()) {
+    return c.json(
+      { error: 'AutoTag aggregation is not implemented for standalone SQLite yet' },
+      501
+    );
+  }
   const prisma = usePrisma(c);
   try {
     const body = (await c.req.json().catch(() => null)) as { threshold?: number } | null;
@@ -856,6 +895,14 @@ stacksRoute.post('/:id{[0-9]+}/aggregate-tags', async (c) => {
 // POST /stacks/:id/tags - add a tag to stack
 stacksRoute.post('/:id{[0-9]+}/tags', async (c) => {
   const id = Number.parseInt(c.req.param('id'), 10);
+  if (isStandaloneSqliteEnabled()) {
+    const body = await c.req.json().catch(() => ({}));
+    const tag = String((body as { tag?: unknown })?.tag || '').trim();
+    if (!tag) return c.json({ error: 'Tag is required' }, 400);
+    const result = new StandaloneStackRepository().addTag(id, tag);
+    if (!result) return c.json({ error: 'Stack not found' }, 404);
+    return c.json(result);
+  }
   const prisma = usePrisma(c);
   try {
     const body = await c.req.json();
@@ -875,6 +922,11 @@ stacksRoute.post('/:id{[0-9]+}/tags', async (c) => {
 stacksRoute.delete('/:id{[0-9]+}/tags/:tag', async (c) => {
   const id = Number.parseInt(c.req.param('id'), 10);
   const tag = c.req.param('tag');
+  if (isStandaloneSqliteEnabled()) {
+    const result = new StandaloneStackRepository().removeTag(id, decodeURIComponent(tag));
+    if (!result) return c.json({ error: 'Stack not found' }, 404);
+    return c.json(result);
+  }
   const prisma = usePrisma(c);
   try {
     const ds = await resolveDatasetId(prisma, id);
@@ -890,6 +942,9 @@ stacksRoute.delete('/:id{[0-9]+}/tags/:tag', async (c) => {
 // POST /stacks/:id/assets - add asset to existing stack
 stacksRoute.post('/:id{[0-9]+}/assets', async (c) => {
   try {
+    if (isStandaloneSqliteEnabled()) {
+      return c.json({ error: 'Asset upload is not implemented for standalone SQLite yet' }, 501);
+    }
     const id = Number.parseInt(c.req.param('id'), 10);
     const formData = await c.req.formData();
     const fileEntry = formData.get('file');
@@ -1199,6 +1254,9 @@ async function withStackServiceForIds(c: Context, ids: number[] | number) {
 
 // POST /stacks/bulk/tags
 stacksRoute.post('/bulk/tags', async (c) => {
+  if (isStandaloneSqliteEnabled()) {
+    return c.json({ error: 'Bulk tags is not implemented for standalone SQLite yet' }, 501);
+  }
   const body: unknown = await c.req.json().catch(() => ({}));
   const parse = BulkTagsSchema.safeParse(body);
   if (!parse.success) return c.json({ error: 'Invalid body', details: parse.error }, 400);
@@ -1209,6 +1267,9 @@ stacksRoute.post('/bulk/tags', async (c) => {
 
 // PUT /stacks/bulk/author
 stacksRoute.put('/bulk/author', async (c) => {
+  if (isStandaloneSqliteEnabled()) {
+    return c.json({ error: 'Bulk author is not implemented for standalone SQLite yet' }, 501);
+  }
   const body: unknown = await c.req.json().catch(() => ({}));
   const parse = BulkAuthorSchema.safeParse(body);
   if (!parse.success) return c.json({ error: 'Invalid body', details: parse.error }, 400);
@@ -1219,6 +1280,9 @@ stacksRoute.put('/bulk/author', async (c) => {
 
 // PUT /stacks/bulk/media-type
 stacksRoute.put('/bulk/media-type', async (c) => {
+  if (isStandaloneSqliteEnabled()) {
+    return c.json({ error: 'Bulk media type is not implemented for standalone SQLite yet' }, 501);
+  }
   const body: unknown = await c.req.json().catch(() => ({}));
   const parse = BulkMediaTypeSchema.safeParse(body);
   if (!parse.success) return c.json({ error: 'Invalid body', details: parse.error }, 400);
@@ -1229,6 +1293,9 @@ stacksRoute.put('/bulk/media-type', async (c) => {
 
 // PUT /stacks/bulk/favorite
 stacksRoute.put('/bulk/favorite', async (c) => {
+  if (isStandaloneSqliteEnabled()) {
+    return c.json({ error: 'Bulk favorite is not implemented for standalone SQLite yet' }, 501);
+  }
   const body: unknown = await c.req.json().catch(() => ({}));
   const parse = BulkFavoriteSchema.safeParse(body);
   if (!parse.success) return c.json({ error: 'Invalid body', details: parse.error }, 400);
@@ -1239,6 +1306,12 @@ stacksRoute.put('/bulk/favorite', async (c) => {
 
 // POST /stacks/bulk/refresh-thumbnails
 stacksRoute.post('/bulk/refresh-thumbnails', async (c) => {
+  if (isStandaloneSqliteEnabled()) {
+    return c.json(
+      { error: 'Bulk thumbnail refresh is not implemented for standalone SQLite yet' },
+      501
+    );
+  }
   const body: unknown = await c.req.json().catch(() => ({}));
   const parse = BulkRefreshThumbsSchema.safeParse(body);
   if (!parse.success) return c.json({ error: 'Invalid body', details: parse.error }, 400);
@@ -1249,6 +1322,9 @@ stacksRoute.post('/bulk/refresh-thumbnails', async (c) => {
 
 // POST /stacks/merge - merge source stacks into target
 stacksRoute.post('/merge', async (c) => {
+  if (isStandaloneSqliteEnabled()) {
+    return c.json({ error: 'Stack merge is not implemented for standalone SQLite yet' }, 501);
+  }
   const body: unknown = await c.req.json().catch(() => ({}));
   const parse = MergeStacksSchema.safeParse(body);
   if (!parse.success) return c.json({ error: 'Invalid body', details: parse.error }, 400);
@@ -1268,6 +1344,9 @@ stacksRoute.post('/merge', async (c) => {
 
 // DELETE /stacks/bulk/remove
 stacksRoute.delete('/bulk/remove', async (c) => {
+  if (isStandaloneSqliteEnabled()) {
+    return c.json({ error: 'Bulk stack remove is not implemented for standalone SQLite yet' }, 501);
+  }
   const body: unknown = await c.req.json().catch(() => ({}));
   const parse = BulkRemoveSchema.safeParse(body);
   if (!parse.success) return c.json({ error: 'Invalid body', details: parse.error }, 400);
@@ -1279,6 +1358,11 @@ stacksRoute.delete('/bulk/remove', async (c) => {
 // DELETE /stacks/:id
 stacksRoute.delete('/:id{[0-9]+}', async (c) => {
   const id = Number.parseInt(c.req.param('id'), 10);
+  if (isStandaloneSqliteEnabled()) {
+    const ok = new StandaloneStackRepository().deleteStack(id);
+    if (!ok) return c.json({ error: 'Stack not found' }, 404);
+    return c.json({ message: 'Stack deleted successfully' });
+  }
   const prisma = usePrisma(c);
   const ds = await resolveDatasetId(prisma, id);
   const colorSearch = createColorSearchService({ prisma, dataSetId: ds });
@@ -1290,6 +1374,17 @@ stacksRoute.delete('/:id{[0-9]+}', async (c) => {
 // PUT /stacks/:id/author - update author name
 stacksRoute.put('/:id{[0-9]+}/author', async (c) => {
   const id = Number.parseInt(c.req.param('id'), 10);
+  if (isStandaloneSqliteEnabled()) {
+    const body = (await c.req.json().catch(() => null)) as Partial<{
+      author: string;
+      name: string;
+    }> | null;
+    const name = String(body?.author ?? body?.name ?? '').trim();
+    if (!name) return c.json({ error: 'Author name is required' }, 400);
+    const result = new StandaloneStackRepository().updateAuthor(id, name);
+    if (!result) return c.json({ error: 'Stack not found' }, 404);
+    return c.json(result);
+  }
   const prisma = usePrisma(c);
   try {
     const body = (await c.req.json().catch(() => null)) as Partial<{
@@ -1312,6 +1407,14 @@ stacksRoute.put('/:id{[0-9]+}/author', async (c) => {
 stacksRoute.get('/:id{[0-9]+}', async (c) => {
   const id = Number.parseInt(c.req.param('id'), 10);
   const dataSetId = Number.parseInt(c.req.query('dataSetId') || '', 10);
+  if (isStandaloneSqliteEnabled()) {
+    const repository = new StandaloneStackRepository();
+    const stack = repository.getById(id, Number.isNaN(dataSetId) ? undefined : dataSetId);
+    if (!stack) return c.json({ error: 'Stack not found' }, 404);
+    const auth = await ensureDatasetAuthorizedForCurrentStore(c, Number(stack.dataSetId));
+    if (auth) return auth;
+    return c.json(stack);
+  }
   const prisma = usePrisma(c);
   const effectiveDs = Number.isNaN(dataSetId) ? await resolveDatasetId(prisma, id) : dataSetId;
   const auth = await (await import('../utils/dataset-protection')).ensureDatasetAuthorized(
@@ -1362,6 +1465,9 @@ stacksRoute.get('/:id{[0-9]+}', async (c) => {
 // POST /stacks - create stack with file upload
 stacksRoute.post('/', async (c) => {
   try {
+    if (isStandaloneSqliteEnabled()) {
+      return c.json({ error: 'Stack upload is not implemented for standalone SQLite yet' }, 501);
+    }
     const formData = await c.req.formData();
     const fileEntry = formData.get('file');
     if (!isUploadedFile(fileEntry)) return c.json({ error: 'File is required' }, 400);

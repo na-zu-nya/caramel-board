@@ -477,33 +477,13 @@ class ApiClient {
     datasetId: string | number;
     stackId: string | number;
     assetId: string | number;
-    meta: Record<string, any>;
-  }): Promise<{ success?: boolean } & any> {
+    meta: Record<string, unknown>;
+  }): Promise<{ success?: boolean } & Record<string, unknown>> {
     const { datasetId, stackId, assetId, meta } = params;
-    // Prefer dataset-scoped feature route; fall back to assets-lite if unavailable
-    try {
-      return await this.fetch(
-        `/api/v1/datasets/${datasetId}/stacks/${stackId}/assets/${assetId}/meta`,
-        {
-          method: 'PUT',
-          body: JSON.stringify(meta || {}),
-        }
-      );
-    } catch (_e) {
-      try {
-        // Fallback (legacy): /api/v1/assets/:assetId/meta
-        return await this.fetch(`/api/v1/assets/${assetId}/meta`, {
-          method: 'PUT',
-          body: JSON.stringify(meta || {}),
-        });
-      } catch {
-        // Last resort (very legacy): /assets/:assetId/meta
-        return await this.fetch(`/assets/${assetId}/meta`, {
-          method: 'PUT',
-          body: JSON.stringify(meta || {}),
-        });
-      }
-    }
+    return this.fetch(`/api/v1/datasets/${datasetId}/stacks/${stackId}/assets/${assetId}/meta`, {
+      method: 'PUT',
+      body: JSON.stringify(meta || {}),
+    });
   }
 
   // Collection APIs
@@ -845,37 +825,6 @@ class ApiClient {
       totalItems: number;
       availableYears: number[];
     }>(`/api/v1/activities/likes/yearly?${queryParams}`);
-  }
-
-  // AutoTag operations
-  async regenerateDatasetAutoTags(
-    datasetId: string | number,
-    options?: {
-      threshold?: number;
-      batchSize?: number;
-    }
-  ): Promise<{
-    datasetId: number;
-    totalStacks: number;
-    processedStacks: number;
-    threshold: number;
-    batchSize: number;
-    message: string;
-  }> {
-    return this.fetch<{
-      datasetId: number;
-      totalStacks: number;
-      processedStacks: number;
-      threshold: number;
-      batchSize: number;
-      message: string;
-    }>(`/api/v1/stacks/dataset/${datasetId}/aggregate-all-tags`, {
-      method: 'POST',
-      body: JSON.stringify({
-        threshold: options?.threshold || 0.4,
-        batchSize: options?.batchSize || 5,
-      }),
-    });
   }
 
   async aggregateStackTags(
@@ -1363,62 +1312,6 @@ class ApiClient {
       method: 'PUT',
       body: JSON.stringify({ parentId, folderOrders }),
     });
-  }
-
-  // Search and Embedding methods
-  async generateAllEmbeddings(params: {
-    datasetId: number;
-    type?: 'text' | 'clip' | 'all';
-    batchSize?: number;
-    forceRegenerate?: boolean;
-  }): Promise<{
-    message: string;
-    datasetId: number;
-    totalCount: number;
-    queued: number;
-    type: string;
-    batchSize: number;
-    forceRegenerate: boolean;
-  }> {
-    return this.fetch('/api/v1/search/generate-all-embeddings', {
-      method: 'POST',
-      body: JSON.stringify(params),
-    });
-  }
-
-  async getEmbeddingQueueStatus(): Promise<{
-    queue: {
-      waiting: number;
-      active: number;
-      completed: number;
-      failed: number;
-    };
-    workerEnabled: boolean;
-    workerConcurrency: number;
-  }> {
-    return this.fetch('/api/v1/search/queue-status');
-  }
-
-  async runDatasetAIAnalysis(
-    datasetId: string,
-    params: {
-      forceRegenerate?: boolean;
-      batchSize?: number;
-    }
-  ): Promise<{ totalCount: number; queued: number; message: string }> {
-    const queryParams = new URLSearchParams();
-    if (params.forceRegenerate)
-      queryParams.append('forceRegenerate', String(params.forceRegenerate));
-    if (params.batchSize) queryParams.append('batchSize', String(params.batchSize));
-
-    const query = queryParams.toString();
-    const response = await this.fetch<{ totalCount: number; queued: number; message: string }>(
-      `/api/v1/datasets/${datasetId}/ai-analysis${query ? `?${query}` : ''}`,
-      {
-        method: 'POST',
-      }
-    );
-    return response;
   }
 
   async runDatasetRefreshAll(
