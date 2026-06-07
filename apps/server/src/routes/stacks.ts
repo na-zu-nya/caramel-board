@@ -520,11 +520,12 @@ stacksRoute.get('/favorites/list', async (c) => {
   if (!parse.success) return c.json({ error: 'Invalid query', details: parse.error }, 400);
 
   const { dataSetId, limit, offset } = parse.data;
-  const auth = await (await import('../utils/dataset-protection')).ensureDatasetAuthorized(
-    c,
-    dataSetId
-  );
+  const auth = await ensureDatasetAuthorizedForCurrentStore(c, dataSetId);
   if (auth) return auth;
+
+  if (isStandaloneSqliteEnabled()) {
+    return c.json(new StandaloneStackRepository().getFavoriteItems(dataSetId, limit, offset));
+  }
 
   const prisma = usePrisma(c);
   const userId = await ensureSuperUser(prisma);
