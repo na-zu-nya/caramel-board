@@ -35,7 +35,7 @@
 | activities | 完了 | `GET /activities`, `GET /activities/likes`, `GET /activities/likes/yearly`, `DELETE /activities/likes/:id` | なし |
 | navigation-pins | 完了 | `GET /navigation-pins/dataset/:dataSetId`, `POST /navigation-pins`, `PUT /navigation-pins/:id`, `DELETE /navigation-pins/:id`, `PUT /navigation-pins/order` | root helper は案内レスポンスのみ |
 | auto-tags | 未移行 | なし | health / statistics / mappings / stack auto-tag search |
-| colors | 未移行 | なし | stats / search / stack update |
+| colors | 部分 | `POST /colors/search`, `POST /colors/search-multi`, `POST /colors/filter`, `POST /colors/stacks/:stackId/update-colors`, `POST /colors/datasets/:datasetId/update-all-colors`, `GET /colors/stats` | standalone では export/import 済みの `dominant_colors_json` を利用。画像ファイルからの再抽出は upload / refresh pipeline 側で再設計 |
 | upload/defaults | 未移行 | なし | 起動設定 UI へ統合するか要判断 |
 | dead APIs | 削除 | `routes/pictures.ts`, `PictureService`, 未マウント `features/datasets/routes/*`, client の embedding / AI analysis / 存在しない asset meta fallback wrapper | なし |
 
@@ -48,6 +48,8 @@
 - `/tmp/caramel-board-library-write-check.sqlite` のコピーDBで collection/folder/pin の create/update/reorder/delete、collection stack add/bulk/remove/reorder を確認。
 - `exports/imported-reference-check.sqlite` を参照して activities grouped/recent/yearly likes と favorites list を確認。
 - `/tmp/caramel-board-activity-write-check.sqlite` のコピーDBで like activity delete と liked decrement を確認。
+- `exports/imported-reference-check.sqlite` を参照して colors stats/search/search-multi/filter/update-all-colors を確認。
+- colors stack update は既存 asset colors を集約して stack colors を更新する実装。検証時に `exports/imported-reference-check.sqlite` の stack 79 を更新済み。
 
 ## 結論
 
