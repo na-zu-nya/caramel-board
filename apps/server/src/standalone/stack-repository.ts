@@ -13,7 +13,8 @@ export interface StandaloneStackListParams {
   hasNoTags?: boolean;
   hasNoAuthor?: boolean;
   search?: string;
-  sort?: 'recommended' | 'dateAdded' | 'name' | 'likes' | 'updated';
+  stackIds?: number[];
+  sort?: 'recommended' | 'dateAdded' | 'name' | 'likes' | 'updated' | 'id';
   order?: 'asc' | 'desc';
   limit: number;
   offset: number;
@@ -125,6 +126,15 @@ export class StandaloneStackRepository {
       sqlParams.push(params.collection);
     }
 
+    if (params.stackIds) {
+      if (params.stackIds.length === 0) {
+        where.push('0 = 1');
+      } else {
+        where.push(`s.id IN (${placeholders(params.stackIds)})`);
+        sqlParams.push(...params.stackIds);
+      }
+    }
+
     if (params.mediaType) {
       where.push('s.media_type = ?');
       sqlParams.push(params.mediaType);
@@ -220,6 +230,8 @@ export class StandaloneStackRepository {
         return `s.name ${direction}, s.id DESC`;
       case 'likes':
         return `s.liked ${direction}, s.updated_at DESC`;
+      case 'id':
+        return `s.id ${direction}`;
       default:
         return `s.updated_at ${direction}, s.created_at ${direction}, s.id ${direction}`;
     }

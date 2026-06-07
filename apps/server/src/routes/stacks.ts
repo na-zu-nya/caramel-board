@@ -22,6 +22,7 @@ import { AutoTagService } from '../shared/services/AutoTagService';
 import { CollectionService } from '../shared/services/CollectionService';
 import { ensureSuperUser } from '../shared/services/UserService';
 import { ensureDatasetAuthorizedForCurrentStore } from '../standalone/auth';
+import { StandaloneAutoTagRepository } from '../standalone/auto-tag-repository';
 import { isStandaloneSqliteEnabled } from '../standalone/sqlite';
 import { StandaloneStackRepository } from '../standalone/stack-repository';
 import { toPublicAssetPath, withPublicAssetArray } from '../utils/assetPath';
@@ -229,10 +230,7 @@ stacksRoute.get('/download-originals', async (c) => {
     return c.json({ error: 'No stack or asset ids specified' }, 400);
   }
 
-  const auth = await (await import('../utils/dataset-protection')).ensureDatasetAuthorized(
-    c,
-    dataSetId
-  );
+  const auth = await ensureDatasetAuthorizedForCurrentStore(c, dataSetId);
   if (auth) return auth;
 
   const prisma = usePrisma(c);
@@ -675,13 +673,32 @@ stacksRoute.get('/search/autotag', async (c) => {
     hasNoTags,
     hasNoAuthor,
   } = parsed.data;
-  const auth = await (await import('../utils/dataset-protection')).ensureDatasetAuthorized(
-    c,
-    dataSetId
-  );
+  const auth = await ensureDatasetAuthorizedForCurrentStore(c, dataSetId);
   if (auth) return auth;
   const tags = Array.isArray(autoTag) ? autoTag : [autoTag];
   const lowered = tags.map((t) => t.toLowerCase());
+
+  if (isStandaloneSqliteEnabled()) {
+    const stackIds = new StandaloneAutoTagRepository().getMatchingStackIds(dataSetId, tags);
+    return c.json(
+      new StandaloneStackRepository().getPaginated({
+        dataSetId,
+        stackIds,
+        limit,
+        offset,
+        search,
+        mediaType,
+        author,
+        tag,
+        fav,
+        liked,
+        hasNoTags,
+        hasNoAuthor,
+        sort: 'id',
+        order: 'desc',
+      })
+    );
+  }
 
   // Use raw SQL for efficient JSONB search on topTags array
   // Match any of the requested AutoTag keys (case-insensitive), with default threshold 0.4
@@ -875,10 +892,15 @@ stacksRoute.post('/:id{[0-9]+}/refresh-thumbnail', async (c) => {
 stacksRoute.post('/:id{[0-9]+}/aggregate-tags', async (c) => {
   const id = Number.parseInt(c.req.param('id'), 10);
   if (isStandaloneSqliteEnabled()) {
-    return c.json(
-      { error: 'AutoTag aggregation is not implemented for standalone SQLite yet' },
-      501
-    );
+    try {
+      const body = (await c.req.json().catch(() => null)) as { threshold?: number } | null;
+      const threshold = typeof body?.threshold === 'number' ? body.threshold : 0.4;
+      const result = new StandaloneAutoTagRepository().aggregateStackTags(id, threshold);
+      return c.json(result);
+    } catch (error) {
+      console.error('Error aggregating stack tags:', error);
+      return c.json({ error: 'Failed to aggregate tags' }, 500);
+    }
   }
   const prisma = usePrisma(c);
   try {

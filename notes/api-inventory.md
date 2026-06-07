@@ -26,15 +26,15 @@
 | --- | --- | --- | --- |
 | datasets | 部分 | `GET /datasets`, `GET /datasets/:id`, `POST /datasets`, `PUT /datasets/:id`, `DELETE /datasets/:id`, `GET /datasets/:id/overview`, protection/auth/default 系 | `POST /datasets/:id/refresh-all` は standalone SQLite で 501 |
 | authors | 完了 | `GET /authors`, `GET /authors/search` | なし |
-| tags | 部分 | `GET /tags`, `GET /tags/management`, `GET /tags/search`, `POST /tags`, `PUT /tags/:id`, `POST /tags/merge`, `POST /tags/tag-stack`, `DELETE /tags/:id` | `GET /tags/:id/stacks` は standalone SQLite で 501 |
-| stacks | 部分 | `GET /stacks/paginated`, `GET /stacks/:id`, `GET /stacks/favorites/list`, `POST /stacks/:id/like`, `PUT /stacks/:id/favorite`, `POST /stacks/:id/tags`, `DELETE /stacks/:id/tags/:tag`, `PUT /stacks/:id/author`, `DELETE /stacks/:id` | auto-tag search / upload / URL import / download originals は未移行。thumbnail refresh / aggregate-tags / stack asset追加 / bulk edit / merge は 501 |
+| tags | 完了 | `GET /tags`, `GET /tags/management`, `GET /tags/search`, `POST /tags`, `PUT /tags/:id`, `POST /tags/merge`, `POST /tags/tag-stack`, `GET /tags/:id/stacks`, `DELETE /tags/:id` | なし |
+| stacks | 部分 | `GET /stacks/paginated`, `GET /stacks/:id`, `GET /stacks/favorites/list`, `GET /stacks/search/autotag`, `POST /stacks/:id/aggregate-tags`, `POST /stacks/:id/like`, `PUT /stacks/:id/favorite`, `POST /stacks/:id/tags`, `DELETE /stacks/:id/tags/:tag`, `PUT /stacks/:id/author`, `DELETE /stacks/:id` | upload / URL import / download originals は未移行。thumbnail refresh / stack asset追加 / bulk edit / merge は 501 |
 | dataset assets | 完了 | `GET /datasets/:dataSetId/stacks/:id/assets`, `PUT /datasets/:dataSetId/stacks/:id/assets/:assetId/meta` | なし |
 | assets-lite | 部分 | `DELETE /assets/:assetId`, `PUT /assets/:assetId/order`, `PUT /assets/:assetId/favorite`, `POST /assets/:assetId/like` | `POST /assets/:assetId/separate` は 501 |
 | collections | 部分 | `GET /collections`, `GET /collections/:id`, `POST /collections`, `PUT /collections/:id`, `DELETE /collections/:id`, stack add/remove/bulk/reorder, `GET /collections/:id/stacks`, `GET /collections/:id/smart-stacks`, `GET /stacks/:id/collections` | smart-stacks は検索/タグ/作者/fav/liked/mediaType を SQLite stack query に変換。colorFilter は colors API 移行時に精度合わせ |
 | collection-folders | 完了 | `GET /collection-folders`, `GET /collection-folders/tree`, `GET /collection-folders/:id`, `POST /collection-folders`, `PUT /collection-folders/:id`, `DELETE /collection-folders/:id`, reorder, move | なし |
 | activities | 完了 | `GET /activities`, `GET /activities/likes`, `GET /activities/likes/yearly`, `DELETE /activities/likes/:id` | なし |
 | navigation-pins | 完了 | `GET /navigation-pins/dataset/:dataSetId`, `POST /navigation-pins`, `PUT /navigation-pins/:id`, `DELETE /navigation-pins/:id`, `PUT /navigation-pins/order` | root helper は案内レスポンスのみ |
-| auto-tags | 未移行 | なし | health / statistics / mappings / stack auto-tag search |
+| auto-tags | 部分 | `GET /auto-tags/statistics/:datasetId`, `GET /auto-tags/statistics/:datasetId/strict`, mappings list/create/update/delete | `GET /auto-tags/joytag/health` は外部 JoyTag health のまま |
 | colors | 部分 | `POST /colors/search`, `POST /colors/search-multi`, `POST /colors/filter`, `POST /colors/stacks/:stackId/update-colors`, `POST /colors/datasets/:datasetId/update-all-colors`, `GET /colors/stats` | standalone では export/import 済みの `dominant_colors_json` を利用。画像ファイルからの再抽出は upload / refresh pipeline 側で再設計 |
 | upload/defaults | 未移行 | なし | 起動設定 UI へ統合するか要判断 |
 | dead APIs | 削除 | `routes/pictures.ts`, `PictureService`, 未マウント `features/datasets/routes/*`, client の embedding / AI analysis / 存在しない asset meta fallback wrapper | なし |
@@ -50,6 +50,7 @@
 - `/tmp/caramel-board-activity-write-check.sqlite` のコピーDBで like activity delete と liked decrement を確認。
 - `exports/imported-reference-check.sqlite` を参照して colors stats/search/search-multi/filter/update-all-colors を確認。
 - colors stack update は既存 asset colors を集約して stack colors を更新する実装。検証時に `exports/imported-reference-check.sqlite` の stack 79 を更新済み。
+- `/tmp/caramel-board-autotag-write-check.sqlite` のコピーDBで auto-tag statistics(raw/aggregate)/strict, mappings list/create/update/delete, stack auto-tag search, stack aggregate-tags, tag stacks を確認。
 
 ## 結論
 

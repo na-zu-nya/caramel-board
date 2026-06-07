@@ -1,5 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { getStandaloneSqlite } from './sqlite';
+import { StandaloneStackRepository } from './stack-repository';
 
 export interface PaginationOptions {
   limit: number;
@@ -119,6 +120,21 @@ export class StandaloneMetadataRepository {
          LIMIT 10`
       )
       .all(datasetId, `%${key}%`) as Array<{ id: number; title: string }>;
+  }
+
+  getStacksByTag(id: number, datasetId: number, options: PaginationOptions) {
+    const tag = this.db
+      .prepare('SELECT title FROM tags WHERE id = ? AND dataset_id = ?')
+      .get(id, datasetId) as { title: string } | undefined;
+    if (!tag) {
+      return { stacks: [], total: 0, limit: options.limit, offset: options.offset };
+    }
+    return new StandaloneStackRepository(this.db).getPaginated({
+      dataSetId: datasetId,
+      tag: tag.title,
+      limit: options.limit,
+      offset: options.offset,
+    });
   }
 
   createTag(datasetId: number, title: string) {

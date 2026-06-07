@@ -217,7 +217,9 @@ tagsRoute.get(
       const auth = await ensureDatasetAuthorizedForCurrentStore(c, dataSetId);
       if (auth) return auth;
       if (isStandaloneSqliteEnabled()) {
-        return c.json({ error: 'Stacks by tag is not implemented for standalone SQLite yet' }, 501);
+        return c.json(
+          new StandaloneMetadataRepository().getStacksByTag(id, dataSetId, { limit, offset })
+        );
       }
       const service = makeService(c, dataSetId);
       const result = await service.getStacksByTag(id, { limit, offset });
