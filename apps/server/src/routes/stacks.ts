@@ -997,6 +997,9 @@ stacksRoute.post('/:id{[0-9]+}/assets', async (c) => {
 // GET /stacks/:id/collections
 stacksRoute.get('/:id{[0-9]+}/collections', async (c) => {
   const id = Number.parseInt(c.req.param('id'), 10);
+  if (isStandaloneSqliteEnabled()) {
+    return c.json(new StandaloneStackRepository().getCollectionIdsByStackId(id));
+  }
   const prisma = usePrisma(c);
   const ds = await resolveDatasetId(prisma, id);
   const colorSearch = createColorSearchService({ prisma, dataSetId: ds });

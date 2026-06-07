@@ -9,20 +9,26 @@ import {
   UpdateCollectionSchema,
 } from '../models/CollectionModel.js';
 import { CollectionService } from '../shared/services/CollectionService';
+import { ensureDatasetAuthorizedForCurrentStore } from '../standalone/auth';
+import { StandaloneLibraryRepository } from '../standalone/library-repository';
+import { isStandaloneSqliteEnabled } from '../standalone/sqlite';
 import { useResponse } from '../utils/useResponse.js';
 
 const app = new Hono();
 const collectionService = new CollectionService(getPrisma());
 
 const ensureAuthorized = async (c: Context, dataSetId: number) => {
-  const { ensureDatasetAuthorized } = await import('../utils/dataset-protection');
-  return ensureDatasetAuthorized(c, dataSetId);
+  return ensureDatasetAuthorizedForCurrentStore(c, dataSetId);
 };
 
 // コレクション一覧取得
 app.get('/', zValidator('query', CollectionQuerySchema), async (c) => {
   try {
     const query = c.req.valid('query');
+    if (isStandaloneSqliteEnabled()) {
+      const result = new StandaloneLibraryRepository().getCollectionList(query);
+      return useResponse(c, result);
+    }
     if (query.dataSetId) {
       const auth = await ensureAuthorized(c, query.dataSetId);
       if (auth) return auth;
@@ -46,6 +52,17 @@ app.get('/', zValidator('query', CollectionQuerySchema), async (c) => {
 app.get('/:id', zValidator('param', z.object({ id: z.coerce.number() })), async (c) => {
   try {
     const { id } = c.req.valid('param');
+    if (isStandaloneSqliteEnabled()) {
+      const collection = new StandaloneLibraryRepository().getCollection(id, {
+        includeStacks: true,
+      });
+      if (!collection) {
+        return useResponse(c, { error: 'コレクションが見つかりません' }, 404);
+      }
+      const auth = await ensureAuthorized(c, collection.dataSetId);
+      if (auth) return auth;
+      return useResponse(c, collection);
+    }
     const collection = await collectionService.findById(id);
 
     if (!collection) {
@@ -66,6 +83,10 @@ app.get('/:id', zValidator('param', z.object({ id: z.coerce.number() })), async 
 app.post('/', zValidator('json', CreateCollectionSchema), async (c) => {
   try {
     const data = c.req.valid('json');
+    if (isStandaloneSqliteEnabled()) {
+      const collection = new StandaloneLibraryRepository().createCollection(data);
+      return useResponse(c, collection, 201);
+    }
     const collection = await collectionService.create(data);
     return useResponse(c, collection, 201);
   } catch (error) {
@@ -92,6 +113,13 @@ app.put(
     try {
       const { id } = c.req.valid('param');
       const data = c.req.valid('json');
+      if (isStandaloneSqliteEnabled()) {
+        const collection = new StandaloneLibraryRepository().updateCollection(id, data);
+        if (!collection) {
+          return useResponse(c, { error: 'コレクションが見つかりません' }, 404);
+        }
+        return useResponse(c, collection);
+      }
       const collection = await collectionService.update(id, data);
       return useResponse(c, collection);
     } catch (error) {
@@ -117,6 +145,11 @@ app.put(
 app.delete('/:id', zValidator('param', z.object({ id: z.coerce.number() })), async (c) => {
   try {
     const { id } = c.req.valid('param');
+    if (isStandaloneSqliteEnabled()) {
+      const ok = new StandaloneLibraryRepository().deleteCollection(id);
+      if (!ok) return useResponse(c, { error: 'コレクションが見つかりません' }, 404);
+      return useResponse(c, { message: 'コレクションを削除しました' });
+    }
     await collectionService.delete(id);
     return useResponse(c, { message: 'コレクションを削除しました' });
   } catch (error) {
@@ -143,6 +176,20 @@ app.post(
     try {
       const { id } = c.req.valid('param');
       const { stackId, orderIndex } = c.req.valid('json');
+      if (isStandaloneSqliteEnabled()) {
+        const result = new StandaloneLibraryRepository().addStackToCollection(
+          id,
+          stackId,
+          orderIndex
+        );
+        if (!result.ok && result.reason === 'duplicate') {
+          return useResponse(c, { error: 'スタックは既にコレクションに追加されています' }, 400);
+        }
+        if (!result.ok) {
+          return useResponse(c, { error: 'コレクションまたはスタックが見つかりません' }, 404);
+        }
+        return useResponse(c, { message: 'スタックをコレクションに追加しました' });
+      }
 
       await collectionService.addStackToCollection(id, stackId, orderIndex);
       return useResponse(c, { message: 'スタックをコレクションに追加しました' });
@@ -170,6 +217,13 @@ app.post(
     try {
       const { id } = c.req.valid('param');
       const { stackIds } = c.req.valid('json');
+      if (isStandaloneSqliteEnabled()) {
+        const ok = new StandaloneLibraryRepository().bulkAddStacksToCollection(id, stackIds);
+        if (!ok) return useResponse(c, { error: 'コレクションが見つかりません' }, 404);
+        return useResponse(c, {
+          message: `${stackIds.length}個のスタックをコレクションに追加しました`,
+        });
+      }
 
       await collectionService.bulkAddStacksToCollection(id, stackIds);
       return useResponse(c, {
@@ -197,6 +251,14 @@ app.get(
     try {
       const { id } = c.req.valid('param');
       const { limit, offset } = c.req.valid('query');
+      if (isStandaloneSqliteEnabled()) {
+        const collection = new StandaloneLibraryRepository().getCollection(id);
+        if (!collection) return useResponse(c, { error: 'コレクションが見つかりません' }, 404);
+        const auth = await ensureAuthorized(c, collection.dataSetId);
+        if (auth) return auth;
+        const result = new StandaloneLibraryRepository().getCollectionStacks(id, limit, offset);
+        return useResponse(c, result);
+      }
       const col = await collectionService.findById(id);
       if (!col) return useResponse(c, { error: 'コレクションが見つかりません' }, 404);
       const auth = await ensureAuthorized(c, col.dataSetId);
@@ -223,6 +285,10 @@ app.delete(
   async (c) => {
     try {
       const { id, stackId } = c.req.valid('param');
+      if (isStandaloneSqliteEnabled()) {
+        new StandaloneLibraryRepository().removeStackFromCollection(id, stackId);
+        return useResponse(c, { message: 'スタックをコレクションから削除しました' });
+      }
       await collectionService.removeStackFromCollection(id, stackId);
       return useResponse(c, { message: 'スタックをコレクションから削除しました' });
     } catch (error) {
@@ -251,6 +317,10 @@ app.put(
     try {
       const { id } = c.req.valid('param');
       const { stackOrders } = c.req.valid('json');
+      if (isStandaloneSqliteEnabled()) {
+        new StandaloneLibraryRepository().reorderStacksInCollection(id, stackOrders);
+        return useResponse(c, { message: 'スタックの順序を更新しました' });
+      }
 
       await collectionService.reorderStacksInCollection(id, stackOrders);
       return useResponse(c, { message: 'スタックの順序を更新しました' });
@@ -276,6 +346,15 @@ app.get(
     try {
       const { id } = c.req.valid('param');
       const { limit, offset } = c.req.valid('query');
+      if (isStandaloneSqliteEnabled()) {
+        const result = new StandaloneLibraryRepository().getSmartCollectionStacks(
+          id,
+          limit,
+          offset
+        );
+        if (!result) return useResponse(c, { error: '無効なスマートコレクションです' }, 400);
+        return useResponse(c, result);
+      }
 
       const result = await collectionService.getStacksByFilter(id, limit, offset);
       return useResponse(c, result);

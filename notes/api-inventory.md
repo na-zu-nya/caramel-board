@@ -30,10 +30,10 @@
 | stacks | 部分 | `GET /stacks/paginated`, `GET /stacks/:id`, `POST /stacks/:id/like`, `PUT /stacks/:id/favorite`, `POST /stacks/:id/tags`, `DELETE /stacks/:id/tags/:tag`, `PUT /stacks/:id/author`, `DELETE /stacks/:id` | favorites list / auto-tag search / upload / URL import / download originals は未移行。thumbnail refresh / aggregate-tags / stack asset追加 / bulk edit / merge は 501 |
 | dataset assets | 完了 | `GET /datasets/:dataSetId/stacks/:id/assets`, `PUT /datasets/:dataSetId/stacks/:id/assets/:assetId/meta` | なし |
 | assets-lite | 部分 | `DELETE /assets/:assetId`, `PUT /assets/:assetId/order`, `PUT /assets/:assetId/favorite`, `POST /assets/:assetId/like` | `POST /assets/:assetId/separate` は 501 |
-| collections | 未移行 | なし | collections / stack add-remove / bulk add / reorder / smart-stacks |
-| collection-folders | 未移行 | なし | tree / CRUD / move |
+| collections | 部分 | `GET /collections`, `GET /collections/:id`, `POST /collections`, `PUT /collections/:id`, `DELETE /collections/:id`, stack add/remove/bulk/reorder, `GET /collections/:id/stacks`, `GET /collections/:id/smart-stacks`, `GET /stacks/:id/collections` | smart-stacks は検索/タグ/作者/fav/liked/mediaType を SQLite stack query に変換。colorFilter は colors API 移行時に精度合わせ |
+| collection-folders | 完了 | `GET /collection-folders`, `GET /collection-folders/tree`, `GET /collection-folders/:id`, `POST /collection-folders`, `PUT /collection-folders/:id`, `DELETE /collection-folders/:id`, reorder, move | なし |
 | activities | 未移行 | なし | yearly likes / like activity delete / legacy一覧 |
-| navigation-pins | 未移行 | なし | dataset scoped list / CRUD / order |
+| navigation-pins | 完了 | `GET /navigation-pins/dataset/:dataSetId`, `POST /navigation-pins`, `PUT /navigation-pins/:id`, `DELETE /navigation-pins/:id`, `PUT /navigation-pins/order` | root helper は案内レスポンスのみ |
 | auto-tags | 未移行 | なし | health / statistics / mappings / stack auto-tag search |
 | colors | 未移行 | なし | stats / search / stack update |
 | upload/defaults | 未移行 | なし | 起動設定 UI へ統合するか要判断 |
@@ -44,6 +44,8 @@
 - `exports/imported-reference-check.sqlite` を参照して `GET /api/v1/stacks/paginated?dataSetId=1&limit=3&offset=0` が `total: 100` を返すことを確認。
 - `GET /api/v1/stacks/81?dataSetId=1`, `GET /api/v1/datasets/1/stacks/81/assets`, tag filter 付き stack list を確認。
 - `/tmp/caramel-board-stack-write-check.sqlite` のコピーDBで stack/asset favorite, like, asset meta, order, stack tag add/remove, author update, asset delete, stack delete を確認。
+- `exports/imported-reference-check.sqlite` を参照して collections list/detail/stacks, folder tree, navigation pins を確認。
+- `/tmp/caramel-board-library-write-check.sqlite` のコピーDBで collection/folder/pin の create/update/reorder/delete、collection stack add/bulk/remove/reorder を確認。
 
 ## 結論
 

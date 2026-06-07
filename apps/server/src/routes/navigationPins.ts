@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { usePrisma } from '../shared/di';
 import { NavigationPinService } from '../shared/services/NavigationPinService';
 import { ensureSuperUser } from '../shared/services/UserService';
+import { StandaloneLibraryRepository } from '../standalone/library-repository';
+import { isStandaloneSqliteEnabled } from '../standalone/sqlite';
 
 // リクエストボディのスキーマ定義
 const createNavigationPinSchema = z.object({
@@ -55,6 +57,11 @@ navigationPinsRouter.get('/dataset/:dataSetId', async (c) => {
   }
 
   try {
+    if (isStandaloneSqliteEnabled()) {
+      const pins = new StandaloneLibraryRepository().getNavigationPins(dataSetId);
+      console.log(`Found ${pins.length} navigation pins for dataset ${dataSetId}`);
+      return c.json(pins);
+    }
     const prisma = usePrisma(c);
     const userId = await ensureSuperUser(prisma);
     const navigationPinService = new NavigationPinService(prisma, userId);
@@ -72,6 +79,11 @@ navigationPinsRouter.post('/', async (c) => {
     const body = await c.req.json();
     console.log('POST /navigation-pins - body:', body);
     const validatedData = createNavigationPinSchema.parse(body);
+    if (isStandaloneSqliteEnabled()) {
+      const pin = new StandaloneLibraryRepository().upsertNavigationPin(validatedData);
+      console.log('Created/Updated navigation pin:', pin);
+      return c.json(pin, 201);
+    }
 
     const prisma = usePrisma(c);
     const userId = await ensureSuperUser(prisma);
@@ -92,6 +104,10 @@ navigationPinsRouter.put('/order', async (c) => {
   try {
     const body = await c.req.json();
     const validatedData = updateOrderSchema.parse(body);
+    if (isStandaloneSqliteEnabled()) {
+      new StandaloneLibraryRepository().updateNavigationPinOrder(validatedData.pins);
+      return c.json({ success: true });
+    }
 
     const prisma = usePrisma(c);
     const userId = await ensureSuperUser(prisma);
@@ -117,6 +133,11 @@ navigationPinsRouter.put('/:id', async (c) => {
   try {
     const body = await c.req.json();
     const validatedData = updateNavigationPinSchema.parse(body);
+    if (isStandaloneSqliteEnabled()) {
+      const pin = new StandaloneLibraryRepository().updateNavigationPin(id, validatedData);
+      if (!pin) return c.json({ error: 'Navigation pin not found' }, 404);
+      return c.json(pin);
+    }
 
     const prisma = usePrisma(c);
     const userId = await ensureSuperUser(prisma);
@@ -140,6 +161,11 @@ navigationPinsRouter.delete('/:id', async (c) => {
   }
 
   try {
+    if (isStandaloneSqliteEnabled()) {
+      const ok = new StandaloneLibraryRepository().deleteNavigationPin(id);
+      if (!ok) return c.json({ error: 'Navigation pin not found' }, 404);
+      return c.json({ success: true });
+    }
     const prisma = usePrisma(c);
     const userId = await ensureSuperUser(prisma);
     const navigationPinService = new NavigationPinService(prisma, userId);
