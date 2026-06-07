@@ -276,6 +276,13 @@ export class StandaloneStackRepository {
     return row ? this.toStack(row, { includeAssets: true, includeTags: true }) : null;
   }
 
+  getStackIdsByDataset(dataSetId: number) {
+    const rows = this.db
+      .prepare('SELECT id FROM stacks WHERE dataset_id = ? ORDER BY id ASC')
+      .all(dataSetId) as Array<{ id: number }>;
+    return rows.map((row) => row.id);
+  }
+
   getAssetsByStackId(stackId: number, dataSetId: number) {
     const rows = this.db
       .prepare(

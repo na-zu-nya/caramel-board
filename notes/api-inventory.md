@@ -24,7 +24,7 @@
 
 | 領域 | 状態 | SQLite 化済み | 未完了・保留 |
 | --- | --- | --- | --- |
-| datasets | 部分 | `GET /datasets`, `GET /datasets/:id`, `POST /datasets`, `PUT /datasets/:id`, `DELETE /datasets/:id`, `GET /datasets/:id/overview`, protection/auth/default 系 | `POST /datasets/:id/refresh-all` は standalone SQLite で 501 |
+| datasets | 完了 | `GET /datasets`, `GET /datasets/:id`, `POST /datasets`, `PUT /datasets/:id`, `DELETE /datasets/:id`, `GET /datasets/:id/overview`, protection/auth/default 系, `POST /datasets/:id/refresh-all` | なし |
 | authors | 完了 | `GET /authors`, `GET /authors/search` | なし |
 | tags | 完了 | `GET /tags`, `GET /tags/management`, `GET /tags/search`, `POST /tags`, `PUT /tags/:id`, `POST /tags/merge`, `POST /tags/tag-stack`, `GET /tags/:id/stacks`, `DELETE /tags/:id` | なし |
 | stacks | 部分 | `GET /stacks/paginated`, `GET /stacks/:id`, `GET /stacks/favorites/list`, `GET /stacks/search/autotag`, `POST /stacks/:id/aggregate-tags`, `POST /stacks/:id/refresh-thumbnail`, `POST /stacks/bulk/tags`, `PUT /stacks/bulk/author`, `PUT /stacks/bulk/media-type`, `PUT /stacks/bulk/favorite`, `POST /stacks/bulk/refresh-thumbnails`, `POST /stacks/merge`, `DELETE /stacks/bulk/remove`, `POST /stacks/:id/like`, `PUT /stacks/:id/favorite`, `POST /stacks/:id/tags`, `DELETE /stacks/:id/tags/:tag`, `PUT /stacks/:id/author`, `DELETE /stacks/:id` | upload / URL import / download originals / stack asset追加 は未移行 |
@@ -52,6 +52,7 @@
 - colors stack update は既存 asset colors を集約して stack colors を更新する実装。検証時に `exports/imported-reference-check.sqlite` の stack 79 を更新済み。
 - `/tmp/caramel-board-autotag-write-check.sqlite` のコピーDBで auto-tag statistics(raw/aggregate)/strict, mappings list/create/update/delete, stack auto-tag search, stack aggregate-tags, tag stacks を確認。
 - `/tmp/caramel-board-stack-maintenance-check.sqlite` のコピーDBで asset separate, thumbnail refresh, bulk tags/author/media-type/favorite/refresh/remove, stack merge を確認。
+- `/tmp/caramel-board-refresh-all-check.sqlite` のコピーDBで dataset refresh-all が 100 stacks / colors 99 / autotags 100 を処理することを確認。
 
 ## 結論
 

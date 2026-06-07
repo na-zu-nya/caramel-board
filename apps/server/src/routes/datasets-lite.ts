@@ -14,8 +14,11 @@ import {
   ensureDatasetAuthorizedForCurrentStore,
   isDatasetAuthorizedForCurrentStore,
 } from '../standalone/auth';
+import { StandaloneAutoTagRepository } from '../standalone/auto-tag-repository';
+import { StandaloneColorRepository } from '../standalone/color-repository';
 import { StandaloneDatasetRepository } from '../standalone/dataset-repository';
 import { isStandaloneSqliteEnabled } from '../standalone/sqlite';
+import { StandaloneStackRepository } from '../standalone/stack-repository';
 import { hashPassword, setDatasetAuthCookie, verifyPassword } from '../utils/dataset-protection';
 
 // Minimal datasets router to satisfy client needs without heavy deps
@@ -365,7 +368,48 @@ app.post('/:id/refresh-all', async (c) => {
     if (isStandaloneSqliteEnabled()) {
       const ds = getStandaloneDatasetRepository().getById(id);
       if (!ds) return c.json({ error: 'DataSet not found' }, 404);
-      return c.json({ error: 'Refresh all is not implemented for standalone SQLite yet' }, 501);
+      const auth = await ensureDatasetAuthorizedForCurrentStore(c, id);
+      if (auth) return auth;
+
+      const stackRepository = new StandaloneStackRepository();
+      const colorRepository = new StandaloneColorRepository();
+      const autoTagRepository = new StandaloneAutoTagRepository();
+      const stackIds = stackRepository.getStackIdsByDataset(id);
+      const colorStackIds = colorRepository.getDatasetUpdateCandidateStackIds(id);
+
+      for (const stackId of stackIds) {
+        stackRepository.refreshStackThumbnail(stackId);
+      }
+      for (const stackId of colorStackIds) {
+        colorRepository.updateStackColors(stackId);
+      }
+
+      let autotagUpdated = 0;
+      for (const stackId of stackIds) {
+        try {
+          autoTagRepository.aggregateStackTags(stackId, 0.4);
+          autotagUpdated++;
+        } catch (error) {
+          console.error(`Failed to aggregate AutoTags for stack ${stackId}:`, error);
+        }
+      }
+
+      return c.json({
+        message: forceRegenerate
+          ? '全体リフレッシュ（再生成）を完了しました'
+          : '全体リフレッシュを完了しました',
+        datasetId: id,
+        totalStacks: stackIds.length,
+        scheduled: {
+          thumbnails: stackIds.length,
+          colors: colorStackIds.length,
+          autotags: autotagUpdated,
+          embeddings: 0,
+        },
+        totals: {
+          embeddings: 0,
+        },
+      });
     }
     const prisma = getPrisma();
     const dataStorage = useDataStorage(c);

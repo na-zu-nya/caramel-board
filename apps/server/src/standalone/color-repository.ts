@@ -193,16 +193,21 @@ export class StandaloneColorRepository {
   }
 
   getDatasetUpdateCandidateCount(datasetId: number) {
-    const row = this.db
+    return this.getDatasetUpdateCandidateStackIds(datasetId).length;
+  }
+
+  getDatasetUpdateCandidateStackIds(datasetId: number) {
+    const rows = this.db
       .prepare(
-        `SELECT COUNT(DISTINCT s.id) AS count
+        `SELECT DISTINCT s.id AS id
          FROM stacks s
          JOIN assets a ON a.stack_id = s.id
          WHERE s.dataset_id = ?
-           AND lower(a.file_type) IN ('jpg', 'jpeg', 'png', 'gif', 'webp', 'mp4', 'mov', 'avi', 'mkv', 'webm')`
+           AND lower(a.file_type) IN ('jpg', 'jpeg', 'png', 'gif', 'webp', 'mp4', 'mov', 'avi', 'mkv', 'webm')
+         ORDER BY s.id ASC`
       )
-      .get(datasetId) as CountRow | undefined;
-    return row?.count ?? 0;
+      .all(datasetId) as Array<{ id: number }>;
+    return rows.map((row) => row.id);
   }
 
   getStats(dataSetId?: number) {
