@@ -21,6 +21,11 @@ import { AutoTagService } from '../shared/services/AutoTagService';
 import { CollectionService } from '../shared/services/CollectionService';
 import { DataSetService } from '../shared/services/DataSetService';
 import { ensureSuperUser } from '../shared/services/UserService';
+import { StandaloneDatasetRepository } from '../standalone/dataset-repository';
+import { StandaloneLibraryRepository } from '../standalone/library-repository';
+import { StandaloneMetadataRepository } from '../standalone/metadata-repository';
+import { isStandaloneSqliteEnabled } from '../standalone/sqlite';
+import { StandaloneStackRepository } from '../standalone/stack-repository';
 import { toPublicAssetPath, withPublicAssetArray } from '../utils/assetPath';
 
 const app = new Hono();
@@ -61,6 +66,18 @@ async function getStackFavoriteSet(stackIds: number[]) {
 // Middleware to validate dataset exists
 app.use('/:dataSetId/*', async (c, next) => {
   const dataSetId = Number.parseInt(c.req.param('dataSetId'), 10);
+  if (isStandaloneSqliteEnabled()) {
+    const dataSet = new StandaloneDatasetRepository().getById(dataSetId);
+    if (!dataSet) {
+      return c.json({ error: 'DataSet not found' }, 404);
+    }
+
+    c.set('dataSet', dataSet);
+    c.set('dataSetId', dataSetId);
+    await next();
+    return;
+  }
+
   const dataSet = await dataSetService.getById(dataSetId);
 
   if (!dataSet) {
@@ -176,6 +193,15 @@ app.get(
       const { id } = c.req.valid('param');
       const { limit, offset, threshold } = c.req.valid('query');
 
+      if (isStandaloneSqliteEnabled()) {
+        const result = new StandaloneStackRepository().getSimilarByStackIds(dataSetId, [id], {
+          limit,
+          offset,
+          threshold,
+        });
+        return c.json(result);
+      }
+
       const searchService = c.get('searchService');
       if (!searchService) return c.json({ error: 'Search service not available' }, 500);
 
@@ -250,6 +276,31 @@ app.get(
       const dataSetId = c.get('dataSetId') as number;
       const { collectionId } = c.req.valid('param');
       const { limit, offset, threshold } = c.req.valid('query');
+
+      if (isStandaloneSqliteEnabled()) {
+        const libraryRepository = new StandaloneLibraryRepository();
+        const collection = libraryRepository.getCollection(collectionId);
+        if (!collection || collection.dataSetId !== dataSetId) {
+          return c.json({ error: 'Collection not found' }, 404);
+        }
+
+        const sourceStackIds =
+          collection.type === 'SMART'
+            ? (libraryRepository
+                .getSmartCollectionStacks(collectionId, 5000, 0)
+                ?.stacks.map((stack) => stack.id) ?? [])
+            : libraryRepository.getCollectionStackIds(collectionId);
+        const result = new StandaloneStackRepository().getSimilarByStackIds(
+          dataSetId,
+          sourceStackIds,
+          {
+            limit,
+            offset,
+            threshold,
+          }
+        );
+        return c.json(result);
+      }
 
       const collection = await prisma.collection.findUnique({
         where: { id: collectionId },
@@ -331,6 +382,15 @@ app.get(
       const dataSetId = c.get('dataSetId') as number;
       const { id } = c.req.valid('param');
       const options = c.req.valid('query');
+
+      if (isStandaloneSqliteEnabled()) {
+        const stack = new StandaloneStackRepository().getById(id, dataSetId);
+        if (!stack) {
+          return c.json({ error: 'Stack not found' }, 404);
+        }
+        return c.json(stack);
+      }
+
       const stackService = buildStackService(dataSetId);
       const stack = await stackService.getById(id, options);
 
@@ -353,7 +413,6 @@ app.post(
     try {
       const dataSetId = c.get('dataSetId') as number;
       const { id } = c.req.valid('param');
-      const stackService = buildStackService(dataSetId);
 
       let parsed: unknown = {};
       try {
@@ -365,6 +424,17 @@ app.post(
           ? (parsed as { force?: boolean }).force
           : true;
 
+      if (isStandaloneSqliteEnabled()) {
+        const result = await new StandaloneStackRepository().regeneratePreviews(id, dataSetId, {
+          force,
+        });
+        if (!result) {
+          return c.json({ error: 'Stack not found' }, 404);
+        }
+        return c.json(result);
+      }
+
+      const stackService = buildStackService(dataSetId);
       const result = await stackService.regeneratePreviews(id, { force });
       return c.json(result);
     } catch (error) {
@@ -607,6 +677,10 @@ app.get('/:dataSetId/tags/search', async (c) => {
     const dataSetId = c.get('dataSetId') as number;
     const key = c.req.query('key') || '';
     if (!key) return c.json([]);
+    if (isStandaloneSqliteEnabled()) {
+      const rows = new StandaloneMetadataRepository().searchTags(key, dataSetId);
+      return c.json(rows.map((row) => row.title));
+    }
     const rows = await prisma.tag.findMany({
       where: {
         dataSetId,

@@ -469,6 +469,18 @@ export class StandaloneLibraryRepository {
     }));
   }
 
+  getCollectionStackIds(collectionId: number) {
+    const rows = this.db
+      .prepare(
+        `SELECT stack_id
+         FROM collection_stacks
+         WHERE collection_id = ?
+         ORDER BY order_index ASC, added_at ASC`
+      )
+      .all(collectionId) as Array<{ stack_id: number }>;
+    return rows.map((row) => row.stack_id);
+  }
+
   removeStackFromCollection(collectionId: number, stackId: number) {
     this.db
       .prepare('DELETE FROM collection_stacks WHERE collection_id = ? AND stack_id = ?')
