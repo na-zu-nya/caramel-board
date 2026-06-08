@@ -23,6 +23,7 @@ import { CollectionService } from '../shared/services/CollectionService';
 import { ensureSuperUser } from '../shared/services/UserService';
 import { ensureDatasetAuthorizedForCurrentStore } from '../standalone/auth';
 import { StandaloneAutoTagRepository } from '../standalone/auto-tag-repository';
+import { StandaloneLibraryRepository } from '../standalone/library-repository';
 import { isStandaloneSqliteEnabled } from '../standalone/sqlite';
 import { StandaloneStackRepository } from '../standalone/stack-repository';
 import { toPublicAssetPath, withPublicAssetArray } from '../utils/assetPath';
@@ -974,14 +975,35 @@ stacksRoute.delete('/:id{[0-9]+}/tags/:tag', async (c) => {
 // POST /stacks/:id/assets - add asset to existing stack
 stacksRoute.post('/:id{[0-9]+}/assets', async (c) => {
   try {
-    if (isStandaloneSqliteEnabled()) {
-      return c.json({ error: 'Asset upload is not implemented for standalone SQLite yet' }, 501);
-    }
     const id = Number.parseInt(c.req.param('id'), 10);
     const formData = await c.req.formData();
     const fileEntry = formData.get('file');
     if (!isUploadedFile(fileEntry)) return c.json({ error: 'File is required' }, 400);
     const file = fileEntry;
+
+    if (isStandaloneSqliteEnabled()) {
+      const repository = new StandaloneStackRepository();
+      const stack = repository.getById(id);
+      if (!stack) return c.json({ error: 'Stack not found' }, 404);
+      const auth = await ensureDatasetAuthorizedForCurrentStore(c, stack.dataSetId);
+      if (auth) return auth;
+
+      const buf = new Uint8Array(await file.arrayBuffer());
+      const storageRoot = process.env.FILES_STORAGE || path.resolve('./data');
+      const tmpDir = path.join(storageRoot, 'tmp');
+      if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
+      const tmpPath = path.join(tmpDir, `${Date.now()}-${file.name || 'upload'}`);
+      fs.writeFileSync(tmpPath, buf);
+
+      const asset = await repository.addAssetWithFile(id, {
+        path: tmpPath,
+        originalname: file.name,
+        mimetype: file.type,
+        size: file.size,
+      });
+      if (!asset) return c.json({ error: 'Stack not found' }, 404);
+      return c.json(asset, 201);
+    }
 
     const prisma = usePrisma(c);
     const ds = await resolveDatasetId(prisma, id);
@@ -1512,9 +1534,6 @@ stacksRoute.get('/:id{[0-9]+}', async (c) => {
 // POST /stacks - create stack with file upload
 stacksRoute.post('/', async (c) => {
   try {
-    if (isStandaloneSqliteEnabled()) {
-      return c.json({ error: 'Stack upload is not implemented for standalone SQLite yet' }, 501);
-    }
     const formData = await c.req.formData();
     const fileEntry = formData.get('file');
     if (!isUploadedFile(fileEntry)) return c.json({ error: 'File is required' }, 400);
@@ -1547,6 +1566,46 @@ stacksRoute.post('/', async (c) => {
       if (mimeType === 'application/pdf') return 'comic';
       return 'image';
     })();
+
+    if (isStandaloneSqliteEnabled()) {
+      const auth = await ensureDatasetAuthorizedForCurrentStore(c, dataSetId);
+      if (auth) return auth;
+
+      const libraryRepository = new StandaloneLibraryRepository();
+      if (collectionId) {
+        const collection = libraryRepository.getCollection(collectionId);
+        if (!collection) return c.json({ error: 'Collection not found' }, 404);
+        if (collection.dataSetId !== dataSetId) {
+          return c.json({ error: 'Collection does not belong to provided dataset' }, 400);
+        }
+      }
+
+      const buf = new Uint8Array(await file.arrayBuffer());
+      const storageRoot = process.env.FILES_STORAGE || path.resolve('./data');
+      const tmpDir = path.join(storageRoot, 'tmp');
+      if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
+      const tmpPath = path.join(tmpDir, `${Date.now()}-${file.name || 'upload'}`);
+      fs.writeFileSync(tmpPath, buf);
+
+      const stack = await new StandaloneStackRepository().createStackWithFile({
+        dataSetId,
+        name,
+        mediaType: finalMediaType as 'image' | 'comic' | 'video',
+        tags: tags.length ? tags : undefined,
+        author,
+        file: {
+          path: tmpPath,
+          originalname: file.name,
+          mimetype: file.type,
+          size: file.size,
+        },
+      });
+      if (!stack) return c.json({ error: 'Failed to create stack' }, 500);
+      if (collectionId) {
+        libraryRepository.addStackToCollection(collectionId, Number(stack.id));
+      }
+      return c.json(stack, 201);
+    }
 
     // Prepare temp file
     const buf = new Uint8Array(await file.arrayBuffer());
@@ -1625,6 +1684,125 @@ stacksRoute.post('/import-from-urls', async (c) => {
   }
 
   try {
+    if (isStandaloneSqliteEnabled()) {
+      const stackRepository = new StandaloneStackRepository();
+      const libraryRepository = new StandaloneLibraryRepository();
+      let effectiveDatasetId = dataSetId ?? null;
+
+      if (stackId) {
+        const stack = stackRepository.getById(stackId);
+        if (!stack) return c.json({ error: 'Stack not found' }, 404);
+        effectiveDatasetId = stack.dataSetId;
+        if (dataSetId && effectiveDatasetId !== dataSetId) {
+          return c.json({ error: 'Stack does not belong to provided dataset' }, 400);
+        }
+      }
+
+      if (!effectiveDatasetId) {
+        return c.json({ error: 'dataSetId is required' }, 400);
+      }
+
+      const auth = await ensureDatasetAuthorizedForCurrentStore(c, effectiveDatasetId);
+      if (auth) {
+        return auth;
+      }
+
+      if (collectionId) {
+        const collection = libraryRepository.getCollection(collectionId);
+        if (!collection) return c.json({ error: 'Collection not found' }, 404);
+        if (collection.dataSetId !== effectiveDatasetId) {
+          return c.json({ error: 'Collection does not belong to provided dataset' }, 400);
+        }
+      }
+
+      const storageRoot = process.env.FILES_STORAGE || path.resolve('./data');
+      const tmpDir = path.join(storageRoot, 'tmp');
+      if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
+
+      const results: Array<{
+        url: string;
+        status: 'created' | 'added' | 'skipped' | 'error';
+        stackId?: number;
+        assetId?: number;
+        message?: string;
+      }> = [];
+
+      for (const url of urls) {
+        let downloaded: {
+          path: string;
+          originalname: string;
+          mimetype: string;
+          size: number;
+        } | null = null;
+        try {
+          downloaded = await importAssetFromUrl(url, tmpDir);
+
+          if (stackId) {
+            const asset = await stackRepository.addAssetWithFile(stackId, downloaded);
+            results.push({
+              url,
+              status: 'added',
+              stackId,
+              assetId: asset ? Number(asset.id) : undefined,
+            });
+            continue;
+          }
+
+          const createdStack = await stackRepository.createStackWithFile({
+            dataSetId: effectiveDatasetId,
+            name: downloaded.originalname,
+            mediaType:
+              mediaType ?? inferMediaTypeFromMime(downloaded.mimetype, downloaded.originalname),
+            tags,
+            author,
+            file: downloaded,
+          });
+          const createdStackId = Number(createdStack?.id ?? 0);
+          const firstAssetId = Number(createdStack?.assets?.[0]?.id ?? 0);
+
+          if (collectionId && createdStackId) {
+            libraryRepository.addStackToCollection(collectionId, createdStackId);
+          }
+
+          results.push({
+            url,
+            status: 'created',
+            stackId: createdStackId || undefined,
+            assetId: firstAssetId || undefined,
+          });
+        } catch (error) {
+          if (downloaded) {
+            try {
+              fs.rmSync(downloaded.path, { force: true });
+            } catch (cleanupError) {
+              console.warn('Failed to clean up temp file after URL import error', cleanupError);
+            }
+          }
+
+          let message = 'URLの取得に失敗しました';
+          if (error instanceof DuplicateAssetError) {
+            message = error.message;
+            results.push({
+              url,
+              status: 'skipped',
+              stackId: error.details?.stackId,
+              assetId: error.details?.assetId,
+              message,
+            });
+            continue;
+          }
+
+          if (error instanceof Error) {
+            message = error.message;
+          }
+
+          results.push({ url, status: 'error', message });
+        }
+      }
+
+      return c.json({ results });
+    }
+
     const prisma = usePrisma(c);
     let effectiveDatasetId = dataSetId ?? null;
 

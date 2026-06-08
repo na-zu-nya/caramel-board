@@ -27,7 +27,7 @@
 | datasets | 完了 | `GET /datasets`, `GET /datasets/:id`, `POST /datasets`, `PUT /datasets/:id`, `DELETE /datasets/:id`, `GET /datasets/:id/overview`, protection/auth/default 系, `POST /datasets/:id/refresh-all` | なし |
 | authors | 完了 | `GET /authors`, `GET /authors/search` | なし |
 | tags | 完了 | `GET /tags`, `GET /tags/management`, `GET /tags/search`, `GET /datasets/:dataSetId/tags/search`, `POST /tags`, `PUT /tags/:id`, `POST /tags/merge`, `POST /tags/tag-stack`, `GET /tags/:id/stacks`, `DELETE /tags/:id` | なし |
-| stacks | 部分 | `GET /stacks/paginated`, `GET /stacks/:id`, `GET /stacks/favorites/list`, `GET /stacks/search/autotag`, `GET /stacks/download-originals`, `GET /datasets/:dataSetId/stacks/:id`, `GET /datasets/:dataSetId/stacks/:id/similar`, `GET /datasets/:dataSetId/collections/:collectionId/similar`, dataset-scoped stack update/delete/tags/author/favorite/like, `POST /datasets/:dataSetId/stacks/:id/regenerate-preview`, `POST /stacks/:id/aggregate-tags`, `POST /stacks/:id/refresh-thumbnail`, `POST /stacks/bulk/tags`, `PUT /stacks/bulk/author`, `PUT /stacks/bulk/media-type`, `PUT /stacks/bulk/favorite`, `POST /stacks/bulk/refresh-thumbnails`, `POST /stacks/merge`, `DELETE /stacks/bulk/remove`, `POST /stacks/:id/like`, `PUT /stacks/:id/favorite`, `POST /stacks/:id/tags`, `DELETE /stacks/:id/tags/:tag`, `PUT /stacks/:id/author`, `DELETE /stacks/:id` | upload / URL import / stack asset追加、dataset-scoped stack search は未移行 |
+| stacks | 完了 | `GET /stacks/paginated`, `GET /stacks/:id`, `GET /stacks/favorites/list`, `GET /stacks/search/autotag`, `GET /stacks/download-originals`, `POST /stacks`, `POST /stacks/import-from-urls`, `POST /stacks/:id/assets`, dataset-scoped stack search/detail/similar/collection similar/create/update/delete/tags/author/favorite/like/regenerate-preview, `POST /stacks/:id/aggregate-tags`, `POST /stacks/:id/refresh-thumbnail`, `POST /stacks/bulk/tags`, `PUT /stacks/bulk/author`, `PUT /stacks/bulk/media-type`, `PUT /stacks/bulk/favorite`, `POST /stacks/bulk/refresh-thumbnails`, `POST /stacks/merge`, `DELETE /stacks/bulk/remove`, `POST /stacks/:id/like`, `PUT /stacks/:id/favorite`, `POST /stacks/:id/tags`, `DELETE /stacks/:id/tags/:tag`, `PUT /stacks/:id/author`, `DELETE /stacks/:id` | なし |
 | dataset assets | 完了 | `GET /datasets/:dataSetId/stacks/:id/assets`, `PUT /datasets/:dataSetId/stacks/:id/assets/:assetId/meta` | なし |
 | assets-lite | 完了 | `DELETE /assets/:assetId`, `POST /assets/:assetId/separate`, `PUT /assets/:assetId/order`, `PUT /assets/:assetId/favorite`, `POST /assets/:assetId/like` | なし |
 | collections | 部分 | `GET /collections`, `GET /collections/:id`, `POST /collections`, `PUT /collections/:id`, `DELETE /collections/:id`, stack add/remove/bulk/reorder, `GET /collections/:id/stacks`, `GET /collections/:id/smart-stacks`, `GET /stacks/:id/collections` | smart-stacks は検索/タグ/作者/fav/liked/mediaType を SQLite stack query に変換。colorFilter は colors API 移行時に精度合わせ |
@@ -36,7 +36,7 @@
 | navigation-pins | 完了 | `GET /navigation-pins/dataset/:dataSetId`, `POST /navigation-pins`, `PUT /navigation-pins/:id`, `DELETE /navigation-pins/:id`, `PUT /navigation-pins/order` | root helper は案内レスポンスのみ |
 | auto-tags | 部分 | `GET /auto-tags/statistics/:datasetId`, `GET /auto-tags/statistics/:datasetId/strict`, mappings list/create/update/delete | `GET /auto-tags/joytag/health` は外部 JoyTag health のまま |
 | colors | 部分 | `POST /colors/search`, `POST /colors/search-multi`, `POST /colors/filter`, `POST /colors/stacks/:stackId/update-colors`, `POST /colors/datasets/:datasetId/update-all-colors`, `GET /colors/stats` | standalone では export/import 済みの `dominant_colors_json` を利用。画像ファイルからの再抽出は upload / refresh pipeline 側で再設計 |
-| upload/defaults | 未移行 | なし | 起動設定 UI へ統合するか要判断 |
+| upload/defaults | 完了 | `GET /upload/defaults`, `PUT /upload/defaults` | DB非依存のメモリ設定API。起動設定 UI へ統合するかは別途設計 |
 | dead APIs | 削除 | `routes/pictures.ts`, `PictureService`, 未マウント `features/datasets/routes/*`, client の embedding / AI analysis / 存在しない asset meta fallback wrapper | なし |
 
 直近の検証:
@@ -56,6 +56,7 @@
 - `/tmp/caramel-board-download-check.sqlite` のコピーDBで `GET /api/v1/stacks/download-originals` の single asset / single stack / multi asset zip を確認。
 - `/tmp/caramel-board-dataset-scoped-check.sqlite` のコピーDBで dataset-scoped stack detail, stack similar, collection similar, regenerate-preview, tags/search を確認。
 - `/tmp/caramel-board-dataset-crud-check.sqlite` のコピーDBで dataset-scoped stack update, tag add/remove, author update, favorite, like, delete を確認。
+- `/tmp/caramel-board-final-api-check.sqlite` のコピーDBで dataset-scoped stack search, generic stack upload, existing stack asset upload, URL import, dataset-scoped stack upload を確認。
 
 ## 結論
 

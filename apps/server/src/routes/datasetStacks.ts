@@ -117,6 +117,53 @@ app.get(
       const dataSetId = c.req.valid('param').dataSetId;
       const queryParams = c.req.valid('query');
 
+      if (isStandaloneSqliteEnabled()) {
+        if (queryParams.mode === SearchMode.SIMILAR && queryParams.referenceStackId) {
+          const result = new StandaloneStackRepository().getSimilarByStackIds(
+            dataSetId,
+            [queryParams.referenceStackId],
+            {
+              limit: queryParams.limit,
+              offset: queryParams.offset,
+            }
+          );
+          return c.json(result);
+        }
+
+        const filters = queryParams.filters || {};
+        const sort = queryParams.sort || { by: 'recommended', order: 'desc' };
+        const result = new StandaloneStackRepository().getPaginated({
+          dataSetId,
+          collection: filters.collectionId,
+          mediaType:
+            filters.mediaType && filters.mediaType !== 'all' ? filters.mediaType : undefined,
+          tag: filters.tags?.includeAny ?? filters.tags?.include,
+          author: filters.author?.includeAny ?? filters.author?.include,
+          fav:
+            filters.favorites === 'is-fav'
+              ? '1'
+              : filters.favorites === 'not-fav'
+                ? '0'
+                : undefined,
+          liked:
+            filters.likes === 'is-liked' ? '1' : filters.likes === 'not-liked' ? '0' : undefined,
+          hasNoTags: filters.tags?.includeNotSet === true,
+          hasNoAuthor: filters.author?.includeNotSet === true,
+          search: queryParams.query,
+          sort:
+            sort.by === 'dateAdded' ||
+            sort.by === 'name' ||
+            sort.by === 'likes' ||
+            sort.by === 'updated'
+              ? sort.by
+              : 'recommended',
+          order: sort.order,
+          limit: queryParams.limit,
+          offset: queryParams.offset,
+        });
+        return c.json(result);
+      }
+
       // SearchServiceを取得
       const searchService = c.get('searchService');
       if (!searchService) {
@@ -496,6 +543,22 @@ app.post('/:dataSetId/stacks', async (c) => {
       } else {
         finalMediaType = 'image';
       }
+    }
+
+    if (isStandaloneSqliteEnabled()) {
+      const stack = await new StandaloneStackRepository().createStackWithFile({
+        dataSetId,
+        name: name || file.name,
+        mediaType: finalMediaType as 'image' | 'comic' | 'video',
+        file: {
+          path: tempPath,
+          originalname: file.name,
+          mimetype: file.type,
+          size: file.size,
+        },
+      });
+      if (!stack) return c.json({ error: 'Failed to create stack' }, 500);
+      return c.json(stack, 201);
     }
 
     // Create stack with the file

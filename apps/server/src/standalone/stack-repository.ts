@@ -1,6 +1,13 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
-import { toPublicAssetPath, withPublicAssetArray } from '../utils/assetPath';
+import { DuplicateAssetError } from '../errors/DuplicateAssetError';
+import { DataStorage } from '../lib/DataStorage';
+import { buildAssetKey, toPublicAssetPath, withPublicAssetArray } from '../utils/assetPath';
+import { ColorExtractor, type DominantColor } from '../utils/colorExtractor';
+import { getExtension, getFileType, getHash } from '../utils/functions';
 import { generateMediaPreview, shouldGeneratePreview } from '../utils/generateMediaPreview';
+import { generateThumbnail } from '../utils/generateThumbnail';
 import { getStandaloneSqlite, nowIso, parseJsonObject } from './sqlite';
 
 export interface StandaloneStackListParams {
@@ -69,6 +76,27 @@ interface AssetPreviewRow {
   file_type: string;
   hash: string;
   preview: string | null;
+}
+
+interface StandaloneFileInput {
+  path: string;
+  originalname: string;
+  mimetype: string;
+  size: number;
+}
+
+interface CreateStackWithFileInput {
+  dataSetId: number;
+  name: string;
+  mediaType: 'image' | 'comic' | 'video';
+  author?: string;
+  tags?: string[];
+  file: StandaloneFileInput;
+}
+
+interface DuplicateAssetRow {
+  id: number;
+  stack_id: number;
 }
 
 interface TagRow {
@@ -147,6 +175,29 @@ const parseJsonArray = (value: string | null | undefined): unknown[] => {
 const placeholders = (values: unknown[]) => values.map(() => '?').join(', ');
 const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
 const normalizeTag = (tag: string) => tag.trim().toLowerCase();
+const IMAGE_EXTENSIONS = new Set([
+  'jpg',
+  'jpeg',
+  'png',
+  'gif',
+  'webp',
+  'bmp',
+  'avif',
+  'heic',
+  'heif',
+  'tif',
+  'tiff',
+]);
+const VIDEO_EXTENSIONS = new Set(['mp4', 'mov', 'avi', 'mkv', 'webm']);
+const normalizeExtension = (ext: string) => ext.replace(/^\./, '').toLowerCase();
+const canonicalizeExtension = (ext: string) => {
+  const normalized = normalizeExtension(ext);
+  return normalized === 'jpeg' ? 'jpg' : normalized;
+};
+const isImageExtension = (ext: string) => IMAGE_EXTENSIONS.has(canonicalizeExtension(ext));
+const isVideoExtension = (ext: string) => VIDEO_EXTENSIONS.has(canonicalizeExtension(ext));
+const toColorJson = (colors: DominantColor[] | null) =>
+  colors && colors.length > 0 ? JSON.stringify(colors) : null;
 
 const toAsset = (row: AssetRow, dataSetId: number) => ({
   id: row.id,
@@ -507,6 +558,144 @@ export class StandaloneStackRepository {
       failed: failures,
       previews: results,
     };
+  }
+
+  async createStackWithFile(input: CreateStackWithFileInput) {
+    const now = nowIso();
+    const authorId = input.author?.trim()
+      ? this.findOrCreateAuthor(input.dataSetId, input.author.trim())
+      : null;
+    const result = this.db
+      .prepare(
+        `INSERT INTO stacks
+           (dataset_id, author_id, name, thumbnail, media_type, liked, meta_json, dominant_colors_json, created_at, updated_at)
+         VALUES (?, ?, ?, '', ?, 0, '{}', NULL, ?, ?)`
+      )
+      .run(input.dataSetId, authorId, input.name, input.mediaType, now, now);
+    const stackId = Number(result.lastInsertRowid);
+
+    try {
+      const asset = await this.addAssetWithFile(stackId, input.file);
+      if (!asset) {
+        this.deleteStack(stackId);
+        return null;
+      }
+      for (const tag of input.tags ?? []) {
+        const trimmed = tag.trim();
+        if (trimmed) this.addTag(stackId, trimmed);
+      }
+      this.refreshStackColors(stackId);
+      return this.getById(stackId, input.dataSetId);
+    } catch (error) {
+      this.deleteStack(stackId);
+      throw error;
+    }
+  }
+
+  async addAssetWithFile(stackId: number, file: StandaloneFileInput) {
+    const stack = this.getStackDataset(stackId);
+    if (!stack) return null;
+
+    const hash = await getHash(file.path);
+    const ext = this.resolveAssetExtension(file.path, file.originalname);
+    const existing = this.db
+      .prepare(
+        `SELECT a.id, a.stack_id
+         FROM assets a
+         JOIN stacks s ON s.id = a.stack_id
+         WHERE s.dataset_id = ? AND a.hash = ?
+         LIMIT 1`
+      )
+      .get(stack.dataset_id, hash) as DuplicateAssetRow | undefined;
+
+    if (existing) {
+      try {
+        fs.rmSync(file.path, { force: true });
+      } catch {}
+      if (existing.stack_id === stackId) {
+        throw new DuplicateAssetError('このスタックに同一画像が既に存在します', {
+          assetId: existing.id,
+          stackId: existing.stack_id,
+          scope: 'same-stack',
+        });
+      }
+      throw new DuplicateAssetError('重複画像のため追加できません（別スタックに存在）', {
+        assetId: existing.id,
+        stackId: existing.stack_id,
+        scope: 'dataset',
+      });
+    }
+
+    const key = buildAssetKey(stack.dataset_id, hash, ext);
+    await DataStorage.mkdir(path.dirname(key), stack.dataset_id);
+    DataStorage.move(key, file.path, stack.dataset_id);
+
+    let thumbnailKey = '';
+    try {
+      thumbnailKey = await generateThumbnail(key, ext, false, stack.dataset_id);
+    } catch (error) {
+      console.error('Failed to generate thumbnail for standalone asset upload', error);
+    }
+
+    let previewKey: string | null = null;
+    try {
+      previewKey = await generateMediaPreview(key, hash, ext, { dataSetId: stack.dataset_id });
+    } catch (error) {
+      console.error('Failed to generate preview for standalone asset upload', error);
+    }
+
+    const dominantColors = await this.extractAssetColors(key, thumbnailKey, ext);
+    const nextOrder =
+      (
+        this.db
+          .prepare(
+            'SELECT COALESCE(MAX(order_in_stack), -1) AS count FROM assets WHERE stack_id = ?'
+          )
+          .get(stackId) as CountRow | undefined
+      )?.count ?? -1;
+    const now = nowIso();
+    const created = this.db
+      .prepare(
+        `INSERT INTO assets
+           (stack_id, file, thumbnail, preview, file_type, original_name, hash, order_in_stack, meta_json, dominant_colors_json, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, '{}', ?, ?, ?)`
+      )
+      .run(
+        stackId,
+        key,
+        thumbnailKey,
+        previewKey,
+        ext,
+        file.originalname,
+        hash,
+        nextOrder + 1,
+        toColorJson(dominantColors),
+        now,
+        now
+      );
+    const assetId = Number(created.lastInsertRowid);
+    this.replaceAssetColors(assetId, dominantColors);
+
+    if (thumbnailKey) {
+      this.db
+        .prepare(
+          `UPDATE stacks
+           SET thumbnail = CASE WHEN thumbnail = '' THEN ? ELSE thumbnail END,
+               updated_at = ?
+           WHERE id = ?`
+        )
+        .run(thumbnailKey, now, stackId);
+    }
+    this.refreshStackColors(stackId);
+
+    const row = this.db
+      .prepare(
+        `SELECT assets.*, 0 AS is_favorite
+         FROM assets
+         WHERE id = ?`
+      )
+      .get(assetId) as AssetRow | undefined;
+    return row ? toAsset(row, stack.dataset_id) : null;
   }
 
   updateStack(
@@ -1159,6 +1348,130 @@ export class StandaloneStackRepository {
          WHERE assets.id = ?`
       )
       .get(assetId) as { id: number; stack_id: number; dataset_id: number } | undefined;
+  }
+
+  private findOrCreateAuthor(dataSetId: number, name: string) {
+    const existing = this.db
+      .prepare('SELECT id FROM authors WHERE dataset_id = ? AND name = ? COLLATE NOCASE')
+      .get(dataSetId, name) as { id: number } | undefined;
+    if (existing) return existing.id;
+    return Number(
+      this.db.prepare('INSERT INTO authors (dataset_id, name) VALUES (?, ?)').run(dataSetId, name)
+        .lastInsertRowid
+    );
+  }
+
+  private resolveAssetExtension(sourcePath: string, originalName: string) {
+    const candidates = [
+      canonicalizeExtension(getFileType(originalName)),
+      canonicalizeExtension(getExtension(originalName)),
+      canonicalizeExtension(path.extname(originalName)),
+      canonicalizeExtension(path.extname(sourcePath)),
+    ].filter((value) => value.length > 0);
+    const supported = candidates.find(
+      (candidate) => isImageExtension(candidate) || isVideoExtension(candidate)
+    );
+    if (supported) return supported;
+    return candidates[0] || 'jpg';
+  }
+
+  private async extractAssetColors(fileKey: string, thumbnailKey: string, ext: string) {
+    try {
+      if (isImageExtension(ext)) {
+        return await ColorExtractor.extractDominantColors(DataStorage.getPath(fileKey), 3);
+      }
+      if (isVideoExtension(ext) && thumbnailKey) {
+        return await ColorExtractor.extractDominantColors(DataStorage.getPath(thumbnailKey), 3);
+      }
+    } catch (error) {
+      console.error('Failed to extract colors for standalone asset upload', error);
+    }
+    return null;
+  }
+
+  private replaceAssetColors(assetId: number, colors: DominantColor[] | null) {
+    this.db.prepare('DELETE FROM asset_colors WHERE asset_id = ?').run(assetId);
+    if (!colors || colors.length === 0) return;
+    const insert = this.db.prepare(
+      `INSERT INTO asset_colors
+         (asset_id, r, g, b, hex, percentage, hue, saturation, lightness, hue_category, order_index)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    );
+    colors.forEach((color, index) => {
+      insert.run(
+        assetId,
+        color.r,
+        color.g,
+        color.b,
+        color.hex,
+        color.percentage,
+        color.hue,
+        color.saturation,
+        color.lightness,
+        color.hueCategory,
+        index
+      );
+    });
+  }
+
+  private replaceStackColors(stackId: number, colors: DominantColor[] | null) {
+    this.db.prepare('DELETE FROM stack_colors WHERE stack_id = ?').run(stackId);
+    if (!colors || colors.length === 0) return;
+    const insert = this.db.prepare(
+      `INSERT INTO stack_colors
+         (stack_id, r, g, b, hex, percentage, hue, saturation, lightness, hue_category, order_index)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    );
+    colors.forEach((color, index) => {
+      insert.run(
+        stackId,
+        color.r,
+        color.g,
+        color.b,
+        color.hex,
+        color.percentage,
+        color.hue,
+        color.saturation,
+        color.lightness,
+        color.hueCategory,
+        index
+      );
+    });
+  }
+
+  private refreshStackColors(stackId: number) {
+    const rows = this.db
+      .prepare(
+        `SELECT dominant_colors_json
+         FROM assets
+         WHERE stack_id = ?
+         ORDER BY order_in_stack ASC, id ASC`
+      )
+      .all(stackId) as Array<{ dominant_colors_json: string | null }>;
+    const colorSets = rows
+      .map((row) => parseJsonArray(row.dominant_colors_json).filter(this.isDominantColor))
+      .filter((colors) => colors.length > 0);
+    const colors = colorSets.length > 0 ? ColorExtractor.aggregateStackColors(colorSets) : null;
+    this.db
+      .prepare('UPDATE stacks SET dominant_colors_json = ?, updated_at = ? WHERE id = ?')
+      .run(toColorJson(colors), nowIso(), stackId);
+    this.replaceStackColors(stackId, colors);
+  }
+
+  private isDominantColor(value: unknown): value is DominantColor {
+    if (!value || typeof value !== 'object') return false;
+    const color = value as Partial<DominantColor>;
+    return (
+      typeof color.r === 'number' &&
+      typeof color.g === 'number' &&
+      typeof color.b === 'number' &&
+      typeof color.hex === 'string' &&
+      typeof color.percentage === 'number' &&
+      typeof color.hue === 'number' &&
+      typeof color.saturation === 'number' &&
+      typeof color.lightness === 'number' &&
+      typeof color.hueCategory === 'string'
+    );
   }
 
   private getExistingStackIds(dataSetId: number, stackIds: number[]) {
