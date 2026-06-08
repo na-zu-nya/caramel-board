@@ -10,6 +10,7 @@ import type {
   CreateCollectionInput,
   UpdateCollectionInput,
 } from '../models/CollectionModel';
+import { StandaloneColorRepository } from './color-repository';
 import { getStandaloneSqlite, nowIso, parseJsonObject } from './sqlite';
 import { type StandaloneStackListParams, StandaloneStackRepository } from './stack-repository';
 
@@ -84,11 +85,55 @@ const parseJsonRecord = (value: string | null | undefined): Record<string, unkno
   return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const toStringArray = (value: unknown) =>
+  Array.isArray(value) && value.every((entry) => typeof entry === 'string') ? value : undefined;
+
+const toNumber = (value: unknown) => (typeof value === 'number' ? value : undefined);
+
+const getSmartCollectionColorStackIds = (
+  repository: StandaloneColorRepository,
+  dataSetId: number,
+  mediaType: 'image' | 'comic' | 'video' | undefined,
+  colorFilter: unknown
+) => {
+  if (!isRecord(colorFilter)) return undefined;
+
+  const hueCategories = toStringArray(colorFilter.hueCategories);
+  const toneSaturation = toNumber(colorFilter.toneSaturation);
+  const toneLightness = toNumber(colorFilter.toneLightness);
+  const tonePoint =
+    toneSaturation !== undefined && toneLightness !== undefined
+      ? { saturation: toneSaturation, lightness: toneLightness }
+      : undefined;
+  const similarityThreshold = toNumber(colorFilter.similarityThreshold);
+  const customColor =
+    typeof colorFilter.customColor === 'string' ? colorFilter.customColor : undefined;
+  const hasColorFilter =
+    Boolean(hueCategories?.length) || Boolean(tonePoint) || Boolean(customColor);
+
+  if (!hasColorFilter) return undefined;
+
+  return repository.getMatchingStackIdsByFilter({
+    dataSetId,
+    mediaType,
+    hueCategories,
+    tonePoint,
+    toneTolerance: toNumber(colorFilter.toneTolerance),
+    similarityThreshold,
+    customColor,
+  });
+};
+
 export class StandaloneLibraryRepository {
   private stackRepository: StandaloneStackRepository;
+  private colorRepository: StandaloneColorRepository;
 
   constructor(private db: DatabaseSync = getStandaloneSqlite()) {
     this.stackRepository = new StandaloneStackRepository(db);
+    this.colorRepository = new StandaloneColorRepository(db);
   }
 
   private ensureUserId() {
@@ -510,14 +555,21 @@ export class StandaloneLibraryRepository {
     const collection = this.getCollectionRow(collectionId);
     if (!collection || collection.type !== 'SMART') return null;
     const filterConfig = parseJsonRecord(collection.filter_config_json);
+    const mediaType =
+      filterConfig.mediaType === 'image' ||
+      filterConfig.mediaType === 'comic' ||
+      filterConfig.mediaType === 'video'
+        ? filterConfig.mediaType
+        : undefined;
+    const stackIds = getSmartCollectionColorStackIds(
+      this.colorRepository,
+      collection.dataset_id,
+      mediaType,
+      filterConfig.colorFilter
+    );
     const params: StandaloneStackListParams = {
       dataSetId: collection.dataset_id,
-      mediaType:
-        filterConfig.mediaType === 'image' ||
-        filterConfig.mediaType === 'comic' ||
-        filterConfig.mediaType === 'video'
-          ? filterConfig.mediaType
-          : undefined,
+      mediaType,
       tag: Array.isArray(filterConfig.tagIds)
         ? filterConfig.tagIds.map((value) => String(value))
         : undefined,
@@ -534,6 +586,7 @@ export class StandaloneLibraryRepository {
       hasNoTags: filterConfig.hasNoTags === true,
       hasNoAuthor: filterConfig.hasNoAuthor === true,
       search: typeof filterConfig.search === 'string' ? filterConfig.search : undefined,
+      stackIds,
       sort: 'recommended',
       order: 'desc',
       limit,

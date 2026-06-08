@@ -30,12 +30,12 @@
 | stacks | 完了 | `GET /stacks/paginated`, `GET /stacks/:id`, `GET /stacks/favorites/list`, `GET /stacks/search/autotag`, `GET /stacks/download-originals`, `POST /stacks`, `POST /stacks/import-from-urls`, `POST /stacks/:id/assets`, dataset-scoped stack search/detail/similar/collection similar/create/update/delete/tags/author/favorite/like/regenerate-preview, `POST /stacks/:id/aggregate-tags`, `POST /stacks/:id/refresh-thumbnail`, `POST /stacks/bulk/tags`, `PUT /stacks/bulk/author`, `PUT /stacks/bulk/media-type`, `PUT /stacks/bulk/favorite`, `POST /stacks/bulk/refresh-thumbnails`, `POST /stacks/merge`, `DELETE /stacks/bulk/remove`, `POST /stacks/:id/like`, `PUT /stacks/:id/favorite`, `POST /stacks/:id/tags`, `DELETE /stacks/:id/tags/:tag`, `PUT /stacks/:id/author`, `DELETE /stacks/:id` | なし |
 | dataset assets | 完了 | `GET /datasets/:dataSetId/stacks/:id/assets`, `PUT /datasets/:dataSetId/stacks/:id/assets/:assetId/meta` | なし |
 | assets-lite | 完了 | `DELETE /assets/:assetId`, `POST /assets/:assetId/separate`, `PUT /assets/:assetId/order`, `PUT /assets/:assetId/favorite`, `POST /assets/:assetId/like` | なし |
-| collections | 部分 | `GET /collections`, `GET /collections/:id`, `POST /collections`, `PUT /collections/:id`, `DELETE /collections/:id`, stack add/remove/bulk/reorder, `GET /collections/:id/stacks`, `GET /collections/:id/smart-stacks`, `GET /stacks/:id/collections` | smart-stacks は検索/タグ/作者/fav/liked/mediaType を SQLite stack query に変換。colorFilter は colors API 移行時に精度合わせ |
+| collections | 完了 | `GET /collections`, `GET /collections/:id`, `POST /collections`, `PUT /collections/:id`, `DELETE /collections/:id`, stack add/remove/bulk/reorder, `GET /collections/:id/stacks`, `GET /collections/:id/smart-stacks`, `GET /stacks/:id/collections` | なし |
 | collection-folders | 完了 | `GET /collection-folders`, `GET /collection-folders/tree`, `GET /collection-folders/:id`, `POST /collection-folders`, `PUT /collection-folders/:id`, `DELETE /collection-folders/:id`, reorder, move | なし |
 | activities | 完了 | `GET /activities`, `GET /activities/likes`, `GET /activities/likes/yearly`, `DELETE /activities/likes/:id` | なし |
 | navigation-pins | 完了 | `GET /navigation-pins/dataset/:dataSetId`, `POST /navigation-pins`, `PUT /navigation-pins/:id`, `DELETE /navigation-pins/:id`, `PUT /navigation-pins/order` | root helper は案内レスポンスのみ |
-| auto-tags | 部分 | `GET /auto-tags/statistics/:datasetId`, `GET /auto-tags/statistics/:datasetId/strict`, mappings list/create/update/delete | `GET /auto-tags/joytag/health` は外部 JoyTag health のまま |
-| colors | 部分 | `POST /colors/search`, `POST /colors/search-multi`, `POST /colors/filter`, `POST /colors/stacks/:stackId/update-colors`, `POST /colors/datasets/:datasetId/update-all-colors`, `GET /colors/stats` | standalone では export/import 済みの `dominant_colors_json` を利用。画像ファイルからの再抽出は upload / refresh pipeline 側で再設計 |
+| auto-tags | 完了 | `GET /auto-tags/statistics/:datasetId`, `GET /auto-tags/statistics/:datasetId/strict`, mappings list/create/update/delete | `GET /auto-tags/joytag/health` は外部 JoyTag health 確認で DB 非依存 |
+| colors | 完了 | `POST /colors/search`, `POST /colors/search-multi`, `POST /colors/filter`, `POST /colors/stacks/:stackId/update-colors`, `POST /colors/datasets/:datasetId/update-all-colors`, `GET /colors/stats`, stack list / smart-stacks の colorFilter | なし |
 | upload/defaults | 完了 | `GET /upload/defaults`, `PUT /upload/defaults` | DB非依存のメモリ設定API。起動設定 UI へ統合するかは別途設計 |
 | dead APIs | 削除 | `routes/pictures.ts`, `PictureService`, 未マウント `features/datasets/routes/*`, client の embedding / AI analysis / 存在しない asset meta fallback wrapper | なし |
 
@@ -57,6 +57,7 @@
 - `/tmp/caramel-board-dataset-scoped-check.sqlite` のコピーDBで dataset-scoped stack detail, stack similar, collection similar, regenerate-preview, tags/search を確認。
 - `/tmp/caramel-board-dataset-crud-check.sqlite` のコピーDBで dataset-scoped stack update, tag add/remove, author update, favorite, like, delete を確認。
 - `/tmp/caramel-board-final-api-check.sqlite` のコピーDBで dataset-scoped stack search, generic stack upload, existing stack asset upload, URL import, dataset-scoped stack upload を確認。
+- stack list / dataset-scoped stack search / smart-stacks の standalone colorFilter が `dominant_colors_json` を使うことを確認。
 
 ## 結論
 

@@ -21,6 +21,7 @@ import { AutoTagService } from '../shared/services/AutoTagService';
 import { CollectionService } from '../shared/services/CollectionService';
 import { DataSetService } from '../shared/services/DataSetService';
 import { ensureSuperUser } from '../shared/services/UserService';
+import { StandaloneColorRepository } from '../standalone/color-repository';
 import { StandaloneDatasetRepository } from '../standalone/dataset-repository';
 import { StandaloneLibraryRepository } from '../standalone/library-repository';
 import { StandaloneMetadataRepository } from '../standalone/metadata-repository';
@@ -41,6 +42,66 @@ function buildStackService(dataSetId: number) {
   const colorSearch = createColorSearchService({ prisma, dataSetId });
   return createStackService({ prisma, colorSearch, dataSetId });
 }
+
+const getStandaloneColorStackIds = (
+  dataSetId: number,
+  mediaType: 'image' | 'comic' | 'video' | undefined,
+  colorFilter:
+    | {
+        hue?: number;
+        hex?: string;
+        tones?: {
+          brightness?: { min?: number; max?: number };
+          saturation?: { min?: number; max?: number };
+        };
+        hueCategories?: string[];
+        tonePoint?: { saturation: number; lightness: number };
+        toneTolerance?: number;
+        similarityThreshold?: number;
+        customColor?: string;
+      }
+    | undefined
+) => {
+  if (!colorFilter) return undefined;
+  const hasColorFilter =
+    typeof colorFilter.hue === 'number' ||
+    Boolean(colorFilter.hex) ||
+    Boolean(colorFilter.tones?.brightness) ||
+    Boolean(colorFilter.tones?.saturation) ||
+    Boolean(colorFilter.hueCategories?.length) ||
+    Boolean(colorFilter.tonePoint) ||
+    Boolean(colorFilter.customColor);
+
+  if (!hasColorFilter) return undefined;
+
+  return new StandaloneColorRepository().getMatchingStackIdsByFilter({
+    dataSetId,
+    mediaType,
+    hue: colorFilter.hue,
+    hex: colorFilter.hex,
+    hueCategories: colorFilter.hueCategories,
+    tonePoint: colorFilter.tonePoint,
+    toneTolerance: colorFilter.toneTolerance,
+    similarityThreshold: colorFilter.similarityThreshold,
+    customColor: colorFilter.customColor,
+    saturationRange:
+      colorFilter.tones?.saturation?.min !== undefined ||
+      colorFilter.tones?.saturation?.max !== undefined
+        ? {
+            min: colorFilter.tones.saturation.min ?? 0,
+            max: colorFilter.tones.saturation.max ?? 100,
+          }
+        : undefined,
+    lightnessRange:
+      colorFilter.tones?.brightness?.min !== undefined ||
+      colorFilter.tones?.brightness?.max !== undefined
+        ? {
+            min: colorFilter.tones.brightness.min ?? 0,
+            max: colorFilter.tones.brightness.max ?? 100,
+          }
+        : undefined,
+  });
+};
 
 async function getStackFavoriteSet(stackIds: number[]) {
   if (stackIds.length === 0) {
@@ -132,11 +193,13 @@ app.get(
 
         const filters = queryParams.filters || {};
         const sort = queryParams.sort || { by: 'recommended', order: 'desc' };
+        const mediaType =
+          filters.mediaType && filters.mediaType !== 'all' ? filters.mediaType : undefined;
+        const stackIds = getStandaloneColorStackIds(dataSetId, mediaType, filters.color);
         const result = new StandaloneStackRepository().getPaginated({
           dataSetId,
           collection: filters.collectionId,
-          mediaType:
-            filters.mediaType && filters.mediaType !== 'all' ? filters.mediaType : undefined,
+          mediaType,
           tag: filters.tags?.includeAny ?? filters.tags?.include,
           author: filters.author?.includeAny ?? filters.author?.include,
           fav:
@@ -150,6 +213,7 @@ app.get(
           hasNoTags: filters.tags?.includeNotSet === true,
           hasNoAuthor: filters.author?.includeNotSet === true,
           search: queryParams.query,
+          stackIds,
           sort:
             sort.by === 'dateAdded' ||
             sort.by === 'name' ||

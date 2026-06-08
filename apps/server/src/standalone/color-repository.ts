@@ -28,7 +28,13 @@ export interface StandaloneColorSearchOptions {
 }
 
 export interface StandaloneColorFilterOptions {
+  hue?: number;
+  hex?: string;
   hueCategories?: string[];
+  tonePoint?: { saturation: number; lightness: number };
+  toneTolerance?: number;
+  similarityThreshold?: number;
+  customColor?: string;
   saturationRange?: { min: number; max: number };
   lightnessRange?: { min: number; max: number };
   dataSetId?: number;
@@ -74,6 +80,82 @@ const hslDistance = (color: DominantColor, target: { h: number; s: number; l: nu
       (color.saturation - target.s) ** 2 +
       (color.lightness - target.l) ** 2
   );
+
+const toneDistance = (color: DominantColor, tonePoint: { saturation: number; lightness: number }) =>
+  Math.sqrt(
+    (color.saturation - tonePoint.saturation) ** 2 + (color.lightness - tonePoint.lightness) ** 2
+  );
+
+const HUE_CATEGORY_TARGETS: Record<string, { hue: number; radius: number }> = {
+  red: { hue: 0, radius: 15 },
+  orange: { hue: 30, radius: 15 },
+  yellow: { hue: 60, radius: 15 },
+  green: { hue: 105, radius: 30 },
+  cyan: { hue: 165, radius: 30 },
+  blue: { hue: 225, radius: 30 },
+  violet: { hue: 300, radius: 45 },
+  gray: { hue: 0, radius: 180 },
+};
+
+const hexToRgb = (hex: string): { r: number; g: number; b: number } | null => {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result
+    ? {
+        r: Number.parseInt(result[1], 16),
+        g: Number.parseInt(result[2], 16),
+        b: Number.parseInt(result[3], 16),
+      }
+    : null;
+};
+
+const getHueCategoryMatchScore = (
+  color: DominantColor,
+  hueCategories: string[] | undefined,
+  similarityThreshold: number | undefined
+) => {
+  if (!hueCategories?.length) return null;
+  if (!hueCategories.includes(color.hueCategory)) return null;
+
+  const threshold = similarityThreshold ?? 0;
+  if (threshold <= 0) return 0;
+
+  let bestDistance: number | null = null;
+  for (const category of hueCategories) {
+    if (category !== color.hueCategory) continue;
+    const target = HUE_CATEGORY_TARGETS[category];
+    if (!target) return 0;
+
+    const distance = hueDistance(color.hue, target.hue);
+    const allowedDistance = Math.max(2, target.radius * (1 - threshold / 100));
+    if (distance > allowedDistance) continue;
+    bestDistance = bestDistance === null ? distance : Math.min(bestDistance, distance);
+  }
+
+  return bestDistance;
+};
+
+const getCustomColorTarget = (
+  customColor: string | undefined,
+  tonePoint: { saturation: number; lightness: number } | undefined
+) => {
+  if (!customColor) return null;
+  const customRgb = hexToRgb(customColor);
+  if (!customRgb) return null;
+  const hsl = ColorExtractor.rgbToHsl(customRgb.r, customRgb.g, customRgb.b);
+  return {
+    h: hsl.h,
+    s: tonePoint?.saturation ?? hsl.s,
+    l: tonePoint?.lightness ?? hsl.l,
+  };
+};
+
+const getHueTarget = (hue: number | undefined, hex: string | undefined) => {
+  if (hue !== undefined) return hue;
+  if (!hex) return undefined;
+  const rgb = hexToRgb(hex);
+  if (!rgb) return undefined;
+  return ColorExtractor.rgbToHsl(rgb.r, rgb.g, rgb.b).h;
+};
 
 export class StandaloneColorRepository {
   private stackRepository: StandaloneStackRepository;
@@ -137,32 +219,33 @@ export class StandaloneColorRepository {
   }
 
   searchByColorFilter(options: StandaloneColorFilterOptions) {
-    const { hueCategories, saturationRange, lightnessRange, limit = 50, offset = 0 } = options;
-    const matches = this.getCandidateRows(options).filter((row) => {
-      const colors = parseDominantColors(row.dominant_colors_json);
-      return colors.some((color) => {
-        if (hueCategories?.length && !hueCategories.includes(color.hueCategory)) return false;
-        if (saturationRange) {
-          if (color.saturation < saturationRange.min || color.saturation > saturationRange.max) {
-            return false;
-          }
-        }
-        if (lightnessRange) {
-          if (color.lightness < lightnessRange.min || color.lightness > lightnessRange.max) {
-            return false;
-          }
-        }
-        return true;
-      });
-    });
-
-    const stackIds = matches.slice(offset, offset + limit).map((row) => row.id);
+    const { limit = 50, offset = 0 } = options;
+    const matchedIds = this.getMatchingStackIdsByFilter(options);
+    const stackIds = matchedIds.slice(offset, offset + limit);
     return {
       stacks: this.getStacksInOrder(stackIds),
-      total: matches.length,
+      total: matchedIds.length,
       limit,
       offset,
     };
+  }
+
+  getMatchingStackIdsByFilter(options: StandaloneColorFilterOptions) {
+    const matches = this.getCandidateRows(options)
+      .map((row) => {
+        const colors = parseDominantColors(row.dominant_colors_json).slice(0, 3);
+        let bestScore: number | null = null;
+        for (const color of colors) {
+          const score = this.getColorMatchScore(color, options);
+          if (score === null) continue;
+          bestScore = bestScore === null ? score : Math.min(bestScore, score);
+        }
+        return bestScore === null ? null : { id: row.id, score: bestScore };
+      })
+      .filter((result): result is { id: number; score: number } => result !== null)
+      .sort((left, right) => left.score - right.score);
+
+    return matches.map((result) => result.id);
   }
 
   updateStackColors(stackId: number) {
@@ -281,6 +364,59 @@ export class StandaloneColorRepository {
     const colors = parseDominantColors(row.dominant_colors_json);
     if (colors.length === 0) return null;
     return Math.min(...colors.map(getDistance));
+  }
+
+  private getColorMatchScore(color: DominantColor, options: StandaloneColorFilterOptions) {
+    const {
+      hueCategories,
+      hue,
+      hex,
+      tonePoint,
+      toneTolerance = 20,
+      similarityThreshold,
+      customColor,
+      saturationRange,
+      lightnessRange,
+    } = options;
+    const target = getCustomColorTarget(customColor, tonePoint);
+    const legacyHueTarget = getHueTarget(hue, hex);
+    const hueScore = getHueCategoryMatchScore(color, hueCategories, similarityThreshold);
+
+    if (hueCategories?.length && hueScore === null) return null;
+
+    if (target) {
+      const customSimilarityThreshold = similarityThreshold ?? 85;
+      const tolerance = Math.max(8, (100 - customSimilarityThreshold) * 1.5);
+      const distance = hslDistance(color, target);
+      return distance <= tolerance ? distance : null;
+    }
+
+    if (tonePoint) {
+      const distance = toneDistance(color, tonePoint);
+      return distance <= toneTolerance ? distance : null;
+    }
+
+    if (legacyHueTarget !== undefined) {
+      const distance = hueDistance(color.hue, legacyHueTarget);
+      return distance <= 30 ? distance : null;
+    }
+
+    if (saturationRange) {
+      if (color.saturation < saturationRange.min || color.saturation > saturationRange.max) {
+        return null;
+      }
+    }
+
+    if (lightnessRange) {
+      if (color.lightness < lightnessRange.min || color.lightness > lightnessRange.max) {
+        return null;
+      }
+    }
+
+    if (hueCategories?.length) return hueScore;
+    if (saturationRange || lightnessRange) return 0;
+
+    return null;
   }
 
   private getStacksInOrder(stackIds: number[]) {

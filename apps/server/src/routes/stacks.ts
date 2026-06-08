@@ -23,6 +23,7 @@ import { CollectionService } from '../shared/services/CollectionService';
 import { ensureSuperUser } from '../shared/services/UserService';
 import { ensureDatasetAuthorizedForCurrentStore } from '../standalone/auth';
 import { StandaloneAutoTagRepository } from '../standalone/auto-tag-repository';
+import { StandaloneColorRepository } from '../standalone/color-repository';
 import { StandaloneLibraryRepository } from '../standalone/library-repository';
 import { isStandaloneSqliteEnabled } from '../standalone/sqlite';
 import { StandaloneStackRepository } from '../standalone/stack-repository';
@@ -115,6 +116,42 @@ const DownloadOriginalsQuerySchema = z.object({
 });
 
 export const stacksRoute = new Hono();
+
+const normalizeStringArray = (value: string | string[] | undefined) => {
+  if (value === undefined) return undefined;
+  return Array.isArray(value) ? value : [value];
+};
+
+const getStandaloneColorStackIds = (options: {
+  dataSetId: number;
+  mediaType?: 'image' | 'comic' | 'video';
+  hueCategories?: string | string[];
+  toneSaturation?: number;
+  toneLightness?: number;
+  toneTolerance?: number;
+  similarityThreshold?: number;
+  customColor?: string;
+}) => {
+  const hueCategories = normalizeStringArray(options.hueCategories);
+  const tonePoint =
+    typeof options.toneSaturation === 'number' && typeof options.toneLightness === 'number'
+      ? { saturation: options.toneSaturation, lightness: options.toneLightness }
+      : undefined;
+  const hasColorFilter =
+    Boolean(hueCategories?.length) || Boolean(tonePoint) || Boolean(options.customColor);
+
+  if (!hasColorFilter) return undefined;
+
+  return new StandaloneColorRepository().getMatchingStackIdsByFilter({
+    dataSetId: options.dataSetId,
+    mediaType: options.mediaType,
+    hueCategories,
+    tonePoint,
+    toneTolerance: options.toneTolerance,
+    similarityThreshold: options.similarityThreshold,
+    customColor: options.customColor,
+  });
+};
 
 const getAttachmentDisposition = (filename: string) => {
   const fallback = filename.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
@@ -380,6 +417,16 @@ stacksRoute.get('/paginated', async (c) => {
   if (auth) return auth;
 
   if (isStandaloneSqliteEnabled()) {
+    const stackIds = getStandaloneColorStackIds({
+      dataSetId,
+      mediaType,
+      hueCategories,
+      toneSaturation,
+      toneLightness,
+      toneTolerance,
+      similarityThreshold,
+      customColor,
+    });
     const result = new StandaloneStackRepository().getPaginated({
       dataSetId,
       collection,
@@ -391,6 +438,7 @@ stacksRoute.get('/paginated', async (c) => {
       hasNoTags,
       hasNoAuthor,
       search,
+      stackIds,
       sort,
       order,
       limit,

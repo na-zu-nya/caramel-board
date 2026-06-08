@@ -54,13 +54,13 @@ interface InfoSidebarProps {
   hideThumbnails?: boolean;
 }
 
-type StackTagValue = string | { name?: string; displayName?: string; title?: string };
+type StackTagValue = string | { name?: string; displayName?: string; title?: string; tag?: string };
 
 const getStackTagName = (tag: StackTagValue) => {
   if (typeof tag === 'string') {
     return tag;
   }
-  return tag.name || tag.displayName || tag.title || '';
+  return tag.name || tag.displayName || tag.title || tag.tag || '';
 };
 
 export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps) {
@@ -823,8 +823,8 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
                 {selectedItem.tags && selectedItem.tags.length > 0 && (
                   <div className="flex flex-wrap gap-2">
                     {selectedItem.tags.map((tag, index) => {
-                      const tagName =
-                        typeof tag === 'string' ? tag : tag.name || tag.displayName || String(tag);
+                      const tagName = getStackTagName(tag);
+                      if (!tagName) return null;
                       return (
                         <Badge
                           key={typeof tag === 'string' ? tag : `tag-${index}`}
