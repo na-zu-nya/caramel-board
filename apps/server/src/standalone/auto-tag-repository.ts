@@ -1,4 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
+import { getAutoTagClient } from '../lib/AutoTagClient';
 import { getStandaloneSqlite, nowIso } from './sqlite';
 
 export interface AutoTagStats {
@@ -46,7 +47,76 @@ interface ScoreRow {
   score: number;
 }
 
+interface AssetPredictionRow {
+  id: number;
+  stack_id: number;
+  file: string;
+  file_type: string;
+}
+
+interface AssetCandidateRow {
+  id: number;
+  stack_id: number;
+}
+
+interface PredictionIdRow {
+  id: number;
+}
+
+interface StandaloneTagPrediction {
+  predicted_tags: string[];
+  tag_count: number;
+  threshold: number;
+  scores: Record<string, unknown>;
+  processing_time_ms?: number;
+}
+
 const likeQuery = (query: string | undefined) => `%${query?.trim() ?? ''}%`;
+const AUTO_TAG_IMAGE_EXTENSIONS = new Set([
+  'jpg',
+  'jpeg',
+  'png',
+  'gif',
+  'webp',
+  'bmp',
+  'avif',
+  'heic',
+  'heif',
+  'tif',
+  'tiff',
+]);
+const AUTO_TAG_IMAGE_EXTENSION_LIST = [...AUTO_TAG_IMAGE_EXTENSIONS];
+
+const isAutoTagImageExtension = (ext: string) =>
+  AUTO_TAG_IMAGE_EXTENSIONS.has(ext.replace(/^\./, '').toLowerCase());
+
+const toFiniteScore = (value: unknown) => {
+  const score = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(score) ? score : null;
+};
+
+const scoreEntriesFromPrediction = (scores: Record<string, unknown>) =>
+  Object.entries(scores)
+    .map(([tagKey, score]) => ({ tagKey, score: toFiniteScore(score) }))
+    .filter((entry): entry is { tagKey: string; score: number } => {
+      return entry.tagKey.length > 0 && entry.score !== null;
+    })
+    .sort((left, right) => right.score - left.score);
+
+const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null;
+
+const isAutoTagLoadingError = (error: unknown) => {
+  if (!isRecord(error)) return false;
+  const response = error.response;
+  if (!isRecord(response)) return false;
+  if (response.status !== 503) return false;
+  const data = response.data;
+  if (!isRecord(data)) return true;
+  return data.status === 'loading';
+};
 
 const toMapping = (row: MappingRow) => ({
   id: row.id,
@@ -63,8 +133,102 @@ const toMapping = (row: MappingRow) => ({
   tag: row.tag_id && row.tag_title ? { id: row.tag_id, title: row.tag_title } : null,
 });
 
+interface PredictAssetTagsOptions {
+  forceRegenerate?: boolean;
+  aggregateStack?: boolean;
+}
+
 export class StandaloneAutoTagRepository {
   constructor(private db: DatabaseSync = getStandaloneSqlite()) {}
+
+  async predictAssetTags(assetId: number, threshold = 0.4, options: PredictAssetTagsOptions = {}) {
+    const asset = this.db
+      .prepare('SELECT id, stack_id, file, file_type FROM assets WHERE id = ?')
+      .get(assetId) as AssetPredictionRow | undefined;
+    if (!asset) {
+      return { predicted: false as const, reason: 'asset-not-found' };
+    }
+    if (!isAutoTagImageExtension(asset.file_type)) {
+      return { predicted: false as const, reason: 'unsupported-file-type' };
+    }
+
+    const existing = this.db
+      .prepare('SELECT id FROM auto_tag_predictions WHERE asset_id = ? LIMIT 1')
+      .get(assetId) as PredictionIdRow | undefined;
+    if (existing && !options.forceRegenerate) {
+      return { predicted: false as const, reason: 'already-predicted' };
+    }
+
+    const prediction = await this.generateTagsWithRetry(asset.file, threshold);
+    this.saveAssetPrediction(asset.id, prediction, threshold);
+    if (options.aggregateStack !== false) {
+      this.aggregateStackTags(asset.stack_id, threshold);
+    }
+
+    return { predicted: true as const, stackId: asset.stack_id, tagCount: prediction.tag_count };
+  }
+
+  async predictDatasetAssetTags(
+    datasetId: number,
+    options: { threshold?: number; forceRegenerate?: boolean } = {}
+  ) {
+    const threshold = options.threshold ?? 0.4;
+    const existingFilter = options.forceRegenerate ? '' : 'AND p.asset_id IS NULL';
+    const rows = this.db
+      .prepare(
+        `SELECT a.id, a.stack_id
+         FROM assets a
+         JOIN stacks s ON s.id = a.stack_id
+         LEFT JOIN auto_tag_predictions p ON p.asset_id = a.id
+         WHERE s.dataset_id = ?
+           AND LOWER(REPLACE(a.file_type, '.', '')) IN (${AUTO_TAG_IMAGE_EXTENSION_LIST.map(() => '?').join(', ')})
+           ${existingFilter}
+         ORDER BY a.id ASC`
+      )
+      .all(datasetId, ...AUTO_TAG_IMAGE_EXTENSION_LIST) as AssetCandidateRow[];
+
+    let predicted = 0;
+    let skipped = 0;
+    let failed = 0;
+    const stackIds = new Set<number>();
+
+    for (const row of rows) {
+      try {
+        const result = await this.predictAssetTags(row.id, threshold, {
+          forceRegenerate: options.forceRegenerate,
+          aggregateStack: false,
+        });
+        if (result.predicted) {
+          predicted++;
+          stackIds.add(result.stackId);
+        } else {
+          skipped++;
+        }
+      } catch (error) {
+        failed++;
+        console.error(`Failed to predict standalone AutoTags for asset ${row.id}:`, error);
+      }
+    }
+
+    let aggregatedStacks = 0;
+    for (const stackId of stackIds) {
+      try {
+        this.aggregateStackTags(stackId, threshold);
+        aggregatedStacks++;
+      } catch (error) {
+        console.error(`Failed to aggregate AutoTags for stack ${stackId}:`, error);
+      }
+    }
+
+    return {
+      datasetId,
+      candidateAssets: rows.length,
+      predictedAssets: predicted,
+      skippedAssets: skipped,
+      failedAssets: failed,
+      aggregatedStacks,
+    };
+  }
 
   getStatistics(options: AutoTagStatisticsOptions) {
     const tags =
@@ -421,6 +585,78 @@ export class StandaloneAutoTagRepository {
       )
       .get(datasetId, mappingId) as MappingRow | undefined;
     return row ? toMapping(row) : null;
+  }
+
+  private saveAssetPrediction(
+    assetId: number,
+    prediction: StandaloneTagPrediction,
+    threshold: number
+  ) {
+    const now = nowIso();
+    const scoreEntries = scoreEntriesFromPrediction(prediction.scores);
+    const tagCount =
+      prediction.tag_count || scoreEntries.filter((entry) => entry.score >= threshold).length;
+
+    this.db.exec('BEGIN');
+    try {
+      this.db
+        .prepare(
+          `INSERT INTO auto_tag_predictions
+             (asset_id, tags_json, scores_json, threshold, tag_count, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(asset_id) DO UPDATE SET
+             tags_json = excluded.tags_json,
+             scores_json = excluded.scores_json,
+             threshold = excluded.threshold,
+             tag_count = excluded.tag_count,
+             updated_at = excluded.updated_at`
+        )
+        .run(
+          assetId,
+          JSON.stringify(prediction.predicted_tags),
+          JSON.stringify(prediction.scores),
+          threshold,
+          tagCount,
+          now,
+          now
+        );
+
+      const row = this.db
+        .prepare('SELECT id FROM auto_tag_predictions WHERE asset_id = ?')
+        .get(assetId) as PredictionIdRow | undefined;
+      if (!row) throw new Error('AutoTag prediction upsert failed');
+
+      this.db.prepare('DELETE FROM auto_tag_prediction_scores WHERE prediction_id = ?').run(row.id);
+      const insertScore = this.db.prepare(
+        `INSERT INTO auto_tag_prediction_scores
+           (prediction_id, asset_id, tag_key, score, rank)
+         VALUES (?, ?, ?, ?, ?)`
+      );
+      scoreEntries.forEach((entry, index) => {
+        insertScore.run(row.id, assetId, entry.tagKey, entry.score, index + 1);
+      });
+
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+
+  private async generateTagsWithRetry(fileKey: string, threshold: number) {
+    const client = getAutoTagClient();
+    const maxAttempts = 6;
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      try {
+        return await client.generateTags(fileKey, threshold);
+      } catch (error) {
+        if (!isAutoTagLoadingError(error) || attempt === maxAttempts) {
+          throw error;
+        }
+        await wait(2000);
+      }
+    }
+    throw new Error('AutoTag prediction failed');
   }
 
   private saveStackAggregate(

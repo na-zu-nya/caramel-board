@@ -21,6 +21,7 @@ import { AutoTagService } from '../shared/services/AutoTagService';
 import { CollectionService } from '../shared/services/CollectionService';
 import { DataSetService } from '../shared/services/DataSetService';
 import { ensureSuperUser } from '../shared/services/UserService';
+import { StandaloneAutoTagRepository } from '../standalone/auto-tag-repository';
 import { StandaloneColorRepository } from '../standalone/color-repository';
 import { StandaloneDatasetRepository } from '../standalone/dataset-repository';
 import { StandaloneLibraryRepository } from '../standalone/library-repository';
@@ -35,7 +36,16 @@ const _joytagService = new AutoTagService(prisma);
 const dataSetService = new DataSetService(prisma);
 
 type StackWithAssets = Stack & {
-  assets?: Array<{ file?: string | null; thumbnail?: string | null }>;
+  assets?: Array<{ id?: number; file?: string | null; thumbnail?: string | null }>;
+};
+
+const scheduleStandaloneAutoTagPrediction = (asset: { id?: number } | null) => {
+  const assetId = Number(asset?.id ?? 0);
+  if (!assetId) return;
+
+  void new StandaloneAutoTagRepository().predictAssetTags(assetId, 0.4).catch((error) => {
+    console.error(`Failed to predict standalone AutoTags for asset ${assetId}:`, error);
+  });
 };
 
 function buildStackService(dataSetId: number) {
@@ -622,6 +632,7 @@ app.post('/:dataSetId/stacks', async (c) => {
         },
       });
       if (!stack) return c.json({ error: 'Failed to create stack' }, 500);
+      scheduleStandaloneAutoTagPrediction(stack.assets?.[0] ?? null);
       return c.json(stack, 201);
     }
 

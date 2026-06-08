@@ -384,6 +384,11 @@ app.post('/:id/refresh-all', async (c) => {
         colorRepository.updateStackColors(stackId);
       }
 
+      const autotagPredictionResult = await autoTagRepository.predictDatasetAssetTags(id, {
+        threshold: 0.4,
+        forceRegenerate,
+      });
+
       let autotagUpdated = 0;
       for (const stackId of stackIds) {
         try {
@@ -404,9 +409,12 @@ app.post('/:id/refresh-all', async (c) => {
           thumbnails: stackIds.length,
           colors: colorStackIds.length,
           autotags: autotagUpdated,
+          autotagPredictions: autotagPredictionResult.predictedAssets,
           embeddings: 0,
         },
         totals: {
+          autotagCandidates: autotagPredictionResult.candidateAssets,
+          autotagFailures: autotagPredictionResult.failedAssets,
           embeddings: 0,
         },
       });

@@ -114,6 +114,22 @@ interface AutoTagScoreRow {
   score: number;
 }
 
+interface AutoTagAggregateRow {
+  top_tags_json: string | null;
+}
+
+interface AutoTagMappingDisplayRow {
+  auto_tag_key: string;
+  display_name: string;
+  tag_id: number | null;
+  tag_title: string | null;
+}
+
+interface AutoTagEntry {
+  tag: string;
+  score?: number;
+}
+
 interface ManualTagRow {
   stack_id: number;
   title: string;
@@ -198,6 +214,16 @@ const isImageExtension = (ext: string) => IMAGE_EXTENSIONS.has(canonicalizeExten
 const isVideoExtension = (ext: string) => VIDEO_EXTENSIONS.has(canonicalizeExtension(ext));
 const toColorJson = (colors: DominantColor[] | null) =>
   colors && colors.length > 0 ? JSON.stringify(colors) : null;
+const toAutoTagEntry = (value: unknown): AutoTagEntry | null => {
+  if (typeof value === 'string') return { tag: value };
+  if (typeof value !== 'object' || value === null) return null;
+  const record = value as Record<string, unknown>;
+  const tag = typeof record.tag === 'string' ? record.tag : '';
+  if (!tag) return null;
+  const rawScore = record.score;
+  const score = typeof rawScore === 'number' && Number.isFinite(rawScore) ? rawScore : undefined;
+  return { tag, score };
+};
 
 const toAsset = (row: AssetRow, dataSetId: number) => ({
   id: row.id,
@@ -1288,6 +1314,7 @@ export class StandaloneStackRepository {
   private toStack(row: StackRow, options: { includeAssets?: boolean; includeTags?: boolean } = {}) {
     const assets = options.includeAssets ? this.getAssetsByStackId(row.id, row.dataset_id) : [];
     const tags = options.includeTags ? this.getTagsByStackId(row.id) : undefined;
+    const autoTags = this.getAutoTagsByStackId(row.id, row.dataset_id);
     const thumbnail = toPublicAssetPath(assets[0]?.thumbnail || row.thumbnail, row.dataset_id);
     const likeCount = Number(row.liked ?? 0);
     const isFavorite = row.is_favorite === 1;
@@ -1313,8 +1340,48 @@ export class StandaloneStackRepository {
       favorited: isFavorite,
       isFavorite,
       tags,
+      autoTags,
       assets: withPublicAssetArray(assets, row.dataset_id),
     };
+  }
+
+  private getAutoTagsByStackId(stackId: number, dataSetId: number) {
+    const aggregate = this.db
+      .prepare('SELECT top_tags_json FROM stack_auto_tag_aggregates WHERE stack_id = ?')
+      .get(stackId) as AutoTagAggregateRow | undefined;
+    const entries = parseJsonArray(aggregate?.top_tags_json)
+      .map(toAutoTagEntry)
+      .filter((entry): entry is AutoTagEntry => entry !== null);
+    if (entries.length === 0) return [];
+
+    const keys = entries.map((entry) => entry.tag).filter((tag) => tag.length > 0);
+    const rows =
+      keys.length > 0
+        ? (this.db
+            .prepare(
+              `SELECT m.auto_tag_key, m.display_name, m.tag_id, t.title AS tag_title
+               FROM auto_tag_mappings m
+               LEFT JOIN tags t ON t.id = m.tag_id
+               WHERE m.dataset_id = ?
+                 AND m.is_active = 1
+                 AND m.auto_tag_key IN (${placeholders(keys)})`
+            )
+            .all(dataSetId, ...keys) as AutoTagMappingDisplayRow[])
+        : [];
+    const mappingMap = new Map(rows.map((mapping) => [mapping.auto_tag_key, mapping]));
+
+    return entries.map((entry) => {
+      const mapping = mappingMap.get(entry.tag);
+      return {
+        autoTagKey: entry.tag,
+        displayName: mapping?.display_name ?? entry.tag,
+        mappedTag:
+          mapping?.tag_id && mapping.tag_title
+            ? { id: mapping.tag_id, title: mapping.tag_title }
+            : null,
+        score: entry.score,
+      };
+    });
   }
 
   private getTagsByStackId(stackId: number) {

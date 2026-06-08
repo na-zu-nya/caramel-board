@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 import { Hono } from 'hono';
+import { basicAuthMiddleware } from './middlewares/basic-auth';
 import { corsMiddleware } from './middlewares/cors';
 import { errorBoundary } from './middlewares/error-boundary';
 import { fileServer } from './middlewares/files';
@@ -21,6 +22,7 @@ app.use('*', corsMiddleware);
 app.use('*', loggerMiddleware);
 app.use('*', memMonitor);
 app.use('*', diMiddleware);
+app.use('*', basicAuthMiddleware);
 
 // --- asset / static handlers ---
 app.use('/files/*', fileServer);

@@ -42,6 +42,12 @@ type SearchStack = Stack & {
   assets?: StackAssetSummary[];
 };
 
+type StandaloneAutoTagAsset = {
+  id?: number;
+  stackId?: number;
+  fileType?: string;
+};
+
 interface UploadedFile {
   name: string;
   type: string;
@@ -59,6 +65,15 @@ function isUploadedFile(value: unknown): value is UploadedFile {
     typeof candidate.arrayBuffer === 'function'
   );
 }
+
+const scheduleStandaloneAutoTagPrediction = (asset: StandaloneAutoTagAsset | null) => {
+  const assetId = Number(asset?.id ?? 0);
+  if (!assetId) return;
+
+  void new StandaloneAutoTagRepository().predictAssetTags(assetId, 0.4).catch((error) => {
+    console.error(`Failed to predict standalone AutoTags for asset ${assetId}:`, error);
+  });
+};
 
 const PaginatedQuerySchema = z.object({
   dataSetId: z.coerce.number().int().positive(),
@@ -1050,6 +1065,7 @@ stacksRoute.post('/:id{[0-9]+}/assets', async (c) => {
         size: file.size,
       });
       if (!asset) return c.json({ error: 'Stack not found' }, 404);
+      scheduleStandaloneAutoTagPrediction(asset);
       return c.json(asset, 201);
     }
 
@@ -1652,6 +1668,7 @@ stacksRoute.post('/', async (c) => {
       if (collectionId) {
         libraryRepository.addStackToCollection(collectionId, Number(stack.id));
       }
+      scheduleStandaloneAutoTagPrediction(stack.assets?.[0] ?? null);
       return c.json(stack, 201);
     }
 
@@ -1793,6 +1810,7 @@ stacksRoute.post('/import-from-urls', async (c) => {
               stackId,
               assetId: asset ? Number(asset.id) : undefined,
             });
+            scheduleStandaloneAutoTagPrediction(asset);
             continue;
           }
 
@@ -1818,6 +1836,7 @@ stacksRoute.post('/import-from-urls', async (c) => {
             stackId: createdStackId || undefined,
             assetId: firstAssetId || undefined,
           });
+          scheduleStandaloneAutoTagPrediction(createdStack?.assets?.[0] ?? null);
         } catch (error) {
           if (downloaded) {
             try {
