@@ -173,7 +173,9 @@ const resolveStoredFilePath = (
 ): string | null => {
   const normalized = file.replace(/^\/files\//, '').replace(/^files\//, '');
   const raw = file.startsWith('/') ? file.slice(1) : file;
-  const candidates = Array.from(new Set([normalized, raw]));
+  const candidates = Array.from(
+    new Set([normalized, raw, `assets/${normalized}`, `assets/${raw}`])
+  );
 
   for (const candidate of candidates) {
     const fullPath = dataStorage.getPath(candidate);
@@ -233,62 +235,67 @@ stacksRoute.get('/download-originals', async (c) => {
   const auth = await ensureDatasetAuthorizedForCurrentStore(c, dataSetId);
   if (auth) return auth;
 
-  const prisma = usePrisma(c);
   const dataStorage = useDataStorage(c);
-  const stacks =
-    stackIds.length > 0
-      ? await prisma.stack.findMany({
-          where: { id: { in: stackIds }, dataSetId },
-          select: {
-            id: true,
-            assets: {
-              orderBy: { orderInStack: 'asc' },
-              select: {
-                id: true,
-                file: true,
-                fileType: true,
-                originalName: true,
-              },
-            },
-          },
-        })
-      : [];
-  const selectedAssets =
-    assetIds.length > 0
-      ? await prisma.asset.findMany({
-          where: { id: { in: assetIds }, stack: { dataSetId } },
-          select: {
-            id: true,
-            file: true,
-            fileType: true,
-            originalName: true,
-          },
-        })
-      : [];
-  const assetMap = new Map(selectedAssets.map((asset) => [asset.id, asset]));
-  type OriginalAsset = (typeof stacks)[number]['assets'][number] | (typeof selectedAssets)[number];
-  const stackMap = new Map(stacks.map((stack) => [stack.id, stack]));
-  const orderedAssets: OriginalAsset[] = [];
+  const orderedAssets = isStandaloneSqliteEnabled()
+    ? new StandaloneStackRepository().getOriginalAssets(dataSetId, { stackIds, assetIds })
+    : await (async () => {
+        const prisma = usePrisma(c);
+        const stacks =
+          stackIds.length > 0
+            ? await prisma.stack.findMany({
+                where: { id: { in: stackIds }, dataSetId },
+                select: {
+                  id: true,
+                  assets: {
+                    orderBy: { orderInStack: 'asc' },
+                    select: {
+                      id: true,
+                      file: true,
+                      fileType: true,
+                      originalName: true,
+                    },
+                  },
+                },
+              })
+            : [];
+        const selectedAssets =
+          assetIds.length > 0
+            ? await prisma.asset.findMany({
+                where: { id: { in: assetIds }, stack: { dataSetId } },
+                select: {
+                  id: true,
+                  file: true,
+                  fileType: true,
+                  originalName: true,
+                },
+              })
+            : [];
+        const assetMap = new Map(selectedAssets.map((asset) => [asset.id, asset]));
+        const stackMap = new Map(stacks.map((stack) => [stack.id, stack]));
+        const ordered: typeof selectedAssets = [];
 
-  for (const assetId of assetIds) {
-    const asset = assetMap.get(assetId);
-    if (!asset) continue;
-    orderedAssets.push(asset);
-  }
+        for (const assetId of assetIds) {
+          const asset = assetMap.get(assetId);
+          if (!asset) continue;
+          ordered.push(asset);
+        }
 
-  for (const stackId of stackIds) {
-    const stack = stackMap.get(stackId);
-    if (!stack) continue;
-    for (const asset of stack.assets) {
-      orderedAssets.push(asset);
-    }
-  }
+        for (const stackId of stackIds) {
+          const stack = stackMap.get(stackId);
+          if (!stack) continue;
+          for (const asset of stack.assets) {
+            ordered.push(asset);
+          }
+        }
+
+        return ordered;
+      })();
 
   if (orderedAssets.length === 0) {
     return c.json({ error: 'Original files not found' }, 404);
   }
 
-  const downloadableAssets: Array<OriginalAsset & { filePath: string }> = [];
+  const downloadableAssets: Array<(typeof orderedAssets)[number] & { filePath: string }> = [];
   for (const asset of orderedAssets) {
     const filePath = resolveStoredFilePath(asset.file, dataStorage);
     if (!filePath) {

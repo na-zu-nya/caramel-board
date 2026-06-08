@@ -54,6 +54,14 @@ interface AssetRow {
   is_favorite?: number;
 }
 
+interface OriginalAssetRow {
+  id: number;
+  stack_id: number;
+  file: string;
+  file_type: string;
+  original_name: string;
+}
+
 interface TagRow {
   id: number;
   title: string;
@@ -298,6 +306,59 @@ export class StandaloneStackRepository {
       .all(stackId, dataSetId) as AssetRow[];
 
     return rows.map((row) => toAsset(row, dataSetId));
+  }
+
+  getOriginalAssets(dataSetId: number, options: { stackIds: number[]; assetIds: number[] }) {
+    const selectedAssets =
+      options.assetIds.length > 0
+        ? (this.db
+            .prepare(
+              `SELECT a.id, a.stack_id, a.file, a.file_type, a.original_name
+               FROM assets a
+               JOIN stacks s ON s.id = a.stack_id
+               WHERE s.dataset_id = ?
+                 AND a.id IN (${placeholders(options.assetIds)})`
+            )
+            .all(dataSetId, ...options.assetIds) as OriginalAssetRow[])
+        : [];
+    const assetsById = new Map(selectedAssets.map((asset) => [asset.id, asset]));
+
+    const stackAssets =
+      options.stackIds.length > 0
+        ? (this.db
+            .prepare(
+              `SELECT a.id, a.stack_id, a.file, a.file_type, a.original_name
+               FROM assets a
+               JOIN stacks s ON s.id = a.stack_id
+               WHERE s.dataset_id = ?
+                 AND a.stack_id IN (${placeholders(options.stackIds)})
+               ORDER BY a.stack_id ASC, a.order_in_stack ASC, a.id ASC`
+            )
+            .all(dataSetId, ...options.stackIds) as OriginalAssetRow[])
+        : [];
+    const assetsByStackId = new Map<number, OriginalAssetRow[]>();
+    for (const asset of stackAssets) {
+      const current = assetsByStackId.get(asset.stack_id) ?? [];
+      current.push(asset);
+      assetsByStackId.set(asset.stack_id, current);
+    }
+
+    const ordered: OriginalAssetRow[] = [];
+    for (const assetId of options.assetIds) {
+      const asset = assetsById.get(assetId);
+      if (asset) ordered.push(asset);
+    }
+    for (const stackId of options.stackIds) {
+      ordered.push(...(assetsByStackId.get(stackId) ?? []));
+    }
+
+    return ordered.map((asset) => ({
+      id: asset.id,
+      stackId: asset.stack_id,
+      file: asset.file,
+      fileType: asset.file_type,
+      originalName: asset.original_name,
+    }));
   }
 
   updateAssetMeta(assetId: number, dataSetId: number, meta: Record<string, unknown>) {
