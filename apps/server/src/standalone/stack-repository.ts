@@ -509,6 +509,56 @@ export class StandaloneStackRepository {
     };
   }
 
+  updateStack(
+    stackId: number,
+    dataSetId: number,
+    data: {
+      name?: string;
+      thumbnail?: string;
+      meta?: Record<string, unknown>;
+      mediaType?: 'image' | 'comic' | 'video';
+    }
+  ) {
+    if (!this.getById(stackId, dataSetId)) return null;
+    const updates: string[] = [];
+    const params: unknown[] = [];
+
+    if (data.name !== undefined) {
+      updates.push('name = ?');
+      params.push(data.name);
+    }
+    if (data.thumbnail !== undefined) {
+      updates.push('thumbnail = ?');
+      params.push(data.thumbnail);
+    }
+    if (data.meta !== undefined) {
+      updates.push('meta_json = ?');
+      params.push(JSON.stringify(data.meta));
+    }
+    if (data.mediaType !== undefined) {
+      updates.push('media_type = ?');
+      params.push(data.mediaType);
+    }
+
+    if (updates.length > 0) {
+      updates.push('updated_at = ?');
+      params.push(nowIso());
+      this.db
+        .prepare(`UPDATE stacks SET ${updates.join(', ')} WHERE id = ? AND dataset_id = ?`)
+        .run(...params, stackId, dataSetId);
+    }
+
+    return this.getById(stackId, dataSetId);
+  }
+
+  stackBelongsToDataset(stackId: number, dataSetId: number) {
+    return Boolean(
+      this.db
+        .prepare('SELECT id FROM stacks WHERE id = ? AND dataset_id = ?')
+        .get(stackId, dataSetId)
+    );
+  }
+
   updateAssetMeta(assetId: number, dataSetId: number, meta: Record<string, unknown>) {
     const result = this.db
       .prepare(
@@ -639,6 +689,13 @@ export class StandaloneStackRepository {
   updateAuthor(stackId: number, name: string) {
     const stack = this.getStackDataset(stackId);
     if (!stack) return null;
+    if (!name || name.trim() === '') {
+      this.db
+        .prepare('UPDATE stacks SET author_id = NULL, updated_at = ? WHERE id = ?')
+        .run(nowIso(), stackId);
+      return { success: true, author: null };
+    }
+
     const existing = this.db
       .prepare('SELECT id FROM authors WHERE dataset_id = ? AND name = ? COLLATE NOCASE')
       .get(stack.dataset_id, name) as { id: number } | undefined;

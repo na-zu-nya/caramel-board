@@ -528,6 +528,15 @@ app.put(
       const dataSetId = c.get('dataSetId') as number;
       const { id } = c.req.valid('param');
       const data = c.req.valid('json');
+
+      if (isStandaloneSqliteEnabled()) {
+        const stack = new StandaloneStackRepository().updateStack(id, dataSetId, data);
+        if (!stack) {
+          return c.json({ error: 'Stack not found in this dataset' }, 404);
+        }
+        return c.json(stack);
+      }
+
       const stackService = buildStackService(dataSetId);
       const stack = await stackService.update(id, data);
       return c.json(stack);
@@ -546,6 +555,16 @@ app.delete('/:dataSetId/stacks/:id', zValidator('param', IdParamSchema), async (
   try {
     const dataSetId = c.get('dataSetId') as number;
     const { id } = c.req.valid('param');
+
+    if (isStandaloneSqliteEnabled()) {
+      const repository = new StandaloneStackRepository();
+      if (!repository.stackBelongsToDataset(id, dataSetId)) {
+        return c.json({ error: 'Stack not found in this dataset' }, 404);
+      }
+      repository.deleteStack(id);
+      return c.json({ success: true });
+    }
+
     const stackService = buildStackService(dataSetId);
     await stackService.deleteStack(id);
     return c.json({ success: true });
@@ -567,6 +586,15 @@ app.post('/:dataSetId/stacks/:id/tags', zValidator('param', IdParamSchema), asyn
 
     if (!tag) {
       return c.json({ error: 'Tag is required' }, 400);
+    }
+
+    if (isStandaloneSqliteEnabled()) {
+      const repository = new StandaloneStackRepository();
+      if (!repository.stackBelongsToDataset(id, dataSetId)) {
+        return c.json({ error: 'Stack not found in this dataset' }, 404);
+      }
+      repository.addTag(id, tag);
+      return c.json({ success: true });
     }
 
     // Verify stack belongs to this dataset
@@ -591,6 +619,15 @@ app.delete('/:dataSetId/stacks/:id/tags/:tag', zValidator('param', IdParamSchema
     const { id } = c.req.valid('param');
     const tag = c.req.param('tag');
 
+    if (isStandaloneSqliteEnabled()) {
+      const repository = new StandaloneStackRepository();
+      if (!repository.stackBelongsToDataset(id, dataSetId)) {
+        return c.json({ error: 'Stack not found in this dataset' }, 404);
+      }
+      repository.removeTag(id, tag);
+      return c.json({ success: true });
+    }
+
     // Verify stack belongs to this dataset
     const stackService = buildStackService(dataSetId);
     const stack = await stackService.getById(id);
@@ -612,6 +649,15 @@ app.put('/:dataSetId/stacks/:id/author', zValidator('param', IdParamSchema), asy
     const dataSetId = c.get('dataSetId') as number;
     const { id } = c.req.valid('param');
     const { author } = await c.req.json();
+
+    if (isStandaloneSqliteEnabled()) {
+      const repository = new StandaloneStackRepository();
+      if (!repository.stackBelongsToDataset(id, dataSetId)) {
+        return c.json({ error: 'Stack not found in this dataset' }, 404);
+      }
+      repository.updateAuthor(id, author);
+      return c.json({ success: true });
+    }
 
     // Verify stack belongs to this dataset
     const stackService = buildStackService(dataSetId);
@@ -635,6 +681,15 @@ app.put('/:dataSetId/stacks/:id/favorite', zValidator('param', IdParamSchema), a
     const { id } = c.req.valid('param');
     const { favorited } = await c.req.json();
 
+    if (isStandaloneSqliteEnabled()) {
+      const repository = new StandaloneStackRepository();
+      if (!repository.stackBelongsToDataset(id, dataSetId)) {
+        return c.json({ error: 'Stack not found in this dataset' }, 404);
+      }
+      repository.toggleStackFavorite(id, Boolean(favorited));
+      return c.json({ success: true });
+    }
+
     // Verify stack belongs to this dataset
     const stackService = buildStackService(dataSetId);
     const stack = await stackService.getById(id);
@@ -655,6 +710,15 @@ app.post('/:dataSetId/stacks/:id/like', zValidator('param', IdParamSchema), asyn
   try {
     const dataSetId = c.get('dataSetId') as number;
     const { id } = c.req.valid('param');
+
+    if (isStandaloneSqliteEnabled()) {
+      const repository = new StandaloneStackRepository();
+      if (!repository.stackBelongsToDataset(id, dataSetId)) {
+        return c.json({ error: 'Stack not found in this dataset' }, 404);
+      }
+      repository.likeStack(id);
+      return c.json({ success: true });
+    }
 
     // Verify stack belongs to this dataset
     const stackService = buildStackService(dataSetId);
