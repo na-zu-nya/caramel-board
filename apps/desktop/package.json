@@ -6,13 +6,14 @@
   "scripts": {
     "dev": "tauri dev",
     "build": "npm run build:ui",
-    "build:app": "tauri build",
+    "build:app": "npm run prepare:package && tauri build",
     "dev:ui": "vite --host 127.0.0.1 --port 1420",
     "build:ui": "vite build",
     "lint": "biome check src",
     "format": "biome check --write src && biome format --write src",
     "typecheck": "tsc --noEmit",
-    "prepare:sidecar": "npm run -w @caramelboard/server build && npm run -w @caramelboard/client build"
+    "prepare:sidecar": "npm run -w @caramelboard/server build && npm run -w @caramelboard/client build",
+    "prepare:package": "node scripts/prepare-package-resources.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",

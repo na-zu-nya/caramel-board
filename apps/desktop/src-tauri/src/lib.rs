@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::{
-    fs,
+    collections::BTreeSet,
+    env, fs,
     io::{BufRead, BufReader},
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
@@ -46,6 +47,8 @@ struct AppSettings {
     auto_tag_model_dir: String,
     #[serde(default = "default_auto_tag_threshold")]
     auto_tag_threshold: f64,
+    #[serde(default)]
+    ffmpeg_path: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -119,6 +122,17 @@ struct AutoTagInstallProgress {
     total_bytes: u64,
     percent: f64,
     error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct FfmpegCandidate {
+    path: String,
+    label: String,
+    source: String,
+    valid: bool,
+    version: String,
+    details: String,
 }
 
 impl Default for AutoTagInstallProgress {
@@ -218,6 +232,80 @@ fn repo_root() -> PathBuf {
         .collect()
 }
 
+fn resource_dir(app: &AppHandle) -> Option<PathBuf> {
+    app.path().resource_dir().ok()
+}
+
+fn packaged_resource_path(app: &AppHandle, relative: impl AsRef<Path>) -> Option<PathBuf> {
+    let resource_dir = resource_dir(app)?;
+    let relative = relative.as_ref();
+    let candidates = [
+        resource_dir.join(relative),
+        resource_dir.join("_up_").join("resources").join(relative),
+    ];
+    candidates.into_iter().find(|path| path.exists())
+}
+
+fn resource_or_repo_path(
+    app: &AppHandle,
+    resource_relative: impl AsRef<Path>,
+    repo_relative: impl AsRef<Path>,
+) -> PathBuf {
+    packaged_resource_path(app, resource_relative)
+        .unwrap_or_else(|| repo_root().join(repo_relative))
+}
+
+fn bundled_node_path(app: &AppHandle) -> Option<PathBuf> {
+    let candidates = if cfg!(target_os = "windows") {
+        vec![
+            PathBuf::from("runtime/node/node.exe"),
+            PathBuf::from("runtime/node/bin/node.exe"),
+        ]
+    } else {
+        vec![
+            PathBuf::from("runtime/node/bin/node"),
+            PathBuf::from("runtime/node/node"),
+        ]
+    };
+
+    candidates
+        .into_iter()
+        .find_map(|candidate| packaged_resource_path(app, candidate))
+}
+
+fn node_command(app: &AppHandle) -> Command {
+    match bundled_node_path(app) {
+        Some(node) => Command::new(node),
+        None => Command::new("node"),
+    }
+}
+
+fn bundled_uv_path(app: &AppHandle) -> Option<PathBuf> {
+    let candidate = if cfg!(target_os = "windows") {
+        PathBuf::from("runtime/uv/uv.exe")
+    } else {
+        PathBuf::from("runtime/uv/uv")
+    };
+    packaged_resource_path(app, candidate)
+}
+
+fn uv_command(app: &AppHandle) -> Command {
+    match bundled_uv_path(app) {
+        Some(uv) => Command::new(uv),
+        None => Command::new("uv"),
+    }
+}
+
+fn uv_available(app: &AppHandle) -> bool {
+    uv_command(app)
+        .arg("--version")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false)
+}
+
 fn settings_path(app: &AppHandle) -> Result<PathBuf, String> {
     let config_dir = app
         .path()
@@ -268,6 +356,7 @@ fn default_settings(app: &AppHandle) -> Result<AppSettings, String> {
             .to_string_lossy()
             .into_owned(),
         auto_tag_threshold: default_auto_tag_threshold(),
+        ffmpeg_path: String::new(),
     })
 }
 
@@ -354,14 +443,190 @@ fn terminate_listeners_on_port(port: u16, protected_pids: &[u32]) {
     }
 }
 
-fn command_success(program: &str, args: &[&str]) -> bool {
-    Command::new(program)
-        .args(args)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .map(|status| status.success())
-        .unwrap_or(false)
+fn ffmpeg_executable_names(base: &str) -> Vec<String> {
+    #[cfg(target_os = "windows")]
+    {
+        vec![format!("{base}.exe"), base.to_string()]
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        vec![base.to_string()]
+    }
+}
+
+fn path_candidates(base: &str) -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+    let Ok(paths) = env::var("PATH") else {
+        return candidates;
+    };
+
+    let names = ffmpeg_executable_names(base);
+    for dir in env::split_paths(&paths) {
+        for name in &names {
+            candidates.push(dir.join(name));
+        }
+    }
+    candidates
+}
+
+fn common_ffmpeg_candidates() -> Vec<PathBuf> {
+    #[cfg(target_os = "macos")]
+    {
+        vec![
+            PathBuf::from("/opt/homebrew/bin/ffmpeg"),
+            PathBuf::from("/usr/local/bin/ffmpeg"),
+            PathBuf::from("/usr/bin/ffmpeg"),
+        ]
+    }
+    #[cfg(target_os = "windows")]
+    {
+        vec![
+            PathBuf::from(r"C:\ffmpeg\bin\ffmpeg.exe"),
+            PathBuf::from(r"C:\Program Files\ffmpeg\bin\ffmpeg.exe"),
+            PathBuf::from(r"C:\Program Files (x86)\ffmpeg\bin\ffmpeg.exe"),
+        ]
+    }
+    #[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
+    {
+        vec![
+            PathBuf::from("/usr/bin/ffmpeg"),
+            PathBuf::from("/usr/local/bin/ffmpeg"),
+        ]
+    }
+}
+
+fn display_path(path: &Path) -> String {
+    path.to_string_lossy().into_owned()
+}
+
+fn ffprobe_path_for_ffmpeg(ffmpeg_path: &str) -> Option<PathBuf> {
+    let trimmed = ffmpeg_path.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    let path = Path::new(trimmed);
+    let parent = path.parent()?;
+    for name in ffmpeg_executable_names("ffprobe") {
+        let candidate = parent.join(name);
+        if candidate.exists() {
+            return Some(candidate);
+        }
+    }
+    None
+}
+
+fn ffmpeg_label(path: &Path, source: &str) -> String {
+    let file_name = path
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| String::from("ffmpeg"));
+    format!("{file_name} ({source})")
+}
+
+fn validate_ffmpeg_candidate(path: &Path, source: &str) -> FfmpegCandidate {
+    let path_text = display_path(path);
+    let version_output = Command::new(path)
+        .arg("-hide_banner")
+        .arg("-version")
+        .output();
+
+    let Ok(version_output) = version_output else {
+        return FfmpegCandidate {
+            path: path_text,
+            label: ffmpeg_label(path, source),
+            source: source.to_string(),
+            valid: false,
+            version: String::new(),
+            details: String::from("実行できません"),
+        };
+    };
+
+    if !version_output.status.success() {
+        return FfmpegCandidate {
+            path: path_text,
+            label: ffmpeg_label(path, source),
+            source: source.to_string(),
+            valid: false,
+            version: String::new(),
+            details: String::from("FFmpeg として検証できません"),
+        };
+    }
+
+    let version = String::from_utf8_lossy(&version_output.stdout)
+        .lines()
+        .next()
+        .unwrap_or("ffmpeg")
+        .trim()
+        .to_string();
+    let encoders_output = Command::new(path)
+        .arg("-hide_banner")
+        .arg("-encoders")
+        .output();
+    let encoders = encoders_output
+        .ok()
+        .filter(|output| output.status.success())
+        .map(|output| String::from_utf8_lossy(&output.stdout).into_owned())
+        .unwrap_or_default();
+    let has_h264 = encoders.contains("libx264");
+    let has_aac = encoders.contains(" aac");
+    let details = match (has_h264, has_aac) {
+        (true, true) => String::from("H.264 / AAC エンコード対応"),
+        (true, false) => String::from("H.264 対応 / AAC は未確認"),
+        (false, true) => String::from("AAC 対応 / H.264 は未確認"),
+        (false, false) => String::from("実行可能 / H.264・AAC は未確認"),
+    };
+
+    FfmpegCandidate {
+        path: path_text,
+        label: ffmpeg_label(path, source),
+        source: source.to_string(),
+        valid: true,
+        version,
+        details,
+    }
+}
+
+fn detect_ffmpeg_candidates(settings: &AppSettings) -> Vec<FfmpegCandidate> {
+    let mut paths: Vec<(PathBuf, &str)> = Vec::new();
+    if !settings.ffmpeg_path.trim().is_empty() {
+        paths.push((PathBuf::from(settings.ffmpeg_path.trim()), "configured"));
+    }
+    paths.extend(
+        path_candidates("ffmpeg")
+            .into_iter()
+            .map(|path| (path, "PATH")),
+    );
+    paths.extend(
+        common_ffmpeg_candidates()
+            .into_iter()
+            .map(|path| (path, "common")),
+    );
+
+    let mut seen = BTreeSet::new();
+    let mut candidates = Vec::new();
+    for (path, source) in paths {
+        let key = display_path(&path);
+        if !seen.insert(key) {
+            continue;
+        }
+        if source != "configured" && !path.exists() {
+            continue;
+        }
+        candidates.push(validate_ffmpeg_candidate(&path, source));
+    }
+    candidates
+}
+
+fn effective_ffmpeg_path(settings: &AppSettings) -> Option<String> {
+    if !settings.ffmpeg_path.trim().is_empty() {
+        return Some(settings.ffmpeg_path.trim().to_string());
+    }
+
+    detect_ffmpeg_candidates(settings)
+        .into_iter()
+        .find(|candidate| candidate.valid)
+        .map(|candidate| candidate.path)
 }
 
 fn format_bytes(bytes: u64) -> String {
@@ -433,14 +698,18 @@ fn is_auto_tag_model_ready(settings: &AppSettings) -> bool {
         && (model_dir.join("model.safetensors").exists() || model_dir.join("model.onnx").exists())
 }
 
-fn auto_tag_status_from(sidecar: &mut ManagedSidecar, settings: &AppSettings) -> AutoTagStatus {
+fn auto_tag_status_from(
+    app: &AppHandle,
+    sidecar: &mut ManagedSidecar,
+    settings: &AppSettings,
+) -> AutoTagStatus {
     if let Some(child) = sidecar.auto_tag_child.as_mut() {
         if child.try_wait().ok().flatten().is_some() {
             sidecar.auto_tag_child = None;
         }
     }
 
-    let uv_installed = command_success("uv", &["--version"]);
+    let uv_installed = uv_available(app);
     let repository_ready = is_auto_tag_repository_ready(settings);
     let model_ready = is_auto_tag_model_ready(settings);
     let ready = uv_installed && repository_ready && model_ready;
@@ -450,7 +719,7 @@ fn auto_tag_status_from(sidecar: &mut ManagedSidecar, settings: &AppSettings) ->
     } else if ready {
         String::from("自動タグを利用できます。")
     } else if !uv_installed {
-        String::from("uv が見つかりません。先に uv をインストールしてください。")
+        String::from("自動タグの実行環境が見つかりません。アプリを再インストールしてください。")
     } else if !repository_ready {
         String::from("JoyTag のコードがまだ準備されていません。")
     } else {
@@ -501,7 +770,12 @@ fn stop_auto_tag(sidecar: &mut ManagedSidecar, settings: &AppSettings) {
     terminate_listeners_on_port(settings.auto_tag_port, &[]);
 }
 
+fn auto_tag_bridge_root(app: &AppHandle) -> PathBuf {
+    resource_or_repo_path(app, "integrations/joytag", "integrations/joytag")
+}
+
 fn start_auto_tag_if_enabled(
+    app: &AppHandle,
     sidecar: &mut ManagedSidecar,
     settings: &AppSettings,
 ) -> Result<(), String> {
@@ -511,7 +785,7 @@ fn start_auto_tag_if_enabled(
 
     terminate_listeners_on_port(settings.auto_tag_port, &[]);
 
-    let status = auto_tag_status_from(sidecar, settings);
+    let status = auto_tag_status_from(app, sidecar, settings);
     if !status.ready {
         return Err(format!(
             "自動タグの準備が完了していません。設定の AutoTag から準備してください。\n{}",
@@ -519,10 +793,10 @@ fn start_auto_tag_if_enabled(
         ));
     }
 
-    let root = repo_root();
-    let bridge_script = root.join("integrations/joytag/joytag_server.py");
-    let requirements = root.join("integrations/joytag/requirements-server.txt");
-    let mut command = Command::new("uv");
+    let bridge_root = auto_tag_bridge_root(app);
+    let bridge_script = bridge_root.join("joytag_server.py");
+    let requirements = bridge_root.join("requirements-server.txt");
+    let mut command = uv_command(app);
     command
         .arg("run")
         .arg("--no-project")
@@ -572,13 +846,111 @@ fn run_command(mut command: Command, label: &str) -> Result<String, String> {
     Ok(format!("{stdout}{stderr}"))
 }
 
+fn is_same_path(left: &Path, right: &Path) -> bool {
+    if left == right {
+        return true;
+    }
+    match (left.canonicalize(), right.canonicalize()) {
+        (Ok(left), Ok(right)) => left == right,
+        _ => false,
+    }
+}
+
+fn directory_is_empty(path: &Path) -> Result<bool, String> {
+    if !path.exists() {
+        return Ok(true);
+    }
+    let mut entries =
+        fs::read_dir(path).map_err(|error| format!("ディレクトリを確認できません: {error}"))?;
+    Ok(entries.next().is_none())
+}
+
+fn copy_dir_recursive(source: &Path, target: &Path) -> Result<(), String> {
+    fs::create_dir_all(target)
+        .map_err(|error| format!("移動先ディレクトリを作成できません: {error}"))?;
+    for entry in fs::read_dir(source)
+        .map_err(|error| format!("移動元ディレクトリを読み込めません: {error}"))?
+    {
+        let entry = entry.map_err(|error| format!("移動元ファイルを確認できません: {error}"))?;
+        let source_path = entry.path();
+        let target_path = target.join(entry.file_name());
+        let metadata = entry
+            .metadata()
+            .map_err(|error| format!("移動元ファイル情報を確認できません: {error}"))?;
+        if metadata.is_dir() {
+            copy_dir_recursive(&source_path, &target_path)?;
+        } else {
+            if target_path.exists() {
+                return Err(format!(
+                    "移動先に同名ファイルが存在します: {}",
+                    target_path.to_string_lossy()
+                ));
+            }
+            fs::copy(&source_path, &target_path)
+                .map_err(|error| format!("ファイルをコピーできません: {error}"))?;
+        }
+    }
+    Ok(())
+}
+
+fn move_file_path(source: &Path, target: &Path) -> Result<(), String> {
+    if is_same_path(source, target) {
+        return Ok(());
+    }
+    ensure_parent(target)?;
+    if target.exists() {
+        return Err(String::from(
+            "移動先のDBファイルが既に存在します。別の場所を選択してください。",
+        ));
+    }
+    if !source.exists() {
+        return Ok(());
+    }
+    match fs::rename(source, target) {
+        Ok(()) => Ok(()),
+        Err(_) => {
+            fs::copy(source, target).map_err(|error| format!("DBをコピーできません: {error}"))?;
+            fs::remove_file(source).map_err(|error| format!("移動元DBを削除できません: {error}"))
+        }
+    }
+}
+
+fn move_directory_path(source: &Path, target: &Path) -> Result<(), String> {
+    if is_same_path(source, target) {
+        return Ok(());
+    }
+    if target.exists() && !directory_is_empty(target)? {
+        return Err(String::from(
+            "移動先のライブラリフォルダが空ではありません。空のフォルダを選択してください。",
+        ));
+    }
+    if !source.exists() {
+        fs::create_dir_all(target)
+            .map_err(|error| format!("ライブラリフォルダを作成できません: {error}"))?;
+        return Ok(());
+    }
+    if let Some(parent) = target.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|error| format!("移動先の親ディレクトリを作成できません: {error}"))?;
+    }
+    match fs::rename(source, target) {
+        Ok(()) => Ok(()),
+        Err(_) => {
+            copy_dir_recursive(source, target)?;
+            fs::remove_dir_all(source)
+                .map_err(|error| format!("移動元ライブラリフォルダを削除できません: {error}"))
+        }
+    }
+}
+
 fn detect_docker_source_for_settings(
+    app: &AppHandle,
     settings: &AppSettings,
 ) -> Result<DockerSourceDetection, String> {
-    let root = repo_root();
-    let mut command = Command::new("node");
+    let root = resource_or_repo_path(app, "server", "apps/server");
+    let mut command = node_command(app);
     command
-        .arg(root.join("apps/server/scripts/detect-docker-source.mjs"))
+        .arg(root.join("scripts/detect-docker-source.mjs"))
         .current_dir(&root);
 
     if !settings.docker_database_url.trim().is_empty() {
@@ -600,11 +972,12 @@ fn detect_docker_source_for_settings(
 }
 
 fn auto_tag_install_metadata_for_settings(
+    app: &AppHandle,
     _settings: &AppSettings,
 ) -> Result<AutoTagInstallMetadata, String> {
-    if !command_success("uv", &["--version"]) {
+    if !uv_available(app) {
         return Err(String::from(
-            "自動タグのインストールには uv が必要です。先に uv をインストールしてください。",
+            "自動タグの実行環境が見つかりません。アプリを再インストールしてください。",
         ));
     }
 
@@ -627,7 +1000,7 @@ for sibling in info.siblings:
 print(json.dumps({"downloadBytes": total}))
 "#;
 
-    let mut command = Command::new("uv");
+    let mut command = uv_command(app);
     command
         .arg("run")
         .arg("--no-project")
@@ -664,10 +1037,13 @@ print(json.dumps({"downloadBytes": total}))
     })
 }
 
-fn prepare_auto_tag_for_settings(settings: &AppSettings) -> Result<String, String> {
-    if !command_success("uv", &["--version"]) {
+fn prepare_auto_tag_for_settings(
+    app: &AppHandle,
+    settings: &AppSettings,
+) -> Result<String, String> {
+    if !uv_available(app) {
         return Err(String::from(
-            "uv が見つかりません。AutoTag を準備するには uv のインストールが必要です。",
+            "自動タグの実行環境が見つかりません。アプリを再インストールしてください。",
         ));
     }
 
@@ -696,7 +1072,7 @@ fn prepare_auto_tag_for_settings(settings: &AppSettings) -> Result<String, Strin
         let patterns_json = serde_json::to_string(auto_tag_download_patterns())
             .map_err(|error| error.to_string())?;
         let script = "from huggingface_hub import snapshot_download\nimport json\nimport sys\nsnapshot_download(repo_id=sys.argv[1], local_dir=sys.argv[2], allow_patterns=json.loads(sys.argv[3]))\n";
-        let mut model_command = Command::new("uv");
+        let mut model_command = uv_command(app);
         model_command
             .arg("run")
             .arg("--no-project")
@@ -711,9 +1087,8 @@ fn prepare_auto_tag_for_settings(settings: &AppSettings) -> Result<String, Strin
         logs.push(run_command(model_command, "JoyTag モデルの取得")?);
     }
 
-    let root = repo_root();
-    let requirements = root.join("integrations/joytag/requirements-server.txt");
-    let mut dependency_command = Command::new("uv");
+    let requirements = auto_tag_bridge_root(app).join("requirements-server.txt");
+    let mut dependency_command = uv_command(app);
     dependency_command
         .arg("run")
         .arg("--no-project")
@@ -755,7 +1130,7 @@ snapshot_download(
 )
 "#;
 
-    let mut child = Command::new("uv")
+    let mut child = uv_command(app)
         .arg("run")
         .arg("--no-project")
         .arg("--with")
@@ -871,9 +1246,8 @@ fn run_auto_tag_install_task(
         progress.message = String::from("自動タグの実行環境を準備しています...");
     });
 
-    let root = repo_root();
-    let requirements = root.join("integrations/joytag/requirements-server.txt");
-    let mut dependency_command = Command::new("uv");
+    let requirements = auto_tag_bridge_root(&app).join("requirements-server.txt");
+    let mut dependency_command = uv_command(&app);
     dependency_command
         .arg("run")
         .arg("--no-project")
@@ -913,6 +1287,11 @@ fn save_settings(app: AppHandle, settings: AppSettings) -> Result<AppSettings, S
 }
 
 #[tauri::command]
+fn detect_ffmpeg(settings: AppSettings) -> Vec<FfmpegCandidate> {
+    detect_ffmpeg_candidates(&normalize_settings(settings))
+}
+
+#[tauri::command]
 fn autotag_status(
     app: AppHandle,
     state: State<'_, Mutex<ManagedSidecar>>,
@@ -921,7 +1300,7 @@ fn autotag_status(
     let mut sidecar = state
         .lock()
         .map_err(|_| String::from("Caramel Board の状態を確認できません"))?;
-    Ok(auto_tag_status_from(&mut sidecar, &settings))
+    Ok(auto_tag_status_from(&app, &mut sidecar, &settings))
 }
 
 #[tauri::command]
@@ -930,7 +1309,7 @@ fn autotag_install_metadata(
     settings: AppSettings,
 ) -> Result<AutoTagInstallMetadata, String> {
     let settings = normalize_settings_for_app(&app, settings)?;
-    auto_tag_install_metadata_for_settings(&settings)
+    auto_tag_install_metadata_for_settings(&app, &settings)
 }
 
 #[tauri::command]
@@ -967,14 +1346,13 @@ fn start_sidecar(
     let mut sidecar = state
         .lock()
         .map_err(|_| String::from("Caramel Board の状態を確認できません"))?;
-    start_auto_tag_if_enabled(&mut sidecar, &settings)?;
     if sidecar.child.is_some() {
         return status_from(&mut sidecar, &settings);
     }
     terminate_listeners_on_port(settings.port, &[]);
 
-    let root = repo_root();
-    let server_entry = root.join("apps/server/dist/entry.node.mjs");
+    let server_root = resource_or_repo_path(&app, "server", "apps/server");
+    let server_entry = server_root.join("dist/entry.node.mjs");
     if !server_entry.exists() {
         return Err(String::from(
             "Caramel Board の起動に必要なファイルが見つかりません。先にアプリをビルドしてください。",
@@ -985,11 +1363,11 @@ fn start_sidecar(
     fs::create_dir_all(&settings.library_path)
         .map_err(|error| format!("ライブラリディレクトリを作成できません: {error}"))?;
 
-    let client_dist = root.join("apps/client/dist");
-    let mut command = Command::new("node");
+    let client_dist = resource_or_repo_path(&app, "client/dist", "apps/client/dist");
+    let mut command = node_command(&app);
     command
         .arg(server_entry)
-        .current_dir(root)
+        .current_dir(&server_root)
         .env("PORT", settings.port.to_string())
         .env(
             "HOST",
@@ -1027,12 +1405,23 @@ fn start_sidecar(
         .stdout(Stdio::null())
         .stderr(Stdio::null());
 
+    if let Some(ffmpeg_path) = effective_ffmpeg_path(&settings) {
+        command.env("FFMPEG_PATH", &ffmpeg_path);
+        if let Some(ffprobe_path) = ffprobe_path_for_ffmpeg(&ffmpeg_path) {
+            command.env("FFPROBE_PATH", ffprobe_path);
+        }
+    }
+
     let child = command
         .spawn()
         .map_err(|error| format!("Caramel Board を起動できません: {error}"))?;
     sidecar.child = Some(child);
     sidecar.settings = Some(settings.clone());
     sidecar.started_at = Some(now_epoch_seconds());
+
+    if let Err(error) = start_auto_tag_if_enabled(&app, &mut sidecar, &settings) {
+        eprintln!("AutoTag start skipped: {error}");
+    }
 
     status_from(&mut sidecar, &settings)
 }
@@ -1078,12 +1467,12 @@ fn prepare_autotag(
     }
 
     write_settings(&app, &settings)?;
-    prepare_auto_tag_for_settings(&settings)?;
+    prepare_auto_tag_for_settings(&app, &settings)?;
 
     let mut sidecar = state
         .lock()
         .map_err(|_| String::from("Caramel Board の状態を確認できません"))?;
-    Ok(auto_tag_status_from(&mut sidecar, &settings))
+    Ok(auto_tag_status_from(&app, &mut sidecar, &settings))
 }
 
 #[tauri::command]
@@ -1177,7 +1566,60 @@ fn export_database(app: AppHandle, target_path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn move_database(
+    app: AppHandle,
+    target_path: String,
+    state: State<'_, Mutex<ManagedSidecar>>,
+) -> Result<AppSettings, String> {
+    let mut settings = read_settings(&app)?;
+    {
+        let sidecar = state
+            .lock()
+            .map_err(|_| String::from("Caramel Board の状態を確認できません"))?;
+        if sidecar.child.is_some() {
+            return Err(String::from(
+                "DBの移動は Caramel Board を停止してから実行してください。",
+            ));
+        }
+    }
+
+    let source = PathBuf::from(&settings.db_path);
+    let target = PathBuf::from(target_path);
+    move_file_path(&source, &target)?;
+    settings.db_path = target.to_string_lossy().into_owned();
+    write_settings(&app, &settings)?;
+    Ok(settings)
+}
+
+#[tauri::command]
+fn move_library(
+    app: AppHandle,
+    target_path: String,
+    state: State<'_, Mutex<ManagedSidecar>>,
+) -> Result<AppSettings, String> {
+    let mut settings = read_settings(&app)?;
+    {
+        let sidecar = state
+            .lock()
+            .map_err(|_| String::from("Caramel Board の状態を確認できません"))?;
+        if sidecar.child.is_some() {
+            return Err(String::from(
+                "ライブラリの移動は Caramel Board を停止してから実行してください。",
+            ));
+        }
+    }
+
+    let source = PathBuf::from(&settings.library_path);
+    let target = PathBuf::from(target_path);
+    move_directory_path(&source, &target)?;
+    settings.library_path = target.to_string_lossy().into_owned();
+    write_settings(&app, &settings)?;
+    Ok(settings)
+}
+
+#[tauri::command]
 fn detect_docker_source(
+    app: AppHandle,
     settings: AppSettings,
     state: State<'_, Mutex<ManagedSidecar>>,
 ) -> Result<DockerSourceDetection, String> {
@@ -1193,7 +1635,7 @@ fn detect_docker_source(
         }
     }
 
-    detect_docker_source_for_settings(&settings)
+    detect_docker_source_for_settings(&app, &settings)
 }
 
 #[tauri::command]
@@ -1216,7 +1658,7 @@ fn migrate_from_docker(
 
     write_settings(&app, &settings)?;
     ensure_parent(Path::new(&settings.db_path))?;
-    let detected = detect_docker_source_for_settings(&settings)?;
+    let detected = detect_docker_source_for_settings(&app, &settings)?;
     if !detected.available {
         return Err(format!(
             "旧Docker版に接続できません。旧Docker版を起動してから再実行してください。\n{}",
@@ -1224,7 +1666,7 @@ fn migrate_from_docker(
         ));
     }
 
-    let root = repo_root();
+    let root = resource_or_repo_path(&app, "server", "apps/server");
     let migration_root = app
         .path()
         .app_cache_dir()
@@ -1234,9 +1676,9 @@ fn migrate_from_docker(
         .map_err(|error| format!("一時ディレクトリを作成できません: {error}"))?;
     let export_dir = migration_root.join(format!("export-{}", now_epoch_seconds()));
 
-    let mut export_command = Command::new("node");
+    let mut export_command = node_command(&app);
     export_command
-        .arg(root.join("apps/server/scripts/export-standalone.mjs"))
+        .arg(root.join("scripts/export-standalone.mjs"))
         .arg(format!("--out={}", export_dir.to_string_lossy()))
         .arg("--force")
         .current_dir(&root)
@@ -1254,9 +1696,9 @@ fn migrate_from_docker(
 
     let export_output = run_command(export_command, "Docker版DB export")?;
 
-    let mut import_command = Command::new("node");
+    let mut import_command = node_command(&app);
     import_command
-        .arg(root.join("apps/server/scripts/import-standalone-sqlite.mjs"))
+        .arg(root.join("scripts/import-standalone-sqlite.mjs"))
         .arg(format!("--input={}", export_dir.to_string_lossy()))
         .arg(format!("--db={}", settings.db_path))
         .arg("--force")
@@ -1359,6 +1801,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             load_settings,
             save_settings,
+            detect_ffmpeg,
             autotag_status,
             autotag_install_metadata,
             autotag_install_progress,
@@ -1367,6 +1810,8 @@ pub fn run() {
             stop_sidecar,
             import_database,
             export_database,
+            move_database,
+            move_library,
             prepare_autotag,
             start_autotag_install,
             detect_docker_source,

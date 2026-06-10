@@ -4,7 +4,8 @@
   "private": true,
   "packageManager": "npm@10.9.2",
   "workspaces": [
-    "apps/*"
+    "apps/*",
+    "packages/*"
   ],
   "scripts": {
     "build": "turbo run build",
@@ -25,8 +26,10 @@
     "docker:logs": "docker-compose logs -f",
     "db:backup": "./serve.sh backup",
     "db:restore": "docker-compose -f docker-compose.dev.yml exec -T postgres psql -U caramel_user -d caramel_board_db < backup.sql",
-    "standalone:export": "npm run -w @caramelboard/server export:standalone --",
-    "standalone:import": "npm run -w @caramelboard/server import:standalone --",
+    "standalone:export": "npm run -w @caramelboard/docker-migration export:standalone --",
+    "standalone:import": "npm run -w @caramelboard/docker-migration import:standalone --",
+    "standalone:server:build": "npm run -w @caramelboard/server-standalone build",
+    "standalone:server:check": "npm run -w @caramelboard/server-standalone check:no-prisma",
     "desktop:prepare": "npm run -w @caramelboard/desktop prepare:sidecar",
     "desktop:dev": "npm run -w @caramelboard/desktop dev",
     "desktop:build": "npm run -w @caramelboard/desktop build:app",

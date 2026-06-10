@@ -8,6 +8,7 @@ import {
   Database,
   Download,
   ExternalLink,
+  Film,
   Folder,
   Github,
   Globe2,
@@ -16,7 +17,6 @@ import {
   Megaphone,
   Play,
   RefreshCcw,
-  Save,
   SlidersHorizontal,
   Sparkles,
   Square,
@@ -29,6 +29,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import { CaramelBoardLogo } from './CaramelBoardLogo';
@@ -51,6 +52,7 @@ interface AppSettings {
   autoTagRepoDir: string;
   autoTagModelDir: string;
   autoTagThreshold: number;
+  ffmpegPath: string;
 }
 
 interface SidecarStatus {
@@ -112,7 +114,16 @@ interface AutoTagInstallProgress {
   error: string | null;
 }
 
-type SettingsSection = 'general' | 'autotag' | 'migration';
+interface FfmpegCandidate {
+  path: string;
+  label: string;
+  source: string;
+  valid: boolean;
+  version: string;
+  details: string;
+}
+
+type SettingsSection = 'general' | 'media' | 'autotag' | 'migration';
 type AppLanguage = 'en' | 'ja';
 type AutoTagInstallStep = 'intro' | 'metadata' | 'confirm' | 'progress' | null;
 type TextSettingKey =
@@ -122,6 +133,7 @@ type TextSettingKey =
   | 'basicAuthPassword'
   | 'autoTagRepoDir'
   | 'autoTagModelDir'
+  | 'ffmpegPath'
   | 'dockerDatabaseUrl'
   | 'dockerStorageRoot'
   | 'dockerDatasetId';
@@ -153,7 +165,7 @@ const choosePath = async (directory: boolean) => {
 };
 
 const isSettingsSection = (value: string | undefined): value is SettingsSection =>
-  value === 'general' || value === 'autotag' || value === 'migration';
+  value === 'general' || value === 'media' || value === 'autotag' || value === 'migration';
 
 const isAppLanguage = (value: string | undefined): value is AppLanguage =>
   value === 'en' || value === 'ja';
@@ -165,6 +177,7 @@ const isTextSettingKey = (value: string | undefined): value is TextSettingKey =>
   value === 'basicAuthPassword' ||
   value === 'autoTagRepoDir' ||
   value === 'autoTagModelDir' ||
+  value === 'ffmpegPath' ||
   value === 'dockerDatabaseUrl' ||
   value === 'dockerStorageRoot' ||
   value === 'dockerDatasetId';
@@ -181,6 +194,13 @@ const isDockerTextSettingKey = (value: TextSettingKey) =>
 const getInitialLanguage = (): AppLanguage =>
   navigator.language.toLowerCase().startsWith('ja') ? 'ja' : 'en';
 
+const normalizeSettingsForSave = (settings: AppSettings): AppSettings => ({
+  ...settings,
+  port: Number(settings.port),
+  autoTagPort: Number(settings.autoTagPort),
+  autoTagThreshold: Number(settings.autoTagThreshold),
+});
+
 const translations = {
   en: {
     loadingSettings: 'Loading settings...',
@@ -195,11 +215,27 @@ const translations = {
     appActive: 'Caramel Board is running.',
     lockedWhileRunning: 'Stop Caramel Board before changing settings.',
     general: 'General',
+    media: 'GIF/Video',
     autotag: 'AutoTag',
     migration: 'Migration',
     settingsNavigation: 'Settings navigation',
     generalDescription:
       'Core standalone settings for database, files, network, and access control.',
+    mediaDescription: 'Configure FFmpeg used for GIF and video preview generation.',
+    ffmpeg: 'FFmpeg',
+    ffmpegPath: 'FFmpeg executable',
+    ffmpegAutoDetect: 'Auto detect from PATH',
+    chooseFfmpeg: 'Choose ffmpeg',
+    refreshFfmpeg: 'Detect FFmpeg',
+    ffmpegReadyTitle: 'FFmpeg is ready',
+    ffmpegMissingTitle: 'FFmpeg is not configured',
+    ffmpegReadyDescription: 'GIF and video previews can be generated with this executable.',
+    ffmpegMissingDescription:
+      'Install FFmpeg separately, then select ffmpeg from the detected list or browse to it.',
+    ffmpegCandidates: 'Detected FFmpeg',
+    ffmpegNoCandidates: 'No FFmpeg executable was found on PATH.',
+    ffmpegSelected: 'FFmpeg path selected.',
+    ffmpegChecked: 'FFmpeg detection completed.',
     autotagDescription: 'Prepare and run local AI tagging for images.',
     autoTagEnable: 'Use AutoTag',
     autoTagReadyTitle: 'AutoTag is ready',
@@ -248,12 +284,14 @@ const translations = {
     database: 'Database',
     sqliteDb: 'SQLite DB',
     chooseDatabase: 'Choose database',
+    moveDatabase: 'Move database',
     import: 'Import',
     export: 'Export',
     openMigrationSettings: 'Open Docker migration settings',
     files: 'Files',
     libraryPath: 'Library path',
     chooseLibraryFolder: 'Choose library folder',
+    moveLibrary: 'Move library',
     network: 'Network',
     allowExternalNetwork: 'Allow access from other devices on the network',
     port: 'Port',
@@ -284,12 +322,13 @@ const translations = {
     optional: 'optional',
     verifyFileReferences: 'Verify file references',
     migrateFromDocker: 'Migrate',
-    saveSettings: 'Save settings',
     appStarted: 'Caramel Board started.',
     appStopped: 'Caramel Board stopped.',
     openedInBrowser: 'Opened in browser.',
     databasePathSelected: 'Database path selected.',
     libraryPathSelected: 'Library path selected.',
+    databaseMoved: 'Database moved.',
+    libraryMoved: 'Library moved.',
     dockerStorageRootSelected: 'Docker storage root selected.',
     databaseImported: 'Database imported.',
     databaseExported: 'Database exported.',
@@ -300,7 +339,7 @@ const translations = {
     dockerMigrationCompletedSummary: 'Docker migration completed.',
     dockerMigrationCompleted: (dbPath: string, exportDir: string) =>
       `Docker migration completed.\nDB: ${dbPath}\nExport: ${exportDir}`,
-    settingsSaved: 'Settings saved.',
+    settingsAutoSaved: 'Settings are saved automatically.',
     sqliteFilterName: 'SQLite Database',
   },
   ja: {
@@ -316,10 +355,26 @@ const translations = {
     appActive: 'Caramel Board が起動しています。',
     lockedWhileRunning: '設定を変更するには Caramel Board を停止してください。',
     general: '一般',
+    media: 'GIF/動画設定',
     autotag: '自動タグ',
     migration: '移行',
     settingsNavigation: '設定ナビゲーション',
     generalDescription: 'DB、ファイル、ネットワーク、アクセス設定をまとめて管理します。',
+    mediaDescription: 'GIF・動画プレビュー生成に使用する FFmpeg を設定します。',
+    ffmpeg: 'FFmpeg',
+    ffmpegPath: 'FFmpeg 実行ファイル',
+    ffmpegAutoDetect: 'PATH から自動検出',
+    chooseFfmpeg: 'ffmpeg を選択',
+    refreshFfmpeg: 'FFmpeg を検出',
+    ffmpegReadyTitle: 'FFmpeg を利用できます',
+    ffmpegMissingTitle: 'FFmpeg が設定されていません',
+    ffmpegReadyDescription: 'この実行ファイルで GIF・動画プレビューを生成できます。',
+    ffmpegMissingDescription:
+      'FFmpeg を別途インストールし、検出候補から選ぶか ffmpeg を参照してください。',
+    ffmpegCandidates: '検出された FFmpeg',
+    ffmpegNoCandidates: 'PATH 上に FFmpeg は見つかりませんでした。',
+    ffmpegSelected: 'FFmpeg のパスを選択しました。',
+    ffmpegChecked: 'FFmpeg の検出が完了しました。',
     autotagDescription: '画像にAIタグを付けるための準備と起動設定です。',
     autoTagEnable: '自動タグを使う',
     autoTagReadyTitle: '自動タグを利用できます',
@@ -368,12 +423,14 @@ const translations = {
     database: 'データベース',
     sqliteDb: 'SQLite DB',
     chooseDatabase: 'DBを選択',
+    moveDatabase: 'DBを移動',
     import: 'インポート',
     export: 'エクスポート',
     openMigrationSettings: 'Docker版からの移行設定を開く',
     files: 'ファイル',
     libraryPath: 'ライブラリパス',
     chooseLibraryFolder: 'ライブラリフォルダを選択',
+    moveLibrary: 'ライブラリを移動',
     network: 'ネットワーク',
     allowExternalNetwork: '同一ネットワーク上の他デバイスからのアクセスを許可',
     port: 'ポート',
@@ -403,12 +460,13 @@ const translations = {
     optional: '任意',
     verifyFileReferences: 'ファイル参照を検証する',
     migrateFromDocker: '移行する',
-    saveSettings: '設定を保存',
     appStarted: 'Caramel Board を起動しました。',
     appStopped: 'Caramel Board を停止しました。',
     openedInBrowser: 'ブラウザで開きました。',
     databasePathSelected: 'DBパスを選択しました。',
     libraryPathSelected: 'ライブラリパスを選択しました。',
+    databaseMoved: 'DBを移動しました。',
+    libraryMoved: 'ライブラリを移動しました。',
     dockerStorageRootSelected: 'Docker ストレージルートを選択しました。',
     databaseImported: 'DBをインポートしました。',
     databaseExported: 'DBをエクスポートしました。',
@@ -419,7 +477,7 @@ const translations = {
     dockerMigrationCompletedSummary: 'Docker版からの移行が完了しました。',
     dockerMigrationCompleted: (dbPath: string, exportDir: string) =>
       `Docker版からの移行が完了しました。\nDB: ${dbPath}\nExport: ${exportDir}`,
-    settingsSaved: '設定を保存しました。',
+    settingsAutoSaved: '設定は自動保存されます。',
     sqliteFilterName: 'SQLiteデータベース',
   },
 };
@@ -436,8 +494,11 @@ export default function App() {
     useState<AutoTagInstallProgress | null>(null);
   const [dockerDetection, setDockerDetection] = useState<DockerSourceDetection | null>(null);
   const [dockerDetectionAttempted, setDockerDetectionAttempted] = useState(false);
+  const [ffmpegCandidates, setFfmpegCandidates] = useState<FfmpegCandidate[]>([]);
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
+  const settingsRef = useRef<AppSettings | null>(null);
+  const autoSaveTimerRef = useRef<number | null>(null);
 
   const language = settings?.language ?? getInitialLanguage();
   const t = translations[language];
@@ -456,11 +517,54 @@ export default function App() {
     setAutoTagStatus(next);
   }, []);
 
+  const refreshFfmpegCandidates = useCallback(async (targetSettings: AppSettings) => {
+    const next = await invoke<FfmpegCandidate[]>('detect_ffmpeg', { settings: targetSettings });
+    setFfmpegCandidates(next);
+    return next;
+  }, []);
+
+  useEffect(() => {
+    settingsRef.current = settings;
+  }, [settings]);
+
+  const persistSettings = useCallback(async (targetSettings: AppSettings) => {
+    const saved = await invoke<AppSettings>('save_settings', {
+      settings: normalizeSettingsForSave(targetSettings),
+    });
+    settingsRef.current = saved;
+    setSettings(saved);
+    return saved;
+  }, []);
+
+  const clearAutoSaveTimer = useCallback(() => {
+    if (autoSaveTimerRef.current !== null) {
+      window.clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+    }
+  }, []);
+
+  const scheduleSettingsSave = useCallback(
+    (targetSettings: AppSettings) => {
+      clearAutoSaveTimer();
+      autoSaveTimerRef.current = window.setTimeout(() => {
+        autoSaveTimerRef.current = null;
+        void persistSettings(targetSettings).catch((error: unknown) => {
+          setMessage(getErrorMessage(error));
+        });
+      }, 250);
+    },
+    [clearAutoSaveTimer, persistSettings]
+  );
+
+  useEffect(() => clearAutoSaveTimer, [clearAutoSaveTimer]);
+
   const load = useCallback(async () => {
     setBusy(true);
     try {
       const loaded = await invoke<AppSettings>('load_settings');
+      settingsRef.current = loaded;
       setSettings(loaded);
+      await refreshFfmpegCandidates(loaded);
       await refreshStatus();
       await refreshAutoTagStatus();
       const installProgress = await invoke<AutoTagInstallProgress>('autotag_install_progress');
@@ -470,15 +574,24 @@ export default function App() {
     } finally {
       setBusy(false);
     }
-  }, [refreshAutoTagStatus, refreshStatus]);
+  }, [refreshAutoTagStatus, refreshFfmpegCandidates, refreshStatus]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  const patchSettings = useCallback((patch: Partial<AppSettings>) => {
-    setSettings((current) => (current ? { ...current, ...patch } : current));
-  }, []);
+  const patchSettings = useCallback(
+    (patch: Partial<AppSettings>) => {
+      const current = settingsRef.current;
+      if (!current) return null;
+      const next = { ...current, ...patch };
+      settingsRef.current = next;
+      setSettings(next);
+      scheduleSettingsSave(next);
+      return next;
+    },
+    [scheduleSettingsSave]
+  );
 
   const handleSelectSection = useCallback((event: MouseEvent<HTMLButtonElement>) => {
     const section = event.currentTarget.dataset.section;
@@ -533,17 +646,11 @@ export default function App() {
   );
 
   const saveSettings = useCallback(async () => {
-    if (!settings) return null;
-    const normalized = {
-      ...settings,
-      port: Number(settings.port),
-      autoTagPort: Number(settings.autoTagPort),
-      autoTagThreshold: Number(settings.autoTagThreshold),
-    };
-    const saved = await invoke<AppSettings>('save_settings', { settings: normalized });
-    setSettings(saved);
-    return saved;
-  }, [settings]);
+    const current = settingsRef.current;
+    if (!current) return null;
+    clearAutoSaveTimer();
+    return persistSettings(current);
+  }, [clearAutoSaveTimer, persistSettings]);
 
   const runAction = useCallback(async (action: () => Promise<unknown>, defaultMessage: string) => {
     setBusy(true);
@@ -628,6 +735,31 @@ export default function App() {
     }, t.libraryPathSelected);
   }, [patchSettings, runAction, t]);
 
+  const handleFfmpegSelectChange = useCallback(
+    (event: ChangeEvent<HTMLSelectElement>) => {
+      patchSettings({ ffmpegPath: event.currentTarget.value });
+    },
+    [patchSettings]
+  );
+
+  const handleRefreshFfmpeg = useCallback(() => {
+    void runAction(async () => {
+      if (!settings) return;
+      await refreshFfmpegCandidates(settings);
+    }, t.ffmpegChecked);
+  }, [refreshFfmpegCandidates, runAction, settings, t]);
+
+  const handleChooseFfmpeg = useCallback(() => {
+    void runAction(async () => {
+      if (!settings) return;
+      const path = await choosePath(false);
+      if (!path) return;
+      const nextSettings = { ...settings, ffmpegPath: path };
+      patchSettings({ ffmpegPath: path });
+      await refreshFfmpegCandidates(nextSettings);
+    }, t.ffmpegSelected);
+  }, [patchSettings, refreshFfmpegCandidates, runAction, settings, t]);
+
   const handleChooseDockerStorage = useCallback(() => {
     void runAction(async () => {
       const path = await choosePath(true);
@@ -665,15 +797,18 @@ export default function App() {
 
   const handleImportDb = useCallback(() => {
     void runAction(async () => {
+      await saveSettings();
       const sourcePath = await choosePath(false);
       if (!sourcePath) return;
       const next = await invoke<AppSettings>('import_database', { sourcePath });
+      settingsRef.current = next;
       setSettings(next);
     }, t.databaseImported);
-  }, [runAction, t]);
+  }, [runAction, saveSettings, t]);
 
   const handleExportDb = useCallback(() => {
     void runAction(async () => {
+      await saveSettings();
       const targetPath = await save({
         defaultPath: 'caramel-board-backup.sqlite',
         filters: [{ name: t.sqliteFilterName, extensions: ['sqlite', 'db'] }],
@@ -681,7 +816,33 @@ export default function App() {
       if (!targetPath) return;
       await invoke<void>('export_database', { targetPath });
     }, t.databaseExported);
-  }, [runAction, t]);
+  }, [runAction, saveSettings, t]);
+
+  const handleMoveDb = useCallback(() => {
+    void runAction(async () => {
+      const saved = await saveSettings();
+      if (!saved) return;
+      const targetPath = await save({
+        defaultPath: saved.dbPath || 'caramel-board.sqlite',
+        filters: [{ name: t.sqliteFilterName, extensions: ['sqlite', 'db'] }],
+      });
+      if (!targetPath) return;
+      const next = await invoke<AppSettings>('move_database', { targetPath });
+      settingsRef.current = next;
+      setSettings(next);
+    }, t.databaseMoved);
+  }, [runAction, saveSettings, t]);
+
+  const handleMoveLibrary = useCallback(() => {
+    void runAction(async () => {
+      await saveSettings();
+      const targetPath = await choosePath(true);
+      if (!targetPath) return;
+      const next = await invoke<AppSettings>('move_library', { targetPath });
+      settingsRef.current = next;
+      setSettings(next);
+    }, t.libraryMoved);
+  }, [runAction, saveSettings, t]);
 
   const handleRefreshAutoTagStatus = useCallback(() => {
     void runAction(async () => {
@@ -694,6 +855,7 @@ export default function App() {
     setAutoTagInstallProgress(next);
     if (next.completed) {
       const loaded = await invoke<AppSettings>('load_settings');
+      settingsRef.current = loaded;
       setSettings(loaded);
       await refreshAutoTagStatus();
       setMessage(t.autoTagInstallCompleted);
@@ -774,15 +936,10 @@ export default function App() {
     }, t.dockerMigrationCompletedSummary);
   }, [runAction, saveSettings, t]);
 
-  const handleSaveSettings = useCallback(() => {
-    void runAction(async () => {
-      await saveSettings();
-    }, t.settingsSaved);
-  }, [runAction, saveSettings, t]);
-
   const navItems = useMemo(
     () => [
       { id: 'general' as const, label: t.general, icon: SlidersHorizontal },
+      { id: 'media' as const, label: t.media, icon: Film },
       { id: 'autotag' as const, label: t.autotag, icon: Sparkles },
       { id: 'migration' as const, label: t.migration, icon: Database },
     ],
@@ -815,6 +972,22 @@ export default function App() {
     if (!autoTagStatus?.ready) return 'migration-status missing';
     return 'migration-status waiting';
   }, [autoTagStatus, settings?.autoTagEnabled]);
+
+  const selectedFfmpegCandidate = useMemo(() => {
+    if (!settings?.ffmpegPath) {
+      return ffmpegCandidates.find((candidate) => candidate.valid) ?? null;
+    }
+    return (
+      ffmpegCandidates.find((candidate) => candidate.path === settings.ffmpegPath) ??
+      ffmpegCandidates.find((candidate) => candidate.valid) ??
+      null
+    );
+  }, [ffmpegCandidates, settings?.ffmpegPath]);
+
+  const ffmpegStatusClass = useMemo(
+    () => (selectedFfmpegCandidate?.valid ? 'migration-status ready' : 'migration-status missing'),
+    [selectedFfmpegCandidate]
+  );
 
   useEffect(() => {
     if (
@@ -1017,7 +1190,11 @@ export default function App() {
                   </button>
                 </div>
               </label>
-              <div className="button-row two">
+              <div className="button-row">
+                <button type="button" onClick={handleMoveDb} disabled={settingsDisabled}>
+                  <Folder size={15} />
+                  {t.moveDatabase}
+                </button>
                 <button type="button" onClick={handleImportDb} disabled={settingsDisabled}>
                   <Upload size={15} />
                   {t.import}
@@ -1063,6 +1240,12 @@ export default function App() {
                   </button>
                 </div>
               </label>
+              <div className="button-row single">
+                <button type="button" onClick={handleMoveLibrary} disabled={settingsDisabled}>
+                  <Folder size={15} />
+                  {t.moveLibrary}
+                </button>
+              </div>
             </div>
 
             <div className="settings-group">
@@ -1130,6 +1313,114 @@ export default function App() {
                     onChange={handleTextSettingChange}
                   />
                 </label>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {activeSection === 'media' ? (
+          <div className="section-panel">
+            <div className="section-heading">
+              <Film size={18} />
+              <div>
+                <h2>{t.media}</h2>
+                <p>{t.mediaDescription}</p>
+              </div>
+            </div>
+
+            <div className={ffmpegStatusClass}>
+              <div className="migration-status-icon">
+                {selectedFfmpegCandidate?.valid ? (
+                  <CheckCircle2 size={20} />
+                ) : (
+                  <AlertCircle size={20} />
+                )}
+              </div>
+              <div className="migration-status-body">
+                <h3>
+                  {selectedFfmpegCandidate?.valid ? t.ffmpegReadyTitle : t.ffmpegMissingTitle}
+                </h3>
+                <p>
+                  {selectedFfmpegCandidate?.valid
+                    ? t.ffmpegReadyDescription
+                    : t.ffmpegMissingDescription}
+                </p>
+                {selectedFfmpegCandidate?.path ? (
+                  <span className="migration-storage">{selectedFfmpegCandidate.path}</span>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="settings-group">
+              <div className="group-heading">
+                <Film size={16} />
+                <h3>{t.ffmpeg}</h3>
+              </div>
+              <label className="field">
+                <span>{t.ffmpegPath}</span>
+                <div className="select-action-row">
+                  <select
+                    value={settings.ffmpegPath}
+                    disabled={settingsDisabled}
+                    onChange={handleFfmpegSelectChange}
+                  >
+                    <option value="">{t.ffmpegAutoDetect}</option>
+                    {ffmpegCandidates.map((candidate) => (
+                      <option key={candidate.path} value={candidate.path}>
+                        {candidate.valid ? candidate.label : `${candidate.label} - invalid`}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    className="icon-button"
+                    onClick={handleRefreshFfmpeg}
+                    disabled={settingsDisabled}
+                    title={t.refreshFfmpeg}
+                  >
+                    <RefreshCcw size={15} />
+                  </button>
+                  <button
+                    type="button"
+                    className="icon-button"
+                    onClick={handleChooseFfmpeg}
+                    disabled={settingsDisabled}
+                    title={t.chooseFfmpeg}
+                  >
+                    <Folder size={15} />
+                  </button>
+                </div>
+              </label>
+
+              <div className="candidate-list" aria-label={t.ffmpegCandidates}>
+                <div className="candidate-list-heading">{t.ffmpegCandidates}</div>
+                {ffmpegCandidates.length === 0 ? (
+                  <span className="muted">{t.ffmpegNoCandidates}</span>
+                ) : (
+                  ffmpegCandidates.map((candidate) => (
+                    <div
+                      key={candidate.path}
+                      className={
+                        candidate.path === selectedFfmpegCandidate?.path
+                          ? 'candidate-item active'
+                          : 'candidate-item'
+                      }
+                    >
+                      <span
+                        className={
+                          candidate.valid ? 'candidate-state ready' : 'candidate-state missing'
+                        }
+                      >
+                        {candidate.valid ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
+                      </span>
+                      <div className="candidate-body">
+                        <strong>{candidate.path}</strong>
+                        <span>{candidate.version || candidate.details}</span>
+                        {candidate.version ? <span>{candidate.details}</span> : null}
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           </div>
@@ -1420,15 +1711,7 @@ export default function App() {
         ) : null}
 
         <footer className="settings-footer">
-          <button
-            type="button"
-            className="save-button"
-            disabled={settingsDisabled}
-            onClick={handleSaveSettings}
-          >
-            <Save size={15} />
-            {t.saveSettings}
-          </button>
+          <span className="auto-save-note">{t.settingsAutoSaved}</span>
           {message ? <div className="message-box">{message}</div> : null}
         </footer>
       </section>
