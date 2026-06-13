@@ -203,6 +203,20 @@ export class StandaloneDatasetRepository {
     return result.changes > 0;
   }
 
+  getStats(id: number) {
+    const stackCount = getCount(
+      this.db,
+      'SELECT COUNT(*) AS count FROM stacks WHERE dataset_id = ?',
+      id
+    );
+    const assetCount = getCount(
+      this.db,
+      'SELECT COUNT(*) AS count FROM assets a JOIN stacks s ON s.id = a.stack_id WHERE s.dataset_id = ?',
+      id
+    );
+    return { stackCount, assetCount };
+  }
+
   getOverview(id: number) {
     const mediaTypes = ['image', 'comic', 'video'].map((mediaType) => {
       const count = getCount(

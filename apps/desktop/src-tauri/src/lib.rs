@@ -2,13 +2,14 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeSet,
     env, fs,
-    io::{BufRead, BufReader},
+    io::{BufRead, BufReader, Read, Write},
+    net::{SocketAddr, TcpStream, UdpSocket},
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
     sync::Mutex,
     thread,
     time::Duration,
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Instant, SystemTime, UNIX_EPOCH},
 };
 #[cfg(target_os = "windows")]
 use tauri::{
@@ -22,6 +23,8 @@ use tauri::{AppHandle, Manager, State};
 struct AppSettings {
     db_path: String,
     library_path: String,
+    #[serde(default)]
+    setup_completed: bool,
     #[serde(default = "default_language")]
     language: String,
     port: u16,
@@ -49,6 +52,24 @@ struct AppSettings {
     auto_tag_threshold: f64,
     #[serde(default)]
     ffmpeg_path: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DataStoreInspection {
+    path: String,
+    exists: bool,
+    has_database: bool,
+    has_library: bool,
+    is_empty: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DockerStorageResolution {
+    resolved: String,
+    adjusted: bool,
+    matched: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -251,8 +272,12 @@ fn resource_or_repo_path(
     resource_relative: impl AsRef<Path>,
     repo_relative: impl AsRef<Path>,
 ) -> PathBuf {
-    packaged_resource_path(app, resource_relative)
-        .unwrap_or_else(|| repo_root().join(repo_relative))
+    let repo_path = repo_root().join(repo_relative.as_ref());
+    // 開発ビルドでは target/debug に残った古いリソースコピーではなく、リポジトリの最新ビルドを使う
+    if cfg!(debug_assertions) && repo_path.exists() {
+        return repo_path;
+    }
+    packaged_resource_path(app, resource_relative).unwrap_or(repo_path)
 }
 
 fn bundled_node_path(app: &AppHandle) -> Option<PathBuf> {
@@ -330,6 +355,7 @@ fn default_settings(app: &AppHandle) -> Result<AppSettings, String> {
             .to_string_lossy()
             .into_owned(),
         library_path: data_dir.join("library").to_string_lossy().into_owned(),
+        setup_completed: false,
         port: 6777,
         language: default_language(),
         allow_external_network: false,
@@ -370,8 +396,15 @@ fn read_settings(app: &AppHandle) -> Result<AppSettings, String> {
 
     let raw = fs::read_to_string(&path)
         .map_err(|error| format!("設定ファイルを読み込めません: {error}"))?;
-    let parsed = serde_json::from_str(&raw)
+    let value: serde_json::Value = serde_json::from_str(&raw)
         .map_err(|error| format!("設定ファイルの形式が不正です: {error}"))?;
+    let had_setup_field = value.get("setupCompleted").is_some();
+    let mut parsed: AppSettings = serde_json::from_value(value)
+        .map_err(|error| format!("設定ファイルの形式が不正です: {error}"))?;
+    if !had_setup_field {
+        // 旧バージョンの設定ファイルが残っている既存ユーザーはセットアップ済みとして扱う
+        parsed.setup_completed = true;
+    }
     normalize_settings_for_app(app, parsed)
 }
 
@@ -1618,6 +1651,261 @@ fn move_library(
 }
 
 #[tauri::command]
+fn inspect_data_store(path: String) -> Result<DataStoreInspection, String> {
+    let root = PathBuf::from(&path);
+    if !root.exists() {
+        return Ok(DataStoreInspection {
+            path,
+            exists: false,
+            has_database: false,
+            has_library: false,
+            is_empty: true,
+        });
+    }
+    if !root.is_dir() {
+        return Err(String::from("選択された場所はフォルダではありません。"));
+    }
+    let has_database = root.join("caramel-board.sqlite").is_file();
+    let library_dir = root.join("library");
+    let has_library = library_dir.is_dir();
+    let is_empty = directory_is_effectively_empty(&root)?;
+    Ok(DataStoreInspection {
+        path: root.to_string_lossy().into_owned(),
+        exists: true,
+        has_database,
+        has_library,
+        is_empty,
+    })
+}
+
+fn directory_is_effectively_empty(path: &Path) -> Result<bool, String> {
+    if !path.exists() {
+        return Ok(true);
+    }
+    let entries =
+        fs::read_dir(path).map_err(|error| format!("ディレクトリを確認できません: {error}"))?;
+    for entry in entries.flatten() {
+        let Some(name) = entry.file_name().to_str().map(String::from) else {
+            return Ok(false);
+        };
+        // Caramel Board が自分で作るファイルや OS の隠しファイルは「実質空」扱いにする
+        if name == "settings.json"
+            || name == "caramel-board.sqlite"
+            || name == "caramel-board.sqlite-shm"
+            || name == "caramel-board.sqlite-wal"
+            || name == "caramel-board.sqlite-journal"
+            || name == "library"
+            || name == ".DS_Store"
+            || name.starts_with("._")
+        {
+            continue;
+        }
+        return Ok(false);
+    }
+    Ok(true)
+}
+
+#[tauri::command]
+fn apply_data_store(
+    app: AppHandle,
+    root_path: String,
+    state: State<'_, Mutex<ManagedSidecar>>,
+) -> Result<AppSettings, String> {
+    let mut settings = read_settings(&app)?;
+    {
+        let sidecar = state
+            .lock()
+            .map_err(|_| String::from("Caramel Board の状態を確認できません"))?;
+        if sidecar.child.is_some() {
+            return Err(String::from(
+                "データストアの設定は Caramel Board を停止してから実行してください。",
+            ));
+        }
+    }
+
+    let root = PathBuf::from(&root_path);
+    fs::create_dir_all(&root)
+        .map_err(|error| format!("データストアフォルダを作成できません: {error}"))?;
+
+    let new_db = root.join("caramel-board.sqlite");
+    let new_library = root.join("library");
+
+    let old_db = PathBuf::from(&settings.db_path);
+    let old_library = PathBuf::from(&settings.library_path);
+
+    // DB: 旧パスにファイルがあり、新パスが空ならコピー移動。新パスに既にあれば既存を採用。
+    if !is_same_path(&old_db, &new_db) && old_db.is_file() && !new_db.exists() {
+        move_file_path(&old_db, &new_db)?;
+    } else if !new_db.exists() {
+        ensure_parent(&new_db)?;
+    }
+
+    // Library: 同様に新パスが未存在 or 空のときだけ移動。
+    let new_library_ready = new_library.is_dir() && !directory_is_empty(&new_library)?;
+    if !is_same_path(&old_library, &new_library)
+        && old_library.is_dir()
+        && !new_library_ready
+    {
+        move_directory_path(&old_library, &new_library)?;
+    } else {
+        fs::create_dir_all(&new_library)
+            .map_err(|error| format!("ライブラリフォルダを作成できません: {error}"))?;
+    }
+
+    settings.db_path = new_db.to_string_lossy().into_owned();
+    settings.library_path = new_library.to_string_lossy().into_owned();
+    settings.setup_completed = true;
+    let normalized = normalize_settings_for_app(&app, settings)?;
+    write_settings(&app, &normalized)?;
+    Ok(normalized)
+}
+
+#[tauri::command]
+fn wait_server_ready(port: u16, timeout_ms: Option<u64>) -> bool {
+    let deadline = Instant::now() + Duration::from_millis(timeout_ms.unwrap_or(60_000));
+    loop {
+        if http_health_ok(port) {
+            return true;
+        }
+        if Instant::now() >= deadline {
+            return false;
+        }
+        thread::sleep(Duration::from_millis(300));
+    }
+}
+
+fn http_health_ok(port: u16) -> bool {
+    let addr = SocketAddr::from(([127, 0, 0, 1], port));
+    let Ok(mut stream) = TcpStream::connect_timeout(&addr, Duration::from_millis(1000)) else {
+        return false;
+    };
+    let _ = stream.set_read_timeout(Some(Duration::from_millis(2000)));
+    let _ = stream.set_write_timeout(Some(Duration::from_millis(1000)));
+    let request =
+        format!("GET /health HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n\r\n");
+    if stream.write_all(request.as_bytes()).is_err() {
+        return false;
+    }
+    let mut buf = [0u8; 64];
+    let Ok(read) = stream.read(&mut buf) else {
+        return false;
+    };
+    String::from_utf8_lossy(&buf[..read]).contains(" 200 ")
+}
+
+#[tauri::command]
+fn local_ip_address() -> String {
+    detect_local_ip().unwrap_or_else(|| String::from("127.0.0.1"))
+}
+
+fn detect_local_ip() -> Option<String> {
+    // 外向きパケットのルーティングを利用して、実際に通信に使われるインタフェースの IP を取得
+    let socket = UdpSocket::bind("0.0.0.0:0").ok()?;
+    socket.connect("8.8.8.8:80").ok()?;
+    let addr = socket.local_addr().ok()?;
+    let ip = addr.ip();
+    if ip.is_unspecified() || ip.is_loopback() {
+        None
+    } else {
+        Some(ip.to_string())
+    }
+}
+
+#[tauri::command]
+fn complete_setup(app: AppHandle) -> Result<AppSettings, String> {
+    let mut settings = read_settings(&app)?;
+    settings.setup_completed = true;
+    let normalized = normalize_settings_for_app(&app, settings)?;
+    write_settings(&app, &normalized)?;
+    Ok(normalized)
+}
+
+#[tauri::command]
+fn reset_setup(
+    app: AppHandle,
+    state: State<'_, Mutex<ManagedSidecar>>,
+) -> Result<AppSettings, String> {
+    {
+        let sidecar = state
+            .lock()
+            .map_err(|_| String::from("Caramel Board の状態を確認できません"))?;
+        if sidecar.child.is_some() {
+            return Err(String::from(
+                "セットアップのやり直しは Caramel Board を停止してから実行してください。",
+            ));
+        }
+    }
+    let mut settings = read_settings(&app)?;
+    settings.setup_completed = false;
+    let normalized = normalize_settings_for_app(&app, settings)?;
+    write_settings(&app, &normalized)?;
+    Ok(normalized)
+}
+
+#[tauri::command]
+fn resolve_docker_storage_root(path: String) -> Result<DockerStorageResolution, String> {
+    let root = PathBuf::from(&path);
+    if !root.exists() {
+        return Ok(DockerStorageResolution {
+            resolved: path,
+            adjusted: false,
+            matched: false,
+        });
+    }
+
+    let candidates = vec![
+        root.clone(),
+        root.join("assets"),
+        root.join("data").join("assets"),
+        root.join("data"),
+        root.join("files"),
+        root.join("library"),
+    ];
+
+    for candidate in candidates {
+        if !candidate.is_dir() {
+            continue;
+        }
+        if looks_like_docker_storage(&candidate) {
+            let adjusted = !is_same_path(&candidate, &root);
+            return Ok(DockerStorageResolution {
+                resolved: candidate.to_string_lossy().into_owned(),
+                adjusted,
+                matched: true,
+            });
+        }
+    }
+
+    Ok(DockerStorageResolution {
+        resolved: root.to_string_lossy().into_owned(),
+        adjusted: false,
+        matched: false,
+    })
+}
+
+fn looks_like_docker_storage(path: &Path) -> bool {
+    let Ok(entries) = fs::read_dir(path) else {
+        return false;
+    };
+    for entry in entries.flatten() {
+        let Ok(metadata) = entry.metadata() else {
+            continue;
+        };
+        if !metadata.is_dir() {
+            continue;
+        }
+        let name = entry.file_name();
+        let Some(name) = name.to_str() else {
+            continue;
+        };
+        if name.parse::<u32>().is_ok() && entry.path().join("files").is_dir() {
+            return true;
+        }
+    }
+    false
+}
+
+#[tauri::command]
 fn detect_docker_source(
     app: AppHandle,
     settings: AppSettings,
@@ -1815,7 +2103,14 @@ pub fn run() {
             prepare_autotag,
             start_autotag_install,
             detect_docker_source,
-            migrate_from_docker
+            migrate_from_docker,
+            apply_data_store,
+            inspect_data_store,
+            complete_setup,
+            reset_setup,
+            resolve_docker_storage_root,
+            local_ip_address,
+            wait_server_ready
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {

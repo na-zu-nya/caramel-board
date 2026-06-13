@@ -12,7 +12,6 @@ import {
   Folder,
   Github,
   Globe2,
-  KeyRound,
   Languages,
   Megaphone,
   Play,
@@ -33,10 +32,12 @@ import {
   useState,
 } from 'react';
 import { CaramelBoardLogo } from './CaramelBoardLogo';
+import { SetupWizard } from './SetupWizard';
 
 interface AppSettings {
   dbPath: string;
   libraryPath: string;
+  setupCompleted: boolean;
   language: AppLanguage;
   port: number;
   allowExternalNetwork: boolean;
@@ -123,7 +124,6 @@ interface FfmpegCandidate {
   details: string;
 }
 
-type SettingsSection = 'general' | 'media' | 'autotag' | 'migration';
 type AppLanguage = 'en' | 'ja';
 type AutoTagInstallStep = 'intro' | 'metadata' | 'confirm' | 'progress' | null;
 type TextSettingKey =
@@ -163,9 +163,6 @@ const choosePath = async (directory: boolean) => {
   const selected = await open({ directory, multiple: false });
   return typeof selected === 'string' ? selected : null;
 };
-
-const isSettingsSection = (value: string | undefined): value is SettingsSection =>
-  value === 'general' || value === 'media' || value === 'autotag' || value === 'migration';
 
 const isAppLanguage = (value: string | undefined): value is AppLanguage =>
   value === 'en' || value === 'ja';
@@ -236,7 +233,8 @@ const translations = {
     ffmpegNoCandidates: 'No FFmpeg executable was found on PATH.',
     ffmpegSelected: 'FFmpeg path selected.',
     ffmpegChecked: 'FFmpeg detection completed.',
-    autotagDescription: 'Prepare and run local AI tagging for images.',
+    autotagDescription:
+      'Tag images locally with the open-source JoyTag model. Everything runs on this computer — your images are never sent anywhere, and they are never used to train AI.',
     autoTagEnable: 'Use AutoTag',
     autoTagReadyTitle: 'AutoTag is ready',
     autoTagRunningTitle: 'AutoTag is running',
@@ -272,7 +270,9 @@ const translations = {
     chooseAutoTagCodeFolder: 'Choose AutoTag code folder',
     chooseAutoTagModelFolder: 'Choose AutoTag model folder',
     autoTagPort: 'AutoTag port',
-    autoTagThreshold: 'Threshold',
+    autoTagThreshold: 'How easily tags appear',
+    autoTagThresholdLess: 'Stricter',
+    autoTagThresholdMore: 'Looser',
     autoTagAdvancedDescription:
       'Usually not needed. Change this only when using a custom JoyTag location or port.',
     autoTagCodeFolderSelected: 'AutoTag code folder selected.',
@@ -287,17 +287,36 @@ const translations = {
     moveDatabase: 'Move database',
     import: 'Import',
     export: 'Export',
-    openMigrationSettings: 'Open Docker migration settings',
     files: 'Files',
     libraryPath: 'Library path',
     chooseLibraryFolder: 'Choose library folder',
     moveLibrary: 'Move library',
-    network: 'Network',
-    allowExternalNetwork: 'Allow access from other devices on the network',
+    dataStore: 'Data store',
+    dataStoreLocation: 'Data store location',
+    moveDataStore: 'Move data store',
+    dataStoreMoved: 'Data store moved.',
+    dataStoreHint:
+      'The database and your library are kept together in one folder. Moving the data store moves both.',
+    advancedDataStore: 'Advanced (individual paths)',
+    advancedDataStoreDescription:
+      'Change the database file or library folder path individually. Only needed if you want to split storage across drives.',
+    resetSetup: 'Run setup again',
+    resetSetupConfirmTitle: 'Run setup again?',
+    resetSetupConfirmBody:
+      'The setup wizard will open the next time you start. Your data stays where it is.',
+    resetSetupDone: 'Setup has been reset.',
+    network: 'Sharing',
+    networkDescription:
+      'Open Caramel Board from other devices on the same network (phone, tablet, another PC). In typical home networks only devices on your local network can reach it, but depending on your router or environment it may also become reachable from the Internet. Exposing Caramel Board directly to the Internet is strongly discouraged — for remote access, use a VPN like Tailscale. When sharing, we recommend enabling the name and password protection.',
+    allowExternalNetwork: 'Allow access from other devices on this network',
     port: 'Port',
-    basicAuth: 'Basic Auth',
-    requireBasicAuth: 'Require Basic authentication',
-    user: 'User',
+    advancedSharing: 'Advanced (port)',
+    advancedSharingDescription: 'The port other devices connect on. Usually no need to change.',
+    basicAuth: 'Login',
+    requireBasicAuth: 'Protect the page with a password',
+    requireBasicAuthHint:
+      'Visitors will need a name and password to open the page. Recommended when other people share the network.',
+    user: 'Name',
     password: 'Password',
     dockerMigration: 'Docker Migration',
     dockerMigrationDescription:
@@ -375,7 +394,8 @@ const translations = {
     ffmpegNoCandidates: 'PATH 上に FFmpeg は見つかりませんでした。',
     ffmpegSelected: 'FFmpeg のパスを選択しました。',
     ffmpegChecked: 'FFmpeg の検出が完了しました。',
-    autotagDescription: '画像にAIタグを付けるための準備と起動設定です。',
+    autotagDescription:
+      'オープンソースの JoyTag モデルを使って、画像にローカルで AI タグを付けられます。処理はこのコンピュータ内で完結し、画像が外部に送信されたり、AI の学習に使われたりすることはありません。',
     autoTagEnable: '自動タグを使う',
     autoTagReadyTitle: '自動タグを利用できます',
     autoTagRunningTitle: '自動タグが起動しています',
@@ -411,7 +431,9 @@ const translations = {
     chooseAutoTagCodeFolder: '自動タグのコード保存先を選択',
     chooseAutoTagModelFolder: '自動タグのモデル保存先を選択',
     autoTagPort: '自動タグポート',
-    autoTagThreshold: 'しきい値',
+    autoTagThreshold: 'タグの出やすさ',
+    autoTagThresholdLess: '厳選',
+    autoTagThresholdMore: '多め',
     autoTagAdvancedDescription:
       '通常は変更不要です。JoyTagの保存先やポートを変える場合だけ使います。',
     autoTagCodeFolderSelected: '自動タグのコード保存先を選択しました。',
@@ -426,17 +448,36 @@ const translations = {
     moveDatabase: 'DBを移動',
     import: 'インポート',
     export: 'エクスポート',
-    openMigrationSettings: 'Docker版からの移行設定を開く',
     files: 'ファイル',
     libraryPath: 'ライブラリパス',
     chooseLibraryFolder: 'ライブラリフォルダを選択',
     moveLibrary: 'ライブラリを移動',
-    network: 'ネットワーク',
-    allowExternalNetwork: '同一ネットワーク上の他デバイスからのアクセスを許可',
+    dataStore: 'データストア',
+    dataStoreLocation: 'データストアの場所',
+    moveDataStore: 'データストアを移動',
+    dataStoreMoved: 'データストアを移動しました。',
+    dataStoreHint:
+      'データベースとライブラリは 1 つのフォルダにまとめて保存されます。データストアを移動すると両方が一緒に移動します。',
+    advancedDataStore: '詳細(個別パス指定)',
+    advancedDataStoreDescription:
+      'データベースファイルとライブラリフォルダの場所を別々に指定できます。保存先を別ドライブに分けたい場合のみ使用します。',
+    resetSetup: 'セットアップをやり直す',
+    resetSetupConfirmTitle: 'セットアップをやり直しますか?',
+    resetSetupConfirmBody:
+      '次回起動時にセットアップウィザードが表示されます。データはそのまま残ります。',
+    resetSetupDone: 'セットアップ情報をリセットしました。',
+    network: '共有',
+    networkDescription:
+      '同じネットワーク上の機器(スマートフォン・タブレット・別の PC)から Caramel Board を開けるようになります。通常はローカルネットワーク内からのみアクセスできますが、ルーターや環境によってはインターネットからアクセスできる場合があります。インターネットへの直接公開は強く非推奨です。外出先からアクセスしたい場合は Tailscale などの VPN 経由を推奨します。共有を有効にする場合は名前とパスワードによる保護もおすすめします。',
+    allowExternalNetwork: '他の機器からのアクセスを許可する',
     port: 'ポート',
-    basicAuth: 'Basic認証',
-    requireBasicAuth: 'Basic認証を要求する',
-    user: 'ユーザー',
+    advancedSharing: '詳細(ポート)',
+    advancedSharingDescription: '他の機器が接続するときに使うポート番号です。通常は変更不要です。',
+    basicAuth: 'ログイン',
+    requireBasicAuth: 'ページをパスワードで保護する',
+    requireBasicAuthHint:
+      'ページにアクセスするために、名前とパスワードが必要になります。他の人が参加しているネットワークの場合、設定を推奨します。',
+    user: '名前',
     password: 'パスワード',
     dockerMigration: 'Docker版からの移行',
     dockerMigrationDescription:
@@ -485,7 +526,6 @@ const translations = {
 export default function App() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [status, setStatus] = useState<SidecarStatus>(defaultStatus);
-  const [activeSection, setActiveSection] = useState<SettingsSection>('general');
   const [autoTagStatus, setAutoTagStatus] = useState<AutoTagStatus | null>(null);
   const [autoTagInstallStep, setAutoTagInstallStep] = useState<AutoTagInstallStep>(null);
   const [autoTagInstallMetadata, setAutoTagInstallMetadata] =
@@ -497,13 +537,20 @@ export default function App() {
   const [ffmpegCandidates, setFfmpegCandidates] = useState<FfmpegCandidate[]>([]);
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
+  const [localIp, setLocalIp] = useState<string>('');
   const settingsRef = useRef<AppSettings | null>(null);
   const autoSaveTimerRef = useRef<number | null>(null);
 
   const language = settings?.language ?? getInitialLanguage();
   const t = translations[language];
   const settingsDisabled = busy || status.running;
-  const statusLabel = status.running ? t.runningOn(status.url) : t.stopped;
+  const displayUrl = useMemo(() => {
+    if (status.running && settings?.allowExternalNetwork && localIp && localIp !== '127.0.0.1') {
+      return `http://${localIp}:${settings.port}`;
+    }
+    return status.url;
+  }, [status.running, status.url, settings?.allowExternalNetwork, settings?.port, localIp]);
+  const statusLabel = status.running ? t.runningOn(displayUrl) : t.stopped;
   const headerActionLabel = status.running ? t.stop : t.start;
   const HeaderActionIcon = status.running ? Square : Play;
 
@@ -569,6 +616,12 @@ export default function App() {
       await refreshAutoTagStatus();
       const installProgress = await invoke<AutoTagInstallProgress>('autotag_install_progress');
       setAutoTagInstallProgress(installProgress);
+      try {
+        const ip = await invoke<string>('local_ip_address');
+        setLocalIp(ip);
+      } catch {
+        // LAN IP の検出に失敗しても致命的ではない
+      }
     } catch (error) {
       setMessage(getErrorMessage(error));
     } finally {
@@ -592,17 +645,6 @@ export default function App() {
     },
     [scheduleSettingsSave]
   );
-
-  const handleSelectSection = useCallback((event: MouseEvent<HTMLButtonElement>) => {
-    const section = event.currentTarget.dataset.section;
-    if (isSettingsSection(section)) {
-      setActiveSection(section);
-    }
-  }, []);
-
-  const handleOpenMigrationSettings = useCallback(() => {
-    setActiveSection('migration');
-  }, []);
 
   const handleTextSettingChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
@@ -671,6 +713,7 @@ export default function App() {
       if (!saved) return;
       const next = await invoke<SidecarStatus>('start_sidecar', { settings: saved });
       setStatus(next);
+      await invoke<boolean>('wait_server_ready', { port: saved.port, timeoutMs: 60000 });
       await refreshAutoTagStatus();
     }, t.appStarted);
   }, [refreshAutoTagStatus, runAction, saveSettings, t]);
@@ -703,17 +746,17 @@ export default function App() {
       if (!status.running) {
         throw new Error(t.appNotRunning);
       }
-      await openUrl(status.url);
+      await openUrl(displayUrl);
     }, t.openedInBrowser);
-  }, [runAction, status.running, status.url, t]);
+  }, [runAction, status.running, displayUrl, t]);
 
   const handleOpenBrandLink = useCallback(
     (event: MouseEvent<HTMLAnchorElement>) => {
       event.preventDefault();
       if (!status.running || busy) return;
-      void openUrl(status.url);
+      void openUrl(displayUrl);
     },
-    [busy, status.running, status.url]
+    [busy, status.running, displayUrl]
   );
 
   const handleOpenExternalLink = useCallback((event: MouseEvent<HTMLAnchorElement>) => {
@@ -763,7 +806,16 @@ export default function App() {
   const handleChooseDockerStorage = useCallback(() => {
     void runAction(async () => {
       const path = await choosePath(true);
-      if (path) patchSettings({ dockerStorageRoot: path });
+      if (!path) return;
+      try {
+        const resolved = await invoke<{ resolved: string; adjusted: boolean; matched: boolean }>(
+          'resolve_docker_storage_root',
+          { path }
+        );
+        patchSettings({ dockerStorageRoot: resolved.resolved });
+      } catch {
+        patchSettings({ dockerStorageRoot: path });
+      }
     }, t.dockerStorageRootSelected);
   }, [patchSettings, runAction, t]);
 
@@ -784,13 +836,6 @@ export default function App() {
   const handleAutoTagPortChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
       patchSettings({ autoTagPort: Number(event.currentTarget.value) });
-    },
-    [patchSettings]
-  );
-
-  const handleAutoTagThresholdChange = useCallback(
-    (event: ChangeEvent<HTMLInputElement>) => {
-      patchSettings({ autoTagThreshold: Number(event.currentTarget.value) });
     },
     [patchSettings]
   );
@@ -843,6 +888,38 @@ export default function App() {
       setSettings(next);
     }, t.libraryMoved);
   }, [runAction, saveSettings, t]);
+
+  const handleMoveDataStore = useCallback(() => {
+    void runAction(async () => {
+      await saveSettings();
+      const targetPath = await choosePath(true);
+      if (!targetPath) return;
+      const next = await invoke<AppSettings>('apply_data_store', { rootPath: targetPath });
+      settingsRef.current = next;
+      setSettings(next);
+    }, t.dataStoreMoved);
+  }, [runAction, saveSettings, t]);
+
+  const [resetSetupOpen, setResetSetupOpen] = useState(false);
+
+  const handleOpenResetSetup = useCallback(() => {
+    setMessage('');
+    setResetSetupOpen(true);
+  }, []);
+
+  const handleCancelResetSetup = useCallback(() => {
+    setResetSetupOpen(false);
+  }, []);
+
+  const handleConfirmResetSetup = useCallback(() => {
+    void runAction(async () => {
+      const next = await invoke<AppSettings>('reset_setup');
+      settingsRef.current = next;
+      setSettings(next);
+      setResetSetupOpen(false);
+      return t.resetSetupDone;
+    }, t.resetSetupDone);
+  }, [runAction, t]);
 
   const handleRefreshAutoTagStatus = useCallback(() => {
     void runAction(async () => {
@@ -936,20 +1013,29 @@ export default function App() {
     }, t.dockerMigrationCompletedSummary);
   }, [runAction, saveSettings, t]);
 
-  const navItems = useMemo(
+  const navJumpItems = useMemo(
     () => [
-      { id: 'general' as const, label: t.general, icon: SlidersHorizontal },
-      { id: 'media' as const, label: t.media, icon: Film },
-      { id: 'autotag' as const, label: t.autotag, icon: Sparkles },
-      { id: 'migration' as const, label: t.migration, icon: Database },
+      { id: 'section-data-store', label: t.general, icon: SlidersHorizontal },
+      { id: 'section-media', label: t.media, icon: Film },
+      { id: 'section-autotag', label: t.autotag, icon: Sparkles },
+      { id: 'section-migration', label: t.migration, icon: Database },
     ],
     [t]
   );
 
-  const serviceMeta = useMemo(() => {
-    if (!status.running) return t.appNotRunning;
-    return t.appActive;
-  }, [status, t]);
+  const scrollToSection = useCallback((id: string) => {
+    const target = document.getElementById(id);
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, []);
+
+  const dataStoreRoot = useMemo(() => {
+    const dbPath = settings?.dbPath ?? '';
+    if (!dbPath) return '';
+    const sepIndex = Math.max(dbPath.lastIndexOf('/'), dbPath.lastIndexOf('\\'));
+    return sepIndex > 0 ? dbPath.slice(0, sepIndex) : dbPath;
+  }, [settings?.dbPath]);
 
   const autoTagTitle = useMemo(() => {
     if (autoTagStatus?.running) return t.autoTagRunningTitle;
@@ -990,27 +1076,6 @@ export default function App() {
   );
 
   useEffect(() => {
-    if (
-      activeSection !== 'migration' ||
-      !settings ||
-      status.running ||
-      busy ||
-      dockerDetectionAttempted
-    ) {
-      return;
-    }
-
-    setDockerDetectionAttempted(true);
-    void invoke<DockerSourceDetection>('detect_docker_source', { settings })
-      .then((result) => {
-        setDockerDetection(result);
-      })
-      .catch((error: unknown) => {
-        setMessage(getErrorMessage(error));
-      });
-  }, [activeSection, busy, dockerDetectionAttempted, settings, status.running]);
-
-  useEffect(() => {
     if (!autoTagInstallProgress?.running) return;
 
     const timer = window.setInterval(() => {
@@ -1030,13 +1095,39 @@ export default function App() {
     );
   }
 
+  if (!settings.setupCompleted) {
+    const sepIndex = Math.max(settings.dbPath.lastIndexOf('/'), settings.dbPath.lastIndexOf('\\'));
+    const defaultRoot =
+      sepIndex > 0 ? settings.dbPath.slice(0, sepIndex) : settings.libraryPath || settings.dbPath;
+    return (
+      <SetupWizard
+        language={language}
+        initialSettings={settings}
+        defaultDataStoreRoot={defaultRoot}
+        onLanguageChange={(next) => {
+          patchSettings({ language: next });
+          // ウィザード内の後続ステップがディスクの設定を読むため、デバウンスを待たず即時保存する
+          void saveSettings().catch((error: unknown) => {
+            setMessage(getErrorMessage(error));
+          });
+        }}
+        onComplete={(applied) => {
+          settingsRef.current = applied as AppSettings;
+          setSettings(applied as AppSettings);
+          void refreshStatus();
+          void refreshAutoTagStatus();
+        }}
+      />
+    );
+  }
+
   return (
     <main className="settings-shell">
       <header className="top-bar">
         <div className="brand-block">
           <a
             className={status.running ? 'brand-link' : 'brand-link disabled'}
-            href={status.running ? status.url : '#'}
+            href={status.running ? displayUrl : '#'}
             aria-label="Caramel Board"
             onClick={handleOpenBrandLink}
           >
@@ -1102,31 +1193,15 @@ export default function App() {
       </header>
 
       <aside className="settings-sidebar">
-        <div className="status-card">
-          <span className={status.running ? 'status-pill running' : 'status-pill'}>
-            <Circle size={10} fill="currentColor" />
-            {statusLabel}
-          </span>
-          <span className="muted">{serviceMeta}</span>
-          {autoTagStatus?.enabled || autoTagStatus?.running ? (
-            <span className={autoTagStatus.running ? 'status-pill running' : 'status-pill'}>
-              <Sparkles size={10} fill="currentColor" />
-              {autoTagStatus.running ? t.autoTagRunningTitle : t.autotag}
-            </span>
-          ) : null}
-          {status.running ? <span className="locked-note">{t.lockedWhileRunning}</span> : null}
-        </div>
-
         <nav className="settings-nav" aria-label={t.settingsNavigation}>
-          {navItems.map((item) => {
+          {navJumpItems.map((item) => {
             const Icon = item.icon;
             return (
               <button
                 key={item.id}
                 type="button"
-                data-section={item.id}
-                className={activeSection === item.id ? 'nav-item active' : 'nav-item'}
-                onClick={handleSelectSection}
+                className="nav-item"
+                onClick={() => scrollToSection(item.id)}
               >
                 <Icon size={16} />
                 {item.label}
@@ -1137,39 +1212,76 @@ export default function App() {
       </aside>
 
       <section className="settings-content" aria-disabled={settingsDisabled}>
-        {activeSection === 'general' ? (
-          <div className="section-panel general-panel">
-            <div className="section-heading">
-              <SlidersHorizontal size={18} />
-              <div>
-                <h2>{t.general}</h2>
-                <p>{t.generalDescription}</p>
-              </div>
-            </div>
+        <div className={status.running ? 'status-banner running' : 'status-banner'}>
+          <span className={status.running ? 'status-pill running' : 'status-pill'}>
+            <Circle size={10} fill="currentColor" />
+            {statusLabel}
+          </span>
+          {status.running ? (
+            <span className="status-banner-message">{t.lockedWhileRunning}</span>
+          ) : null}
+          {autoTagStatus?.enabled || autoTagStatus?.running ? (
+            <span className={autoTagStatus.running ? 'status-pill running' : 'status-pill'}>
+              <Sparkles size={10} fill="currentColor" />
+              {autoTagStatus.running ? t.autoTagRunningTitle : t.autotag}
+            </span>
+          ) : null}
+        </div>
 
-            <div className="settings-group">
-              <div className="group-heading">
-                <Languages size={16} />
-                <h3>{t.language}</h3>
-              </div>
-              <label className="field compact">
-                <span>{t.displayLanguage}</span>
-                <select
-                  value={settings.language}
-                  disabled={settingsDisabled}
-                  onChange={handleLanguageChange}
-                >
-                  <option value="en">{t.english}</option>
-                  <option value="ja">{t.japanese}</option>
-                </select>
-              </label>
+        <div id="section-data-store" className="section-panel general-panel">
+          <div className="section-heading">
+            <SlidersHorizontal size={18} />
+            <div>
+              <h2>{t.general}</h2>
+              <p>{t.generalDescription}</p>
             </div>
+          </div>
 
-            <div className="settings-group">
-              <div className="group-heading">
-                <Database size={16} />
-                <h3>{t.database}</h3>
-              </div>
+          <div className="settings-group">
+            <div className="group-heading">
+              <Languages size={16} />
+              <h3>{t.language}</h3>
+            </div>
+            <label className="field compact">
+              <span>{t.displayLanguage}</span>
+              <select
+                value={settings.language}
+                disabled={settingsDisabled}
+                onChange={handleLanguageChange}
+              >
+                <option value="en">{t.english}</option>
+                <option value="ja">{t.japanese}</option>
+              </select>
+            </label>
+          </div>
+
+          <div className="settings-group">
+            <div className="group-heading">
+              <Database size={16} />
+              <h3>{t.dataStore}</h3>
+            </div>
+            <p className="muted">{t.dataStoreHint}</p>
+            <label className="field">
+              <span>{t.dataStoreLocation}</span>
+              <input value={dataStoreRoot} disabled readOnly />
+            </label>
+            <div className="button-row">
+              <button type="button" onClick={handleMoveDataStore} disabled={settingsDisabled}>
+                <Folder size={15} />
+                {t.moveDataStore}
+              </button>
+              <button type="button" onClick={handleImportDb} disabled={settingsDisabled}>
+                <Upload size={15} />
+                {t.import}
+              </button>
+              <button type="button" onClick={handleExportDb} disabled={settingsDisabled}>
+                <Download size={15} />
+                {t.export}
+              </button>
+            </div>
+            <details className="advanced-settings">
+              <summary>{t.advancedDataStore}</summary>
+              <p>{t.advancedDataStoreDescription}</p>
               <label className="field">
                 <span>{t.sqliteDb}</span>
                 <div className="path-row">
@@ -1190,35 +1302,11 @@ export default function App() {
                   </button>
                 </div>
               </label>
-              <div className="button-row">
+              <div className="button-row single">
                 <button type="button" onClick={handleMoveDb} disabled={settingsDisabled}>
                   <Folder size={15} />
                   {t.moveDatabase}
                 </button>
-                <button type="button" onClick={handleImportDb} disabled={settingsDisabled}>
-                  <Upload size={15} />
-                  {t.import}
-                </button>
-                <button type="button" onClick={handleExportDb} disabled={settingsDisabled}>
-                  <Download size={15} />
-                  {t.export}
-                </button>
-              </div>
-              <button
-                type="button"
-                className="link-button"
-                onClick={handleOpenMigrationSettings}
-                disabled={busy}
-              >
-                <Database size={15} />
-                {t.openMigrationSettings}
-              </button>
-            </div>
-
-            <div className="settings-group">
-              <div className="group-heading">
-                <Folder size={16} />
-                <h3>{t.files}</h3>
               </div>
               <label className="field">
                 <span>{t.libraryPath}</span>
@@ -1246,475 +1334,512 @@ export default function App() {
                   {t.moveLibrary}
                 </button>
               </div>
-            </div>
-
-            <div className="settings-group">
-              <div className="group-heading">
-                <Globe2 size={16} />
-                <h3>{t.network}</h3>
-              </div>
-              <div className="inline-grid">
-                <label className="toggle-row">
-                  <input
-                    type="checkbox"
-                    checked={settings.allowExternalNetwork}
-                    disabled={settingsDisabled}
-                    data-setting="allowExternalNetwork"
-                    onChange={handleBooleanSettingChange}
-                  />
-                  <span>{t.allowExternalNetwork}</span>
-                </label>
-                <label className="field compact">
-                  <span>{t.port}</span>
-                  <input
-                    type="number"
-                    min={1024}
-                    max={65535}
-                    value={settings.port}
-                    disabled={settingsDisabled}
-                    onChange={handlePortChange}
-                  />
-                </label>
-              </div>
-            </div>
-
-            <div className="settings-group">
-              <div className="group-heading">
-                <KeyRound size={16} />
-                <h3>{t.basicAuth}</h3>
-              </div>
-              <label className="toggle-row">
-                <input
-                  type="checkbox"
-                  checked={settings.basicAuthEnabled}
-                  disabled={settingsDisabled}
-                  data-setting="basicAuthEnabled"
-                  onChange={handleBooleanSettingChange}
-                />
-                <span>{t.requireBasicAuth}</span>
-              </label>
-              <div className="auth-grid">
-                <label className="field compact">
-                  <span>{t.user}</span>
-                  <input
-                    value={settings.basicAuthUsername}
-                    disabled={settingsDisabled}
-                    data-setting="basicAuthUsername"
-                    onChange={handleTextSettingChange}
-                  />
-                </label>
-                <label className="field compact">
-                  <span>{t.password}</span>
-                  <input
-                    type="password"
-                    value={settings.basicAuthPassword}
-                    disabled={settingsDisabled}
-                    data-setting="basicAuthPassword"
-                    onChange={handleTextSettingChange}
-                  />
-                </label>
-              </div>
-            </div>
+            </details>
+            <button
+              type="button"
+              className="link-button"
+              onClick={handleOpenResetSetup}
+              disabled={settingsDisabled}
+            >
+              <RefreshCcw size={15} />
+              {t.resetSetup}
+            </button>
           </div>
-        ) : null}
 
-        {activeSection === 'media' ? (
-          <div className="section-panel">
-            <div className="section-heading">
-              <Film size={18} />
-              <div>
-                <h2>{t.media}</h2>
-                <p>{t.mediaDescription}</p>
-              </div>
+          <div className="settings-group">
+            <div className="group-heading">
+              <Globe2 size={16} />
+              <h3>{t.network}</h3>
             </div>
-
-            <div className={ffmpegStatusClass}>
-              <div className="migration-status-icon">
-                {selectedFfmpegCandidate?.valid ? (
-                  <CheckCircle2 size={20} />
-                ) : (
-                  <AlertCircle size={20} />
-                )}
-              </div>
-              <div className="migration-status-body">
-                <h3>
-                  {selectedFfmpegCandidate?.valid ? t.ffmpegReadyTitle : t.ffmpegMissingTitle}
-                </h3>
-                <p>
-                  {selectedFfmpegCandidate?.valid
-                    ? t.ffmpegReadyDescription
-                    : t.ffmpegMissingDescription}
-                </p>
-                {selectedFfmpegCandidate?.path ? (
-                  <span className="migration-storage">{selectedFfmpegCandidate.path}</span>
-                ) : null}
-              </div>
-            </div>
-
-            <div className="settings-group">
-              <div className="group-heading">
-                <Film size={16} />
-                <h3>{t.ffmpeg}</h3>
-              </div>
-              <label className="field">
-                <span>{t.ffmpegPath}</span>
-                <div className="select-action-row">
-                  <select
-                    value={settings.ffmpegPath}
-                    disabled={settingsDisabled}
-                    onChange={handleFfmpegSelectChange}
-                  >
-                    <option value="">{t.ffmpegAutoDetect}</option>
-                    {ffmpegCandidates.map((candidate) => (
-                      <option key={candidate.path} value={candidate.path}>
-                        {candidate.valid ? candidate.label : `${candidate.label} - invalid`}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    className="icon-button"
-                    onClick={handleRefreshFfmpeg}
-                    disabled={settingsDisabled}
-                    title={t.refreshFfmpeg}
-                  >
-                    <RefreshCcw size={15} />
-                  </button>
-                  <button
-                    type="button"
-                    className="icon-button"
-                    onClick={handleChooseFfmpeg}
-                    disabled={settingsDisabled}
-                    title={t.chooseFfmpeg}
-                  >
-                    <Folder size={15} />
-                  </button>
-                </div>
-              </label>
-
-              <div className="candidate-list" aria-label={t.ffmpegCandidates}>
-                <div className="candidate-list-heading">{t.ffmpegCandidates}</div>
-                {ffmpegCandidates.length === 0 ? (
-                  <span className="muted">{t.ffmpegNoCandidates}</span>
-                ) : (
-                  ffmpegCandidates.map((candidate) => (
-                    <div
-                      key={candidate.path}
-                      className={
-                        candidate.path === selectedFfmpegCandidate?.path
-                          ? 'candidate-item active'
-                          : 'candidate-item'
-                      }
-                    >
-                      <span
-                        className={
-                          candidate.valid ? 'candidate-state ready' : 'candidate-state missing'
-                        }
-                      >
-                        {candidate.valid ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
-                      </span>
-                      <div className="candidate-body">
-                        <strong>{candidate.path}</strong>
-                        <span>{candidate.version || candidate.details}</span>
-                        {candidate.version ? <span>{candidate.details}</span> : null}
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          </div>
-        ) : null}
-
-        {activeSection === 'autotag' ? (
-          <div className="section-panel">
-            <div className="section-heading">
-              <Sparkles size={18} />
-              <div>
-                <h2>{t.autotag}</h2>
-                <p>{t.autotagDescription}</p>
-              </div>
-            </div>
-
+            <p className="muted">{t.networkDescription}</p>
             <label className="toggle-row">
               <input
                 type="checkbox"
-                checked={settings.autoTagEnabled}
-                disabled={settingsDisabled || !autoTagStatus?.ready}
-                data-setting="autoTagEnabled"
+                checked={settings.allowExternalNetwork}
+                disabled={settingsDisabled}
+                data-setting="allowExternalNetwork"
                 onChange={handleBooleanSettingChange}
               />
-              <span>{t.autoTagEnable}</span>
+              <span>{t.allowExternalNetwork}</span>
             </label>
 
-            <div className={autoTagStatusClass}>
-              <div className="migration-status-icon">
-                {autoTagStatus?.ready || autoTagStatus?.running ? (
-                  <CheckCircle2 size={20} />
-                ) : (
-                  <AlertCircle size={20} />
-                )}
-              </div>
-              <div className="migration-status-body">
-                <h3>{autoTagTitle}</h3>
-                <p>{autoTagDescription}</p>
-                {autoTagStatus?.url ? (
-                  <span className="migration-storage">{autoTagStatus.url}</span>
-                ) : null}
-              </div>
-            </div>
-
-            {autoTagInstallProgress?.running || autoTagInstallProgress?.completed ? (
-              <div
-                className={
-                  autoTagInstallProgress.error
-                    ? 'install-progress-card error'
-                    : autoTagInstallProgress.completed
-                      ? 'install-progress-card complete'
-                      : 'install-progress-card'
-                }
-              >
-                <div className="install-progress-heading">
-                  <Sparkles size={16} />
-                  <strong>
-                    {autoTagInstallProgress.completed
-                      ? t.autoTagInstallCompleted
-                      : t.autoTagInstallInProgress}
-                  </strong>
-                </div>
-                <p>{autoTagInstallProgress.message}</p>
-                <div className="progress-track">
-                  <div
-                    className="progress-fill"
-                    style={{ width: `${Math.round(autoTagInstallProgress.percent)}%` }}
+            {settings.allowExternalNetwork ? (
+              <>
+                <label className="toggle-row">
+                  <input
+                    type="checkbox"
+                    checked={settings.basicAuthEnabled}
+                    disabled={settingsDisabled}
+                    data-setting="basicAuthEnabled"
+                    onChange={handleBooleanSettingChange}
                   />
-                </div>
-                <span className="muted">{Math.round(autoTagInstallProgress.percent)}%</span>
-              </div>
+                  <span>{t.requireBasicAuth}</span>
+                </label>
+                <p className="muted">{t.requireBasicAuthHint}</p>
+                {settings.basicAuthEnabled ? (
+                  <div className="auth-grid">
+                    <label className="field compact">
+                      <span>{t.user}</span>
+                      <input
+                        value={settings.basicAuthUsername}
+                        disabled={settingsDisabled}
+                        data-setting="basicAuthUsername"
+                        onChange={handleTextSettingChange}
+                      />
+                    </label>
+                    <label className="field compact">
+                      <span>{t.password}</span>
+                      <input
+                        type="password"
+                        value={settings.basicAuthPassword}
+                        disabled={settingsDisabled}
+                        data-setting="basicAuthPassword"
+                        onChange={handleTextSettingChange}
+                      />
+                    </label>
+                  </div>
+                ) : null}
+              </>
             ) : null}
 
-            <div className="button-row migration-actions">
-              <button type="button" onClick={handleRefreshAutoTagStatus} disabled={busy}>
-                <RefreshCcw size={15} />
-                {t.autoTagCheck}
-              </button>
-              <button
-                type="button"
-                className="primary-button"
-                onClick={handleOpenAutoTagInstallDialog}
-                disabled={
-                  settingsDisabled || autoTagInstallProgress?.running || autoTagStatus?.ready
-                }
-              >
-                <Download size={15} />
-                {t.autoTagPrepare}
-              </button>
-            </div>
-
             <details className="advanced-settings">
-              <summary>{t.advancedSettings}</summary>
-              <p>{t.autoTagAdvancedDescription}</p>
-              <label className="field">
-                <span>{t.autoTagCodeFolder}</span>
-                <div className="path-row">
-                  <input
-                    value={settings.autoTagRepoDir}
-                    disabled={settingsDisabled}
-                    data-setting="autoTagRepoDir"
-                    onChange={handleTextSettingChange}
-                  />
-                  <button
-                    type="button"
-                    className="icon-button"
-                    onClick={handleChooseAutoTagCode}
-                    disabled={settingsDisabled}
-                    title={t.chooseAutoTagCodeFolder}
-                  >
-                    <Folder size={15} />
-                  </button>
-                </div>
+              <summary>{t.advancedSharing}</summary>
+              <p>{t.advancedSharingDescription}</p>
+              <label className="field compact">
+                <span>{t.port}</span>
+                <input
+                  type="number"
+                  min={1024}
+                  max={65535}
+                  value={settings.port}
+                  disabled={settingsDisabled}
+                  onChange={handlePortChange}
+                />
               </label>
-              <label className="field">
-                <span>{t.autoTagModelFolder}</span>
-                <div className="path-row">
-                  <input
-                    value={settings.autoTagModelDir}
-                    disabled={settingsDisabled}
-                    data-setting="autoTagModelDir"
-                    onChange={handleTextSettingChange}
-                  />
-                  <button
-                    type="button"
-                    className="icon-button"
-                    onClick={handleChooseAutoTagModel}
-                    disabled={settingsDisabled}
-                    title={t.chooseAutoTagModelFolder}
-                  >
-                    <Folder size={15} />
-                  </button>
-                </div>
-              </label>
-              <div className="auth-grid">
-                <label className="field compact">
-                  <span>{t.autoTagPort}</span>
-                  <input
-                    type="number"
-                    min={1024}
-                    max={65535}
-                    value={settings.autoTagPort}
-                    disabled={settingsDisabled}
-                    onChange={handleAutoTagPortChange}
-                  />
-                </label>
-                <label className="field compact">
-                  <span>{t.autoTagThreshold}</span>
-                  <input
-                    type="number"
-                    min={0.1}
-                    max={1}
-                    step={0.05}
-                    value={settings.autoTagThreshold}
-                    disabled={settingsDisabled}
-                    onChange={handleAutoTagThresholdChange}
-                  />
-                </label>
-              </div>
             </details>
           </div>
-        ) : null}
+        </div>
 
-        {activeSection === 'migration' ? (
-          <div className="section-panel">
-            <div className="section-heading">
-              <Database size={18} />
-              <div>
-                <h2>{t.dockerMigration}</h2>
-                <p>{t.dockerMigrationDescription}</p>
-              </div>
+        <div id="section-media" className="section-panel">
+          <div className="section-heading">
+            <Film size={18} />
+            <div>
+              <h2>{t.media}</h2>
+              <p>{t.mediaDescription}</p>
             </div>
+          </div>
 
+          <div className={ffmpegStatusClass}>
+            <div className="migration-status-icon">
+              {selectedFfmpegCandidate?.valid ? (
+                <CheckCircle2 size={20} />
+              ) : (
+                <AlertCircle size={20} />
+              )}
+            </div>
+            <div className="migration-status-body">
+              <h3>{selectedFfmpegCandidate?.valid ? t.ffmpegReadyTitle : t.ffmpegMissingTitle}</h3>
+              <p>
+                {selectedFfmpegCandidate?.valid
+                  ? t.ffmpegReadyDescription
+                  : t.ffmpegMissingDescription}
+              </p>
+              {selectedFfmpegCandidate?.path ? (
+                <span className="migration-storage">{selectedFfmpegCandidate.path}</span>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="settings-group">
+            <div className="group-heading">
+              <Film size={16} />
+              <h3>{t.ffmpeg}</h3>
+            </div>
+            <label className="field">
+              <span>{t.ffmpegPath}</span>
+              <div className="select-action-row">
+                <select
+                  value={settings.ffmpegPath}
+                  disabled={settingsDisabled}
+                  onChange={handleFfmpegSelectChange}
+                >
+                  <option value="">{t.ffmpegAutoDetect}</option>
+                  {ffmpegCandidates.map((candidate) => (
+                    <option key={candidate.path} value={candidate.path}>
+                      {candidate.valid ? candidate.label : `${candidate.label} - invalid`}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className="icon-button"
+                  onClick={handleRefreshFfmpeg}
+                  disabled={settingsDisabled}
+                  title={t.refreshFfmpeg}
+                >
+                  <RefreshCcw size={15} />
+                </button>
+                <button
+                  type="button"
+                  className="icon-button"
+                  onClick={handleChooseFfmpeg}
+                  disabled={settingsDisabled}
+                  title={t.chooseFfmpeg}
+                >
+                  <Folder size={15} />
+                </button>
+              </div>
+            </label>
+
+            <div className="candidate-list" aria-label={t.ffmpegCandidates}>
+              <div className="candidate-list-heading">{t.ffmpegCandidates}</div>
+              {ffmpegCandidates.length === 0 ? (
+                <span className="muted">{t.ffmpegNoCandidates}</span>
+              ) : (
+                ffmpegCandidates.map((candidate) => (
+                  <div
+                    key={candidate.path}
+                    className={
+                      candidate.path === selectedFfmpegCandidate?.path
+                        ? 'candidate-item active'
+                        : 'candidate-item'
+                    }
+                  >
+                    <span
+                      className={
+                        candidate.valid ? 'candidate-state ready' : 'candidate-state missing'
+                      }
+                    >
+                      {candidate.valid ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
+                    </span>
+                    <div className="candidate-body">
+                      <strong>{candidate.path}</strong>
+                      <span>{candidate.version || candidate.details}</span>
+                      {candidate.version ? <span>{candidate.details}</span> : null}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div id="section-autotag" className="section-panel">
+          <div className="section-heading">
+            <Sparkles size={18} />
+            <div>
+              <h2>{t.autotag}</h2>
+              <p>{t.autotagDescription}</p>
+            </div>
+          </div>
+
+          <label className="toggle-row">
+            <input
+              type="checkbox"
+              checked={settings.autoTagEnabled}
+              disabled={settingsDisabled || !autoTagStatus?.ready}
+              data-setting="autoTagEnabled"
+              onChange={handleBooleanSettingChange}
+            />
+            <span>{t.autoTagEnable}</span>
+          </label>
+
+          <label className="field">
+            <span>{t.autoTagThreshold}</span>
+            <div className="threshold-row">
+              <span className="muted">{t.autoTagThresholdLess}</span>
+              <input
+                type="range"
+                min={10}
+                max={95}
+                step={5}
+                value={Math.round((1 - settings.autoTagThreshold) * 100)}
+                disabled={settingsDisabled}
+                onChange={(event) =>
+                  patchSettings({
+                    autoTagThreshold: 1 - Number(event.currentTarget.value) / 100,
+                  })
+                }
+              />
+              <span className="muted">{t.autoTagThresholdMore}</span>
+            </div>
+          </label>
+
+          <div className={autoTagStatusClass}>
+            <div className="migration-status-icon">
+              {autoTagStatus?.ready || autoTagStatus?.running ? (
+                <CheckCircle2 size={20} />
+              ) : (
+                <AlertCircle size={20} />
+              )}
+            </div>
+            <div className="migration-status-body">
+              <h3>{autoTagTitle}</h3>
+              <p>{autoTagDescription}</p>
+              {autoTagStatus?.url ? (
+                <span className="migration-storage">{autoTagStatus.url}</span>
+              ) : null}
+            </div>
+          </div>
+
+          {autoTagInstallProgress?.running || autoTagInstallProgress?.completed ? (
             <div
               className={
-                dockerDetection?.available
-                  ? 'migration-status ready'
-                  : dockerDetectionAttempted
-                    ? 'migration-status missing'
-                    : 'migration-status waiting'
+                autoTagInstallProgress.error
+                  ? 'install-progress-card error'
+                  : autoTagInstallProgress.completed
+                    ? 'install-progress-card complete'
+                    : 'install-progress-card'
               }
             >
-              <div className="migration-status-icon">
-                {dockerDetection?.available ? (
-                  <CheckCircle2 size={20} />
-                ) : (
-                  <AlertCircle size={20} />
-                )}
+              <div className="install-progress-heading">
+                <Sparkles size={16} />
+                <strong>
+                  {autoTagInstallProgress.completed
+                    ? t.autoTagInstallCompleted
+                    : t.autoTagInstallInProgress}
+                </strong>
               </div>
-              <div className="migration-status-body">
-                <h3>
-                  {dockerDetection?.available
-                    ? t.migrationReadyTitle
-                    : dockerDetectionAttempted
-                      ? t.migrationNotFoundTitle
-                      : t.migrationWaitingTitle}
-                </h3>
-                <p>
-                  {dockerDetection?.available
-                    ? t.migrationReadyDescription(
-                        dockerDetection.datasetCount,
-                        dockerDetection.stackCount,
-                        dockerDetection.assetCount
-                      )
-                    : dockerDetectionAttempted
-                      ? t.migrationNotFoundDescription
-                      : t.migrationWaitingDescription}
-                </p>
-                {dockerDetection?.available && dockerDetection.storageRoot ? (
-                  <span className="migration-storage">
-                    {t.storageLocation}: {dockerDetection.storageRoot}
-                  </span>
-                ) : null}
+              <p>{autoTagInstallProgress.message}</p>
+              <div className="progress-track">
+                <div
+                  className="progress-fill"
+                  style={{ width: `${Math.round(autoTagInstallProgress.percent)}%` }}
+                />
               </div>
+              <span className="muted">{Math.round(autoTagInstallProgress.percent)}%</span>
             </div>
+          ) : null}
 
-            <div className="button-row migration-actions">
-              <button type="button" onClick={handleDetectDockerSource} disabled={settingsDisabled}>
-                <RefreshCcw size={15} />
-                {t.detectOldDocker}
-              </button>
-              <button
-                type="button"
-                className="primary-button"
-                onClick={handleMigrateFromDocker}
-                disabled={settingsDisabled}
-              >
-                <Database size={15} />
-                {t.migrateFromDocker}
-              </button>
-            </div>
+          <div className="button-row migration-actions">
+            <button type="button" onClick={handleRefreshAutoTagStatus} disabled={busy}>
+              <RefreshCcw size={15} />
+              {t.autoTagCheck}
+            </button>
+            <button
+              type="button"
+              className="primary-button"
+              onClick={handleOpenAutoTagInstallDialog}
+              disabled={settingsDisabled || autoTagInstallProgress?.running || autoTagStatus?.ready}
+            >
+              <Download size={15} />
+              {t.autoTagPrepare}
+            </button>
+          </div>
 
-            <details className="advanced-settings">
-              <summary>{t.advancedSettings}</summary>
-              <p>{t.advancedSettingsDescription}</p>
-              <label className="field">
-                <span>{t.postgresDatabaseUrl}</span>
+          <details className="advanced-settings">
+            <summary>{t.advancedSettings}</summary>
+            <p>{t.autoTagAdvancedDescription}</p>
+            <label className="field">
+              <span>{t.autoTagCodeFolder}</span>
+              <div className="path-row">
                 <input
-                  value={settings.dockerDatabaseUrl}
+                  value={settings.autoTagRepoDir}
                   disabled={settingsDisabled}
-                  data-setting="dockerDatabaseUrl"
+                  data-setting="autoTagRepoDir"
+                  onChange={handleTextSettingChange}
+                />
+                <button
+                  type="button"
+                  className="icon-button"
+                  onClick={handleChooseAutoTagCode}
+                  disabled={settingsDisabled}
+                  title={t.chooseAutoTagCodeFolder}
+                >
+                  <Folder size={15} />
+                </button>
+              </div>
+            </label>
+            <label className="field">
+              <span>{t.autoTagModelFolder}</span>
+              <div className="path-row">
+                <input
+                  value={settings.autoTagModelDir}
+                  disabled={settingsDisabled}
+                  data-setting="autoTagModelDir"
+                  onChange={handleTextSettingChange}
+                />
+                <button
+                  type="button"
+                  className="icon-button"
+                  onClick={handleChooseAutoTagModel}
+                  disabled={settingsDisabled}
+                  title={t.chooseAutoTagModelFolder}
+                >
+                  <Folder size={15} />
+                </button>
+              </div>
+            </label>
+            <div className="auth-grid">
+              <label className="field compact">
+                <span>{t.autoTagPort}</span>
+                <input
+                  type="number"
+                  min={1024}
+                  max={65535}
+                  value={settings.autoTagPort}
+                  disabled={settingsDisabled}
+                  onChange={handleAutoTagPortChange}
+                />
+              </label>
+            </div>
+          </details>
+        </div>
+
+        <div id="section-migration" className="section-panel">
+          <div className="section-heading">
+            <Database size={18} />
+            <div>
+              <h2>{t.dockerMigration}</h2>
+              <p>{t.dockerMigrationDescription}</p>
+            </div>
+          </div>
+
+          <div
+            className={
+              dockerDetection?.available
+                ? 'migration-status ready'
+                : dockerDetectionAttempted
+                  ? 'migration-status missing'
+                  : 'migration-status waiting'
+            }
+          >
+            <div className="migration-status-icon">
+              {dockerDetection?.available ? <CheckCircle2 size={20} /> : <AlertCircle size={20} />}
+            </div>
+            <div className="migration-status-body">
+              <h3>
+                {dockerDetection?.available
+                  ? t.migrationReadyTitle
+                  : dockerDetectionAttempted
+                    ? t.migrationNotFoundTitle
+                    : t.migrationWaitingTitle}
+              </h3>
+              <p>
+                {dockerDetection?.available
+                  ? t.migrationReadyDescription(
+                      dockerDetection.datasetCount,
+                      dockerDetection.stackCount,
+                      dockerDetection.assetCount
+                    )
+                  : dockerDetectionAttempted
+                    ? t.migrationNotFoundDescription
+                    : t.migrationWaitingDescription}
+              </p>
+              {dockerDetection?.available && dockerDetection.storageRoot ? (
+                <span className="migration-storage">
+                  {t.storageLocation}: {dockerDetection.storageRoot}
+                </span>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="button-row migration-actions">
+            <button type="button" onClick={handleDetectDockerSource} disabled={settingsDisabled}>
+              <RefreshCcw size={15} />
+              {t.detectOldDocker}
+            </button>
+            <button
+              type="button"
+              className="primary-button"
+              onClick={handleMigrateFromDocker}
+              disabled={settingsDisabled}
+            >
+              <Database size={15} />
+              {t.migrateFromDocker}
+            </button>
+          </div>
+
+          <details className="advanced-settings">
+            <summary>{t.advancedSettings}</summary>
+            <p>{t.advancedSettingsDescription}</p>
+            <label className="field">
+              <span>{t.postgresDatabaseUrl}</span>
+              <input
+                value={settings.dockerDatabaseUrl}
+                disabled={settingsDisabled}
+                data-setting="dockerDatabaseUrl"
+                onChange={handleTextSettingChange}
+              />
+            </label>
+            <label className="field">
+              <span>{t.dockerStorageRoot}</span>
+              <div className="path-row">
+                <input
+                  value={settings.dockerStorageRoot}
+                  disabled={settingsDisabled}
+                  data-setting="dockerStorageRoot"
+                  onChange={handleTextSettingChange}
+                />
+                <button
+                  type="button"
+                  className="icon-button"
+                  onClick={handleChooseDockerStorage}
+                  disabled={settingsDisabled}
+                  title={t.chooseDockerStorageRoot}
+                >
+                  <Folder size={15} />
+                </button>
+              </div>
+            </label>
+            <div className="auth-grid">
+              <label className="field compact">
+                <span>{t.datasetId}</span>
+                <input
+                  value={settings.dockerDatasetId}
+                  placeholder={t.optional}
+                  disabled={settingsDisabled}
+                  data-setting="dockerDatasetId"
                   onChange={handleTextSettingChange}
                 />
               </label>
-              <label className="field">
-                <span>{t.dockerStorageRoot}</span>
-                <div className="path-row">
-                  <input
-                    value={settings.dockerStorageRoot}
-                    disabled={settingsDisabled}
-                    data-setting="dockerStorageRoot"
-                    onChange={handleTextSettingChange}
-                  />
-                  <button
-                    type="button"
-                    className="icon-button"
-                    onClick={handleChooseDockerStorage}
-                    disabled={settingsDisabled}
-                    title={t.chooseDockerStorageRoot}
-                  >
-                    <Folder size={15} />
-                  </button>
-                </div>
+              <label className="toggle-row bottom-aligned">
+                <input
+                  type="checkbox"
+                  checked={settings.dockerVerifyFiles}
+                  disabled={settingsDisabled}
+                  data-setting="dockerVerifyFiles"
+                  onChange={handleBooleanSettingChange}
+                />
+                <span>{t.verifyFileReferences}</span>
               </label>
-              <div className="auth-grid">
-                <label className="field compact">
-                  <span>{t.datasetId}</span>
-                  <input
-                    value={settings.dockerDatasetId}
-                    placeholder={t.optional}
-                    disabled={settingsDisabled}
-                    data-setting="dockerDatasetId"
-                    onChange={handleTextSettingChange}
-                  />
-                </label>
-                <label className="toggle-row bottom-aligned">
-                  <input
-                    type="checkbox"
-                    checked={settings.dockerVerifyFiles}
-                    disabled={settingsDisabled}
-                    data-setting="dockerVerifyFiles"
-                    onChange={handleBooleanSettingChange}
-                  />
-                  <span>{t.verifyFileReferences}</span>
-                </label>
-              </div>
-            </details>
-          </div>
-        ) : null}
+            </div>
+          </details>
+        </div>
 
         <footer className="settings-footer">
           <span className="auto-save-note">{t.settingsAutoSaved}</span>
           {message ? <div className="message-box">{message}</div> : null}
         </footer>
       </section>
+
+      {resetSetupOpen ? (
+        <div className="modal-backdrop" role="presentation">
+          <div className="modal-panel" role="dialog" aria-modal="true">
+            <div className="modal-heading">
+              <RefreshCcw size={20} />
+              <h2>{t.resetSetupConfirmTitle}</h2>
+            </div>
+            <div className="modal-copy">
+              <p>{t.resetSetupConfirmBody}</p>
+            </div>
+            <div className="modal-actions">
+              <button type="button" onClick={handleCancelResetSetup}>
+                {t.cancel}
+              </button>
+              <button
+                type="button"
+                className="primary-button"
+                onClick={handleConfirmResetSetup}
+                disabled={busy}
+              >
+                <RefreshCcw size={15} />
+                {t.resetSetup}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {autoTagInstallStep ? (
         <div className="modal-backdrop" role="presentation">

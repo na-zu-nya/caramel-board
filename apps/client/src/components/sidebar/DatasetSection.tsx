@@ -9,12 +9,14 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useDatasets } from '@/hooks/useDatasets';
+import { useT } from '@/lib/i18n';
 
 interface DatasetSectionProps extends SidebarSectionProps {
   currentDataset: string | null;
 }
 
 export function DatasetSection({ datasetId, isCollapsed = false, onToggle }: DatasetSectionProps) {
+  const t = useT();
   const { data: datasets = [] } = useDatasets();
   const navigate = useNavigate();
 
@@ -27,7 +29,7 @@ export function DatasetSection({ datasetId, isCollapsed = false, onToggle }: Dat
   };
 
   return (
-    <SideMenuGroup label="Current Library" collapsed={isCollapsed} onToggle={onToggle}>
+    <SideMenuGroup label={t.sidebar.currentLibrary} collapsed={isCollapsed} onToggle={onToggle}>
       <Select value={datasetId} onValueChange={handleDatasetChange}>
         <SelectTrigger className="w-full h-8 text-sm">
           <SelectValue>
@@ -38,7 +40,7 @@ export function DatasetSection({ datasetId, isCollapsed = false, onToggle }: Dat
                 </span>
               </span>
             ) : (
-              <span className="text-xs">Select a library</span>
+              <span className="text-xs">{t.sidebar.selectLibrary}</span>
             )}
           </SelectValue>
         </SelectTrigger>

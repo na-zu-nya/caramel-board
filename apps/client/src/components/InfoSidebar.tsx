@@ -39,6 +39,7 @@ import { useScratch } from '@/hooks/useScratch';
 import { apiClient } from '@/lib/api-client';
 import { copyText } from '@/lib/clipboard';
 import { downloadStackOriginals } from '@/lib/download-originals';
+import { useT } from '@/lib/i18n';
 import { removeStackFromCache } from '@/lib/stack-cache';
 import { cn, hexForCopy } from '@/lib/utils';
 import {
@@ -64,6 +65,7 @@ const getStackTagName = (tag: StackTagValue) => {
 };
 
 export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps) {
+  const t = useT();
   const [isOpen, setIsOpen] = useAtom(infoSidebarOpenAtom);
   const [selectedItemId, setSelectedItemId] = useAtom(selectedItemIdAtom);
   const [, setCustomColor] = useAtom(customColorAtom);
@@ -115,9 +117,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
   const handleRemoveStack = useCallback(async () => {
     if (!selectedItem) return;
 
-    const confirmed = window.confirm(
-      `Are you sure you want to remove the stack "${selectedItem.name}"? This action cannot be undone.`
-    );
+    const confirmed = window.confirm(t.info.removeConfirm(selectedItem.name));
     if (!confirmed) return;
 
     const rawId = selectedItem.id;
@@ -144,7 +144,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
       }
     } catch (error) {
       console.error('❌ Failed to remove stack:', error);
-      alert('Failed to remove stack. Please try again.');
+      alert(t.info.removeFailed);
     }
   }, [
     datasetId,
@@ -154,6 +154,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
     selectedItem,
     setIsOpen,
     setSelectedItemId,
+    t,
   ]);
 
   const previewGenerated = Boolean(selectedItem?.assets?.some((asset) => asset.preview));
@@ -610,7 +611,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
         <div className="h-full flex items-center justify-center text-gray-400">
           <div className="text-center">
             <Image size={48} className="mx-auto mb-4 opacity-50" />
-            <p>Select an item to view details</p>
+            <p>{t.info.selectItem}</p>
           </div>
         </div>
       ) : isLoading ? (
@@ -702,16 +703,16 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
                 <Image size={16} />
-                Media Type
+                {t.info.mediaType}
               </div>
               <Select value={selectedItem.mediaType || ''} onValueChange={handleMediaTypeChange}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select media type" />
+                  <SelectValue placeholder={t.info.selectMediaType} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="image">Image</SelectItem>
-                  <SelectItem value="comic">Comic</SelectItem>
-                  <SelectItem value="video">Video</SelectItem>
+                  <SelectItem value="image">{t.info.image}</SelectItem>
+                  <SelectItem value="comic">{t.info.comic}</SelectItem>
+                  <SelectItem value="video">{t.info.video}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -720,7 +721,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
             <div className="space-y-2">
               <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
                 <Calendar size={16} />
-                Author
+                {t.info.author}
               </label>
               {!authorEditing ? (
                 <button
@@ -761,7 +762,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
                       setAuthorLoading(false);
                     }
                   }}
-                  placeholder="Type author and Enter"
+                  placeholder={t.info.typeAuthorEnter}
                   suggestions={authorSuggestions}
                   loading={authorLoading}
                   autoFocus
@@ -770,7 +771,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
               {/* Recent Authors */}
               {recentAuthors.length > 0 && (
                 <div className="mt-2">
-                  <p className="text-xs text-gray-500 mb-1">Recent authors:</p>
+                  <p className="text-xs text-gray-500 mb-1">{t.info.recentAuthors}</p>
                   <div className="flex flex-wrap gap-1">
                     {recentAuthors.map((author) => (
                       <button
@@ -794,7 +795,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
             <div className="space-y-2">
               <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
                 <Tag size={16} />
-                Tags
+                {t.info.tags}
               </label>
               <div className="space-y-2">
                 <SuggestInput
@@ -816,7 +817,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
                       setTagLoading(false);
                     }
                   }}
-                  placeholder="Add tag"
+                  placeholder={t.info.addTag}
                   suggestions={tagSuggestions}
                   loading={tagLoading}
                 />
@@ -918,7 +919,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
               <div className="flex items-center justify-between text-sm font-medium text-gray-700">
                 <div className="flex items-center gap-2">
                   <Palette size={16} />
-                  Dominant Colors
+                  {t.info.dominantColors}
                 </div>
                 {selectedItem.dominantColors && selectedItem.dominantColors.length > 0 && (
                   <button
@@ -972,7 +973,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
                                     });
                                   }
                                 }}
-                                title="Copy hex"
+                                title={t.info.copyHex}
                               >
                                 <Copy size={12} />
                                 <span>{color.hex}</span>
@@ -1014,29 +1015,29 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
                 <Hash size={16} />
-                Stats
+                {t.info.stats}
               </div>
               <div className="space-y-1 text-sm text-gray-600">
                 <div className="flex justify-between">
-                  <span>Assets</span>
+                  <span>{t.info.assets}</span>
                   <span className="font-medium">{selectedItem.assetCount || 0}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Likes</span>
+                  <span>{t.info.likes}</span>
                   <span className="font-medium">{selectedItem.liked || 0}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Optimized</span>
+                  <span>{t.info.optimized}</span>
                   <span className="font-medium">
                     {previewGenerated ? (
-                      <span className="text-green-600">Yes</span>
+                      <span className="text-green-600">{t.info.yes}</span>
                     ) : (
-                      <span className="text-gray-400">No</span>
+                      <span className="text-gray-400">{t.info.no}</span>
                     )}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Created</span>
+                  <span>{t.info.created}</span>
                   <span className="font-medium">
                     {new Date(selectedItem.createdAt).toLocaleDateString()}
                   </span>
@@ -1050,7 +1051,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
             {/* Header with toggle button */}
             <div className="p-4 pb-2">
               <div className="w-full flex items-center justify-between text-sm font-medium text-gray-700">
-                <span>Actions</span>
+                <span>{t.info.actions}</span>
               </div>
             </div>
 
@@ -1086,7 +1087,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
                   disabled={!selectedItem}
                 >
                   <Download size={16} />
-                  Download All
+                  {t.info.downloadAll}
                 </button>
                 <button
                   type="button"
@@ -1107,7 +1108,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
                   disabled={!selectedItem}
                 >
                   <NotebookText size={16} />
-                  Add to Scratch
+                  {t.info.addToScratch}
                 </button>
                 {previewEligible && (
                   <button
@@ -1127,7 +1128,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
                     ) : (
                       <Clapperboard size={16} />
                     )}
-                    Optimize Video
+                    {t.info.optimizeVideo}
                   </button>
                 )}
                 <button
@@ -1143,7 +1144,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
                   ) : (
                     <RefreshCw size={16} />
                   )}
-                  Refresh
+                  {t.info.refresh}
                 </button>
                 <button
                   type="button"
@@ -1152,7 +1153,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
                   disabled={!selectedItem}
                 >
                   <Trash2 size={16} />
-                  Remove Stack
+                  {t.info.removeStack}
                 </button>
               </div>
             </div>

@@ -12,6 +12,7 @@ import {
 import { SuggestInput } from '@/components/ui/suggest-input';
 import { useSwipeClose } from '@/hooks/features/useSwipeClose';
 import { apiClient } from '@/lib/api-client';
+import { useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
 interface EditPanelProps {
@@ -38,6 +39,7 @@ export default function BulkEditPanel({
   onApplyFilter,
   items = [],
 }: EditPanelProps) {
+  const t = useT();
   const [tagInput, setTagInput] = useState('');
   const [authorInput, setAuthorInput] = useState('');
   const [selectedAuthor, setSelectedAuthor] = useState('');
@@ -147,18 +149,18 @@ export default function BulkEditPanel({
         {/* Header */}
         <div className="p-4 border-b border-gray-200">
           <div className="flex items-center justify-between mb-2">
-            <h2 className="text-lg font-semibold text-gray-900">Bulk Edit</h2>
+            <h2 className="text-lg font-semibold text-gray-900">{t.bulkEdit.title}</h2>
             <button
               type="button"
               onClick={onClose}
               className="p-1 hover:bg-gray-100 rounded-md transition-colors"
-              aria-label="Exit selection mode"
+              aria-label={t.bulkEdit.exitSelection}
             >
               <X size={20} className="text-gray-600" />
             </button>
           </div>
           <span className="text-sm text-gray-600">
-            {selectedItems.size} {selectedItems.size === 1 ? 'item' : 'items'} selected
+            {t.common.selectedCount(selectedItems.size)}
           </span>
         </div>
 
@@ -168,7 +170,7 @@ export default function BulkEditPanel({
           <div className="space-y-2">
             <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
               <Tag size={16} />
-              Add Tags
+              {t.bulkEdit.addTags}
             </label>
             <div className="space-y-2">
               <SuggestInput
@@ -190,7 +192,7 @@ export default function BulkEditPanel({
                     setTagLoading(false);
                   }
                 }}
-                placeholder="Type tag and press Enter"
+                placeholder={t.bulkEdit.typeTagEnter}
                 suggestions={tagSuggestions}
                 loading={tagLoading}
               />
@@ -210,7 +212,7 @@ export default function BulkEditPanel({
                         type="button"
                         onClick={() => handleTagFilter(tag)}
                         className="p-1 text-gray-500 hover:text-primary hover:bg-primary/10 rounded transition-colors"
-                        title="Apply tag filter"
+                        title={t.bulkEdit.applyTagFilter}
                       >
                         <Search size={12} />
                       </button>
@@ -238,7 +240,7 @@ export default function BulkEditPanel({
                         type="button"
                         onClick={() => handleTagFilter(tag)}
                         className="p-1 text-gray-500 hover:text-primary hover:bg-primary/10 rounded transition-colors"
-                        title="Apply tag filter"
+                        title={t.bulkEdit.applyTagFilter}
                       >
                         <Search size={12} />
                       </button>
@@ -253,7 +255,7 @@ export default function BulkEditPanel({
           <div className="space-y-2">
             <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
               <Calendar size={16} />
-              Set Author
+              {t.bulkEdit.setAuthor}
             </label>
             <div className="space-y-2">
               <SuggestInput
@@ -278,7 +280,7 @@ export default function BulkEditPanel({
                     setAuthorLoading(false);
                   }
                 }}
-                placeholder="Search and select author"
+                placeholder={t.bulkEdit.searchAuthor}
                 suggestions={authorSuggestions}
                 loading={authorLoading}
               />
@@ -299,7 +301,7 @@ export default function BulkEditPanel({
                     type="button"
                     onClick={() => handleAuthorFilter(selectedAuthor)}
                     className="p-1 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                    title="Apply author filter"
+                    title={t.bulkEdit.applyAuthorFilter}
                   >
                     <Search size={14} />
                   </button>
@@ -328,7 +330,7 @@ export default function BulkEditPanel({
                         type="button"
                         onClick={() => handleAuthorFilter(author)}
                         className="p-1 text-gray-500 hover:text-primary hover:bg-primary/10 rounded transition-colors"
-                        title="Apply author filter"
+                        title={t.bulkEdit.applyAuthorFilter}
                       >
                         <Search size={12} />
                       </button>
@@ -343,19 +345,19 @@ export default function BulkEditPanel({
           <div className="space-y-2">
             <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
               <Monitor size={16} />
-              Change Media Type
+              {t.bulkEdit.changeMediaType}
             </label>
             <Select
               value={selectedMediaType}
               onValueChange={(value) => setSelectedMediaType(value as 'image' | 'comic' | 'video')}
             >
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select new media type" />
+                <SelectValue placeholder={t.bulkEdit.selectNewMediaType} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="image">Image</SelectItem>
-                <SelectItem value="comic">Comic</SelectItem>
-                <SelectItem value="video">Video</SelectItem>
+                <SelectItem value="image">{t.bulkEdit.image}</SelectItem>
+                <SelectItem value="comic">{t.bulkEdit.comic}</SelectItem>
+                <SelectItem value="video">{t.bulkEdit.video}</SelectItem>
               </SelectContent>
             </Select>
             <p className="text-xs text-gray-500">
@@ -373,10 +375,10 @@ export default function BulkEditPanel({
                 {hasChanges ? (
                   <span className="flex items-center gap-2">
                     <div className="w-2 h-2 bg-green-500 rounded-full" />
-                    Changes ready to apply
+                    {t.bulkEdit.changesReady}
                   </span>
                 ) : (
-                  <span>No changes made</span>
+                  <span>{t.bulkEdit.noChangesMade}</span>
                 )}
               </div>
               {hasChanges && (
@@ -386,7 +388,7 @@ export default function BulkEditPanel({
                   className="flex items-center gap-1.5 px-4 py-2 bg-primary text-primary-foreground text-sm rounded-md hover:bg-primary/90 transition-colors"
                 >
                   <Save size={16} />
-                  Apply Changes
+                  {t.bulkEdit.applyChanges}
                 </button>
               )}
             </div>

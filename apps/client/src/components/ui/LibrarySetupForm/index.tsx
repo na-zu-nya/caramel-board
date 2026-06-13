@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DEFAULT_CARAMEL_COLOR, PRESET_COLOR_GROUPS } from '@/components/ui/LibraryCard';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
 export interface LibrarySetupFormProps {
@@ -36,6 +37,7 @@ export function LibrarySetupForm({
   error,
   focusOnMount,
 }: LibrarySetupFormProps) {
+  const t = useT();
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [colorOpen, setColorOpen] = useState(false);
   const nameInputRef = useRef<HTMLInputElement | null>(null);
@@ -69,12 +71,12 @@ export function LibrarySetupForm({
       }}
     >
       <div className="flex flex-col gap-2">
-        <label className="text-sm font-medium text-gray-900">Library name</label>
+        <label className="text-sm font-medium text-gray-900">{t.library.libraryName}</label>
         <Input
           ref={nameInputRef}
           value={name}
           onChange={(event) => onNameChange(event.target.value)}
-          placeholder="My First Library"
+          placeholder={t.library.myFirstLibrary}
           required
           disabled={interactionsLocked}
           autoFocus={focusOnMount}
@@ -84,7 +86,7 @@ export function LibrarySetupForm({
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         <div className="flex flex-col gap-2">
-          <label className="text-sm font-medium text-gray-900">Emoji icon</label>
+          <label className="text-sm font-medium text-gray-900">{t.library.emojiIcon}</label>
           <Popover open={emojiOpen} onOpenChange={setEmojiOpen}>
             <PopoverTrigger asChild>
               <button
@@ -114,7 +116,7 @@ export function LibrarySetupForm({
         </div>
 
         <div className="flex flex-col gap-2">
-          <label className="text-sm font-medium text-gray-900">Theme color</label>
+          <label className="text-sm font-medium text-gray-900">{t.library.themeColorLabel}</label>
           <Popover open={colorOpen} onOpenChange={setColorOpen}>
             <PopoverTrigger asChild>
               <button

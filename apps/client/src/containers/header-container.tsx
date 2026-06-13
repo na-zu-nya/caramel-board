@@ -1,9 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { useLocation, useNavigate, useParams } from '@tanstack/react-router';
 import { useAtom } from 'jotai';
+import type { LucideIcon } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { ArrowUpDown, Check, ChevronDown, Filter, Menu, Shuffle } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,6 +16,7 @@ import { HeaderIconButton } from '@/components/ui/Header/HeaderIconButton';
 import { useDatasets } from '@/hooks/useDatasets';
 import { isScratchCollection } from '@/hooks/useScratch';
 import { apiClient } from '@/lib/api-client';
+import { getDefaultPinDisplayName, useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import {
   currentDatasetAtom,
@@ -26,8 +28,10 @@ import {
   selectionModeAtom,
   sidebarOpenAtom,
 } from '@/stores/ui';
+import type { Pin } from '@/types';
 
 export default function HeaderContainer() {
+  const t = useT();
   const [withSidebar, setSidebarOpen] = useAtom(sidebarOpenAtom);
   const [currentDataset] = useAtom(currentDatasetAtom);
   const [filterOpen, setFilterOpen] = useAtom(filterOpenAtom);
@@ -40,8 +44,8 @@ export default function HeaderContainer() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const params = useParams({ strict: false });
-  const datasetId = (params as any).datasetId || currentDataset || '1';
+  const params = useParams({ strict: false }) as { datasetId?: string };
+  const datasetId = params.datasetId || currentDataset || '1';
   const selectedDataset = useMemo(
     () => datasets.find((d) => String(d.id) === String(datasetId)),
     [datasets, datasetId]
@@ -49,20 +53,23 @@ export default function HeaderContainer() {
 
   // Fetch stack pins for current dataset
   // Fetch navigation pins for current dataset
-  const { data: navigationPins = [] } = useQuery({
+  const { data: navigationPins = [] } = useQuery<Pin[]>({
     queryKey: ['navigation-pins', datasetId],
     queryFn: async () => apiClient.getNavigationPinsByDataset(datasetId),
   });
 
   // Helper function to render Lucide icons dynamically
-  const renderIcon = (iconName: string) => {
-    const IconComponent = (LucideIcons as any)[iconName];
+  const renderIcon = useCallback((iconName: string) => {
+    /* biome-ignore lint/performance/noDynamicNamespaceImportAccess: user-configurable pin icon lookup */
+    const IconComponent = LucideIcons[iconName as keyof typeof LucideIcons] as
+      | LucideIcon
+      | undefined;
     if (IconComponent) return <IconComponent size={18} />;
     return <LucideIcons.Bookmark size={18} />;
-  };
+  }, []);
 
   // Check if a navigation pin is active
-  const isNavigationPinActive = (pin: any) => {
+  const isNavigationPinActive = useCallback((pin: Pin) => {
     const path = location.pathname;
     if (pin.type === 'COLLECTION' && pin.collectionId) {
       const scratch =
@@ -80,9 +87,9 @@ export default function HeaderContainer() {
       return path === `/library/${datasetId}/likes`;
     }
     return false;
-  };
+  }, [datasetId, location.pathname]);
 
-  const handleNavigationPinClick = (pin: any) => {
+  const handleNavigationPinClick = useCallback((pin: Pin) => {
     if (pin.type === 'COLLECTION' && pin.collectionId) {
       const isScratch =
         (pin.collection && isScratchCollection(pin.collection)) || pin.name === 'Scratch';
@@ -106,7 +113,7 @@ export default function HeaderContainer() {
     } else if (pin.type === 'LIKES') {
       navigate({ to: `/library/${datasetId}/likes` });
     }
-  };
+  }, [datasetId, navigate]);
 
   // Responsive compact mode
   const [isCompactMode, setIsCompactMode] = useState(false);
@@ -135,12 +142,12 @@ export default function HeaderContainer() {
       <HeaderIconButton
         onClick={() => setSidebarOpen(!withSidebar)}
         isActive={withSidebar}
-        aria-label={withSidebar ? 'Close menu' : 'Open menu'}
+        aria-label={withSidebar ? t.header.closeMenu : t.header.openMenu}
       >
         <Menu size={18} />
       </HeaderIconButton>
       {headerActions.showShuffle && (
-        <HeaderIconButton aria-label="Shuffle" onClick={headerActions.onShuffle ?? undefined}>
+        <HeaderIconButton aria-label={t.header.shuffle} onClick={headerActions.onShuffle ?? undefined}>
           <Shuffle size={18} />
         </HeaderIconButton>
       )}
@@ -153,7 +160,7 @@ export default function HeaderContainer() {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium hover:bg-white/10 transition-colors">
-              <span>Pins</span>
+              <span>{t.header.pins}</span>
               <ChevronDown size={14} />
             </button>
           </DropdownMenuTrigger>
@@ -168,7 +175,7 @@ export default function HeaderContainer() {
                 )}
               >
                 {renderIcon(pin.icon)}
-                <span>{pin.name}</span>
+                <span>{getDefaultPinDisplayName(t, pin)}</span>
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>
@@ -181,7 +188,7 @@ export default function HeaderContainer() {
                 <HeaderIconButton
                   key={pin.id}
                   onClick={() => handleNavigationPinClick(pin)}
-                  title={pin.name}
+                  title={getDefaultPinDisplayName(t, pin)}
                   isActive={isNavigationPinActive(pin)}
                 >
                   {renderIcon(pin.icon)}
@@ -190,7 +197,7 @@ export default function HeaderContainer() {
             </div>
           )}
           {navigationPins.length === 0 && (
-            <span className="text-sm text-white/50">No pinned items</span>
+            <span className="text-sm text-white/50">{t.header.noPinnedItems}</span>
           )}
         </>
       )}
@@ -209,10 +216,10 @@ export default function HeaderContainer() {
           className={selectionMode ? 'opacity-50 cursor-not-allowed' : ''}
           aria-label={
             selectionMode
-              ? 'Filter disabled during selection'
+              ? t.header.filterDisabledDuringSelection
               : filterOpen
-                ? 'Close filter'
-                : 'Open filter'
+                ? t.header.closeFilter
+                : t.header.openFilter
           }
         >
           <Filter size={18} />
@@ -230,10 +237,10 @@ export default function HeaderContainer() {
           className={selectionMode ? 'opacity-50 cursor-not-allowed' : ''}
           aria-label={
             selectionMode
-              ? 'Reorder disabled during selection'
+              ? t.header.reorderDisabledDuringSelection
               : reorderMode
-                ? 'Exit reorder mode'
-                : 'Enter reorder mode'
+                ? t.header.exitReorderMode
+                : t.header.enterReorderMode
           }
         >
           <ArrowUpDown size={18} />
@@ -252,10 +259,10 @@ export default function HeaderContainer() {
           className={reorderMode ? 'opacity-50 cursor-not-allowed' : ''}
           aria-label={
             reorderMode
-              ? 'Selection disabled during reorder'
+              ? t.header.selectionDisabledDuringReorder
               : selectionMode
-                ? 'Exit selection mode'
-                : 'Enter selection mode'
+                ? t.header.exitSelectionMode
+                : t.header.enterSelectionMode
           }
         >
           <Check size={18} />

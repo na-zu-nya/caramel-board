@@ -19,6 +19,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { apiClient } from '@/lib/api-client';
+import { useT } from '@/lib/i18n';
 import type { CollectionFolder } from '@/types';
 
 interface CollectionFolderContextMenuProps {
@@ -45,6 +46,7 @@ export function CollectionFolderContextMenu({
   onUpdated,
   onDeleted,
 }: CollectionFolderContextMenuProps) {
+  const t = useT();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -134,12 +136,12 @@ export function CollectionFolderContextMenu({
               onOpen?.();
             }}
           >
-            Open
+            {t.contextMenu.open}
           </ContextMenuItem>
           <ContextMenuSeparator />
           <ContextMenuItem onSelect={handleRenameOpen}>
             <Pencil className="w-4 h-4 mr-2" />
-            Rename
+            {t.contextMenu.rename}
           </ContextMenuItem>
           <ContextMenuSeparator />
           <ContextMenuItem
@@ -147,7 +149,7 @@ export function CollectionFolderContextMenu({
             onSelect={handleDeleteOpen}
           >
             <Trash2 className="w-4 h-4 mr-2" />
-            Remove
+            {t.common.remove}
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>

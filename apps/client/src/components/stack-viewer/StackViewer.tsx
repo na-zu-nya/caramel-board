@@ -9,6 +9,7 @@ import {
   PenTool,
   Pipette,
   Trash2,
+  X,
 } from 'lucide-react';
 import MersenneTwister from 'mersenne-twister';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -26,6 +27,7 @@ import { useScratch } from '@/hooks/useScratch';
 import { useViewContext } from '@/hooks/useViewContext';
 import { apiClient } from '@/lib/api-client';
 import { downloadAssetOriginals, downloadStackOriginals } from '@/lib/download-originals';
+import { useT } from '@/lib/i18n';
 import { isVideoAsset } from '@/lib/media';
 import { cn } from '@/lib/utils';
 import {
@@ -54,6 +56,14 @@ interface StackViewerProps {
   stackId: string;
   listToken?: string;
   returnTo?: string;
+  /** ルーティングなしで埋め込み表示する(チュートリアル等)。レイアウトのサイドバー連動や類似ページ遷移を無効化する */
+  embedded?: boolean;
+  /** 埋め込み時の閉じる要求(ドラッグ閉じ・Esc など)。指定時はルーター遷移の代わりに呼ばれる */
+  onRequestClose?: () => void;
+  /** 埋め込み時のヘッダーテーマカラー(本物のヘッダーと同じ配色にする) */
+  embeddedThemeColor?: string;
+  /** 埋め込み時に隣接スタックへスワイプ移動したときの通知(ルート遷移の代わり) */
+  onNavigateStack?: (stackId: string) => void;
 }
 
 interface ViewerShellProps {
@@ -149,10 +159,17 @@ export default function StackViewer({
   stackId,
   listToken,
   returnTo,
+  embedded = false,
+  onRequestClose,
+  embeddedThemeColor,
+  onNavigateStack,
 }: StackViewerProps) {
+  const t = useT();
   const [isInfoSidebarOpen, setIsInfoSidebarOpen] = useAtom(infoSidebarOpenAtom);
   const [, setSelectedItemId] = useAtom(selectedItemIdAtom);
-  const [sidebarOpen] = useAtom(sidebarOpenAtom);
+  const [rawSidebarOpen] = useAtom(sidebarOpenAtom);
+  // 埋め込み時はアプリのサイドバーが存在しないため、レイアウト連動を無効化する
+  const sidebarOpen = embedded ? false : rawSidebarOpen;
   const setSelectionMode = useSetAtom(selectionModeAtom);
   const addFilesToQueue = useSetAtom(addFilesToQueueAtom);
   const uploadNotifications = useAtomValue(uploadNotificationsAtom);
@@ -198,6 +215,7 @@ export default function StackViewer({
     stack,
     currentPage,
     setCurrentPage,
+    onNavigateStack: embedded ? onNavigateStack : undefined,
   });
 
   // Optimistic markers per assetId so UI updates immediately
@@ -227,7 +245,19 @@ export default function StackViewer({
   );
 
   // Navigation
-  const { navigateBack } = useStackNavigation({ currentStackId: stackId, currentPage, returnTo });
+  const { navigateBack: routerNavigateBack } = useStackNavigation({
+    currentStackId: stackId,
+    currentPage,
+    returnTo,
+  });
+  // 埋め込み時はルーター遷移ではなく onRequestClose で閉じる
+  const navigateBack = useCallback(() => {
+    if (onRequestClose) {
+      onRequestClose();
+      return;
+    }
+    routerNavigateBack();
+  }, [onRequestClose, routerNavigateBack]);
   const { ctx, update } = useViewContext();
   const navigate = useNavigate();
   const shuffleInFlightRef = useRef(false);
@@ -1024,12 +1054,12 @@ export default function StackViewer({
     return (
       <div className="fixed inset-0 bg-black flex items-center justify-center">
         <div className="text-white text-center">
-          <p className="text-xl mb-2">Stack not found</p>
+          <p className="text-xl mb-2">{t.viewer.stackNotFound}</p>
           <button
             onClick={navigateBack}
             className="px-4 py-2 bg-gray-800 rounded hover:bg-gray-700 transition-colors"
           >
-            Go Back
+            {t.viewer.goBack}
           </button>
         </div>
       </div>
@@ -1057,6 +1087,30 @@ export default function StackViewer({
         }}
       >
         <div className="fixed top-0 left-0 right-0 h-14 bg-white" />
+        {embedded ? (
+          // 本物の Header と同じ見た目のヘッダー。#header-actions を持つので、
+          // ビューワーが portal で出す i/ペン/スポイトのボタン群がそのまま収まる
+          <header
+            className="fixed left-0 right-0 top-0 z-50 text-white backdrop-blur supports-[backdrop-filter]:backdrop-blur"
+            style={{
+              backgroundColor: `color-mix(in oklch, ${embeddedThemeColor ?? '#C7743C'} 80%, transparent)`,
+            }}
+          >
+            <div className="relative flex h-14 items-center px-4">
+              <div className="flex items-center gap-2">
+                <HeaderIconButton onClick={navigateBack} aria-label="閉じる">
+                  <X size={18} />
+                </HeaderIconButton>
+              </div>
+              <div className="absolute left-1/2 max-w-[40%] -translate-x-1/2 truncate text-sm font-medium">
+                {stack?.name ?? ''}
+              </div>
+              <div className="ml-auto flex items-center gap-2">
+                <div id="header-actions" className="flex items-center gap-2" />
+              </div>
+            </div>
+          </header>
+        ) : null}
 
         <div
           className={cn(
@@ -1181,7 +1235,7 @@ export default function StackViewer({
                       imageCarouselRef.current!.updateVerticalTransform(nx, scale, opacity, bg);
                       if (bg >= 1) {
                         verticalAnimRef.current = null;
-                        if (isUpward) {
+                        if (isUpward && !embedded) {
                           navigate({
                             to: '/library/$datasetId/stacks/$stackId/similar',
                             params: { datasetId, stackId },
@@ -1420,7 +1474,7 @@ export default function StackViewer({
           onClick={handlePenModeToggle}
           isActive={isPenMode}
           disabled={!canUseImageTools}
-          aria-label={isPenMode ? 'Exit pen mode' : 'Enter pen mode'}
+          aria-label={t.viewer.penMode}
         >
           <PenTool size={18} />
         </HeaderIconButton>,
@@ -1432,7 +1486,7 @@ export default function StackViewer({
           onClick={handleColorPickerToggle}
           isActive={isColorPicker}
           disabled={!canUseImageTools}
-          aria-label={isColorPicker ? 'Exit color picker' : 'Enter color picker'}
+          aria-label={t.viewer.colorPicker}
         >
           <Pipette size={18} />
         </HeaderIconButton>,
@@ -1443,7 +1497,7 @@ export default function StackViewer({
         <HeaderIconButton
           onClick={handleInfoSidebarToggle}
           isActive={isInfoSidebarOpen}
-          aria-label={isInfoSidebarOpen ? 'Close info panel' : 'Open info panel'}
+          aria-label={isInfoSidebarOpen ? t.viewer.closeInfo : t.viewer.openInfo}
         >
           <Info size={18} />
         </HeaderIconButton>,

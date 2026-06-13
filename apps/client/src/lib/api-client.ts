@@ -853,6 +853,14 @@ class ApiClient {
     });
   }
 
+  async getDatasetStats(
+    datasetId: string | number
+  ): Promise<{ stackCount: number; assetCount: number }> {
+    return this.fetch<{ stackCount: number; assetCount: number }>(
+      `/api/v1/datasets/${datasetId}/stats`
+    );
+  }
+
   async getColorStats(datasetId?: string | number): Promise<{
     totalStacks: number;
     totalWithColors: number;

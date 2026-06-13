@@ -447,3 +447,61 @@ code {
   }
 }
 */
+
+/* --- セットアップ/オンボーディング(キャラメル) --- */
+@keyframes setup-blob-float {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(0, -18px, 0) scale(1.05);
+  }
+}
+
+@keyframes setup-bob {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-1.5deg);
+  }
+  50% {
+    transform: translateY(-5px) rotate(1.5deg);
+  }
+}
+
+@keyframes setup-pop-in {
+  0% {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.setup-blob {
+  animation: setup-blob-float 9s ease-in-out infinite;
+}
+
+.setup-bob {
+  animation: setup-bob 3.4s ease-in-out infinite;
+}
+
+.setup-pop-in {
+  animation: setup-pop-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes setup-swipe-nudge {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(14px);
+  }
+}
+
+.setup-swipe-arrow {
+  animation: setup-swipe-nudge 1s ease-in-out infinite;
+}

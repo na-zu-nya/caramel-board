@@ -32,6 +32,7 @@ import { SelectionActionBar } from '@/components/ui/selection-action-bar';
 import { useKeyboardShortcuts } from '@/hooks/features/useKeyboardShortcuts';
 import { useStackTile } from '@/hooks/useStackTile';
 import { apiClient } from '@/lib/api-client';
+import { useT } from '@/lib/i18n';
 import { getSourceImageFilename, getSourceImageUrl } from '@/lib/stack-drag-data';
 import { cn } from '@/lib/utils';
 import {
@@ -98,6 +99,7 @@ interface AutoTagStackPage {
 }
 
 function AutoTagConfigPage() {
+  const t = useT();
   const { datasetId } = Route.useParams();
   const location = useLocation();
   const navigate = useNavigate();
@@ -196,7 +198,7 @@ function AutoTagConfigPage() {
     if (payload?.status === 'ok') {
       return {
         status: 'running' as const,
-        message: payload.device ? `Device: ${payload.device}` : undefined,
+        message: payload.device ? t.autoTagPage.device(payload.device) : undefined,
       };
     }
 
@@ -207,7 +209,7 @@ function AutoTagConfigPage() {
       status: 'not-available' as const,
       message: fallbackMessage,
     };
-  }, [joyTagHealth]);
+  }, [joyTagHealth, t]);
 
   const joyTagStatusLoading = joyTagHealthLoading || joyTagHealthFetching;
 
@@ -503,7 +505,7 @@ function AutoTagConfigPage() {
   };
 
   const handleDeleteMapping = (mappingId: number) => {
-    if (confirm('Are you sure you want to delete this mapping?')) {
+    if (confirm(t.autoTagPage.deleteMappingConfirm)) {
       deleteMappingMutation.mutate(mappingId);
     }
   };
@@ -714,7 +716,7 @@ function AutoTagConfigPage() {
             <div className="p-4 border-b">
               <div className="space-y-3">
                 <div className="space-y-1">
-                  <h2 className="text-lg font-semibold">AutoTag Statistics</h2>
+                  <h2 className="text-lg font-semibold">{t.autoTagPage.statistics}</h2>
                   <JoyTagStatus
                     status={joyTagStatusComputed.status}
                     isLoading={joyTagStatusLoading}
@@ -725,19 +727,23 @@ function AutoTagConfigPage() {
                 <SmallSearchField
                   value={searchQuery}
                   onValueChange={setSearchQuery}
-                  placeholder="Search tags..."
+                  placeholder={t.tagPage.searchTags}
                 />
 
                 <div className="space-y-2">
                   <SmallSelect
                     value={sortBy}
                     onValueChange={(v) => setSortBy(v as typeof sortBy)}
-                    placeholder="Sort by..."
+                    placeholder={t.tagPage.sortBy}
                   >
-                    <SelectItem value="name-asc">Name (A-Z)</SelectItem>
-                    <SelectItem value="name-desc">Name (Z-A)</SelectItem>
-                    <SelectItem value="count-desc">Prediction Count (High to Low)</SelectItem>
-                    <SelectItem value="count-asc">Prediction Count (Low to High)</SelectItem>
+                    <SelectItem value="name-asc">{t.tagPage.nameAsc}</SelectItem>
+                    <SelectItem value="name-desc">{t.tagPage.nameDesc}</SelectItem>
+                    <SelectItem value="count-desc">
+                      {t.autoTagPage.predictionCountDesc}
+                    </SelectItem>
+                    <SelectItem value="count-asc">
+                      {t.autoTagPage.predictionCountAsc}
+                    </SelectItem>
                   </SmallSelect>
                 </div>
               </div>
@@ -747,13 +753,15 @@ function AutoTagConfigPage() {
             <div className="p-2">
               {statisticsError ? (
                 <div className="text-center py-8 text-red-500">
-                  Error loading statistics: {(statisticsError as Error).message}
+                  {t.autoTagPage.errorLoadingStatistics} {(statisticsError as Error).message}
                 </div>
               ) : statisticsLoading ? (
-                <div className="text-center py-8 text-muted-foreground">Loading statistics...</div>
+                <div className="text-center py-8 text-muted-foreground">
+                  {t.autoTagPage.loadingStatistics}
+                </div>
               ) : filteredStatistics.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
-                  {searchQuery ? 'No tags found' : 'No AutoTag data yet'}
+                  {searchQuery ? t.tagPage.noTagsFound : t.sidebar.noAutoTags}
                 </div>
               ) : (
                 <div className="space-y-0.5">
@@ -797,12 +805,15 @@ function AutoTagConfigPage() {
                             <div className="text-xs text-muted-foreground">
                               {strictCounts[stat.autoTagKey] ? (
                                 <>
-                                  {strictCounts[stat.autoTagKey].predictionCount} predictions •{' '}
-                                  {strictCounts[stat.autoTagKey].assetCount} assets
+                                  {strictCounts[stat.autoTagKey].predictionCount}{' '}
+                                  {t.autoTagPage.predictions} -{' '}
+                                  {strictCounts[stat.autoTagKey].assetCount}{' '}
+                                  {t.autoTagPage.assets}
                                 </>
                               ) : (
                                 <>
-                                  {stat.predictionCount} stacks • ≈{stat.assetCount} assets
+                                  {stat.predictionCount} {t.autoTagPage.stacksApproxAssets}{' '}
+                                  {stat.assetCount} {t.autoTagPage.assets}
                                 </>
                               )}
                             </div>
@@ -888,7 +899,7 @@ function AutoTagConfigPage() {
                       <div className="flex items-center gap-2">
                         <Tag className="h-4 w-4 text-blue-500 mt-0.5" />
                         <div>
-                          <p className="text-sm text-gray-600">Mapped to:</p>
+                          <p className="text-sm text-gray-600">{t.autoTagPage.mappedTo}</p>
                           <p className="font-medium">{mapping.displayName}</p>
                         </div>
                       </div>
@@ -917,10 +928,12 @@ function AutoTagConfigPage() {
                   </div>
                 ) : (
                   <div className="mt-3 bg-gray-100 rounded-lg p-3 border border-gray-200 max-w-lg">
-                    <p className="text-sm text-muted-foreground mb-2">No mapping configured</p>
+                    <p className="text-sm text-muted-foreground mb-2">
+                      {t.autoTagPage.noMappingConfigured}
+                    </p>
                     <Button size="sm" onClick={() => handleCreateMapping(selectedAutoTag)}>
                       <Plus className="h-3.5 w-3.5 mr-1" />
-                      Create Mapping
+                      {t.autoTagPage.createMapping}
                     </Button>
                   </div>
                 );
@@ -929,14 +942,16 @@ function AutoTagConfigPage() {
 
             {/* Stacks with this AutoTag */}
             <div className="mt-6">
-              <h3 className="text-lg font-semibold mb-4">Stacks with this AutoTag</h3>
+              <h3 className="text-lg font-semibold mb-4">
+                {t.autoTagPage.stacksWithThisAutoTag}
+              </h3>
               {stacksLoading ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>
               ) : allStacks.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
-                  No stacks found with this AutoTag
+                  {t.autoTagPage.noStacksWithThisAutoTag}
                 </div>
               ) : (
                 <>
@@ -1014,7 +1029,7 @@ function AutoTagConfigPage() {
                       ref={loadMoreTriggerRef}
                       className="text-sm text-muted-foreground text-center mt-8"
                     >
-                      Scroll to load more...
+                      {t.common.scrollToLoadMore}
                     </div>
                   )}
                 </>
@@ -1032,7 +1047,7 @@ function AutoTagConfigPage() {
                 return (
                   <div className="mt-8 p-4 bg-white rounded-lg border border-gray-200">
                     <h4 className="text-sm font-semibold mb-2">
-                      AutoTags from: {stackWithAutoTags.name}
+                      {t.autoTagPage.autoTagsFrom} {stackWithAutoTags.name}
                     </h4>
                     <AutoTagDisplay
                       autoTags={stackWithAutoTags.autoTags}
@@ -1060,7 +1075,7 @@ function AutoTagConfigPage() {
         >
           <div className="text-center">
             <Tag className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-lg text-muted-foreground">Select an AutoTag to view details</p>
+            <p className="text-lg text-muted-foreground">{t.autoTagPage.selectAutoTagPrompt}</p>
           </div>
         </div>
       )}
@@ -1112,7 +1127,7 @@ function AutoTagConfigPage() {
             selectedItems.size > 0
               ? [
                   {
-                    label: 'Bulk Edit',
+                    label: t.grid.bulkEdit,
                     value: 'bulk-edit',
                     onSelect: toggleEditPanel,
                     icon: <Pencil size={12} />,
@@ -1135,10 +1150,10 @@ function AutoTagConfigPage() {
             className={selectionMode ? 'opacity-50 cursor-not-allowed' : ''}
             aria-label={
               selectionMode
-                ? 'Filter disabled during selection'
+                ? t.header.filterDisabledDuringSelection
                 : filterOpen
-                  ? 'Close filter'
-                  : 'Open filter'
+                  ? t.header.closeFilter
+                  : t.header.openFilter
             }
           >
             <Filter size={18} />
@@ -1155,7 +1170,7 @@ function AutoTagConfigPage() {
               }
             }}
             isActive={selectionMode}
-            aria-label={selectionMode ? 'Exit selection mode' : 'Enter selection mode'}
+            aria-label={selectionMode ? t.header.exitSelectionMode : t.header.enterSelectionMode}
           >
             <Check size={18} />
           </HeaderIconButton>
@@ -1165,7 +1180,7 @@ function AutoTagConfigPage() {
             <HeaderIconButton
               onClick={() => setInfoSidebarOpen(!infoSidebarOpen)}
               isActive={infoSidebarOpen}
-              aria-label={infoSidebarOpen ? 'Close info panel' : 'Open info panel'}
+              aria-label={infoSidebarOpen ? t.viewer.closeInfo : t.viewer.openInfo}
             >
               <Info size={18} />
             </HeaderIconButton>

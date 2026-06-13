@@ -8,6 +8,7 @@ import StackGrid from '@/components/StackGrid';
 import { useDataset } from '@/hooks/useDatasets';
 import { useHeaderActions } from '@/hooks/useHeaderActions';
 import { apiClient } from '@/lib/api-client';
+import { useT } from '@/lib/i18n';
 import { navigationStateAtom } from '@/stores/navigation';
 import { currentFilterAtom } from '@/stores/ui';
 import { genListToken, saveViewContext } from '@/stores/view-context';
@@ -18,6 +19,7 @@ export const Route = createFileRoute('/library/$datasetId/favorites')({
 });
 
 function FavoritesPage() {
+  const t = useT();
   const { datasetId } = Route.useParams();
   const { data: dataset } = useDataset(datasetId);
   const navigate = useNavigate();
@@ -270,8 +272,8 @@ function FavoritesPage() {
         onRefreshAll={refreshAll}
         emptyState={{
           icon: '⭐',
-          title: 'No favorite items yet',
-          description: 'Mark items as favorites to see them here.',
+          title: t.emptyState.noFavorites,
+          description: t.emptyState.favoritesDescription,
         }}
       />
       <FilterPanel

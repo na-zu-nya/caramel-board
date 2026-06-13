@@ -1,4 +1,4 @@
-import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueries, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import EmojiPicker, { type EmojiClickData } from 'emoji-picker-react';
 import { useAtom } from 'jotai';
@@ -19,9 +19,9 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import {
-  type ColorStats,
   DEFAULT_CARAMEL_COLOR,
   LibraryCard,
+  type LibraryStats,
   PRESET_COLOR_GROUPS,
 } from '@/components/ui/LibraryCard';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -35,6 +35,7 @@ import {
 } from '@/hooks/useDatasets';
 import { useHeaderActions } from '@/hooks/useHeaderActions';
 import { apiClient } from '@/lib/api-client';
+import { useT } from '@/lib/i18n';
 import { sidebarOpenAtom } from '@/stores/ui';
 import type { Dataset } from '@/types';
 
@@ -43,6 +44,7 @@ export const Route = createFileRoute('/settings/libraries')({
 });
 
 function DatasetManagement() {
+  const t = useT();
   const { data: datasets = [], isLoading } = useDatasets();
   const createDataset = useCreateDataset();
   const updateDataset = useUpdateDataset();
@@ -87,31 +89,13 @@ function DatasetManagement() {
   const [createColorOpen, setCreateColorOpen] = useState(false);
   const [createEmojiOpen, setCreateEmojiOpen] = useState(false);
 
-  const colorStatsQueries = useQueries({
+  const statsQueries = useQueries({
     queries: datasets.map((dataset) => ({
-      queryKey: ['colorStats', dataset.id],
-      queryFn: () => apiClient.getColorStats(dataset.id),
+      queryKey: ['library-stats', dataset.id],
+      queryFn: () => apiClient.getDatasetStats(dataset.id),
       enabled: !!dataset.id,
+      staleTime: 5000,
     })),
-  });
-
-  const { data: itemCounts } = useQuery({
-    queryKey: ['library-item-counts', datasets.map((d) => d.id)],
-    enabled: datasets.length > 0,
-    queryFn: async () => {
-      const entries = await Promise.all(
-        datasets.map(async (d) => {
-          try {
-            const res = await apiClient.getStacks({ datasetId: d.id, limit: 1, offset: 0 });
-            return [d.id, res.total as number] as const;
-          } catch {
-            return [d.id, d.itemCount ?? 0] as const;
-          }
-        })
-      );
-      return Object.fromEntries(entries) as Record<string, number>;
-    },
-    staleTime: 5000,
   });
 
   const handleUpdateLibrary = (
@@ -137,13 +121,13 @@ function DatasetManagement() {
     const datasetName = dataset.name || 'this library';
     const message = hasItems
       ? [
-          `Delete "${datasetName}"?`,
+          t.library.deleteConfirm(datasetName),
           '',
-          `${itemCount.toLocaleString()} items in this library will be permanently removed.`,
+          t.library.deleteWithItems(itemCount),
           '',
-          'This action cannot be undone. Continue?',
+          t.library.deleteIrreversible,
         ].join('\n')
-      : [`Delete "${datasetName}"?`, '', 'This action cannot be undone. Continue?'].join('\n');
+      : [t.library.deleteConfirm(datasetName), '', t.library.deleteIrreversible].join('\n');
 
     if (!confirm(message)) {
       return;
@@ -258,15 +242,22 @@ function DatasetManagement() {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto px-4 py-8 pt-24 max-w-4xl">
-        <div className="flex items-center justify-between mb-8">
-          <h1 className="text-3xl font-bold">Library Management</h1>
+        <div className="flex items-end justify-between mb-8">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">{t.library.management}</h1>
+            <p className="mt-1 text-sm text-gray-500">
+              {datasets.length > 0
+                ? `${datasets.length} ${datasets.length === 1 ? 'library' : 'libraries'}`
+                : t.library.multipleLibrariesHint}
+            </p>
+          </div>
           <button
             type="button"
             onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/30 transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90 transition-colors shadow-sm"
           >
             <Plus size={20} />
-            <span>Create Library</span>
+            <span>{t.library.createLibrary}</span>
           </button>
         </div>
 
@@ -275,13 +266,13 @@ function DatasetManagement() {
             <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-6">
             {datasets.map((dataset, index) => {
-              const colorStats = (colorStatsQueries[index]?.data ?? null) as ColorStats | null;
+              const stats = (statsQueries[index]?.data ?? null) as LibraryStats | null;
               const isUpdating = Boolean(
                 updatingAutoTags[dataset.id] || updatingColors[dataset.id]
               );
-              const itemCount = itemCounts?.[dataset.id] ?? dataset.itemCount ?? 0;
+              const itemCount = stats?.assetCount ?? dataset.itemCount ?? 0;
               const libraryDataset = {
                 ...dataset,
                 itemCount,
@@ -297,7 +288,7 @@ function DatasetManagement() {
                 <LibraryCard
                   key={dataset.id}
                   dataset={libraryDataset}
-                  colorStats={colorStats}
+                  stats={stats}
                   isRefreshing={isUpdating}
                   disableSetDefault={defaultSettingId === dataset.id}
                   onUpdate={(updates) => handleUpdateLibrary(dataset.id, updates)}
@@ -320,14 +311,14 @@ function DatasetManagement() {
 
         {!isLoading && datasets.length === 0 && (
           <div className="text-center py-12">
-            <p className="text-gray-500 mb-4">No libraries created yet.</p>
+            <p className="text-gray-500 mb-4">{t.library.noLibraries}</p>
             <button
               type="button"
               onClick={() => setShowCreateModal(true)}
               className="inline-flex items-center gap-2 px-4 py-2 border rounded-md hover:bg-gray-100 transition-colors"
             >
               <Plus size={20} />
-              <span>Create your first library</span>
+              <span>{t.library.createFirstLibrary}</span>
             </button>
           </div>
         )}
@@ -341,12 +332,12 @@ function DatasetManagement() {
 
             <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-white border rounded-lg shadow-lg z-50 p-6">
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-semibold">Create New Library</h2>
+                <h2 className="text-xl font-semibold">{t.library.createNewLibrary}</h2>
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
                   className="p-2 hover:bg-gray-100 rounded-md transition-colors"
-                  aria-label="Close modal"
+                  aria-label={t.common.close}
                 >
                   <X size={20} />
                 </button>
@@ -354,7 +345,7 @@ function DatasetManagement() {
 
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium mb-2">Library Name</label>
+                  <label className="block text-sm font-medium mb-2">{t.library.libraryName}</label>
                   <div className="flex items-center gap-3">
                     <Popover open={createEmojiOpen} onOpenChange={setCreateEmojiOpen}>
                       <PopoverTrigger asChild>
@@ -382,14 +373,14 @@ function DatasetManagement() {
                       type="text"
                       value={newName}
                       onChange={(e) => setNewName(e.target.value)}
-                      placeholder="Enter library name"
+                      placeholder={t.library.enterLibraryName}
                       className="flex-1 px-3 py-2 border border-gray-300 rounded-md bg-white"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium mb-2">Theme Color</label>
+                  <label className="block text-sm font-medium mb-2">{t.library.themeColor}</label>
                   <Popover open={createColorOpen} onOpenChange={setCreateColorOpen}>
                     <PopoverTrigger asChild>
                       <button
@@ -446,14 +437,14 @@ function DatasetManagement() {
                     disabled={!newName.trim()}
                     className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Create Library
+                    {t.library.createLibrary}
                   </button>
                   <button
                     type="button"
                     onClick={() => setShowCreateModal(false)}
                     className="px-4 py-2 border rounded-md hover:bg-gray-100 transition-colors"
                   >
-                    Cancel
+                    {t.common.cancel}
                   </button>
                 </div>
               </div>

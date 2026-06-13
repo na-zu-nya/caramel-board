@@ -21,6 +21,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { apiClient } from '@/lib/api-client';
+import { useT } from '@/lib/i18n';
 import type { AvailableIcon, Collection } from '@/types';
 import { AVAILABLE_ICONS } from '@/types';
 
@@ -56,6 +57,7 @@ export function CollectionContextMenu({
   onOpen,
   onFindSimilar,
 }: CollectionContextMenuProps) {
+  const t = useT();
   const [showRenameDialog, setShowRenameDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showPinDialog, setShowPinDialog] = useState(false);
@@ -227,26 +229,26 @@ export function CollectionContextMenu({
       <ContextMenu open={menuOpen} onOpenChange={handleMenuOpenChange}>
         <ContextMenuTrigger>{children}</ContextMenuTrigger>
         <ContextMenuContent className="w-44">
-          <ContextMenuItem onSelect={onOpen}>Open</ContextMenuItem>
+          <ContextMenuItem onSelect={onOpen}>{t.contextMenu.open}</ContextMenuItem>
           <ContextMenuItem onSelect={handleFindSimilar}>
             <Search className="w-4 h-4 mr-2" />
-            Find similar
+            {t.contextMenu.findSimilar}
           </ContextMenuItem>
           <ContextMenuSeparator />
           <ContextMenuItem onSelect={openRenameDialog}>
             <Pencil className="w-4 h-4 mr-2" />
-            Edit
+            {t.common.edit}
           </ContextMenuItem>
           <ContextMenuSeparator />
           {isPinned ? (
             <ContextMenuItem onSelect={onUnpin}>
               <PinOff className="w-4 h-4 mr-2" />
-              Unpin
+              {t.contextMenu.unpin}
             </ContextMenuItem>
           ) : (
             <ContextMenuItem onSelect={openPinDialog}>
               <Pin className="w-4 h-4 mr-2" />
-              Pin
+              {t.contextMenu.pin}
             </ContextMenuItem>
           )}
           <ContextMenuSeparator />
@@ -258,7 +260,7 @@ export function CollectionContextMenu({
             }}
           >
             <Trash2 className="w-4 h-4 mr-2" />
-            Delete
+            {t.common.delete}
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>

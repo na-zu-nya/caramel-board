@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { apiClient } from '@/lib/api-client';
+import { useT } from '@/lib/i18n';
 import { currentDatasetAtom } from '@/stores/ui';
 import type { CollectionFolder, CollectionType } from '@/types';
 
@@ -29,6 +30,7 @@ export function CreateCollectionModal({
   onSuccess,
   type,
 }: CreateCollectionModalProps) {
+  const t = useT();
   const params = useParams({ strict: false });
   const currentDataset = useAtomValue(currentDatasetAtom);
   const datasetId = (params as { datasetId?: string }).datasetId || currentDataset || '1';
@@ -148,7 +150,9 @@ export function CreateCollectionModal({
       <DialogContent className="sm:max-w-md">
         <DialogHeader className="border-b border-gray-200 pb-4">
           <DialogTitle className="text-lg font-semibold text-gray-900">
-            {collectionType === 'SMART' ? 'Create Smart Collection' : 'Create Collection'}
+            {collectionType === 'SMART'
+              ? t.collection.createSmartCollection
+              : t.collection.createCollection}
           </DialogTitle>
         </DialogHeader>
 
@@ -163,14 +167,14 @@ export function CreateCollectionModal({
           )}
           <div className="space-y-2">
             <Label htmlFor="collection-name" className="text-gray-700">
-              Name *
+              {t.common.name}
             </Label>
             <Input
               id="collection-name"
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Collection Name"
+              placeholder={t.collection.collectionName}
               required
               autoFocus
             />
@@ -178,7 +182,7 @@ export function CreateCollectionModal({
 
           <div className="space-y-2">
             <Label htmlFor="collection-type" className="text-gray-700">
-              Type
+              {t.collection.type}
             </Label>
             <Select
               value={collectionType}
@@ -188,20 +192,18 @@ export function CreateCollectionModal({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="MANUAL">Collection</SelectItem>
-                <SelectItem value="SMART">Smart Collection</SelectItem>
+                <SelectItem value="MANUAL">{t.collection.collection}</SelectItem>
+                <SelectItem value="SMART">{t.collection.smartCollection}</SelectItem>
               </SelectContent>
             </Select>
             {collectionType === 'SMART' && (
-              <p className="text-sm text-muted-foreground">
-                Automatically display stacks based on filter conditions
-              </p>
+              <p className="text-sm text-muted-foreground">{t.collection.smartDescription}</p>
             )}
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="collection-folder" className="text-gray-700">
-              Folder
+              {t.collection.folder}
             </Label>
             <Select
               value={selectedFolderId ? String(selectedFolderId) : 'root'}
@@ -210,17 +212,17 @@ export function CreateCollectionModal({
               }
             >
               <SelectTrigger>
-                <SelectValue placeholder="Create at root (without folder)" />
+                <SelectValue placeholder={t.collection.createAtRoot} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="root">Create at root (without folder)</SelectItem>
+                <SelectItem value="root">{t.collection.createAtRoot}</SelectItem>
                 {loadingFolders ? (
                   <SelectItem value="loading" disabled>
-                    Loading...
+                    {t.collection.loading}
                   </SelectItem>
                 ) : flatFolders.length === 0 ? (
                   <SelectItem value="empty" disabled>
-                    No folders available
+                    {t.collection.noFoldersAvailable}
                   </SelectItem>
                 ) : (
                   flatFolders.map(({ folder, level }) => (
@@ -233,9 +235,7 @@ export function CreateCollectionModal({
                 )}
               </SelectContent>
             </Select>
-            <p className="text-sm text-muted-foreground">
-              You can select folders to organize your collection
-            </p>
+            <p className="text-sm text-muted-foreground">{t.collection.folderHint}</p>
           </div>
 
           <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
@@ -246,14 +246,14 @@ export function CreateCollectionModal({
               disabled={loading}
               className="px-4 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
             >
-              Cancel
+              {t.common.cancel}
             </Button>
             <Button
               type="submit"
               disabled={loading || !name.trim() || !datasetId}
               className="px-4 py-2 text-sm text-primary-foreground bg-primary rounded-md hover:bg-primary/90 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
             >
-              {loading ? 'Creating...' : 'Create'}
+              {loading ? t.common.creating : t.common.create}
             </Button>
           </div>
         </form>

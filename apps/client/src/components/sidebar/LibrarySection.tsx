@@ -25,6 +25,7 @@ import { DroppableSideMenuItem } from '@/components/ui/DroppableSideMenuItem';
 import { SideMenuGroup, SideMenuListItem } from '@/components/ui/SideMenu';
 import { useScratch } from '@/hooks/useScratch';
 import { apiClient } from '@/lib/api-client';
+import { useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
 export function LibrarySection({
@@ -37,6 +38,7 @@ export function LibrarySection({
   onPinOverview,
   onUnpinOverview,
 }: LibrarySectionProps) {
+  const t = useT();
   const queryClient = useQueryClient();
   const { scratch, ensureScratch } = useScratch(datasetId);
   const navigate = useNavigate();
@@ -182,12 +184,12 @@ export function LibrarySection({
   };
 
   return (
-    <SideMenuGroup label="Library" collapsed={isCollapsed} onToggle={onToggle}>
+    <SideMenuGroup label={t.sidebar.library} collapsed={isCollapsed} onToggle={onToggle}>
       <nav className="space-y-0.5">
         <SideMenuListItem
           asChild
           icon={Home}
-          label="Overview"
+          label={t.sidebar.overview}
           enableContextMenu
           pinnable
           pinned={isPinned('OVERVIEW')}
@@ -205,7 +207,7 @@ export function LibrarySection({
         <DroppableSideMenuItem
           asChild
           icon={Star}
-          label="Favorites"
+          label={t.sidebar.favorites}
           count={counts?.favorites}
           onStacksDrop={handleFavoriteDrop}
         >
@@ -216,7 +218,7 @@ export function LibrarySection({
           />
         </DroppableSideMenuItem>
 
-        <SideMenuListItem asChild icon={Heart} label="Likes" count={counts?.likes}>
+        <SideMenuListItem asChild icon={Heart} label={t.sidebar.likes} count={counts?.likes}>
           <Link
             to="/library/$datasetId/likes"
             params={{ datasetId }}
@@ -235,7 +237,7 @@ export function LibrarySection({
               });
             }}
             icon={NotebookText}
-            label="Scratch"
+            label={t.sidebar.scratch}
             count={counts?.scratch}
             onStacksDrop={handleScratchDrop}
             acceptDrop
@@ -246,7 +248,7 @@ export function LibrarySection({
         <DroppableSideMenuItem
           asChild
           icon={Image}
-          label="Images"
+          label={t.sidebar.images}
           count={counts?.image}
           onStacksDrop={(stackIds) => handleMediaTypeDrop(stackIds, 'image')}
           enableContextMenu
@@ -265,7 +267,7 @@ export function LibrarySection({
         <DroppableSideMenuItem
           asChild
           icon={BookOpen}
-          label="Comics"
+          label={t.sidebar.comics}
           count={counts?.comic}
           onStacksDrop={(stackIds) => handleMediaTypeDrop(stackIds, 'comic')}
           enableContextMenu
@@ -284,7 +286,7 @@ export function LibrarySection({
         <DroppableSideMenuItem
           asChild
           icon={Film}
-          label="Videos"
+          label={t.sidebar.videos}
           count={counts?.video}
           onStacksDrop={(stackIds) => handleMediaTypeDrop(stackIds, 'video')}
           enableContextMenu
@@ -305,7 +307,7 @@ export function LibrarySection({
             (
               <span className="flex items-center gap-1.5">
                 <Tag size={15} />
-                <span>Tags</span>
+                <span>{t.sidebar.tags}</span>
               </span>
             ) as any
           }
@@ -331,7 +333,7 @@ export function LibrarySection({
             (
               <span className="flex items-center gap-1.5">
                 <Tag size={15} />
-                <span>AutoTags</span>
+                <span>{t.sidebar.autoTags}</span>
               </span>
             ) as any
           }
@@ -357,7 +359,7 @@ export function LibrarySection({
             (
               <span className="flex items-center gap-1.5">
                 <User size={15} />
-                <span>Authors</span>
+                <span>{t.sidebar.authors}</span>
               </span>
             ) as any
           }

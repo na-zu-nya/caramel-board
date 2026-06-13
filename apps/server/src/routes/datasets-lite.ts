@@ -72,6 +72,22 @@ app.get('/:id', async (c) => {
   return c.json({ ...ds, authorized });
 });
 
+// ライブラリの統計(スタック数・アイテム数)
+app.get('/:id/stats', async (c) => {
+  const id = Number.parseInt(c.req.param('id'), 10);
+  const auth = await ensureDatasetAuthorizedForCurrentStore(c, id);
+  if (auth) return auth;
+  if (isStandaloneSqliteEnabled()) {
+    return c.json(getStandaloneDatasetRepository().getStats(id));
+  }
+  const prisma = getPrisma();
+  const [stackCount, assetCount] = await Promise.all([
+    prisma.stack.count({ where: { dataSetId: id } }),
+    prisma.asset.count({ where: { stack: { dataSetId: id } } }),
+  ]);
+  return c.json({ stackCount, assetCount });
+});
+
 // Overview data
 app.get('/:id/overview', async (c) => {
   const id = Number.parseInt(c.req.param('id'), 10);
