@@ -21,11 +21,15 @@ const serverRoot = path.join(repoRoot, 'apps/server');
 const clientRoot = path.join(repoRoot, 'apps/client');
 const nodeMajor = Number(process.env.CARAMEL_NODE_MAJOR || 24);
 
+const npmCommand = () => (process.platform === 'win32' ? 'npm.cmd' : 'npm');
+const isWindowsCommandScript = (command) => /\.(cmd|bat)$/i.test(command);
+
 const run = (command, args, options = {}) => {
   console.log(`$ ${command} ${args.join(' ')}`);
   execFileSync(command, args, {
     cwd: repoRoot,
     stdio: 'inherit',
+    shell: process.platform === 'win32' && isWindowsCommandScript(command),
     ...options,
   });
 };
@@ -270,7 +274,7 @@ const prepareServerRuntime = () => {
   });
   writeRuntimeServerPackageJson();
 
-  run('npm', ['install', '--omit=dev', '--package-lock=false'], { cwd: serverResource });
+  run(npmCommand(), ['install', '--omit=dev', '--package-lock=false'], { cwd: serverResource });
   run(
     packageBin(serverResource, 'prisma'),
     ['generate', '--schema', path.join(serverResource, 'prisma/schema.prisma')],
@@ -308,8 +312,8 @@ const prepareAutoTagBridge = () => {
 };
 
 const main = async () => {
-  run('npm', ['run', '-w', '@caramelboard/server', 'build']);
-  run('npm', ['run', '-w', '@caramelboard/client', 'build']);
+  run(npmCommand(), ['run', '-w', '@caramelboard/server', 'build']);
+  run(npmCommand(), ['run', '-w', '@caramelboard/client', 'build']);
 
   fs.mkdirSync(resourcesRoot, { recursive: true });
   await installNodeRuntime();
