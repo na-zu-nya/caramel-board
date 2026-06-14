@@ -14,6 +14,8 @@ import {
   Globe2,
   Languages,
   Megaphone,
+  Monitor,
+  PanelTop,
   Play,
   RefreshCcw,
   SlidersHorizontal,
@@ -54,6 +56,8 @@ interface AppSettings {
   autoTagModelDir: string;
   autoTagThreshold: number;
   ffmpegPath: string;
+  launchOnStartup: boolean;
+  residentMode: ResidentMode;
 }
 
 interface SidecarStatus {
@@ -125,6 +129,7 @@ interface FfmpegCandidate {
 }
 
 type AppLanguage = 'en' | 'ja';
+type ResidentMode = 'taskbar' | 'tray';
 type AutoTagInstallStep = 'intro' | 'metadata' | 'confirm' | 'progress' | null;
 type TextSettingKey =
   | 'dbPath'
@@ -141,7 +146,8 @@ type BooleanSettingKey =
   | 'allowExternalNetwork'
   | 'basicAuthEnabled'
   | 'dockerVerifyFiles'
-  | 'autoTagEnabled';
+  | 'autoTagEnabled'
+  | 'launchOnStartup';
 
 const defaultStatus: SidecarStatus = {
   running: false,
@@ -167,6 +173,9 @@ const choosePath = async (directory: boolean) => {
 const isAppLanguage = (value: string | undefined): value is AppLanguage =>
   value === 'en' || value === 'ja';
 
+const isResidentMode = (value: string | undefined): value is ResidentMode =>
+  value === 'taskbar' || value === 'tray';
+
 const isTextSettingKey = (value: string | undefined): value is TextSettingKey =>
   value === 'dbPath' ||
   value === 'libraryPath' ||
@@ -183,7 +192,8 @@ const isBooleanSettingKey = (value: string | undefined): value is BooleanSetting
   value === 'allowExternalNetwork' ||
   value === 'basicAuthEnabled' ||
   value === 'dockerVerifyFiles' ||
-  value === 'autoTagEnabled';
+  value === 'autoTagEnabled' ||
+  value === 'launchOnStartup';
 
 const isDockerTextSettingKey = (value: TextSettingKey) =>
   value === 'dockerDatabaseUrl' || value === 'dockerStorageRoot' || value === 'dockerDatasetId';
@@ -218,6 +228,17 @@ const translations = {
     settingsNavigation: 'Settings navigation',
     generalDescription:
       'Core standalone settings for database, files, network, and access control.',
+    startupAndResident: 'Startup and resident mode',
+    startupAndResidentDescription:
+      'Choose whether Caramel Board starts at login and where the settings window stays available.',
+    launchOnStartup: 'Start Caramel Board when you sign in',
+    residentMode: 'Resident mode',
+    taskbarMode: 'Taskbar',
+    dockMode: 'Dock',
+    trayMode: 'Task tray',
+    menuBarMode: 'Menu bar',
+    taskbarModeHint: 'Closing the settings window minimizes it so it can be reopened from there.',
+    trayModeHint: 'Closing the settings window hides it; reopen it from the resident icon.',
     mediaDescription: 'Configure FFmpeg used for GIF and video preview generation.',
     ffmpeg: 'FFmpeg',
     ffmpegPath: 'FFmpeg executable',
@@ -250,14 +271,15 @@ const translations = {
     autoTagInstallIntroTitle: 'Install AutoTag model',
     autoTagInstallIntroLead: 'AutoTag uses the open-source JoyTag model.',
     autoTagInstallIntroDetail:
-      'This feature uses a pre-trained model to generate tags from images.',
+      'This feature uses a pre-trained model to generate tags from images. CUDA is not required for normal CPU tagging. If you want GPU acceleration and CUDA setup fails, install the latest NVIDIA driver and CUDA Toolkit, then try again.',
     autoTagInstallIntroLocal:
       'All processing runs locally. Images are not transferred outside this computer.',
     autoTagInstallIntroTraining: 'Images used with this feature are not used for training.',
     autoTagInstallReference: 'Reference',
     autoTagMetadataLoading: 'Fetching model metadata...',
     autoTagDownloadConfirmTitle: 'Download model data',
-    autoTagDownloadConfirm: (size: string) => `${size} of data will be downloaded. Continue?`,
+    autoTagDownloadConfirm: (size: string) =>
+      `${size} of data will be downloaded. Continue? CUDA is not required for CPU tagging. If you want GPU acceleration and CUDA setup fails, install the latest NVIDIA driver and CUDA Toolkit, then try again.`,
     autoTagDownloadStarted: 'AutoTag installation started in the background.',
     autoTagInstallCompleted: 'AutoTag installation completed. AutoTag was enabled.',
     autoTagInstallInProgress: 'Installing AutoTag...',
@@ -379,6 +401,17 @@ const translations = {
     migration: '移行',
     settingsNavigation: '設定ナビゲーション',
     generalDescription: 'DB、ファイル、ネットワーク、アクセス設定をまとめて管理します。',
+    startupAndResident: '自動起動と常駐',
+    startupAndResidentDescription:
+      'ログイン時に起動するか、設定画面をどこから開けるようにするかを選びます。',
+    launchOnStartup: 'ログイン時に Caramel Board を起動する',
+    residentMode: '常駐方法',
+    taskbarMode: 'タスクバー',
+    dockMode: 'Dock',
+    trayMode: 'タスクトレイ',
+    menuBarMode: 'メニューバー',
+    taskbarModeHint: '設定画面を閉じると最小化し、ここから再表示できます。',
+    trayModeHint: '設定画面を閉じると隠れ、常駐アイコンから再表示できます。',
     mediaDescription: 'GIF・動画プレビュー生成に使用する FFmpeg を設定します。',
     ffmpeg: 'FFmpeg',
     ffmpegPath: 'FFmpeg 実行ファイル',
@@ -411,14 +444,15 @@ const translations = {
     autoTagInstallIntroTitle: '自動タグモデルのインストール',
     autoTagInstallIntroLead: '自動タグにはオープンソースのJoyTagを使用します。',
     autoTagInstallIntroDetail:
-      'この機能により、事前に学習されたモデルを使用し、画像のタグを生成します。',
+      'この機能により、事前に学習されたモデルを使用し、画像のタグを生成します。通常の CPU タグ付けに CUDA は不要です。GPU 高速化を使いたい場合に CUDA のセットアップで失敗したら、最新の NVIDIA ドライバーと CUDA Toolkit をインストールしてから再試行してください。',
     autoTagInstallIntroLocal:
       '動作は全てローカルで完結し、画像が外部に転送されることはありません。',
     autoTagInstallIntroTraining: 'この機能で使用された画像が学習されることはありません。',
     autoTagInstallReference: '詳細',
     autoTagMetadataLoading: 'メタデータを取得中...',
     autoTagDownloadConfirmTitle: 'モデルのダウンロード',
-    autoTagDownloadConfirm: (size: string) => `${size} のデータをダウンロードします。続けますか？`,
+    autoTagDownloadConfirm: (size: string) =>
+      `${size} のデータをダウンロードします。続けますか？ CPU でのタグ付けに CUDA は不要です。GPU 高速化を使いたい場合に CUDA のセットアップで失敗したら、最新の NVIDIA ドライバーと CUDA Toolkit をインストールしてから再試行してください。`,
     autoTagDownloadStarted: '自動タグのインストールをバックグラウンドで開始しました。',
     autoTagInstallCompleted: '自動タグのインストールが完了しました。自動タグを有効にしました。',
     autoTagInstallInProgress: '自動タグをインストールしています...',
@@ -544,6 +578,14 @@ export default function App() {
   const language = settings?.language ?? getInitialLanguage();
   const t = translations[language];
   const settingsDisabled = busy || status.running;
+  const shellSettingsDisabled = busy;
+  const residentModeLabels = useMemo(() => {
+    const isMac = navigator.platform.toLowerCase().includes('mac');
+    return {
+      taskbar: isMac ? t.dockMode : t.taskbarMode,
+      tray: isMac ? t.menuBarMode : t.trayMode,
+    };
+  }, [t]);
   const displayUrl = useMemo(() => {
     if (status.running && settings?.allowExternalNetwork && localIp && localIp !== '127.0.0.1') {
       return `http://${localIp}:${settings.port}`;
@@ -682,6 +724,16 @@ export default function App() {
       const nextLanguage = event.currentTarget.value;
       if (isAppLanguage(nextLanguage)) {
         patchSettings({ language: nextLanguage });
+      }
+    },
+    [patchSettings]
+  );
+
+  const handleResidentModeChange = useCallback(
+    (event: ChangeEvent<HTMLSelectElement>) => {
+      const nextMode = event.currentTarget.value;
+      if (isResidentMode(nextMode)) {
+        patchSettings({ residentMode: nextMode });
       }
     },
     [patchSettings]
@@ -894,7 +946,12 @@ export default function App() {
       await saveSettings();
       const targetPath = await choosePath(true);
       if (!targetPath) return;
-      const next = await invoke<AppSettings>('apply_data_store', { rootPath: targetPath });
+      const next = await invoke<AppSettings>('apply_data_store', {
+        rootPath: targetPath,
+        resetExisting: false,
+        setupCompleted: true,
+        carryExistingData: true,
+      });
       settingsRef.current = next;
       setSettings(next);
     }, t.dataStoreMoved);
@@ -1253,6 +1310,39 @@ export default function App() {
                 <option value="ja">{t.japanese}</option>
               </select>
             </label>
+          </div>
+
+          <div className="settings-group">
+            <div className="group-heading">
+              <Monitor size={16} />
+              <h3>{t.startupAndResident}</h3>
+            </div>
+            <p className="muted">{t.startupAndResidentDescription}</p>
+            <label className="toggle-row">
+              <input
+                type="checkbox"
+                checked={settings.launchOnStartup}
+                disabled={shellSettingsDisabled}
+                data-setting="launchOnStartup"
+                onChange={handleBooleanSettingChange}
+              />
+              <span>{t.launchOnStartup}</span>
+            </label>
+            <label className="field compact">
+              <span>{t.residentMode}</span>
+              <select
+                value={settings.residentMode}
+                disabled={shellSettingsDisabled}
+                onChange={handleResidentModeChange}
+              >
+                <option value="tray">{residentModeLabels.tray}</option>
+                <option value="taskbar">{residentModeLabels.taskbar}</option>
+              </select>
+            </label>
+            <div className="resident-mode-hint">
+              <PanelTop size={15} />
+              <span>{settings.residentMode === 'tray' ? t.trayModeHint : t.taskbarModeHint}</span>
+            </div>
           </div>
 
           <div className="settings-group">

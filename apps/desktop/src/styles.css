@@ -495,6 +495,23 @@ select:disabled {
   min-height: 0;
 }
 
+.resident-mode-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  max-width: 440px;
+  color: #687685;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.resident-mode-hint svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: #7d8da0;
+}
+
 .bottom-aligned {
   align-self: end;
   min-height: 32px;
@@ -701,10 +718,14 @@ select:disabled {
 }
 
 .install-progress-card p {
+  max-height: 96px;
+  overflow: auto;
   margin: 0;
   color: #526174;
   font-size: 12px;
   line-height: 1.45;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
 }
 
 .progress-track {
@@ -1074,6 +1095,7 @@ select:disabled {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  max-height: 132px;
   padding: 12px 18px;
   border-top: 1px solid #d8e0e9;
   background: #ffffffd9;
@@ -1084,8 +1106,11 @@ select:disabled {
 
 .wizard-footer .wizard-message {
   flex: 1;
+  max-height: 108px;
+  overflow: auto;
   white-space: pre-line;
   color: #18212c;
+  overflow-wrap: anywhere;
 }
 
 .wizard-footer .wizard-error {
@@ -1096,10 +1121,13 @@ select:disabled {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  max-height: 180px;
+  overflow: auto;
   padding: 14px;
   border: 1px solid #cfd8e3;
   border-radius: 8px;
   background: #f1f6fb;
+  overflow-wrap: anywhere;
 }
 
 .wizard-progress-card.spinner::before {

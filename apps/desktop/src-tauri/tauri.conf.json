@@ -32,6 +32,11 @@
     ],
     "resources": {
       "../resources/": ""
+    },
+    "windows": {
+      "wix": {
+        "template": "wix/main.wxs"
+      }
     }
   }
 }

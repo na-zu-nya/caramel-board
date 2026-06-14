@@ -109,7 +109,7 @@ interface AutoTagInstallProgress {
   error: string | null;
 }
 
-type AutoTagInstallPhase = 'idle' | 'metadata' | 'confirm' | 'progress' | 'done';
+type AutoTagInstallPhase = 'idle' | 'metadata' | 'confirm' | 'progress' | 'done' | 'failed';
 
 type FullSettings = AppSettingsLike & {
   ffmpegPath: string;
@@ -156,6 +156,13 @@ const wizardCopy = {
     detectExistingEmpty: 'A new data store will be created here.',
     detectExistingNotEmptyOther:
       'The folder is not empty but is not a Caramel Board data store. Choose an empty folder.',
+    detectExistingResettable:
+      'This folder already has files. You can clear it and create a new data store here.',
+    resetDataStoreTitle: 'Clear this folder and create a new data store?',
+    resetDataStoreBody:
+      'All files and folders inside the selected folder will be deleted. This is useful when setup was interrupted and left a partial data store.',
+    resetDataStoreCancel: 'Choose another folder',
+    resetDataStoreConfirm: 'Clear and create',
     existingTitle: 'Open your data store',
     existingBody:
       'Pick a folder that already contains your Caramel Board data (a caramel-board.sqlite file).',
@@ -180,6 +187,8 @@ const wizardCopy = {
       'Copying data into the new data store. Please leave the previous version running until this finishes.',
     doneTitle: 'All set',
     doneBody: 'Setup is complete. Start Caramel Board now?',
+    launchNetworkNote:
+      'On first launch, Windows may ask to allow network access for Node.js or Python. Allow access on private networks if you want to open Caramel Board from this computer or other devices on your local network.',
     launchNow: 'Start Caramel Board',
     launchLater: 'Start later',
     launchPreparing: 'Starting Caramel Board…',
@@ -232,7 +241,7 @@ const wizardCopy = {
     useThis: 'Use this',
     autoTagTitle: 'Auto-tagging',
     autoTagBody:
-      'Caramel Board can tag your images locally using the open-source JoyTag model. Everything runs on this computer — your images are never sent anywhere, and they are never used to train AI.',
+      'Caramel Board can tag your images locally using the open-source JoyTag model. Everything runs on this computer — your images are never sent anywhere, and they are never used to train AI. CUDA is not required for normal CPU tagging. If you want GPU acceleration and CUDA setup fails, install the latest NVIDIA driver and CUDA Toolkit, then try again.',
     aboutJoyTag: 'About JoyTag',
     autoTagEnable: 'I want to use auto-tagging',
     autoTagEnableHint:
@@ -241,7 +250,8 @@ const wizardCopy = {
     autoTagInstallNow: 'Install now',
     autoTagFetchMetadata: 'Checking model size…',
     autoTagConfirmTitle: 'Download model data',
-    autoTagConfirmBody: (size: string) => `About ${size} of data will be downloaded. Continue?`,
+    autoTagConfirmBody: (size: string) =>
+      `About ${size} of data will be downloaded. Continue? CUDA is not required for CPU tagging. If you want GPU acceleration and CUDA setup fails, install the latest NVIDIA driver and CUDA Toolkit, then try again.`,
     autoTagInstallStart: 'Start install',
     autoTagInstalling: 'Installing auto-tag…',
     autoTagInstallDone: 'Auto-tag installation completed.',
@@ -272,6 +282,13 @@ const wizardCopy = {
     detectExistingEmpty: 'ここに新しいデータストアを作ります。',
     detectExistingNotEmptyOther:
       'フォルダが空ではありませんが、Caramel Board のデータストアではありません。空のフォルダを選んでください。',
+    detectExistingResettable:
+      'このフォルダには既に中身があります。中身をクリアして新しいデータストアを作成できます。',
+    resetDataStoreTitle: 'このフォルダをクリアして新規作成しますか?',
+    resetDataStoreBody:
+      '選択したフォルダ内のファイルとフォルダをすべて削除します。セットアップが途中で止まり、作成途中のデータストアが残った場合に使います。',
+    resetDataStoreCancel: '別のフォルダを選ぶ',
+    resetDataStoreConfirm: 'クリアして作成',
     existingTitle: 'データストアを開く',
     existingBody: 'caramel-board.sqlite が入っている、これまで使っていたフォルダを選んでください。',
     existingMissing:
@@ -295,6 +312,8 @@ const wizardCopy = {
       'データをコピーしています。完了するまで以前の版は起動したままにしてください。',
     doneTitle: '準備ができました',
     doneBody: 'セットアップが完了しました。Caramel Board を起動しますか?',
+    launchNetworkNote:
+      '初回起動時に、Windows が Node.js や Python のネットワークアクセス許可を求める場合があります。この PC や同じネットワーク上の機器から Caramel Board を開く場合は、プライベートネットワークでのアクセスを許可してください。',
     launchNow: 'Caramel Board を起動',
     launchLater: 'あとで起動する',
     launchPreparing: 'Caramel Board を起動しています…',
@@ -344,7 +363,7 @@ const wizardCopy = {
     useThis: 'この FFmpeg を使う',
     autoTagTitle: '自動タグ',
     autoTagBody:
-      'オープンソースの JoyTag モデルを使って、画像にローカルで AI タグを付けられます。処理はこのコンピュータ内で完結し、画像が外部に送信されたり、AI の学習に使われたりすることはありません。',
+      'オープンソースの JoyTag モデルを使って、画像にローカルで AI タグを付けられます。処理はこのコンピュータ内で完結し、画像が外部に送信されたり、AI の学習に使われたりすることはありません。通常の CPU タグ付けに CUDA は不要です。GPU 高速化を使いたい場合に CUDA のセットアップで失敗したら、最新の NVIDIA ドライバーと CUDA Toolkit をインストールしてから再試行してください。',
     aboutJoyTag: 'JoyTag について',
     autoTagEnable: '自動タグを使う',
     autoTagEnableHint:
@@ -353,7 +372,8 @@ const wizardCopy = {
     autoTagInstallNow: 'いまインストールする',
     autoTagFetchMetadata: 'モデルサイズを取得中…',
     autoTagConfirmTitle: 'モデルのダウンロード',
-    autoTagConfirmBody: (size: string) => `約 ${size} のデータをダウンロードします。続けますか?`,
+    autoTagConfirmBody: (size: string) =>
+      `約 ${size} のデータをダウンロードします。続けますか? CPU でのタグ付けに CUDA は不要です。GPU 高速化を使いたい場合に CUDA のセットアップで失敗したら、最新の NVIDIA ドライバーと CUDA Toolkit をインストールしてから再試行してください。`,
     autoTagInstallStart: 'インストールを開始',
     autoTagInstalling: '自動タグをインストール中…',
     autoTagInstallDone: '自動タグのインストールが完了しました。',
@@ -374,6 +394,11 @@ const FFMPEG_INSTALL_URL = 'https://ffmpeg.org/download.html';
 const JOYTAG_URL = 'https://github.com/fpgaminer/joytag';
 
 const errorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
+
+const dataStoreHasContents = (inspection: DataStoreInspection | null) =>
+  Boolean(
+    inspection?.exists && (!inspection.isEmpty || inspection.hasDatabase || inspection.hasLibrary)
+  );
 
 export function SetupWizard({
   language,
@@ -413,6 +438,7 @@ export function SetupWizard({
   const [autoTagProgress, setAutoTagProgress] = useState<AutoTagInstallProgress | null>(null);
   const [launchPhase, setLaunchPhase] = useState<'idle' | 'starting' | 'ready'>('idle');
   const [launchedUrl, setLaunchedUrl] = useState('');
+  const [resetDataStoreConfirmOpen, setResetDataStoreConfirmOpen] = useState(false);
 
   const targetPath = useDefault ? defaultDataStoreRoot : customPath;
 
@@ -543,9 +569,19 @@ export function SetupWizard({
   }, []);
 
   const handleApplyDataStore = useCallback(
-    async (root: string) => {
+    async (
+      root: string,
+      options: {
+        resetExisting?: boolean;
+        setupCompleted?: boolean;
+        carryExistingData?: boolean;
+      } = {}
+    ) => {
       const applied = await invoke<FullSettings>('apply_data_store', {
         rootPath: root,
+        resetExisting: options.resetExisting ?? false,
+        setupCompleted: options.setupCompleted ?? false,
+        carryExistingData: options.carryExistingData ?? false,
       });
       // intro 画面で選んだ言語が、ディスク再読込の結果で巻き戻らないようにマージする
       return { ...applied, language };
@@ -553,12 +589,21 @@ export function SetupWizard({
     [language]
   );
 
-  const handleConfirmNew = useCallback(async () => {
+  const handleConfirmNew = useCallback(async (resetExisting = false) => {
     if (!targetPath.trim()) return;
     setBusy(true);
     setError('');
     try {
-      const applied = await handleApplyDataStore(targetPath);
+      const latestInspection = (await inspectTarget(targetPath)) ?? inspection;
+      if (!resetExisting && dataStoreHasContents(latestInspection)) {
+        setResetDataStoreConfirmOpen(true);
+        return;
+      }
+      const applied = await handleApplyDataStore(targetPath, {
+        resetExisting,
+        setupCompleted: false,
+        carryExistingData: false,
+      });
       setAppliedSettings(applied as FullSettings);
       setStep('sharing-setup');
     } catch (err) {
@@ -566,14 +611,17 @@ export function SetupWizard({
     } finally {
       setBusy(false);
     }
-  }, [targetPath, handleApplyDataStore]);
+  }, [targetPath, inspectTarget, inspection, handleApplyDataStore]);
 
   const handleConfirmExisting = useCallback(async () => {
     if (!existingPath.trim()) return;
     setBusy(true);
     setError('');
     try {
-      const applied = await handleApplyDataStore(existingPath);
+      const applied = await handleApplyDataStore(existingPath, {
+        setupCompleted: false,
+        carryExistingData: false,
+      });
       setAppliedSettings(applied as FullSettings);
       setStep('sharing-setup');
     } catch (err) {
@@ -589,7 +637,10 @@ export function SetupWizard({
     setBusy(true);
     setError('');
     try {
-      const applied = await handleApplyDataStore(targetPath);
+      const applied = await handleApplyDataStore(targetPath, {
+        setupCompleted: false,
+        carryExistingData: false,
+      });
       const settingsForMigration = {
         ...applied,
         dockerDatabaseUrl: sourceDatabaseUrl,
@@ -608,11 +659,26 @@ export function SetupWizard({
     }
   }, [targetPath, handleApplyDataStore, sourceDatabaseUrl, sourceStorageRoot]);
 
-  const handleFinish = useCallback(() => {
-    if (appliedSettings) {
-      onComplete(appliedSettings);
+  const completeWizard = useCallback(async () => {
+    const completed = await invoke<FullSettings>('complete_setup');
+    const merged = { ...completed, language };
+    setAppliedSettings(merged);
+    return merged;
+  }, [language]);
+
+  const handleFinish = useCallback(async () => {
+    if (!appliedSettings) return;
+    setBusy(true);
+    setError('');
+    try {
+      const completed = await completeWizard();
+      onComplete(completed);
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
     }
-  }, [appliedSettings, onComplete]);
+  }, [appliedSettings, completeWizard, onComplete]);
 
   const handleLaunch = useCallback(async () => {
     if (!appliedSettings) return;
@@ -620,15 +686,16 @@ export function SetupWizard({
     setError('');
     setLaunchPhase('starting');
     try {
+      const completed = await completeWizard();
       const next = await invoke<SidecarStatus>('start_sidecar', {
-        settings: appliedSettings,
+        settings: completed,
       });
       let url = next.url;
-      if (appliedSettings.allowExternalNetwork) {
+      if (completed.allowExternalNetwork) {
         try {
           const ip = await invoke<string>('local_ip_address');
           if (ip && ip !== '127.0.0.1') {
-            url = `http://${ip}:${appliedSettings.port}`;
+            url = `http://${ip}:${completed.port}`;
           }
         } catch {
           // LAN IP が取れなくてもローカル URL で続行
@@ -636,7 +703,7 @@ export function SetupWizard({
       }
       setLaunchedUrl(url);
       const ready = await invoke<boolean>('wait_server_ready', {
-        port: appliedSettings.port,
+        port: completed.port,
         timeoutMs: 60000,
       });
       if (ready) {
@@ -651,7 +718,7 @@ export function SetupWizard({
     } finally {
       setBusy(false);
     }
-  }, [appliedSettings, t]);
+  }, [appliedSettings, completeWizard, t]);
 
   const handleOpenLaunchedUrl = useCallback(() => {
     if (launchedUrl) {
@@ -822,8 +889,8 @@ export function SetupWizard({
             setError(errorMessage(err));
           }
         } else if (next.error) {
-          setAutoTagPhase('idle');
-          setError(next.error);
+          setAutoTagPhase('failed');
+          setError('');
           window.clearInterval(timer);
         }
       } catch (err) {
@@ -907,6 +974,14 @@ export function SetupWizard({
     const inspectionHint = (() => {
       if (!targetPath.trim()) return null;
       if (!inspection) return null;
+      if (!forMigration && dataStoreHasContents(inspection)) {
+        return (
+          <div className="wizard-path-card warn">
+            <strong>{t.detectExistingResettable}</strong>
+            <span>{inspection.path}</span>
+          </div>
+        );
+      }
       if (inspection.hasDatabase) {
         return (
           <div className="wizard-path-card">
@@ -932,7 +1007,8 @@ export function SetupWizard({
     })();
 
     const blocked =
-      !targetPath.trim() || (inspection?.exists && !inspection.isEmpty && !inspection.hasDatabase);
+      !targetPath.trim() ||
+      (forMigration && inspection?.exists && !inspection.isEmpty && !inspection.hasDatabase);
 
     return (
       <>
@@ -1367,12 +1443,14 @@ export function SetupWizard({
           </div>
         ) : null}
 
-        {phase === 'progress' || phase === 'done' ? (
+        {phase === 'progress' || phase === 'done' || phase === 'failed' ? (
           <div className="wizard-progress-card">
             <span>
               {phase === 'done'
                 ? t.autoTagInstallDone
-                : (autoTagProgress?.message ?? t.autoTagInstalling)}
+                : phase === 'failed'
+                  ? (autoTagProgress?.message ?? t.autoTagInstallFailed)
+                  : (autoTagProgress?.message ?? t.autoTagInstalling)}
             </span>
             <div className="progress-track">
               <div className="progress-fill" style={{ width: `${progressPercent}%` }} />
@@ -1383,14 +1461,16 @@ export function SetupWizard({
 
         <div className="wizard-actions between">
           {phase === 'progress' ? (
-            <span className="muted">{t.autoTagInstalling}</span>
+            <button type="button" onClick={handleSkipAutoTag} disabled={busy}>
+              {t.skipForNow}
+            </button>
           ) : (
             <button
               type="button"
-              onClick={phase === 'done' ? handleProceedFromAutoTag : handleSkipAutoTag}
+              onClick={phase === 'done' || phase === 'failed' ? handleProceedFromAutoTag : handleSkipAutoTag}
               disabled={busy}
             >
-              {phase === 'done' ? t.next : t.skipForNow}
+              {phase === 'done' || phase === 'failed' ? t.next : t.skipForNow}
             </button>
           )}
 
@@ -1426,7 +1506,7 @@ export function SetupWizard({
               <Download size={15} />
               {t.autoTagInstallStart}
             </button>
-          ) : phase === 'done' ? (
+          ) : phase === 'done' || phase === 'failed' ? (
             <button
               type="button"
               className="primary-button"
@@ -1468,7 +1548,7 @@ export function SetupWizard({
             <strong>{launchedUrl}</strong>
           </div>
           <div className="wizard-actions between">
-            <button type="button" onClick={handleFinish} disabled={busy}>
+            <button type="button" onClick={() => void handleFinish()} disabled={busy}>
               {t.goToSettings}
             </button>
             <button
@@ -1495,8 +1575,11 @@ export function SetupWizard({
           <strong>{t.selectedFolder}</strong>
           <span>{mode === 'existing' ? existingPath : targetPath}</span>
         </div>
+        <div className="wizard-path-card warn">
+          <strong>{t.launchNetworkNote}</strong>
+        </div>
         <div className="wizard-actions between">
-          <button type="button" onClick={handleFinish} disabled={busy}>
+          <button type="button" onClick={() => void handleFinish()} disabled={busy}>
             {t.launchLater}
           </button>
           <button
@@ -1539,6 +1622,40 @@ export function SetupWizard({
           <AlertCircle size={14} />
           <span className="wizard-message wizard-error">{error}</span>
         </footer>
+      ) : null}
+      {resetDataStoreConfirmOpen ? (
+        <div className="modal-backdrop" role="presentation">
+          <div className="modal-panel" role="dialog" aria-modal="true">
+            <div className="modal-heading">
+              <AlertCircle size={20} />
+              <h2>{t.resetDataStoreTitle}</h2>
+            </div>
+            <div className="modal-copy">
+              <p>{t.resetDataStoreBody}</p>
+              <p>{targetPath}</p>
+            </div>
+            <div className="modal-actions">
+              <button
+                type="button"
+                onClick={() => setResetDataStoreConfirmOpen(false)}
+                disabled={busy}
+              >
+                {t.resetDataStoreCancel}
+              </button>
+              <button
+                type="button"
+                className="primary-button"
+                onClick={() => {
+                  setResetDataStoreConfirmOpen(false);
+                  void handleConfirmNew(true);
+                }}
+                disabled={busy}
+              >
+                {t.resetDataStoreConfirm}
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
     </main>
   );

@@ -26,6 +26,7 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
+    base: './',
     clearScreen: false,
     define: {
       'import.meta.env.VITE_APP_VERSION': JSON.stringify(appVersion),
