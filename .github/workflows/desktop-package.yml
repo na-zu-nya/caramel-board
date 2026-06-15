@@ -36,8 +36,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build desktop package
+      - name: Build desktop package (macOS)
+        if: runner.os == 'macOS'
         run: npm run -w @caramelboard/desktop build:app
+
+      - name: Build desktop package (Windows)
+        if: runner.os == 'Windows'
+        run: npm run -w @caramelboard/desktop prepare:package && npm exec -w @caramelboard/desktop -- tauri build --bundles nsis
 
       - name: Upload desktop bundles
         uses: actions/upload-artifact@v4
