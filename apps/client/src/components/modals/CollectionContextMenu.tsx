@@ -270,21 +270,21 @@ export function CollectionContextMenu({
         <DialogContent className="sm:max-w-md">
           <DialogHeader className="border-b border-gray-200 pb-4">
             <DialogTitle className="text-lg font-semibold text-gray-900">
-              Edit Collection
+              {t.collection.editCollection}
             </DialogTitle>
           </DialogHeader>
 
           <form className="space-y-6 pt-2" onSubmit={handleRename}>
             <div className="space-y-2">
               <Label htmlFor="edit-name" className="text-gray-700">
-                Collection Name *
+                {t.collection.collectionName} *
               </Label>
               <Input
                 id="edit-name"
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Enter collection name"
+                placeholder={t.contextMenu.enterCollectionName}
                 required
                 autoFocus
                 disabled={loading}
@@ -299,14 +299,14 @@ export function CollectionContextMenu({
                 disabled={loading}
                 className="px-4 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
               >
-                Cancel
+                {t.common.cancel}
               </Button>
               <Button
                 type="submit"
                 disabled={loading || !name.trim()}
                 className="px-4 py-2 text-sm text-primary-foreground bg-primary rounded-md hover:bg-primary/90 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
               >
-                {loading ? 'Updating...' : 'Update'}
+                {loading ? t.common.updating : t.common.update}
               </Button>
             </div>
           </form>
@@ -318,10 +318,10 @@ export function CollectionContextMenu({
         <DialogContent className="sm:max-w-md">
           <DialogHeader className="border-b border-gray-200 pb-4">
             <DialogTitle className="text-lg font-semibold text-gray-900">
-              Delete Collection
+              {t.collection.deleteCollection}
             </DialogTitle>
             <DialogDescription className="text-gray-600 mt-2">
-              Delete collection "{collection.name}"? This action cannot be undone.
+              {t.collection.deleteCollectionConfirm(collection.name)}
             </DialogDescription>
           </DialogHeader>
 
@@ -333,14 +333,14 @@ export function CollectionContextMenu({
               disabled={loading}
               className="px-4 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
             >
-              Cancel
+              {t.common.cancel}
             </Button>
             <Button
               onClick={handleDelete}
               disabled={loading}
               className="px-4 py-2 text-sm text-white bg-red-600 rounded-md hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
             >
-              {loading ? 'Deleting...' : 'Delete'}
+              {loading ? t.common.deleting : t.common.delete}
             </Button>
           </div>
         </DialogContent>
@@ -351,30 +351,30 @@ export function CollectionContextMenu({
         <DialogContent className="sm:max-w-md">
           <DialogHeader className="border-b border-gray-200 pb-4">
             <DialogTitle className="text-lg font-semibold text-gray-900">
-              Pin {collection.name}
+              {t.collection.pinCollection(collection.name)}
             </DialogTitle>
             <DialogDescription className="text-gray-600 mt-2">
-              Set the name and icon to display in the header navigation.
+              {t.collection.setHeaderPinDisplay}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-6 pt-2">
             <div className="space-y-2">
               <Label htmlFor="pin-name" className="text-gray-700">
-                Display Name *
+                {t.contextMenu.displayName} *
               </Label>
               <Input
                 id="pin-name"
                 type="text"
                 value={pinName}
                 onChange={(e) => setPinName(e.target.value)}
-                placeholder="Enter display name"
+                placeholder={t.contextMenu.enterDisplayName}
                 required
               />
             </div>
 
             <div className="space-y-2">
-              <Label className="text-gray-700">Icon</Label>
+              <Label className="text-gray-700">{t.contextMenu.icon}</Label>
               <div className="grid grid-cols-8 gap-2 max-h-48 overflow-y-auto border border-gray-200 rounded-md p-2">
                 {AVAILABLE_ICONS.map((iconName) => (
                   <button
@@ -392,7 +392,9 @@ export function CollectionContextMenu({
                   </button>
                 ))}
               </div>
-              <p className="text-xs text-gray-500">Selected: {selectedPinIcon}</p>
+              <p className="text-xs text-gray-500">
+                {t.collection.selected} {selectedPinIcon}
+              </p>
             </div>
 
             <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
@@ -403,14 +405,14 @@ export function CollectionContextMenu({
                 disabled={loading}
                 className="px-4 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
               >
-                Cancel
+                {t.common.cancel}
               </Button>
               <Button
                 onClick={handlePin}
                 disabled={loading || !pinName.trim()}
                 className="px-4 py-2 text-sm text-primary-foreground bg-primary rounded-md hover:bg-primary/90 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
               >
-                {loading ? 'Pinning...' : 'Pin'}
+                {loading ? t.contextMenu.pinning : t.contextMenu.pin}
               </Button>
             </div>
           </div>

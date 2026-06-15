@@ -487,10 +487,8 @@ export default function StackViewer({
     if (!stack) return;
     const stackIdValue =
       typeof stack.id === 'string' ? Number.parseInt(stack.id, 10) : (stack.id as number);
-    const name = stack.name || 'this stack';
-    const confirmed = window.confirm(
-      `Are you sure you want to delete the stack "${name}"? This action cannot be undone.`
-    );
+    const name = stack.name || t.common.untitled;
+    const confirmed = window.confirm(t.viewer.deleteStackConfirm(name));
     if (!confirmed) return;
 
     try {
@@ -512,7 +510,7 @@ export default function StackViewer({
       }
     } catch (error) {
       console.error('Failed to delete stack:', error);
-      alert('Failed to delete stack. Please try again.');
+      alert(t.viewer.deleteStackFailed);
     }
   }, [
     datasetId,
@@ -523,6 +521,7 @@ export default function StackViewer({
     setIsInfoSidebarOpen,
     setSelectedItemId,
     stack,
+    t,
   ]);
   const handleContextMenuInfo = useCallback(() => {
     if (!stack) return;
@@ -545,10 +544,10 @@ export default function StackViewer({
     if (!success) {
       addNotification({
         type: 'error',
-        message: '現在のフレームをダウンロードできませんでした。',
+        message: t.viewer.downloadFrameFailed,
       });
     }
-  }, [addNotification, imageCarouselRef]);
+  }, [addNotification, imageCarouselRef, t]);
   const handleContextMenuDownloadCurrentFrame = useCallback(() => {
     closeViewerContextMenu();
     void handleDownloadCurrentVideoFrame();
@@ -974,7 +973,7 @@ export default function StackViewer({
 
       addNotification({
         type: 'info',
-        message: `${urls.length}件のURLをダウンロード中です`,
+        message: t.grid.urlDownloading(urls.length),
       });
 
       try {
@@ -995,7 +994,7 @@ export default function StackViewer({
         if (successes.length > 0) {
           addNotification({
             type: 'success',
-            message: `${successes.length}件のURLからアップロードしました`,
+            message: t.grid.urlUploaded(successes.length),
           });
           await refetch();
           void queryClient.invalidateQueries({ queryKey: ['stacks'] });
@@ -1008,7 +1007,7 @@ export default function StackViewer({
         if (duplicates.length > 0) {
           addNotification({
             type: 'info',
-            message: `${duplicates.length}件のURLは既に取り込み済みのためスキップしました`,
+            message: t.grid.urlDuplicatesSkipped(duplicates.length),
           });
         }
 
@@ -1022,24 +1021,23 @@ export default function StackViewer({
             type: 'error',
             message:
               failures.length === results.length
-                ? 'URLのアップロードに失敗しました'
-                : `${failures.length}件のURLでエラーが発生しました${summary ? `: ${summary}` : ''}`,
+                ? t.grid.urlUploadFailed
+                : t.grid.urlUploadPartialFailed(failures.length, summary),
           });
 
           if (protectedFailures.length > 0) {
             addNotification({
               type: 'info',
-              message:
-                '保護された画像は直接ドロップできません。一度保存してから再度ドロップしてください。',
+              message: t.grid.protectedImageDropHint,
             });
           }
         }
       } catch (error) {
         console.error('Failed to import URLs for stack', error);
-        addNotification({ type: 'error', message: 'URLのアップロードに失敗しました' });
+        addNotification({ type: 'error', message: t.grid.urlUploadFailed });
       }
     },
-    [stack, addNotification, refetch, queryClient, datasetId]
+    [stack, addNotification, refetch, queryClient, datasetId, t]
   );
 
   if (isLoading) {
@@ -1374,7 +1372,7 @@ export default function StackViewer({
                 role="menuitem"
               >
                 <Info className="w-4 h-4 mr-2" />
-                Info
+                {t.contextMenu.info}
               </button>
               <button
                 type="button"
@@ -1383,7 +1381,7 @@ export default function StackViewer({
                 role="menuitem"
               >
                 <Download className="w-4 h-4 mr-2" />
-                Download Page
+                {t.viewer.downloadPage}
               </button>
               {isCurrentVideoAsset && (
                 <button
@@ -1393,7 +1391,7 @@ export default function StackViewer({
                   role="menuitem"
                 >
                   <Download className="w-4 h-4 mr-2" />
-                  Download Frame
+                  {t.viewer.downloadFrame}
                 </button>
               )}
               <button
@@ -1403,7 +1401,7 @@ export default function StackViewer({
                 role="menuitem"
               >
                 <Download className="w-4 h-4 mr-2" />
-                Download All
+                {t.info.downloadAll}
               </button>
               <button
                 type="button"
@@ -1412,7 +1410,7 @@ export default function StackViewer({
                 role="menuitem"
               >
                 <GalleryVerticalEnd className="w-4 h-4 mr-2" />
-                Find similar
+                {t.contextMenu.findSimilar}
               </button>
               <button
                 type="button"
@@ -1421,7 +1419,7 @@ export default function StackViewer({
                 role="menuitem"
               >
                 <NotebookText className="w-4 h-4 mr-2" />
-                Add to Scratch
+                {t.contextMenu.addToScratch}
               </button>
               <div className="-mx-1 my-1 h-px bg-border" />
               <button
@@ -1431,7 +1429,7 @@ export default function StackViewer({
                 role="menuitem"
               >
                 <Trash2 className="w-4 h-4 mr-2" />
-                Delete
+                {t.common.delete}
               </button>
             </div>
           )}
@@ -1513,7 +1511,7 @@ export default function StackViewer({
           }}
           altMode={isColorPickerAlt && !isColorPickerManual}
           onCopied={(hex) => {
-            addNotification({ type: 'success', message: `Copied ${hex} to clipboard` });
+            addNotification({ type: 'success', message: t.viewer.copiedHex(hex) });
           }}
         />
       )}

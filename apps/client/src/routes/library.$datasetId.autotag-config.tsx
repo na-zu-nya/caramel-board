@@ -738,12 +738,8 @@ function AutoTagConfigPage() {
                   >
                     <SelectItem value="name-asc">{t.tagPage.nameAsc}</SelectItem>
                     <SelectItem value="name-desc">{t.tagPage.nameDesc}</SelectItem>
-                    <SelectItem value="count-desc">
-                      {t.autoTagPage.predictionCountDesc}
-                    </SelectItem>
-                    <SelectItem value="count-asc">
-                      {t.autoTagPage.predictionCountAsc}
-                    </SelectItem>
+                    <SelectItem value="count-desc">{t.autoTagPage.predictionCountDesc}</SelectItem>
+                    <SelectItem value="count-asc">{t.autoTagPage.predictionCountAsc}</SelectItem>
                   </SmallSelect>
                 </div>
               </div>
@@ -807,8 +803,7 @@ function AutoTagConfigPage() {
                                 <>
                                   {strictCounts[stat.autoTagKey].predictionCount}{' '}
                                   {t.autoTagPage.predictions} -{' '}
-                                  {strictCounts[stat.autoTagKey].assetCount}{' '}
-                                  {t.autoTagPage.assets}
+                                  {strictCounts[stat.autoTagKey].assetCount} {t.autoTagPage.assets}
                                 </>
                               ) : (
                                 <>
@@ -942,9 +937,7 @@ function AutoTagConfigPage() {
 
             {/* Stacks with this AutoTag */}
             <div className="mt-6">
-              <h3 className="text-lg font-semibold mb-4">
-                {t.autoTagPage.stacksWithThisAutoTag}
-              </h3>
+              <h3 className="text-lg font-semibold mb-4">{t.autoTagPage.stacksWithThisAutoTag}</h3>
               {stacksLoading ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />

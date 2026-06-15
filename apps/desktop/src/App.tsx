@@ -8,6 +8,7 @@ import {
   Database,
   Download,
   ExternalLink,
+  FileText,
   Film,
   Folder,
   Github,
@@ -56,6 +57,7 @@ interface AppSettings {
   autoTagModelDir: string;
   autoTagThreshold: number;
   ffmpegPath: string;
+  pdfRasterizerPath: string;
   launchOnStartup: boolean;
   residentMode: ResidentMode;
 }
@@ -128,6 +130,15 @@ interface FfmpegCandidate {
   details: string;
 }
 
+interface PdfRasterizerCandidate {
+  path: string;
+  label: string;
+  source: string;
+  valid: boolean;
+  version: string;
+  details: string;
+}
+
 type AppLanguage = 'en' | 'ja';
 type ResidentMode = 'taskbar' | 'tray';
 type AutoTagInstallStep = 'intro' | 'metadata' | 'confirm' | 'progress' | null;
@@ -139,6 +150,7 @@ type TextSettingKey =
   | 'autoTagRepoDir'
   | 'autoTagModelDir'
   | 'ffmpegPath'
+  | 'pdfRasterizerPath'
   | 'dockerDatabaseUrl'
   | 'dockerStorageRoot'
   | 'dockerDatasetId';
@@ -184,6 +196,7 @@ const isTextSettingKey = (value: string | undefined): value is TextSettingKey =>
   value === 'autoTagRepoDir' ||
   value === 'autoTagModelDir' ||
   value === 'ffmpegPath' ||
+  value === 'pdfRasterizerPath' ||
   value === 'dockerDatabaseUrl' ||
   value === 'dockerStorageRoot' ||
   value === 'dockerDatasetId';
@@ -222,7 +235,7 @@ const translations = {
     appActive: 'Caramel Board is running.',
     lockedWhileRunning: 'Stop Caramel Board before changing settings.',
     general: 'General',
-    media: 'GIF/Video',
+    media: 'Media',
     autotag: 'AutoTag',
     migration: 'Migration',
     settingsNavigation: 'Settings navigation',
@@ -239,7 +252,7 @@ const translations = {
     menuBarMode: 'Menu bar',
     taskbarModeHint: 'Closing the settings window minimizes it so it can be reopened from there.',
     trayModeHint: 'Closing the settings window hides it; reopen it from the resident icon.',
-    mediaDescription: 'Configure FFmpeg used for GIF and video preview generation.',
+    mediaDescription: 'Configure FFmpeg for GIF and video preview generation.',
     ffmpeg: 'FFmpeg',
     ffmpegPath: 'FFmpeg executable',
     ffmpegAutoDetect: 'Auto detect from PATH',
@@ -254,8 +267,25 @@ const translations = {
     ffmpegNoCandidates: 'No FFmpeg executable was found on PATH.',
     ffmpegSelected: 'FFmpeg path selected.',
     ffmpegChecked: 'FFmpeg detection completed.',
+    pdf: 'PDF import',
+    poppler: 'Poppler',
+    popplerDescription:
+      'Configure Poppler used to rasterize PDF pages before importing them as page images.',
+    pdfRasterizerPath: 'pdftocairo executable',
+    pdfRasterizerAutoDetect: 'Auto detect from PATH',
+    choosePdfRasterizer: 'Choose pdftocairo',
+    refreshPdfRasterizer: 'Detect Poppler',
+    pdfReadyTitle: 'Poppler is ready',
+    pdfMissingTitle: 'Poppler is not configured',
+    pdfReadyDescription: 'PDF pages can be imported as 350dpi images with this executable.',
+    pdfMissingDescription:
+      'Install Poppler separately, then select pdftocairo from the detected list or browse to it.',
+    pdfCandidates: 'Detected Poppler',
+    pdfNoCandidates: 'No pdftocairo executable was found on PATH.',
+    pdfSelected: 'Poppler path selected.',
+    pdfChecked: 'Poppler detection completed.',
     autotagDescription:
-      'Tag images locally with the open-source JoyTag model. Everything runs on this computer — your images are never sent anywhere, and they are never used to train AI.',
+      'Use AutoTag to automatically tag imported images and enable image-based discovery such as similar-image search. Everything runs locally with the open-source JoyTag model; your images are never sent anywhere or used to train AI.',
     autoTagEnable: 'Use AutoTag',
     autoTagReadyTitle: 'AutoTag is ready',
     autoTagRunningTitle: 'AutoTag is running',
@@ -263,7 +293,8 @@ const translations = {
     autoTagOffTitle: 'AutoTag is off',
     autoTagOffDescription: 'Turn it on to start AutoTag together with Caramel Board.',
     autoTagReadyDescription: 'AutoTag can start together with Caramel Board.',
-    autoTagSetupDescription: 'Install the model to enable local image tagging.',
+    autoTagSetupDescription:
+      'Install the model to enable automatic tags for imported images and similar-image search.',
     autoTagPrepare: 'Install model',
     autoTagCheck: 'Check AutoTag',
     autoTagPrepared: 'AutoTag was installed and enabled.',
@@ -342,7 +373,7 @@ const translations = {
     password: 'Password',
     dockerMigration: 'Docker Migration',
     dockerMigrationDescription:
-      'Start the old Docker version, then migrate. Caramel Board will find it automatically.',
+      'Start the old Docker version, confirm the asset folder, then migrate.',
     detectOldDocker: 'Check old Docker version',
     migrationReadyTitle: 'Old Docker version found',
     migrationWaitingTitle: 'Start the old Docker version',
@@ -355,7 +386,7 @@ const translations = {
     storageLocation: 'File storage',
     advancedSettings: 'Advanced settings',
     advancedSettingsDescription:
-      'Usually not needed. Use this only when the old Docker setup uses custom paths.',
+      'Usually not needed. Use this only when the old Docker setup uses a custom database URL.',
     postgresDatabaseUrl: 'PostgreSQL DATABASE_URL',
     dockerStorageRoot: 'Docker storage root',
     chooseDockerStorageRoot: 'Choose Docker storage root',
@@ -396,7 +427,7 @@ const translations = {
     appActive: 'Caramel Board が起動しています。',
     lockedWhileRunning: '設定を変更するには Caramel Board を停止してください。',
     general: '一般',
-    media: 'GIF/動画設定',
+    media: 'メディア処理',
     autotag: '自動タグ',
     migration: '移行',
     settingsNavigation: '設定ナビゲーション',
@@ -427,8 +458,24 @@ const translations = {
     ffmpegNoCandidates: 'PATH 上に FFmpeg は見つかりませんでした。',
     ffmpegSelected: 'FFmpeg のパスを選択しました。',
     ffmpegChecked: 'FFmpeg の検出が完了しました。',
+    pdf: 'PDF 取り込み',
+    poppler: 'Poppler',
+    popplerDescription: 'PDF ページを画像として取り込むために使用する Poppler を設定します。',
+    pdfRasterizerPath: 'pdftocairo 実行ファイル',
+    pdfRasterizerAutoDetect: 'PATH から自動検出',
+    choosePdfRasterizer: 'pdftocairo を選択',
+    refreshPdfRasterizer: 'Poppler を検出',
+    pdfReadyTitle: 'Poppler を利用できます',
+    pdfMissingTitle: 'Poppler が設定されていません',
+    pdfReadyDescription: 'この実行ファイルで PDF ページを 350dpi の画像として取り込めます。',
+    pdfMissingDescription:
+      'Poppler を別途インストールし、検出候補から選ぶか pdftocairo を参照してください。',
+    pdfCandidates: '検出された Poppler',
+    pdfNoCandidates: 'PATH 上に pdftocairo は見つかりませんでした。',
+    pdfSelected: 'Poppler のパスを選択しました。',
+    pdfChecked: 'Poppler の検出が完了しました。',
     autotagDescription:
-      'オープンソースの JoyTag モデルを使って、画像にローカルで AI タグを付けられます。処理はこのコンピュータ内で完結し、画像が外部に送信されたり、AI の学習に使われたりすることはありません。',
+      '自動タグを使うと、取り込んだ画像に自動でタグを付け、類似画像検索など画像ベースの検索に活用できます。オープンソースの JoyTag モデルでローカル処理し、画像が外部に送信されたり、AI の学習に使われたりすることはありません。',
     autoTagEnable: '自動タグを使う',
     autoTagReadyTitle: '自動タグを利用できます',
     autoTagRunningTitle: '自動タグが起動しています',
@@ -436,7 +483,8 @@ const translations = {
     autoTagOffTitle: '自動タグはOFFです',
     autoTagOffDescription: 'ONにすると Caramel Board の起動時に自動タグも一緒に起動します。',
     autoTagReadyDescription: 'Caramel Board と一緒に起動できます。',
-    autoTagSetupDescription: 'モデルをインストールすると、画像からローカルでタグを生成できます。',
+    autoTagSetupDescription:
+      'モデルをインストールすると、取り込んだ画像の自動タグ付けと類似画像検索を利用できます。',
     autoTagPrepare: 'モデルをインストール',
     autoTagCheck: '状態を確認',
     autoTagPrepared: '自動タグをインストールし、有効にしました。',
@@ -515,7 +563,7 @@ const translations = {
     password: 'パスワード',
     dockerMigration: 'Docker版からの移行',
     dockerMigrationDescription:
-      '旧Docker版を起動した状態で移行してください。接続先とファイルの場所は自動で探します。',
+      '旧Docker版を起動した状態で、アセットフォルダを確認してから移行してください。',
     detectOldDocker: '旧Docker版を再検出',
     migrationReadyTitle: '旧Docker版が見つかりました',
     migrationWaitingTitle: '旧Docker版を起動してください',
@@ -527,7 +575,7 @@ const translations = {
     storageLocation: 'ファイルの場所',
     advancedSettings: '詳細設定',
     advancedSettingsDescription:
-      '通常は変更不要です。旧Docker版で保存場所や接続先を変更している場合だけ使います。',
+      '通常は変更不要です。旧Docker版で接続先 URL を変更している場合だけ使います。',
     postgresDatabaseUrl: 'PostgreSQL DATABASE_URL',
     dockerStorageRoot: 'Docker ストレージルート',
     chooseDockerStorageRoot: 'Docker ストレージルートを選択',
@@ -569,6 +617,9 @@ export default function App() {
   const [dockerDetection, setDockerDetection] = useState<DockerSourceDetection | null>(null);
   const [dockerDetectionAttempted, setDockerDetectionAttempted] = useState(false);
   const [ffmpegCandidates, setFfmpegCandidates] = useState<FfmpegCandidate[]>([]);
+  const [pdfRasterizerCandidates, setPdfRasterizerCandidates] = useState<PdfRasterizerCandidate[]>(
+    []
+  );
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const [localIp, setLocalIp] = useState<string>('');
@@ -609,6 +660,14 @@ export default function App() {
   const refreshFfmpegCandidates = useCallback(async (targetSettings: AppSettings) => {
     const next = await invoke<FfmpegCandidate[]>('detect_ffmpeg', { settings: targetSettings });
     setFfmpegCandidates(next);
+    return next;
+  }, []);
+
+  const refreshPdfRasterizerCandidates = useCallback(async (targetSettings: AppSettings) => {
+    const next = await invoke<PdfRasterizerCandidate[]>('detect_pdf_rasterizer', {
+      settings: targetSettings,
+    });
+    setPdfRasterizerCandidates(next);
     return next;
   }, []);
 
@@ -654,6 +713,7 @@ export default function App() {
       settingsRef.current = loaded;
       setSettings(loaded);
       await refreshFfmpegCandidates(loaded);
+      await refreshPdfRasterizerCandidates(loaded);
       await refreshStatus();
       await refreshAutoTagStatus();
       const installProgress = await invoke<AutoTagInstallProgress>('autotag_install_progress');
@@ -669,7 +729,12 @@ export default function App() {
     } finally {
       setBusy(false);
     }
-  }, [refreshAutoTagStatus, refreshFfmpegCandidates, refreshStatus]);
+  }, [
+    refreshAutoTagStatus,
+    refreshFfmpegCandidates,
+    refreshPdfRasterizerCandidates,
+    refreshStatus,
+  ]);
 
   useEffect(() => {
     void load();
@@ -837,6 +902,13 @@ export default function App() {
     [patchSettings]
   );
 
+  const handlePdfRasterizerSelectChange = useCallback(
+    (event: ChangeEvent<HTMLSelectElement>) => {
+      patchSettings({ pdfRasterizerPath: event.currentTarget.value });
+    },
+    [patchSettings]
+  );
+
   const handleRefreshFfmpeg = useCallback(() => {
     void runAction(async () => {
       if (!settings) return;
@@ -854,6 +926,24 @@ export default function App() {
       await refreshFfmpegCandidates(nextSettings);
     }, t.ffmpegSelected);
   }, [patchSettings, refreshFfmpegCandidates, runAction, settings, t]);
+
+  const handleRefreshPdfRasterizer = useCallback(() => {
+    void runAction(async () => {
+      if (!settings) return;
+      await refreshPdfRasterizerCandidates(settings);
+    }, t.pdfChecked);
+  }, [refreshPdfRasterizerCandidates, runAction, settings, t]);
+
+  const handleChoosePdfRasterizer = useCallback(() => {
+    void runAction(async () => {
+      if (!settings) return;
+      const path = await choosePath(false);
+      if (!path) return;
+      const nextSettings = { ...settings, pdfRasterizerPath: path };
+      patchSettings({ pdfRasterizerPath: path });
+      await refreshPdfRasterizerCandidates(nextSettings);
+    }, t.pdfSelected);
+  }, [patchSettings, refreshPdfRasterizerCandidates, runAction, settings, t]);
 
   const handleChooseDockerStorage = useCallback(() => {
     void runAction(async () => {
@@ -1049,8 +1139,11 @@ export default function App() {
     setDockerDetectionAttempted(true);
     const result = await invoke<DockerSourceDetection>('detect_docker_source', { settings });
     setDockerDetection(result);
+    if (result.storageRoot.trim() && result.storageRoot !== settings.dockerStorageRoot) {
+      patchSettings({ dockerStorageRoot: result.storageRoot });
+    }
     return result;
-  }, [settings]);
+  }, [patchSettings, settings]);
 
   const handleDetectDockerSource = useCallback(() => {
     void runAction(async () => {
@@ -1074,6 +1167,7 @@ export default function App() {
     () => [
       { id: 'section-data-store', label: t.general, icon: SlidersHorizontal },
       { id: 'section-media', label: t.media, icon: Film },
+      { id: 'section-poppler', label: t.poppler, icon: FileText },
       { id: 'section-autotag', label: t.autotag, icon: Sparkles },
       { id: 'section-migration', label: t.migration, icon: Database },
     ],
@@ -1130,6 +1224,23 @@ export default function App() {
   const ffmpegStatusClass = useMemo(
     () => (selectedFfmpegCandidate?.valid ? 'migration-status ready' : 'migration-status missing'),
     [selectedFfmpegCandidate]
+  );
+
+  const selectedPdfRasterizerCandidate = useMemo(() => {
+    if (!settings?.pdfRasterizerPath) {
+      return pdfRasterizerCandidates.find((candidate) => candidate.valid) ?? null;
+    }
+    return (
+      pdfRasterizerCandidates.find((candidate) => candidate.path === settings.pdfRasterizerPath) ??
+      pdfRasterizerCandidates.find((candidate) => candidate.valid) ??
+      null
+    );
+  }, [pdfRasterizerCandidates, settings?.pdfRasterizerPath]);
+
+  const pdfRasterizerStatusClass = useMemo(
+    () =>
+      selectedPdfRasterizerCandidate?.valid ? 'migration-status ready' : 'migration-status missing',
+    [selectedPdfRasterizerCandidate]
   );
 
   useEffect(() => {
@@ -1614,6 +1725,110 @@ export default function App() {
           </div>
         </div>
 
+        <div id="section-poppler" className="section-panel">
+          <div className="section-heading">
+            <FileText size={18} />
+            <div>
+              <h2>{t.poppler}</h2>
+              <p>{t.popplerDescription}</p>
+            </div>
+          </div>
+
+          <div className={pdfRasterizerStatusClass}>
+            <div className="migration-status-icon">
+              {selectedPdfRasterizerCandidate?.valid ? (
+                <CheckCircle2 size={20} />
+              ) : (
+                <AlertCircle size={20} />
+              )}
+            </div>
+            <div className="migration-status-body">
+              <h3>{selectedPdfRasterizerCandidate?.valid ? t.pdfReadyTitle : t.pdfMissingTitle}</h3>
+              <p>
+                {selectedPdfRasterizerCandidate?.valid
+                  ? t.pdfReadyDescription
+                  : t.pdfMissingDescription}
+              </p>
+              {selectedPdfRasterizerCandidate?.path ? (
+                <span className="migration-storage">{selectedPdfRasterizerCandidate.path}</span>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="settings-group">
+            <div className="group-heading">
+              <FileText size={16} />
+              <h3>{t.pdf}</h3>
+            </div>
+            <label className="field">
+              <span>{t.pdfRasterizerPath}</span>
+              <div className="select-action-row">
+                <select
+                  value={settings.pdfRasterizerPath}
+                  disabled={settingsDisabled}
+                  onChange={handlePdfRasterizerSelectChange}
+                >
+                  <option value="">{t.pdfRasterizerAutoDetect}</option>
+                  {pdfRasterizerCandidates.map((candidate) => (
+                    <option key={candidate.path} value={candidate.path}>
+                      {candidate.valid ? candidate.label : `${candidate.label} - invalid`}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className="icon-button"
+                  onClick={handleRefreshPdfRasterizer}
+                  disabled={settingsDisabled}
+                  title={t.refreshPdfRasterizer}
+                >
+                  <RefreshCcw size={15} />
+                </button>
+                <button
+                  type="button"
+                  className="icon-button"
+                  onClick={handleChoosePdfRasterizer}
+                  disabled={settingsDisabled}
+                  title={t.choosePdfRasterizer}
+                >
+                  <Folder size={15} />
+                </button>
+              </div>
+            </label>
+
+            <div className="candidate-list" aria-label={t.pdfCandidates}>
+              <div className="candidate-list-heading">{t.pdfCandidates}</div>
+              {pdfRasterizerCandidates.length === 0 ? (
+                <span className="muted">{t.pdfNoCandidates}</span>
+              ) : (
+                pdfRasterizerCandidates.map((candidate) => (
+                  <div
+                    key={candidate.path}
+                    className={
+                      candidate.path === selectedPdfRasterizerCandidate?.path
+                        ? 'candidate-item active'
+                        : 'candidate-item'
+                    }
+                  >
+                    <span
+                      className={
+                        candidate.valid ? 'candidate-state ready' : 'candidate-state missing'
+                      }
+                    >
+                      {candidate.valid ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
+                    </span>
+                    <div className="candidate-body">
+                      <strong>{candidate.path}</strong>
+                      <span>{candidate.version || candidate.details}</span>
+                      {candidate.version ? <span>{candidate.details}</span> : null}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+
         <div id="section-autotag" className="section-panel">
           <div className="section-heading">
             <Sparkles size={18} />
@@ -1824,6 +2039,27 @@ export default function App() {
             </div>
           </div>
 
+          <label className="field">
+            <span>{t.dockerStorageRoot}</span>
+            <div className="path-row">
+              <input
+                value={settings.dockerStorageRoot}
+                disabled={settingsDisabled}
+                data-setting="dockerStorageRoot"
+                onChange={handleTextSettingChange}
+              />
+              <button
+                type="button"
+                className="icon-button"
+                onClick={handleChooseDockerStorage}
+                disabled={settingsDisabled}
+                title={t.chooseDockerStorageRoot}
+              >
+                <Folder size={15} />
+              </button>
+            </div>
+          </label>
+
           <div className="button-row migration-actions">
             <button type="button" onClick={handleDetectDockerSource} disabled={settingsDisabled}>
               <RefreshCcw size={15} />
@@ -1833,7 +2069,7 @@ export default function App() {
               type="button"
               className="primary-button"
               onClick={handleMigrateFromDocker}
-              disabled={settingsDisabled}
+              disabled={settingsDisabled || !settings.dockerStorageRoot.trim()}
             >
               <Database size={15} />
               {t.migrateFromDocker}
@@ -1851,26 +2087,6 @@ export default function App() {
                 data-setting="dockerDatabaseUrl"
                 onChange={handleTextSettingChange}
               />
-            </label>
-            <label className="field">
-              <span>{t.dockerStorageRoot}</span>
-              <div className="path-row">
-                <input
-                  value={settings.dockerStorageRoot}
-                  disabled={settingsDisabled}
-                  data-setting="dockerStorageRoot"
-                  onChange={handleTextSettingChange}
-                />
-                <button
-                  type="button"
-                  className="icon-button"
-                  onClick={handleChooseDockerStorage}
-                  disabled={settingsDisabled}
-                  title={t.chooseDockerStorageRoot}
-                >
-                  <Folder size={15} />
-                </button>
-              </div>
             </label>
             <div className="auth-grid">
               <label className="field compact">

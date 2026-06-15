@@ -50,6 +50,8 @@ struct AppSettings {
     #[serde(default)]
     ffmpeg_path: String,
     #[serde(default)]
+    pdf_rasterizer_path: String,
+    #[serde(default)]
     launch_on_startup: bool,
     #[serde(default = "default_resident_mode")]
     resident_mode: String,

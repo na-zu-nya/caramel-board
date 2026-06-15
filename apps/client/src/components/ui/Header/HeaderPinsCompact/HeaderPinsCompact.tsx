@@ -1,6 +1,6 @@
+import type { LucideIcon } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { ChevronDown } from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
 import { useT } from '@/lib/i18n';
 import {
   DropdownMenu,

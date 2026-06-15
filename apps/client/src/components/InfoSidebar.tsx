@@ -395,9 +395,9 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
   const _handleCopyTag = async (tag: string) => {
     const ok = await copyText(tag);
     if (ok) {
-      addNotification({ type: 'success', message: `Copied tag: ${tag}` });
+      addNotification({ type: 'success', message: t.info.copiedTag(tag) });
     } else {
-      addNotification({ type: 'error', message: 'Failed to copy (try HTTPS or use ⌘/Ctrl+C)' });
+      addNotification({ type: 'error', message: t.info.failedToCopyWithHint });
     }
   };
 
@@ -582,9 +582,9 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
     const copied = hexForCopy(color.hex);
     copyText(copied).then((ok) => {
       if (ok) {
-        addNotification({ type: 'success', message: `Copied ${copied} to clipboard` });
+        addNotification({ type: 'success', message: t.common.copiedToClipboard(copied) });
       } else {
-        addNotification({ type: 'error', message: 'Failed to copy to clipboard' });
+        addNotification({ type: 'error', message: t.common.failedToCopy });
       }
     });
   };
@@ -859,7 +859,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
               {/* Recent Tags */}
               {recentTags.length > 0 && (
                 <div className="mt-2">
-                  <p className="text-xs text-gray-500 mb-1">Recent tags:</p>
+                  <p className="text-xs text-gray-500 mb-1">{t.info.recentTags}</p>
                   <div className="flex flex-wrap gap-1">
                     {recentTags.map((tag) => (
                       <button
@@ -876,7 +876,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
               )}
               {suggestedTags.length > 0 && (
                 <div className="mt-2">
-                  <p className="text-xs text-gray-500 mb-1">Suggested tags:</p>
+                  <p className="text-xs text-gray-500 mb-1">{t.info.suggestedTags}</p>
                   <div className="flex flex-wrap gap-1">
                     {suggestedTags.map((tag) => (
                       <button
@@ -927,7 +927,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
                     onClick={() => setShowColorDetails(!showColorDetails)}
                     className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 transition-colors"
                   >
-                    Detail
+                    {t.info.detail}
                     {showColorDetails ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
                   </button>
                 )}
@@ -964,12 +964,12 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
                                   if (ok) {
                                     addNotification({
                                       type: 'success',
-                                      message: `Copied ${copied} to clipboard`,
+                                      message: t.common.copiedToClipboard(copied),
                                     });
                                   } else {
                                     addNotification({
                                       type: 'error',
-                                      message: 'Failed to copy to clipboard',
+                                      message: t.common.failedToCopy,
                                     });
                                   }
                                 }}
@@ -988,7 +988,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
                               <Progress
                                 value={color.lightness}
                                 max={100}
-                                label="Brightness"
+                                label={t.info.brightness}
                                 size="sm"
                                 color="primary"
                                 className="text-gray-400"
@@ -996,7 +996,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
                               <Progress
                                 value={color.saturation}
                                 max={100}
-                                label="Saturation"
+                                label={t.info.saturation}
                                 size="sm"
                                 color="gray"
                                 className="text-gray-400"

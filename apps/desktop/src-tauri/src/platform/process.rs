@@ -2,12 +2,16 @@
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 fn hidden_command(program: impl AsRef<std::ffi::OsStr>) -> Command {
-    let mut command = Command::new(program);
     #[cfg(target_os = "windows")]
     {
+        let mut command = Command::new(program);
         command.creation_flags(CREATE_NO_WINDOW);
+        command
     }
-    command
+    #[cfg(not(target_os = "windows"))]
+    {
+        Command::new(program)
+    }
 }
 
 #[cfg(target_os = "windows")]

@@ -15,6 +15,7 @@ import {
 import { getHash } from '../../../utils/functions';
 import { generateMediaPreview, shouldGeneratePreview } from '../../../utils/generateMediaPreview';
 import { generateThumbnail } from '../../../utils/generateThumbnail';
+import { appendPdfOriginalMeta, isPdfFileInput, preparePdfImport } from '../../../utils/pdfImport';
 import { formatStacksThumbnails } from '../../../utils/thumbnailPath';
 import type { createColorSearchService } from './color-search-service';
 import type { ColorFilter as SearchColorFilter } from './search-service';
@@ -735,6 +736,48 @@ export const createStackService = (deps: {
   }
 
   async function createWithFile(data: CreateStackWithFileData) {
+    if (await isPdfFileInput(data.file)) {
+      const preparedPdf = await preparePdfImport(data.file, dataSetId);
+      let stackId: number | null = null;
+
+      try {
+        const stack = await prisma.stack.create({
+          data: {
+            name: data.name,
+            mediaType: data.mediaType ?? 'image',
+            thumbnail: '',
+            meta: appendPdfOriginalMeta({}, preparedPdf.original) as Prisma.InputJsonObject,
+            dataSetId,
+          },
+        });
+        stackId = stack.id;
+
+        for (const page of preparedPdf.pages) {
+          await AssetModel.createWithFile(page.path, page.originalname, stack.id, dataSetId, {
+            allowDuplicate: true,
+            storageHash: page.storageHash,
+            meta: {
+              sourcePdfHash: preparedPdf.original.hash,
+              sourcePdfImportId: preparedPdf.original.importId,
+              sourcePdfPage: page.pageNumber,
+              rasterDpi: preparedPdf.original.rasterDpi,
+            },
+          });
+        }
+
+        return getById(stack.id, { assets: true });
+      } catch (error) {
+        if (stackId !== null) {
+          try {
+            await prisma.stack.delete({ where: { id: stackId } });
+          } catch {}
+        }
+        throw error;
+      } finally {
+        preparedPdf.cleanup();
+      }
+    }
+
     // 1) 事前に重複を検知（空スタック生成を防ぐ）
     const hash = await getHash(data.file.path);
     const existing = await prisma.asset.findFirst({

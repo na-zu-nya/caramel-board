@@ -35,17 +35,73 @@ fn common_ffmpeg_candidates() -> Vec<PathBuf> {
     }
     #[cfg(target_os = "windows")]
     {
-        vec![
+        let mut candidates = Vec::new();
+        if let Some(app_data) = env::var_os("APPDATA") {
+            candidates.push(
+                PathBuf::from(app_data).join(r"Caramel Board\tools\ffmpeg\bin\ffmpeg.exe"),
+            );
+        }
+        if let Some(local_app_data) = env::var_os("LOCALAPPDATA") {
+            candidates.push(
+                PathBuf::from(local_app_data).join(r"Caramel Board\tools\ffmpeg\bin\ffmpeg.exe"),
+            );
+        }
+        candidates.extend([
+            PathBuf::from(r"C:\tools\ffmpeg\bin\ffmpeg.exe"),
             PathBuf::from(r"C:\ffmpeg\bin\ffmpeg.exe"),
             PathBuf::from(r"C:\Program Files\ffmpeg\bin\ffmpeg.exe"),
             PathBuf::from(r"C:\Program Files (x86)\ffmpeg\bin\ffmpeg.exe"),
-        ]
+        ]);
+        candidates
     }
     #[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
     {
         vec![
             PathBuf::from("/usr/bin/ffmpeg"),
             PathBuf::from("/usr/local/bin/ffmpeg"),
+        ]
+    }
+}
+
+fn common_pdf_rasterizer_candidates() -> Vec<PathBuf> {
+    #[cfg(target_os = "macos")]
+    {
+        vec![
+            PathBuf::from("/opt/homebrew/bin/pdftocairo"),
+            PathBuf::from("/usr/local/bin/pdftocairo"),
+            PathBuf::from("/usr/bin/pdftocairo"),
+        ]
+    }
+    #[cfg(target_os = "windows")]
+    {
+        let mut candidates = Vec::new();
+        if let Some(app_data) = env::var_os("APPDATA") {
+            let tools_root = PathBuf::from(app_data).join(r"Caramel Board\tools\poppler");
+            candidates.push(tools_root.join(r"Library\bin\pdftocairo.exe"));
+            candidates.push(tools_root.join(r"bin\pdftocairo.exe"));
+        }
+        if let Some(local_app_data) = env::var_os("LOCALAPPDATA") {
+            let tools_root = PathBuf::from(local_app_data).join(r"Caramel Board\tools\poppler");
+            candidates.push(tools_root.join(r"Library\bin\pdftocairo.exe"));
+            candidates.push(tools_root.join(r"bin\pdftocairo.exe"));
+        }
+        candidates.extend([
+            PathBuf::from(r"C:\msys64\mingw64\bin\pdftocairo.exe"),
+            PathBuf::from(r"C:\msys64\ucrt64\bin\pdftocairo.exe"),
+            PathBuf::from(r"C:\tools\poppler\Library\bin\pdftocairo.exe"),
+            PathBuf::from(r"C:\tools\poppler\bin\pdftocairo.exe"),
+            PathBuf::from(r"C:\poppler\Library\bin\pdftocairo.exe"),
+            PathBuf::from(r"C:\poppler\bin\pdftocairo.exe"),
+            PathBuf::from(r"C:\Program Files\poppler\Library\bin\pdftocairo.exe"),
+            PathBuf::from(r"C:\Program Files\poppler\bin\pdftocairo.exe"),
+        ]);
+        candidates
+    }
+    #[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
+    {
+        vec![
+            PathBuf::from("/usr/bin/pdftocairo"),
+            PathBuf::from("/usr/local/bin/pdftocairo"),
         ]
     }
 }
@@ -184,7 +240,113 @@ fn effective_ffmpeg_path(settings: &AppSettings) -> Option<String> {
         .map(|candidate| candidate.path)
 }
 
+fn pdf_rasterizer_label(path: &Path, source: &str) -> String {
+    let file_name = path
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| String::from("pdftocairo"));
+    format!("{file_name} ({source})")
+}
+
+fn validate_pdf_rasterizer_candidate(path: &Path, source: &str) -> FfmpegCandidate {
+    let path_text = display_path(path);
+    let version_output = hidden_command(path).arg("-v").output();
+
+    let Ok(version_output) = version_output else {
+        return FfmpegCandidate {
+            path: path_text,
+            label: pdf_rasterizer_label(path, source),
+            source: source.to_string(),
+            valid: false,
+            version: String::new(),
+            details: String::from("実行できません"),
+        };
+    };
+
+    if !version_output.status.success() {
+        return FfmpegCandidate {
+            path: path_text,
+            label: pdf_rasterizer_label(path, source),
+            source: source.to_string(),
+            valid: false,
+            version: String::new(),
+            details: String::from("pdftocairo として検証できません"),
+        };
+    }
+
+    let version_text = format!(
+        "{}\n{}",
+        String::from_utf8_lossy(&version_output.stdout),
+        String::from_utf8_lossy(&version_output.stderr)
+    );
+    let version = version_text
+        .lines()
+        .find(|line| !line.trim().is_empty())
+        .unwrap_or("pdftocairo")
+        .trim()
+        .to_string();
+
+    FfmpegCandidate {
+        path: path_text,
+        label: pdf_rasterizer_label(path, source),
+        source: source.to_string(),
+        valid: true,
+        version,
+        details: String::from("PDF ページ変換対応"),
+    }
+}
+
+fn detect_pdf_rasterizer_candidates(settings: &AppSettings) -> Vec<FfmpegCandidate> {
+    let mut paths: Vec<(PathBuf, &str)> = Vec::new();
+    if !settings.pdf_rasterizer_path.trim().is_empty() {
+        paths.push((
+            PathBuf::from(settings.pdf_rasterizer_path.trim()),
+            "configured",
+        ));
+    }
+    paths.extend(
+        path_candidates("pdftocairo")
+            .into_iter()
+            .map(|path| (path, "PATH")),
+    );
+    paths.extend(
+        common_pdf_rasterizer_candidates()
+            .into_iter()
+            .map(|path| (path, "common")),
+    );
+
+    let mut seen = BTreeSet::new();
+    let mut candidates = Vec::new();
+    for (path, source) in paths {
+        let key = display_path(&path);
+        if !seen.insert(key) {
+            continue;
+        }
+        if source != "configured" && !path.exists() {
+            continue;
+        }
+        candidates.push(validate_pdf_rasterizer_candidate(&path, source));
+    }
+    candidates
+}
+
+fn effective_pdf_rasterizer_path(settings: &AppSettings) -> Option<String> {
+    if !settings.pdf_rasterizer_path.trim().is_empty() {
+        return Some(settings.pdf_rasterizer_path.trim().to_string());
+    }
+
+    detect_pdf_rasterizer_candidates(settings)
+        .into_iter()
+        .find(|candidate| candidate.valid)
+        .map(|candidate| candidate.path)
+}
+
 #[tauri::command]
 fn detect_ffmpeg(settings: AppSettings) -> Vec<FfmpegCandidate> {
     detect_ffmpeg_candidates(&normalize_settings(settings))
+}
+
+#[tauri::command]
+fn detect_pdf_rasterizer(settings: AppSettings) -> Vec<FfmpegCandidate> {
+    detect_pdf_rasterizer_candidates(&normalize_settings(settings))
 }

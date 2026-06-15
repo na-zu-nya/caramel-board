@@ -8,6 +8,7 @@ import {
   Database,
   Download,
   ExternalLink,
+  FileText,
   Film,
   Folder,
   FolderOpen,
@@ -80,6 +81,15 @@ interface FfmpegCandidate {
   details: string;
 }
 
+interface PdfRasterizerCandidate {
+  path: string;
+  label: string;
+  source: string;
+  valid: boolean;
+  version: string;
+  details: string;
+}
+
 interface AutoTagStatus {
   enabled: boolean;
   running: boolean;
@@ -113,6 +123,7 @@ type AutoTagInstallPhase = 'idle' | 'metadata' | 'confirm' | 'progress' | 'done'
 
 type FullSettings = AppSettingsLike & {
   ffmpegPath: string;
+  pdfRasterizerPath: string;
   autoTagEnabled: boolean;
 };
 
@@ -127,6 +138,7 @@ type WizardStep =
   | 'migrate-running'
   | 'sharing-setup'
   | 'ffmpeg-setup'
+  | 'pdf-setup'
   | 'autotag-setup'
   | 'done';
 
@@ -206,15 +218,18 @@ const wizardCopy = {
     startMigration: 'Start migration',
     chooseExistingFolder: 'Open data store',
     advancedSourceTitle: 'Advanced source settings',
-    advancedSourceBody:
-      'Only needed if the previous version used a custom database URL or asset folder.',
+    advancedSourceBody: 'Only needed if the previous version used a custom database URL.',
     sourceDatabaseUrl: 'Database URL',
     sourceStorageRoot: 'Asset folder',
+    sourceStorageRootTitle: 'Confirm the asset folder',
+    sourceStorageRootBody:
+      'Choose the folder from the previous version that contains the imported image and video files.',
+    sourceStorageRootMissing: 'Choose the asset folder before continuing.',
     chooseSourceStorageRoot: 'Choose asset folder',
     storageRootAdjustedInfo: (path: string) =>
       `Asset folder was adjusted to a likely library location: ${path}`,
     storageRootCheckHint:
-      'If migration fails, choose the folder that contains numbered library folders like 1/files/, 2/files/…',
+      'Choose the folder that contains numbered library folders like 1/files/, 2/files/…',
     sharingTitle: 'Share with other devices',
     sharingBody:
       'Caramel Board can be opened from other devices on the same network — phones, tablets, or another PC. In typical home networks only devices on your local network can reach it, but depending on your router setup it may also become reachable from the Internet. Direct Internet exposure is strongly discouraged — for remote access, use a VPN like Tailscale.',
@@ -236,12 +251,21 @@ const wizardCopy = {
     mediaInstallHint:
       'After installing FFmpeg, click "Re-detect" or set it up later from the settings screen.',
     mediaInstallGuide: 'How to install FFmpeg',
+    pdfTitle: 'PDF import',
+    pdfBody:
+      'Caramel Board uses Poppler to turn PDF pages into images. This is optional — you can set it up later from the settings screen.',
+    pdfDetectedHeading: 'Detected Poppler',
+    pdfDetectedHint: 'Pick the pdftocairo executable to use.',
+    pdfNotFound: 'No pdftocairo executable was found on this computer.',
+    pdfInstallHint:
+      'After installing Poppler, click "Re-detect" or set it up later from the settings screen.',
+    pdfInstallGuide: 'How to install Poppler',
     redetect: 'Re-detect',
     skipForNow: 'Skip for now',
     useThis: 'Use this',
     autoTagTitle: 'Auto-tagging',
     autoTagBody:
-      'Caramel Board can tag your images locally using the open-source JoyTag model. Everything runs on this computer — your images are never sent anywhere, and they are never used to train AI. CUDA is not required for normal CPU tagging. If you want GPU acceleration and CUDA setup fails, install the latest NVIDIA driver and CUDA Toolkit, then try again.',
+      'Caramel Board can automatically tag imported images and enable similar-image search using the open-source JoyTag model. Everything runs on this computer — your images are never sent anywhere, and they are never used to train AI. CUDA is not required for normal CPU tagging. If you want GPU acceleration and CUDA setup fails, install the latest NVIDIA driver and CUDA Toolkit, then try again.',
     aboutJoyTag: 'About JoyTag',
     autoTagEnable: 'I want to use auto-tagging',
     autoTagEnableHint:
@@ -331,13 +355,17 @@ const wizardCopy = {
     startMigration: '引き継ぎを開始',
     chooseExistingFolder: 'データストアを開く',
     advancedSourceTitle: '取り込み元の詳細設定',
-    advancedSourceBody: '以前の版で接続先 URL やアセット保存先を変えていた場合のみ使います。',
+    advancedSourceBody: '以前の版で接続先 URL を変えていた場合のみ使います。',
     sourceDatabaseUrl: 'データベース URL',
     sourceStorageRoot: 'アセットフォルダ',
+    sourceStorageRootTitle: 'アセットフォルダを確認',
+    sourceStorageRootBody:
+      '以前の版で取り込んだ画像や動画ファイルが入っているフォルダを選んでください。',
+    sourceStorageRootMissing: '続ける前にアセットフォルダを選んでください。',
     chooseSourceStorageRoot: 'アセットフォルダを選ぶ',
     storageRootAdjustedInfo: (path: string) => `アセットフォルダを自動で補正しました: ${path}`,
     storageRootCheckHint:
-      '引き継ぎに失敗する場合は、1/files/、2/files/… のような番号付きフォルダがある階層を選んでください。',
+      '1/files/、2/files/… のような番号付きフォルダがある階層を選んでください。',
     sharingTitle: '他の機器からのアクセス',
     sharingBody:
       '同じネットワーク上のスマートフォン・タブレット・別の PC から Caramel Board を開けるようにできます。通常はローカルネットワーク内からのみアクセスできますが、ルーターや環境によってはインターネットからアクセスできる場合があります。インターネットへの直接公開は強く非推奨です。外出先からアクセスしたい場合は Tailscale などの VPN 経由を推奨します。',
@@ -358,12 +386,20 @@ const wizardCopy = {
     mediaNotFound: 'このコンピュータに FFmpeg は見つかりませんでした。',
     mediaInstallHint: 'FFmpeg をインストールして「再検出」を押すか、後から設定画面で設定できます。',
     mediaInstallGuide: 'FFmpeg のインストール方法',
+    pdfTitle: 'PDF 取り込み',
+    pdfBody:
+      'PDF ページを画像に変換するために Poppler を使います。任意の設定です。後から設定画面で設定することもできます。',
+    pdfDetectedHeading: '検出された Poppler',
+    pdfDetectedHint: '使用する pdftocairo を選んでください。',
+    pdfNotFound: 'このコンピュータに pdftocairo は見つかりませんでした。',
+    pdfInstallHint: 'Poppler をインストールして「再検出」を押すか、後から設定画面で設定できます。',
+    pdfInstallGuide: 'Poppler のインストール方法',
     redetect: '再検出',
     skipForNow: 'あとで設定する',
-    useThis: 'この FFmpeg を使う',
+    useThis: 'これを使う',
     autoTagTitle: '自動タグ',
     autoTagBody:
-      'オープンソースの JoyTag モデルを使って、画像にローカルで AI タグを付けられます。処理はこのコンピュータ内で完結し、画像が外部に送信されたり、AI の学習に使われたりすることはありません。通常の CPU タグ付けに CUDA は不要です。GPU 高速化を使いたい場合に CUDA のセットアップで失敗したら、最新の NVIDIA ドライバーと CUDA Toolkit をインストールしてから再試行してください。',
+      '自動タグを使うと、取り込んだ画像に自動でタグを付け、類似画像検索など画像ベースの検索に活用できます。オープンソースの JoyTag モデルでローカル処理し、画像が外部に送信されたり、AI の学習に使われたりすることはありません。通常の CPU タグ付けに CUDA は不要です。GPU 高速化を使いたい場合に CUDA のセットアップで失敗したら、最新の NVIDIA ドライバーと CUDA Toolkit をインストールしてから再試行してください。',
     aboutJoyTag: 'JoyTag について',
     autoTagEnable: '自動タグを使う',
     autoTagEnableHint:
@@ -391,6 +427,8 @@ interface SetupWizardProps {
 }
 
 const FFMPEG_INSTALL_URL = 'https://ffmpeg.org/download.html';
+const POPPLER_WINDOWS_INSTALL_URL = 'https://github.com/oschwartz10612/poppler-windows/releases';
+const POPPLER_MACOS_INSTALL_URL = 'https://formulae.brew.sh/formula/poppler';
 const JOYTAG_URL = 'https://github.com/fpgaminer/joytag';
 
 const errorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
@@ -418,6 +456,7 @@ export function SetupWizard({
   const [detectionAttempted, setDetectionAttempted] = useState(false);
   const [sourceDatabaseUrl, setSourceDatabaseUrl] = useState(initialSettings.dockerDatabaseUrl);
   const [sourceStorageRoot, setSourceStorageRoot] = useState(initialSettings.dockerStorageRoot);
+  const [sourceStorageRootTouched, setSourceStorageRootTouched] = useState(false);
   const [storageRootAdjusted, setStorageRootAdjusted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -425,6 +464,12 @@ export function SetupWizard({
   const [ffmpegCandidates, setFfmpegCandidates] = useState<FfmpegCandidate[]>([]);
   const [selectedFfmpegPath, setSelectedFfmpegPath] = useState<string>(
     initialSettings.ffmpegPath ?? ''
+  );
+  const [pdfRasterizerCandidates, setPdfRasterizerCandidates] = useState<PdfRasterizerCandidate[]>(
+    []
+  );
+  const [selectedPdfRasterizerPath, setSelectedPdfRasterizerPath] = useState<string>(
+    initialSettings.pdfRasterizerPath ?? ''
   );
   const [autoTagStatus, setAutoTagStatus] = useState<AutoTagStatus | null>(null);
   const [sharingAllow, setSharingAllow] = useState(initialSettings.allowExternalNetwork ?? false);
@@ -442,7 +487,7 @@ export function SetupWizard({
 
   const targetPath = useDefault ? defaultDataStoreRoot : customPath;
 
-  const totalSteps = 6;
+  const totalSteps = 7;
 
   const currentStepIndex = useMemo(() => {
     switch (step) {
@@ -459,10 +504,12 @@ export function SetupWizard({
         return 3;
       case 'ffmpeg-setup':
         return 4;
-      case 'autotag-setup':
+      case 'pdf-setup':
         return 5;
-      case 'done':
+      case 'autotag-setup':
         return 6;
+      case 'done':
+        return 7;
       default:
         return 1;
     }
@@ -517,9 +564,11 @@ export function SetupWizard({
         path: selected,
       });
       setSourceStorageRoot(resolved.resolved);
+      setSourceStorageRootTouched(true);
       setStorageRootAdjusted(resolved.adjusted);
     } catch (err) {
       setSourceStorageRoot(selected);
+      setSourceStorageRootTouched(true);
       setStorageRootAdjusted(false);
       setError(errorMessage(err));
     }
@@ -538,13 +587,17 @@ export function SetupWizard({
         },
       });
       setDetection(next);
+      if (!sourceStorageRootTouched && next.storageRoot.trim()) {
+        setSourceStorageRoot(next.storageRoot);
+        setStorageRootAdjusted(false);
+      }
     } catch (err) {
       setDetection(null);
       setError(errorMessage(err));
     } finally {
       setBusy(false);
     }
-  }, [initialSettings, sourceDatabaseUrl, sourceStorageRoot]);
+  }, [initialSettings, sourceDatabaseUrl, sourceStorageRoot, sourceStorageRootTouched]);
 
   useEffect(() => {
     if (step !== 'migrate-detect' || detectionAttempted) return;
@@ -565,6 +618,8 @@ export function SetupWizard({
       setStep('migrate-detect');
       setDetectionAttempted(false);
       setDetection(null);
+      setSourceStorageRootTouched(false);
+      setStorageRootAdjusted(false);
     }
   }, []);
 
@@ -589,29 +644,32 @@ export function SetupWizard({
     [language]
   );
 
-  const handleConfirmNew = useCallback(async (resetExisting = false) => {
-    if (!targetPath.trim()) return;
-    setBusy(true);
-    setError('');
-    try {
-      const latestInspection = (await inspectTarget(targetPath)) ?? inspection;
-      if (!resetExisting && dataStoreHasContents(latestInspection)) {
-        setResetDataStoreConfirmOpen(true);
-        return;
+  const handleConfirmNew = useCallback(
+    async (resetExisting = false) => {
+      if (!targetPath.trim()) return;
+      setBusy(true);
+      setError('');
+      try {
+        const latestInspection = (await inspectTarget(targetPath)) ?? inspection;
+        if (!resetExisting && dataStoreHasContents(latestInspection)) {
+          setResetDataStoreConfirmOpen(true);
+          return;
+        }
+        const applied = await handleApplyDataStore(targetPath, {
+          resetExisting,
+          setupCompleted: false,
+          carryExistingData: false,
+        });
+        setAppliedSettings(applied as FullSettings);
+        setStep('sharing-setup');
+      } catch (err) {
+        setError(errorMessage(err));
+      } finally {
+        setBusy(false);
       }
-      const applied = await handleApplyDataStore(targetPath, {
-        resetExisting,
-        setupCompleted: false,
-        carryExistingData: false,
-      });
-      setAppliedSettings(applied as FullSettings);
-      setStep('sharing-setup');
-    } catch (err) {
-      setError(errorMessage(err));
-    } finally {
-      setBusy(false);
-    }
-  }, [targetPath, inspectTarget, inspection, handleApplyDataStore]);
+    },
+    [targetPath, inspectTarget, inspection, handleApplyDataStore]
+  );
 
   const handleConfirmExisting = useCallback(async () => {
     if (!existingPath.trim()) return;
@@ -632,7 +690,7 @@ export function SetupWizard({
   }, [existingPath, handleApplyDataStore]);
 
   const handleConfirmMigrate = useCallback(async () => {
-    if (!targetPath.trim()) return;
+    if (!targetPath.trim() || !sourceStorageRoot.trim()) return;
     setStep('migrate-running');
     setBusy(true);
     setError('');
@@ -783,7 +841,7 @@ export function SetupWizard({
         settings: { ...appliedSettings, ffmpegPath: selectedFfmpegPath || '' },
       });
       setAppliedSettings(next);
-      setStep('autotag-setup');
+      setStep('pdf-setup');
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -792,6 +850,54 @@ export function SetupWizard({
   }, [appliedSettings, selectedFfmpegPath]);
 
   const handleSkipFfmpeg = useCallback(() => {
+    setStep('pdf-setup');
+  }, []);
+
+  const refreshPdfRasterizer = useCallback(async () => {
+    if (!appliedSettings) return;
+    try {
+      const next = await invoke<PdfRasterizerCandidate[]>('detect_pdf_rasterizer', {
+        settings: appliedSettings,
+      });
+      setPdfRasterizerCandidates(next);
+      setSelectedPdfRasterizerPath((current) => {
+        if (current) {
+          const stillValid = next.find(
+            (candidate) => candidate.path === current && candidate.valid
+          );
+          if (stillValid) return current;
+        }
+        const valid = next.find((candidate) => candidate.valid);
+        return valid?.path ?? '';
+      });
+    } catch (err) {
+      setError(errorMessage(err));
+    }
+  }, [appliedSettings]);
+
+  useEffect(() => {
+    if (step !== 'pdf-setup' || !appliedSettings) return;
+    void refreshPdfRasterizer();
+  }, [step, appliedSettings, refreshPdfRasterizer]);
+
+  const handleUsePdfRasterizer = useCallback(async () => {
+    if (!appliedSettings) return;
+    setBusy(true);
+    setError('');
+    try {
+      const next = await invoke<FullSettings>('save_settings', {
+        settings: { ...appliedSettings, pdfRasterizerPath: selectedPdfRasterizerPath || '' },
+      });
+      setAppliedSettings(next);
+      setStep('autotag-setup');
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }, [appliedSettings, selectedPdfRasterizerPath]);
+
+  const handleSkipPdfRasterizer = useCallback(() => {
     setStep('autotag-setup');
   }, []);
 
@@ -906,8 +1012,13 @@ export function SetupWizard({
     setStep('done');
   }, []);
 
-  const handleOpenInstallGuide = useCallback(() => {
+  const handleOpenFfmpegInstallGuide = useCallback(() => {
     void openUrl(FFMPEG_INSTALL_URL);
+  }, []);
+
+  const handleOpenPopplerInstallGuide = useCallback(() => {
+    const isMac = navigator.platform.toLowerCase().includes('mac');
+    void openUrl(isMac ? POPPLER_MACOS_INSTALL_URL : POPPLER_WINDOWS_INSTALL_URL);
   }, []);
 
   const renderIntro = () => (
@@ -1117,6 +1228,10 @@ export function SetupWizard({
 
   const renderMigrateDetect = () => {
     const ready = detection?.available ?? false;
+    const detectedStorageIsSelected = detection?.storageRoot === sourceStorageRoot;
+    const sourceStorageExists =
+      !detectedStorageIsSelected || detection?.storageRootExists !== false;
+    const sourceStorageReady = sourceStorageRoot.trim().length > 0 && sourceStorageExists;
     return (
       <>
         <div className="wizard-heading">
@@ -1144,6 +1259,23 @@ export function SetupWizard({
             <span>{detection?.message ?? ''}</span>
           </div>
         )}
+        <div className={sourceStorageReady ? 'wizard-path-card' : 'wizard-path-card warn'}>
+          <strong>
+            {sourceStorageReady ? t.sourceStorageRootTitle : t.sourceStorageRootMissing}
+          </strong>
+          <span>{sourceStorageRoot.trim() ? sourceStorageRoot : t.sourceStorageRootBody}</span>
+        </div>
+        <div className="wizard-actions" style={{ justifyContent: 'flex-start' }}>
+          <button type="button" onClick={handleChooseSourceStorageRoot} disabled={busy}>
+            <Folder size={15} />
+            {t.chooseSourceStorageRoot}
+          </button>
+        </div>
+        {storageRootAdjusted ? (
+          <p className="muted">{t.storageRootAdjustedInfo(sourceStorageRoot)}</p>
+        ) : (
+          <p className="muted">{t.storageRootCheckHint}</p>
+        )}
         <details className="advanced-settings">
           <summary>{t.advancedSourceTitle}</summary>
           <p>{t.advancedSourceBody}</p>
@@ -1154,31 +1286,6 @@ export function SetupWizard({
               onChange={(event) => setSourceDatabaseUrl(event.currentTarget.value)}
             />
           </label>
-          <label className="field">
-            <span>{t.sourceStorageRoot}</span>
-            <div className="path-row">
-              <input
-                value={sourceStorageRoot}
-                onChange={(event) => {
-                  setSourceStorageRoot(event.currentTarget.value);
-                  setStorageRootAdjusted(false);
-                }}
-              />
-              <button
-                type="button"
-                className="icon-button"
-                onClick={handleChooseSourceStorageRoot}
-                title={t.chooseSourceStorageRoot}
-              >
-                <Folder size={15} />
-              </button>
-            </div>
-          </label>
-          {storageRootAdjusted ? (
-            <p className="muted">{t.storageRootAdjustedInfo(sourceStorageRoot)}</p>
-          ) : (
-            <p className="muted">{t.storageRootCheckHint}</p>
-          )}
         </details>
         <div className="wizard-actions between">
           <button type="button" onClick={() => setStep('intro')} disabled={busy}>
@@ -1192,7 +1299,7 @@ export function SetupWizard({
             <button
               type="button"
               className="primary-button"
-              disabled={busy || !ready}
+              disabled={busy || !ready || !sourceStorageReady}
               onClick={() => setStep('migrate-location')}
             >
               <ArrowRight size={15} />
@@ -1213,6 +1320,10 @@ export function SetupWizard({
       <div className="wizard-path-card">
         <strong>{t.selectedFolder}</strong>
         <span>{targetPath}</span>
+      </div>
+      <div className="wizard-path-card">
+        <strong>{t.sourceStorageRoot}</strong>
+        <span>{sourceStorageRoot}</span>
       </div>
       {detection ? (
         <div className="wizard-path-card">
@@ -1372,7 +1483,7 @@ export function SetupWizard({
           <button
             type="button"
             className="link-button"
-            onClick={handleOpenInstallGuide}
+            onClick={handleOpenFfmpegInstallGuide}
             disabled={busy}
           >
             <ExternalLink size={15} />
@@ -1390,6 +1501,76 @@ export function SetupWizard({
             disabled={busy || !hasCandidates || !selectedFfmpegPath}
           >
             <Film size={15} />
+            {t.useThis}
+          </button>
+        </div>
+      </>
+    );
+  };
+
+  const renderPdfSetup = () => {
+    const hasCandidates = pdfRasterizerCandidates.length > 0;
+    return (
+      <>
+        <div className="wizard-heading">
+          <h1>{t.pdfTitle}</h1>
+          <p>{t.pdfBody}</p>
+        </div>
+        {hasCandidates ? (
+          <>
+            <p className="muted">{t.pdfDetectedHint}</p>
+            <div className="wizard-choice-list">
+              {pdfRasterizerCandidates.map((candidate) => (
+                <label key={candidate.path} className="wizard-choice">
+                  <input
+                    type="radio"
+                    name="wizard-pdf-rasterizer"
+                    checked={selectedPdfRasterizerPath === candidate.path}
+                    disabled={!candidate.valid}
+                    onChange={() => setSelectedPdfRasterizerPath(candidate.path)}
+                    style={{ width: 'auto', minHeight: 0, marginTop: 4 }}
+                  />
+                  <span className="wizard-choice-body">
+                    <strong>{candidate.label}</strong>
+                    <span>{candidate.path}</span>
+                    {candidate.version ? <span>{candidate.version}</span> : null}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </>
+        ) : (
+          <div className="wizard-path-card warn">
+            <strong>{t.pdfNotFound}</strong>
+            <span>{t.pdfInstallHint}</span>
+          </div>
+        )}
+        <div className="wizard-actions" style={{ justifyContent: 'flex-start', gap: 8 }}>
+          <button type="button" onClick={() => void refreshPdfRasterizer()} disabled={busy}>
+            <RefreshCcw size={15} />
+            {t.redetect}
+          </button>
+          <button
+            type="button"
+            className="link-button"
+            onClick={handleOpenPopplerInstallGuide}
+            disabled={busy}
+          >
+            <ExternalLink size={15} />
+            {t.pdfInstallGuide}
+          </button>
+        </div>
+        <div className="wizard-actions between">
+          <button type="button" onClick={handleSkipPdfRasterizer} disabled={busy}>
+            {t.skipForNow}
+          </button>
+          <button
+            type="button"
+            className="primary-button"
+            onClick={() => void handleUsePdfRasterizer()}
+            disabled={busy || !hasCandidates || !selectedPdfRasterizerPath}
+          >
+            <FileText size={15} />
             {t.useThis}
           </button>
         </div>
@@ -1467,7 +1648,11 @@ export function SetupWizard({
           ) : (
             <button
               type="button"
-              onClick={phase === 'done' || phase === 'failed' ? handleProceedFromAutoTag : handleSkipAutoTag}
+              onClick={
+                phase === 'done' || phase === 'failed'
+                  ? handleProceedFromAutoTag
+                  : handleSkipAutoTag
+              }
               disabled={busy}
             >
               {phase === 'done' || phase === 'failed' ? t.next : t.skipForNow}
@@ -1613,6 +1798,7 @@ export function SetupWizard({
           {step === 'migrate-running' ? renderMigrateRunning() : null}
           {step === 'sharing-setup' ? renderSharingSetup() : null}
           {step === 'ffmpeg-setup' ? renderFfmpegSetup() : null}
+          {step === 'pdf-setup' ? renderPdfSetup() : null}
           {step === 'autotag-setup' ? renderAutoTagSetup() : null}
           {step === 'done' ? renderDone() : null}
         </div>

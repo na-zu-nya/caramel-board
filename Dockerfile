@@ -69,7 +69,8 @@ RUN set -eux; \
   apt-get update; \
   apt-get install -y --no-install-recommends \
     ca-certificates \
-    ffmpeg; \
+    ffmpeg \
+    poppler-utils; \
   rm -rf /var/lib/apt/lists/*
 
 COPY package.json package-lock.json ./

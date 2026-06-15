@@ -221,11 +221,11 @@ export default function BulkEditPanel({
                 </div>
               )}
             </div>
-            <p className="text-xs text-gray-500">These tags will be added to all selected items</p>
+            <p className="text-xs text-gray-500">{t.bulkEdit.tagsWillBeAdded}</p>
             {/* Existing Tags from Selected Items */}
             {existingTags.length > 0 && (
               <div className="mt-2">
-                <p className="text-xs text-gray-500 mb-1">Tags from selected items:</p>
+                <p className="text-xs text-gray-500 mb-1">{t.bulkEdit.tagsFromSelectedItems}</p>
                 <div className="flex flex-wrap gap-1">
                   {existingTags.slice(0, 20).map((tag) => (
                     <div key={tag} className="flex items-center gap-1">
@@ -308,11 +308,11 @@ export default function BulkEditPanel({
                 </div>
               )}
             </div>
-            <p className="text-xs text-gray-500">This author will be set for all selected items</p>
+            <p className="text-xs text-gray-500">{t.bulkEdit.authorWillBeSet}</p>
             {/* Existing Authors from Selected Items */}
             {existingAuthors.length > 0 && (
               <div className="mt-2">
-                <p className="text-xs text-gray-500 mb-1">Authors from selected items:</p>
+                <p className="text-xs text-gray-500 mb-1">{t.bulkEdit.authorsFromSelectedItems}</p>
                 <div className="flex flex-wrap gap-1">
                   {existingAuthors.slice(0, 10).map((author) => (
                     <div key={author} className="flex items-center gap-1">
@@ -360,9 +360,7 @@ export default function BulkEditPanel({
                 <SelectItem value="video">{t.bulkEdit.video}</SelectItem>
               </SelectContent>
             </Select>
-            <p className="text-xs text-gray-500">
-              All selected items will be changed to this media type
-            </p>
+            <p className="text-xs text-gray-500">{t.bulkEdit.mediaTypeWillChange}</p>
           </div>
         </div>
 

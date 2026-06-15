@@ -116,6 +116,7 @@ fn default_settings(app: &AppHandle) -> Result<AppSettings, String> {
             .into_owned(),
         auto_tag_threshold: default_auto_tag_threshold(),
         ffmpeg_path: String::new(),
+        pdf_rasterizer_path: String::new(),
         launch_on_startup: false,
         resident_mode: default_resident_mode(),
     })
@@ -159,6 +160,7 @@ fn load_settings(app: AppHandle) -> Result<AppSettings, String> {
 fn save_settings(app: AppHandle, settings: AppSettings) -> Result<AppSettings, String> {
     let normalized = normalize_settings_for_app(&app, settings)?;
     write_settings(&app, &normalized)?;
+    apply_app_shell_settings(&app, &normalized)?;
     Ok(normalized)
 }
 
@@ -184,11 +186,21 @@ fn apply_app_shell_settings(app: &AppHandle, settings: &AppSettings) -> Result<(
     let tray_mode = is_tray_resident(settings);
     let tray_resident = settings.setup_completed && tray_mode;
     if let Some(tray) = app.tray_by_id("main") {
-        tray.set_visible(tray_mode)
+        tray.set_visible(tray_resident)
             .map_err(|error| format!("トレイ表示を切り替えられません: {error}"))?;
     }
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.set_skip_taskbar(tray_resident);
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let activation_policy = if tray_resident {
+            ActivationPolicy::Accessory
+        } else {
+            ActivationPolicy::Regular
+        };
+        app.set_activation_policy(activation_policy)
+            .map_err(|error| format!("Dock表示を切り替えられません: {error}"))?;
     }
     Ok(())
 }

@@ -8,6 +8,7 @@ import StackGrid from '@/components/StackGrid';
 import { useDataset } from '@/hooks/useDatasets';
 import { useHeaderActions } from '@/hooks/useHeaderActions';
 import { apiClient } from '@/lib/api-client';
+import { useT } from '@/lib/i18n';
 import { currentFilterAtom } from '@/stores/ui';
 import { genListToken, saveViewContext } from '@/stores/view-context';
 import type { MediaGridItem } from '@/types';
@@ -17,6 +18,7 @@ export const Route = createFileRoute('/library/$datasetId/scratch/$scratchId')({
 });
 
 function ScratchView() {
+  const t = useT();
   const { datasetId, scratchId } = Route.useParams();
   const collectionId = scratchId; // reuse collection-based logic
   const { data: dataset } = useDataset(datasetId);
@@ -298,8 +300,8 @@ function ScratchView() {
         onReorderStacks={undefined}
         emptyState={{
           icon: '📂',
-          title: 'No items in "Scratch"',
-          description: 'Drag and drop stacks here to collect them temporarily.',
+          title: t.emptyState.noScratchItems,
+          description: t.emptyState.scratchDescription,
         }}
         allowRemoveFromScratch
         scratchCollectionId={collectionId}

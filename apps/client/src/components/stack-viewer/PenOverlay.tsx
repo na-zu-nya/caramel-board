@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Slider } from '@/components/ui/slider';
+import { useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils'; // Stateless presentational helpers (no hooks)
 
 // Stateless presentational helpers (no hooks)
@@ -122,6 +123,8 @@ export default function PenOverlay({
   onExit,
   getImageEl,
 }: PenOverlayProps) {
+  const t = useT();
+  const viewerControls = t.viewerControls;
   const containerRef = useRef<HTMLDivElement | null>(null);
   // base canvas: committed strokes
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -565,17 +568,17 @@ export default function PenOverlay({
           style={{ pointerEvents: 'auto' }}
         >
           {/* Tool mode: Pen or Eraser (exclusive) */}
-          <ToolButton aria="Pen" active={!eraser} onClick={() => setEraser(false)}>
+          <ToolButton aria={viewerControls.pen} active={!eraser} onClick={() => setEraser(false)}>
             <PenTool size={16} />
           </ToolButton>
-          <ToolButton aria="Eraser" active={eraser} onClick={() => setEraser(true)}>
+          <ToolButton aria={viewerControls.eraser} active={eraser} onClick={() => setEraser(true)}>
             <Eraser size={16} />
           </ToolButton>
 
           {/* Size */}
           <div className="relative">
             <ToolButton
-              aria={`Size ${size}px`}
+              aria={viewerControls.sizeValue(size)}
               active={openPanel === 'size'}
               onClick={() => setOpenPanel((p) => (p === 'size' ? 'none' : 'size'))}
             >
@@ -583,7 +586,7 @@ export default function PenOverlay({
             </ToolButton>
             {openPanel === 'size' && (
               <PopCard>
-                <div className="text-xs text-gray-600 mb-2">Size: {size}px</div>
+                <div className="text-xs text-gray-600 mb-2">{viewerControls.sizeValue(size)}</div>
                 <div
                   onPointerDown={() => setIsAdjusting(true)}
                   onPointerUp={() => setIsAdjusting(false)}
@@ -605,7 +608,7 @@ export default function PenOverlay({
           {/* Opacity */}
           <div className="relative">
             <ToolButton
-              aria={`Opacity ${Math.round(opacity * 100)}%`}
+              aria={viewerControls.opacityValue(Math.round(opacity * 100))}
               active={openPanel === 'opacity'}
               onClick={() => setOpenPanel((p) => (p === 'opacity' ? 'none' : 'opacity'))}
             >
@@ -614,7 +617,7 @@ export default function PenOverlay({
             {openPanel === 'opacity' && (
               <PopCard>
                 <div className="text-xs text-gray-600 mb-2">
-                  Opacity: {Math.round(opacity * 100)}%
+                  {viewerControls.opacityValue(Math.round(opacity * 100))}
                 </div>
                 <div
                   onPointerDown={() => setIsAdjusting(true)}
@@ -637,7 +640,7 @@ export default function PenOverlay({
           {/* Color */}
           <div className="relative">
             <ToolButton
-              aria={`Color ${color}`}
+              aria={viewerControls.setColor(color)}
               active={openPanel === 'color'}
               onClick={() => setOpenPanel((p) => (p === 'color' ? 'none' : 'color'))}
             >
@@ -645,7 +648,7 @@ export default function PenOverlay({
             </ToolButton>
             {openPanel === 'color' && (
               <PopCard>
-                <div className="text-xs text-gray-600 mb-2">Color</div>
+                <div className="text-xs text-gray-600 mb-2">{viewerControls.color}</div>
                 <div className="grid grid-cols-6 gap-2">
                   {DEFAULT_COLORS.map((c) => (
                     <ColorSwatch
@@ -663,32 +666,32 @@ export default function PenOverlay({
 
           {/* Undo/Redo */}
           <ToolButton
-            aria="Undo"
+            aria={viewerControls.undo}
             disabled={strokes.length === 0}
             onClick={undo}
-            title="Undo (⌘/Ctrl+Z)"
+            title={viewerControls.undo}
           >
             <Undo2 size={16} />
           </ToolButton>
           <ToolButton
-            aria="Redo"
+            aria={viewerControls.redo}
             disabled={redoStack.length === 0}
             onClick={redo}
-            title="Redo (⌘/Ctrl+Shift+Z / Ctrl+Y)"
+            title={viewerControls.redo}
           >
             <Redo2 size={16} />
           </ToolButton>
 
           {/* Layer opacity / visibility */}
           <ToolButton
-            aria={layerVisible ? 'Hide pen layer' : 'Show pen layer'}
+            aria={layerVisible ? viewerControls.hidePenLayer : viewerControls.showPenLayer}
             onClick={() => setLayerVisible((v) => !v)}
           >
             {layerVisible ? <Eye size={16} /> : <EyeOff size={16} />}
           </ToolButton>
           <div className="relative">
             <ToolButton
-              aria={`Layer opacity ${Math.round(layerOpacity * 100)}%`}
+              aria={viewerControls.layerOpacity(Math.round(layerOpacity * 100))}
               active={openAuxPanel === 'layer'}
               onClick={() => setOpenAuxPanel((p) => (p === 'layer' ? 'none' : 'layer'))}
             >
@@ -697,7 +700,7 @@ export default function PenOverlay({
             {openAuxPanel === 'layer' && (
               <PopCard>
                 <div className="text-xs text-gray-600 mb-2">
-                  Pen layer opacity: {Math.round(layerOpacity * 100)}%
+                  {viewerControls.layerOpacity(Math.round(layerOpacity * 100))}
                 </div>
                 <div
                   onPointerDown={() => setIsAdjusting(true)}
@@ -719,7 +722,7 @@ export default function PenOverlay({
           {/* Background fade */}
           <div className="relative">
             <ToolButton
-              aria={`Background fade ${Math.round(bgFade * 100)}%`}
+              aria={viewerControls.backgroundFadeValue(Math.round(bgFade * 100))}
               active={openAuxPanel === 'bg'}
               onClick={() => setOpenAuxPanel((p) => (p === 'bg' ? 'none' : 'bg'))}
             >
@@ -728,7 +731,7 @@ export default function PenOverlay({
             {openAuxPanel === 'bg' && (
               <PopCard>
                 <div className="text-xs text-gray-600 mb-2">
-                  Background fade: {Math.round(bgFade * 100)}%
+                  {viewerControls.backgroundFadeValue(Math.round(bgFade * 100))}
                 </div>
                 <div
                   onPointerDown={() => setIsAdjusting(true)}
@@ -748,12 +751,12 @@ export default function PenOverlay({
           </div>
 
           {/* Clear */}
-          <ToolButton aria="Clear all" onClick={clearAll}>
+          <ToolButton aria={viewerControls.clearAll} onClick={clearAll}>
             <Trash2 size={16} />
           </ToolButton>
 
           {/* Exit */}
-          <ToolButton aria="Exit pen mode" onClick={onExit}>
+          <ToolButton aria={viewerControls.exitPenMode} onClick={onExit}>
             <X size={16} />
           </ToolButton>
         </div>
@@ -776,6 +779,7 @@ export default function PenOverlay({
     isAdjusting,
     redo,
     undo,
+    viewerControls,
   ]);
 
   return (

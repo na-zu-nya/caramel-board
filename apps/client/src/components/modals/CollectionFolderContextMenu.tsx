@@ -157,16 +157,18 @@ export function CollectionFolderContextMenu({
       <Dialog open={isRenameDialogOpen} onOpenChange={setIsRenameDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader className="border-b border-gray-200 pb-4">
-            <DialogTitle className="text-lg font-semibold text-gray-900">Rename Folder</DialogTitle>
+            <DialogTitle className="text-lg font-semibold text-gray-900">
+              {t.collection.renameFolder}
+            </DialogTitle>
             <DialogDescription className="text-gray-600 mt-2">
-              Update the name of "{folder.name}".
+              {t.collection.updateFolderName(folder.name)}
             </DialogDescription>
           </DialogHeader>
 
           <form className="space-y-6 pt-2" onSubmit={handleRename}>
             <div className="space-y-2">
               <Label htmlFor="folder-rename" className="text-gray-700">
-                Folder Name *
+                {t.collection.folderName} *
               </Label>
               <Input
                 id="folder-rename"
@@ -186,14 +188,14 @@ export function CollectionFolderContextMenu({
                 disabled={isProcessing}
                 className="px-4 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
               >
-                Cancel
+                {t.common.cancel}
               </Button>
               <Button
                 type="submit"
                 disabled={!canSubmit || isProcessing}
                 className="px-4 py-2 text-sm text-primary-foreground bg-primary rounded-md hover:bg-primary/90 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
               >
-                {isProcessing ? 'Updating...' : 'Update'}
+                {isProcessing ? t.common.updating : t.common.update}
               </Button>
             </div>
           </form>
@@ -203,9 +205,11 @@ export function CollectionFolderContextMenu({
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader className="border-b border-gray-200 pb-4">
-            <DialogTitle className="text-lg font-semibold text-gray-900">Remove Folder</DialogTitle>
+            <DialogTitle className="text-lg font-semibold text-gray-900">
+              {t.collection.removeFolder}
+            </DialogTitle>
             <DialogDescription className="text-gray-600 mt-2">
-              Remove "{folder.name}" and all of its sub-folders? This action cannot be undone.
+              {t.collection.removeFolderConfirm(folder.name)}
             </DialogDescription>
           </DialogHeader>
 
@@ -217,14 +221,14 @@ export function CollectionFolderContextMenu({
               disabled={isProcessing}
               className="px-4 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
             >
-              Cancel
+              {t.common.cancel}
             </Button>
             <Button
               onClick={handleDelete}
               disabled={isProcessing}
               className="px-4 py-2 text-sm text-white bg-red-600 rounded-md hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
             >
-              {isProcessing ? 'Removing...' : 'Remove'}
+              {isProcessing ? t.common.removing : t.common.remove}
             </Button>
           </div>
         </DialogContent>

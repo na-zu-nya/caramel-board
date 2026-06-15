@@ -33,6 +33,7 @@
     "desktop:prepare": "npm run -w @caramelboard/desktop prepare:sidecar",
     "desktop:dev": "npm run -w @caramelboard/desktop dev",
     "desktop:build": "npm run -w @caramelboard/desktop build:app",
+    "update:icon": "node scripts/update-icons.mjs",
     "db:push": "npm run -w @caramelboard/server db:push",
     "prisma:push": "npm run db:push",
     "prisma:generate": "npm run -w @caramelboard/server db:generate",

@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import type { FileHandle } from 'node:fs/promises';
 import { open } from 'node:fs/promises';
 import path from 'node:path';
-import type { Asset, Prisma } from '@prisma/client';
+import { type Asset, Prisma } from '@prisma/client';
 import urlJoin from 'url-join';
 import { DuplicateAssetError } from '../errors/DuplicateAssetError';
 import { getAutoTagClient } from '../lib/AutoTagClient';
@@ -52,6 +52,12 @@ const isDominantColor = (value: unknown): value is DominantColor => {
 
 const isDominantColorArray = (value: Prisma.JsonValue | null): value is DominantColor[] =>
   Array.isArray(value) && value.every(isDominantColor);
+
+interface CreateWithFileOptions {
+  allowDuplicate?: boolean;
+  storageHash?: string;
+  meta?: Prisma.InputJsonValue;
+}
 
 export class AssetModel {
   private static normalizeExtension(ext: string): string {
@@ -203,37 +209,40 @@ export class AssetModel {
     sourcePath: string,
     originalName: string,
     stackId: number,
-    dataSetId = 1
+    dataSetId = 1,
+    options: CreateWithFileOptions = {}
   ): Promise<number> {
     console.log('Source', sourcePath);
     const id = await getHash(sourcePath);
     const ext = await AssetModel.resolveAssetExtension(sourcePath, originalName);
     console.log('src,type,ext', sourcePath, ext, getExtension(originalName));
-    const key = buildAssetKey(dataSetId, id, ext);
+    const key = buildAssetKey(dataSetId, options.storageHash ?? id, ext);
 
     // Check duplicates across dataset (and within the same stack)
-    const existing = await prisma.asset.findFirst({
-      where: { hash: id, stack: { dataSetId } },
-      select: { id: true, stackId: true },
-    });
+    if (!options.allowDuplicate) {
+      const existing = await prisma.asset.findFirst({
+        where: { hash: id, stack: { dataSetId } },
+        select: { id: true, stackId: true },
+      });
 
-    if (existing) {
-      // Clean up temp source if it still exists
-      try {
-        fs.rmSync(sourcePath);
-      } catch {}
-      if (existing.stackId === stackId) {
-        throw new DuplicateAssetError('このスタックに同一画像が既に存在します', {
+      if (existing) {
+        // Clean up temp source if it still exists
+        try {
+          fs.rmSync(sourcePath);
+        } catch {}
+        if (existing.stackId === stackId) {
+          throw new DuplicateAssetError('このスタックに同一画像が既に存在します', {
+            assetId: existing.id,
+            stackId: existing.stackId,
+            scope: 'same-stack',
+          });
+        }
+        throw new DuplicateAssetError('重複画像のため追加できません（別スタックに存在）', {
           assetId: existing.id,
           stackId: existing.stackId,
-          scope: 'same-stack',
+          scope: 'dataset',
         });
       }
-      throw new DuplicateAssetError('重複画像のため追加できません（別スタックに存在）', {
-        assetId: existing.id,
-        stackId: existing.stackId,
-        scope: 'dataset',
-      });
     }
 
     console.log('move:', key, sourcePath);
@@ -291,7 +300,7 @@ export class AssetModel {
         thumbnail: thumbnailKey,
         preview: previewKey ?? null,
         fileType: ext,
-        meta: {},
+        meta: options.meta ?? {},
         stackId: stackId,
         hash: id,
         dominantColors: dominantColors || null,

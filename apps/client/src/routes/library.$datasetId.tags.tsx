@@ -48,6 +48,7 @@ import { SelectionActionBar } from '@/components/ui/selection-action-bar';
 import { useHeaderActions } from '@/hooks/useHeaderActions';
 import { useStackTile } from '@/hooks/useStackTile';
 import { apiClient } from '@/lib/api-client';
+import { useT } from '@/lib/i18n';
 import { getSourceImageFilename, getSourceImageUrl } from '@/lib/stack-drag-data';
 import { cn } from '@/lib/utils';
 import {
@@ -98,6 +99,7 @@ interface StacksResponse {
 }
 
 function TagsPage() {
+  const t = useT();
   const navigate = useNavigate();
   const location = useLocation();
   const { datasetId } = Route.useParams();

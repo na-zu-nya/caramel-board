@@ -12,6 +12,7 @@ import { CaramelBoardLogo } from '@/components/ui/CaramelBoardLogo';
 import { SideMenu } from '@/components/ui/SideMenu';
 import { apiClient } from '@/lib/api-client';
 import { APP_GIT_HASH, APP_VERSION } from '@/lib/app-info';
+import { useT } from '@/lib/i18n';
 import { currentDatasetAtom, sidebarOpenAtom } from '@/stores/ui';
 
 // LocalStorage keys for collapsed state
@@ -35,6 +36,7 @@ function saveCollapsedState(state: Record<string, boolean>) {
 }
 
 export default function SidebarContainer() {
+  const t = useT();
   const [isOpen, setIsOpen] = useAtom(sidebarOpenAtom);
   const [currentDataset] = useAtom(currentDatasetAtom);
   // @ts-expect-error
@@ -193,7 +195,7 @@ export default function SidebarContainer() {
           className="inline-flex items-center gap-1 text-gray-300 no-underline transition-colors hover:text-primary-strong"
         >
           <Megaphone className="h-3.5 w-3.5" aria-hidden="true" />
-          <span className="sr-only">Releases</span>
+          <span className="sr-only">{t.sidebar.releases}</span>
         </a>
         <a
           href="https://x.com/na_zu_nya"
@@ -215,7 +217,7 @@ export default function SidebarContainer() {
         </a>
       </>
     ),
-    []
+    [t]
   );
 
   return (

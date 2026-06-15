@@ -20,6 +20,7 @@ import {
   uploadFolderAsCollection,
   uploadFolderAsSingleStack,
 } from '@/lib/folder-import';
+import { useT } from '@/lib/i18n';
 import { applyScrollbarCompensation, removeScrollbarCompensation } from '@/lib/scrollbar-utils';
 import { cn } from '@/lib/utils';
 import { reorderModeAtom, selectionModeAtom } from '@/stores/ui';
@@ -64,6 +65,7 @@ export default function SparseStackGrid({
   onItemClick,
   className,
 }: SparseStackGridProps) {
+  const t = useT();
   const queryClient = useQueryClient();
   const setSelectionMode = useSetAtom(selectionModeAtom);
   const reorderMode = useAtomValue(reorderModeAtom);
@@ -169,7 +171,7 @@ export default function SparseStackGrid({
       if (!defaults) {
         addNotification({
           type: 'error',
-          message: 'Unable to resolve upload defaults for this folder.',
+          message: t.upload.unableToResolveFolderDefaults,
         });
         finalizeFolderProcessing();
         return;
@@ -190,12 +192,12 @@ export default function SparseStackGrid({
           addFilesToQueue({ files: activeFolder.files, type: 'new-stack' });
           addNotification({
             type: 'success',
-            message: `Queued ${activeFolder.files.length} file(s) from “${activeFolder.name}” for upload.`,
+            message: t.upload.queuedFiles(activeFolder.files.length, activeFolder.name),
           });
         } else if (mode === 'single-stack') {
           addNotification({
             type: 'info',
-            message: `Merging “${activeFolder.name}” into a single stack…`,
+            message: t.upload.mergingFolder(activeFolder.name),
           });
           const { stackId, assetIds } = await uploadFolderAsSingleStack(
             activeFolder.files,
@@ -204,7 +206,11 @@ export default function SparseStackGrid({
           await refreshAfterManualUpload();
           addNotification({
             type: 'success',
-            message: `Created stack #${stackId} from “${activeFolder.name}” with ${assetIds.length + 1} file(s).`,
+            message: t.upload.createdStackFromFolder(
+              stackId,
+              activeFolder.name,
+              assetIds.length + 1
+            ),
           });
         } else if (mode === 'create-collection') {
           const cleanDefaults: FolderUploadDefaults = {
@@ -214,7 +220,7 @@ export default function SparseStackGrid({
           const targetName = options.collectionName?.trim() || activeFolder.name;
           addNotification({
             type: 'info',
-            message: `Creating collection “${targetName}” from “${activeFolder.name}”…`,
+            message: t.upload.creatingCollectionFromFolder(targetName, activeFolder.name),
           });
           const { collectionId: createdCollectionId, stackIds } = await uploadFolderAsCollection(
             activeFolder.files,
@@ -224,12 +230,16 @@ export default function SparseStackGrid({
           await refreshAfterManualUpload();
           addNotification({
             type: 'success',
-            message: `Collection “${targetName}” (ID: ${createdCollectionId}) now contains ${stackIds.length} created stack(s).`,
+            message: t.upload.collectionCreatedFromFolder(
+              targetName,
+              createdCollectionId,
+              stackIds.length
+            ),
           });
         }
       } catch (error) {
         console.error('Folder import flow failed (sparse grid)', error);
-        const message = error instanceof Error ? error.message : 'Folder import failed.';
+        const message = error instanceof Error ? error.message : t.grid.folderImportFailed;
         addNotification({ type: 'error', message });
       } finally {
         finalizeFolderProcessing();
@@ -242,6 +252,7 @@ export default function SparseStackGrid({
       finalizeFolderProcessing,
       refreshAfterManualUpload,
       setUploadDefaults,
+      t,
     ]
   );
 
@@ -249,11 +260,11 @@ export default function SparseStackGrid({
     if (activeFolder) {
       addNotification({
         type: 'info',
-        message: `Cancelled import for “${activeFolder.name}”.`,
+        message: t.upload.cancelledFolderImport(activeFolder.name),
       });
     }
     finalizeFolderProcessing();
-  }, [activeFolder, addNotification, finalizeFolderProcessing]);
+  }, [activeFolder, addNotification, finalizeFolderProcessing, t]);
 
   const {
     containerRef,
@@ -360,7 +371,7 @@ export default function SparseStackGrid({
       exitSelectionMode();
       addNotification({
         type: 'success',
-        message: `選択順の先頭スタック #${targetId} に ${sourceIds.length} 件をマージしました`,
+        message: t.grid.mergeSelectedSuccess(targetId, sourceIds.length),
       });
       await refreshAll();
       void Promise.allSettled([
@@ -372,7 +383,7 @@ export default function SparseStackGrid({
       ]);
     } catch (error) {
       console.error('❌ Failed to merge stacks:', error);
-      addNotification({ type: 'error', message: 'スタックのマージに失敗しました' });
+      addNotification({ type: 'error', message: t.grid.mergeSelectedFailed });
     }
   }, [
     addNotification,
@@ -382,6 +393,7 @@ export default function SparseStackGrid({
     queryClient,
     refreshAll,
     selectedStackIdsInOrder,
+    t,
   ]);
 
   // Handle scroll-based loading
@@ -459,7 +471,7 @@ export default function SparseStackGrid({
       if (!files?.length) return;
       const defaults = computeUploadDefaults();
       if (!defaults) {
-        addNotification({ type: 'error', message: 'データセットが特定できませんでした' });
+        addNotification({ type: 'error', message: t.grid.datasetNotFound });
         return;
       }
 
@@ -486,7 +498,7 @@ export default function SparseStackGrid({
         setFolderQueue((prev) => [...prev, ...requests]);
       }
     },
-    [addFilesToQueue, addNotification, computeUploadDefaults, setUploadDefaults]
+    [addFilesToQueue, addNotification, computeUploadDefaults, setUploadDefaults, t]
   );
 
   const handleUrlDrop = useCallback(
@@ -495,7 +507,7 @@ export default function SparseStackGrid({
 
       const datasetNumericId = dataset?.id ? Number(dataset.id) : Number(datasetId);
       if (Number.isNaN(datasetNumericId)) {
-        addNotification({ type: 'error', message: 'データセットが特定できませんでした' });
+        addNotification({ type: 'error', message: t.grid.datasetNotFound });
         return;
       }
 
@@ -505,7 +517,7 @@ export default function SparseStackGrid({
 
       addNotification({
         type: 'info',
-        message: `${urls.length}件のURLをダウンロード中です`,
+        message: t.grid.urlDownloading(urls.length),
       });
 
       try {
@@ -528,14 +540,14 @@ export default function SparseStackGrid({
         if (successes.length > 0) {
           addNotification({
             type: 'success',
-            message: `${successes.length}件のURLからアップロードしました`,
+            message: t.grid.urlUploaded(successes.length),
           });
         }
 
         if (duplicates.length > 0) {
           addNotification({
             type: 'info',
-            message: `${duplicates.length}件のURLは既に取り込み済みのためスキップしました`,
+            message: t.grid.urlDuplicatesSkipped(duplicates.length),
           });
         }
 
@@ -549,24 +561,23 @@ export default function SparseStackGrid({
             type: 'error',
             message:
               failures.length === results.length
-                ? 'URLのアップロードに失敗しました'
-                : `${failures.length}件のURLでエラーが発生しました${summary ? `: ${summary}` : ''}`,
+                ? t.grid.urlUploadFailed
+                : t.grid.urlUploadPartialFailed(failures.length, summary),
           });
 
           if (protectedFailures.length > 0) {
             addNotification({
               type: 'info',
-              message:
-                '保護された画像は直接ドロップできません。一度保存してから再度ドロップしてください。',
+              message: t.grid.protectedImageDropHint,
             });
           }
         }
       } catch (error) {
         console.error('Failed to import URLs for sparse grid', error);
-        addNotification({ type: 'error', message: 'URLのアップロードに失敗しました' });
+        addNotification({ type: 'error', message: t.grid.urlUploadFailed });
       }
     },
-    [dataset?.id, datasetId, mediaType, addNotification]
+    [dataset?.id, datasetId, mediaType, addNotification, t]
   );
 
   // Loading state
@@ -575,7 +586,7 @@ export default function SparseStackGrid({
       <div className="flex items-center justify-center h-64">
         <div className="flex items-center gap-2 text-gray-500">
           <Loader2 className="h-5 w-5 animate-spin" />
-          <span>Loading...</span>
+          <span>{t.common.loading}</span>
         </div>
       </div>
     );
@@ -587,10 +598,10 @@ export default function SparseStackGrid({
       <div className="flex flex-col items-center justify-center h-64 text-center">
         <div className="text-6xl mb-4">{emptyState?.icon || '📸'}</div>
         <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
-          {emptyState?.title || 'No items found'}
+          {emptyState?.title || t.grid.noStacksFound}
         </h3>
         <p className="text-gray-500 dark:text-gray-400 max-w-sm">
-          {emptyState?.description || 'Try adjusting your filters or upload some content.'}
+          {emptyState?.description || t.emptyState.uploadImagesDescription}
         </p>
       </div>
     );
@@ -711,7 +722,7 @@ export default function SparseStackGrid({
           onExitSelectionMode={() => setSelectionMode(false)}
           actions={[
             {
-              label: 'Bulk Edit',
+              label: t.grid.bulkEdit,
               value: 'bulk-edit',
               onSelect: () => setIsEditPanelOpen((prev) => !prev),
               icon: <Pencil size={12} />,
@@ -720,11 +731,14 @@ export default function SparseStackGrid({
             ...(selectedStackIdsInOrder.length >= 2
               ? [
                   {
-                    label: 'Merge Stacks',
+                    label: t.grid.mergeStacks,
                     value: 'merge-stacks',
                     onSelect: handleMergeStacks,
                     icon: <GitMerge size={12} />,
-                    confirmMessage: `選択順の先頭スタック #${selectedStackIdsInOrder[0]} に残り ${selectedStackIdsInOrder.length - 1} 件をマージします。実行しますか？`,
+                    confirmMessage: t.grid.mergeSelectedConfirm(
+                      selectedStackIdsInOrder[0],
+                      selectedStackIdsInOrder.length - 1
+                    ),
                     group: 'primary' as const,
                   },
                 ]
@@ -736,7 +750,7 @@ export default function SparseStackGrid({
       {/* Info Sidebar Toggle */}
       <HeaderIconButton
         icon={Info}
-        label="Toggle Info Sidebar"
+        label={infoSidebarOpen ? t.viewer.closeInfo : t.viewer.openInfo}
         onClick={() => setInfoSidebarOpen(!infoSidebarOpen)}
         className={cn(
           'fixed top-4 right-4 z-50 transition-colors',

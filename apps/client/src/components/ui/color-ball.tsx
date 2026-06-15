@@ -3,6 +3,7 @@ import { Copy } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { copyText } from '@/lib/clipboard';
+import { useT } from '@/lib/i18n';
 import { cn, hexForCopy } from '@/lib/utils';
 import { addUploadNotificationAtom } from '@/stores/upload';
 import type { DominantColor } from '@/types';
@@ -28,6 +29,7 @@ export function ColorBall({
   onClick,
   className,
 }: ColorBallProps) {
+  const t = useT();
   const addNotification = useSetAtom(addUploadNotificationAtom);
   const [hovered, setHovered] = useState(false);
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
@@ -40,7 +42,7 @@ export function ColorBall({
       copyText(copied).then((ok) =>
         addNotification({
           type: ok ? 'success' : 'error',
-          message: ok ? `Copied ${copied} to clipboard` : 'Failed to copy to clipboard',
+          message: ok ? t.common.copiedToClipboard(copied) : t.common.failedToCopy,
         })
       );
       return;
@@ -140,11 +142,13 @@ export function ColorPalette({
   onColorClick,
   className,
 }: ColorPaletteProps) {
+  const t = useT();
+
   if (!colors || colors.length === 0) {
     return (
       <div className={cn('flex items-center gap-2 text-sm text-gray-400', className)}>
         <div className={cn('rounded-full bg-gray-200', sizeClasses[size])} />
-        <span>No color data</span>
+        <span>{t.viewerControls.noColorData}</span>
       </div>
     );
   }

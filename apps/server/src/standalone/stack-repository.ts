@@ -8,6 +8,12 @@ import { ColorExtractor, type DominantColor } from '../utils/colorExtractor';
 import { getExtension, getFileType, getHash } from '../utils/functions';
 import { generateMediaPreview, shouldGeneratePreview } from '../utils/generateMediaPreview';
 import { generateThumbnail } from '../utils/generateThumbnail';
+import {
+  appendPdfOriginalMeta,
+  extractPdfOriginalsFromMeta,
+  isPdfFileInput,
+  preparePdfImport,
+} from '../utils/pdfImport';
 import { getStandaloneSqlite, nowIso, parseJsonObject } from './sqlite';
 
 export interface StandaloneStackListParams {
@@ -83,6 +89,12 @@ interface StandaloneFileInput {
   originalname: string;
   mimetype: string;
   size: number;
+}
+
+interface AddAssetWithFileOptions {
+  allowDuplicate?: boolean;
+  storageHash?: string;
+  meta?: Record<string, unknown>;
 }
 
 interface CreateStackWithFileInput {
@@ -480,22 +492,62 @@ export class StandaloneStackRepository {
       assetsByStackId.set(asset.stack_id, current);
     }
 
-    const ordered: OriginalAssetRow[] = [];
+    const orderedAssets: OriginalAssetRow[] = [];
     for (const assetId of options.assetIds) {
       const asset = assetsById.get(assetId);
-      if (asset) ordered.push(asset);
+      if (asset) orderedAssets.push(asset);
     }
-    for (const stackId of options.stackIds) {
-      ordered.push(...(assetsByStackId.get(stackId) ?? []));
-    }
-
-    return ordered.map((asset) => ({
+    const ordered = orderedAssets.map((asset) => ({
       id: asset.id,
       stackId: asset.stack_id,
       file: asset.file,
       fileType: asset.file_type,
       originalName: asset.original_name,
     }));
+
+    const stackMetaRows =
+      options.stackIds.length > 0
+        ? (this.db
+            .prepare(
+              `SELECT id, meta_json
+               FROM stacks
+               WHERE dataset_id = ?
+                 AND id IN (${placeholders(options.stackIds)})`
+            )
+            .all(dataSetId, ...options.stackIds) as Array<{
+            id: number;
+            meta_json: string | null;
+          }>)
+        : [];
+    const pdfsByStackId = new Map(
+      stackMetaRows.map((row) => [
+        row.id,
+        extractPdfOriginalsFromMeta(parseJsonObject(row.meta_json)),
+      ])
+    );
+
+    for (const stackId of options.stackIds) {
+      ordered.push(
+        ...(assetsByStackId.get(stackId) ?? []).map((asset) => ({
+          id: asset.id,
+          stackId: asset.stack_id,
+          file: asset.file,
+          fileType: asset.file_type,
+          originalName: asset.original_name,
+        }))
+      );
+      for (const pdf of pdfsByStackId.get(stackId) ?? []) {
+        ordered.push({
+          id: -stackId,
+          stackId,
+          file: pdf.file,
+          fileType: pdf.mimeType,
+          originalName: pdf.originalName,
+        });
+      }
+    }
+
+    return ordered;
   }
 
   getSimilarByStackIds(
@@ -618,41 +670,51 @@ export class StandaloneStackRepository {
     }
   }
 
-  async addAssetWithFile(stackId: number, file: StandaloneFileInput) {
+  async addAssetWithFile(
+    stackId: number,
+    file: StandaloneFileInput,
+    options: AddAssetWithFileOptions = {}
+  ) {
     const stack = this.getStackDataset(stackId);
     if (!stack) return null;
 
-    const hash = await getHash(file.path);
-    const ext = this.resolveAssetExtension(file.path, file.originalname);
-    const existing = this.db
-      .prepare(
-        `SELECT a.id, a.stack_id
-         FROM assets a
-         JOIN stacks s ON s.id = a.stack_id
-         WHERE s.dataset_id = ? AND a.hash = ?
-         LIMIT 1`
-      )
-      .get(stack.dataset_id, hash) as DuplicateAssetRow | undefined;
-
-    if (existing) {
-      try {
-        fs.rmSync(file.path, { force: true });
-      } catch {}
-      if (existing.stack_id === stackId) {
-        throw new DuplicateAssetError('このスタックに同一画像が既に存在します', {
-          assetId: existing.id,
-          stackId: existing.stack_id,
-          scope: 'same-stack',
-        });
-      }
-      throw new DuplicateAssetError('重複画像のため追加できません（別スタックに存在）', {
-        assetId: existing.id,
-        stackId: existing.stack_id,
-        scope: 'dataset',
-      });
+    if (!options.allowDuplicate && (await isPdfFileInput(file))) {
+      return this.addPdfWithFile(stackId, file, stack.dataset_id);
     }
 
-    const key = buildAssetKey(stack.dataset_id, hash, ext);
+    const hash = await getHash(file.path);
+    const ext = this.resolveAssetExtension(file.path, file.originalname);
+    if (!options.allowDuplicate) {
+      const existing = this.db
+        .prepare(
+          `SELECT a.id, a.stack_id
+           FROM assets a
+           JOIN stacks s ON s.id = a.stack_id
+           WHERE s.dataset_id = ? AND a.hash = ?
+           LIMIT 1`
+        )
+        .get(stack.dataset_id, hash) as DuplicateAssetRow | undefined;
+
+      if (existing) {
+        try {
+          fs.rmSync(file.path, { force: true });
+        } catch {}
+        if (existing.stack_id === stackId) {
+          throw new DuplicateAssetError('このスタックに同一画像が既に存在します', {
+            assetId: existing.id,
+            stackId: existing.stack_id,
+            scope: 'same-stack',
+          });
+        }
+        throw new DuplicateAssetError('重複画像のため追加できません（別スタックに存在）', {
+          assetId: existing.id,
+          stackId: existing.stack_id,
+          scope: 'dataset',
+        });
+      }
+    }
+
+    const key = buildAssetKey(stack.dataset_id, options.storageHash ?? hash, ext);
     await DataStorage.mkdir(path.dirname(key), stack.dataset_id);
     DataStorage.move(key, file.path, stack.dataset_id);
 
@@ -684,7 +746,7 @@ export class StandaloneStackRepository {
       .prepare(
         `INSERT INTO assets
            (stack_id, file, thumbnail, preview, file_type, original_name, hash, order_in_stack, meta_json, dominant_colors_json, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, '{}', ?, ?, ?)`
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         stackId,
@@ -695,6 +757,7 @@ export class StandaloneStackRepository {
         file.originalname,
         hash,
         nextOrder + 1,
+        JSON.stringify(options.meta ?? {}),
         toColorJson(dominantColors),
         now,
         now
@@ -722,6 +785,56 @@ export class StandaloneStackRepository {
       )
       .get(assetId) as AssetRow | undefined;
     return row ? toAsset(row, stack.dataset_id) : null;
+  }
+
+  private async addPdfWithFile(stackId: number, file: StandaloneFileInput, dataSetId: number) {
+    const preparedPdf = await preparePdfImport(file, dataSetId);
+    const createdAssetIds: number[] = [];
+    let firstAsset: ReturnType<typeof toAsset> | null = null;
+
+    try {
+      for (const page of preparedPdf.pages) {
+        const asset = await this.addAssetWithFile(stackId, page, {
+          allowDuplicate: true,
+          storageHash: page.storageHash,
+          meta: {
+            sourcePdfHash: preparedPdf.original.hash,
+            sourcePdfImportId: preparedPdf.original.importId,
+            sourcePdfPage: page.pageNumber,
+            rasterDpi: preparedPdf.original.rasterDpi,
+          },
+        });
+        if (asset) {
+          createdAssetIds.push(Number(asset.id));
+          if (!firstAsset) firstAsset = asset;
+        }
+      }
+
+      const stack = this.db
+        .prepare('SELECT meta_json FROM stacks WHERE id = ? AND dataset_id = ?')
+        .get(stackId, dataSetId) as { meta_json: string | null } | undefined;
+      const nextMeta = appendPdfOriginalMeta(
+        parseJsonObject(stack?.meta_json),
+        preparedPdf.original
+      );
+      this.db
+        .prepare('UPDATE stacks SET meta_json = ?, updated_at = ? WHERE id = ?')
+        .run(JSON.stringify(nextMeta), nowIso(), stackId);
+      this.refreshStackThumbnail(stackId);
+      this.refreshStackColors(stackId);
+      return firstAsset;
+    } catch (error) {
+      if (createdAssetIds.length > 0) {
+        this.db
+          .prepare(`DELETE FROM assets WHERE id IN (${placeholders(createdAssetIds)})`)
+          .run(...createdAssetIds);
+        this.refreshStackThumbnail(stackId);
+        this.refreshStackColors(stackId);
+      }
+      throw error;
+    } finally {
+      preparedPdf.cleanup();
+    }
   }
 
   updateStack(

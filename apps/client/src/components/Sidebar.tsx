@@ -12,6 +12,7 @@ import { CaramelBoardLogo } from '@/components/ui/CaramelBoardLogo';
 import { useSwipeClose } from '@/hooks/features/useSwipeClose';
 import { apiClient } from '@/lib/api-client';
 import { APP_GIT_HASH, APP_VERSION } from '@/lib/app-info';
+import { useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { currentDatasetAtom, sidebarOpenAtom } from '@/stores/ui';
 
@@ -38,6 +39,7 @@ function saveCollapsedState(state: Record<string, boolean>) {
 }
 
 export default function Sidebar() {
+  const t = useT();
   const [isOpen, setIsOpen] = useAtom(sidebarOpenAtom);
   const [currentDataset] = useAtom(currentDatasetAtom);
   // @ts-expect-error
@@ -240,7 +242,7 @@ export default function Sidebar() {
           className="inline-flex items-center gap-1 text-gray-300 no-underline transition-colors hover:text-primary-strong"
         >
           <Megaphone className="h-3.5 w-3.5" aria-hidden="true" />
-          <span className="sr-only">Releases</span>
+          <span className="sr-only">{t.sidebar.releases}</span>
         </a>
         <a
           href="https://x.com/na_zu_nya"
@@ -262,7 +264,7 @@ export default function Sidebar() {
         </a>
       </>
     ),
-    []
+    [t]
   );
 
   return (
@@ -285,7 +287,7 @@ export default function Sidebar() {
             type="button"
             onClick={() => setIsOpen(false)}
             className="p-1.5 hover:bg-gray-100 rounded-md transition-colors"
-            aria-label="Close sidebar"
+            aria-label={t.sidebar.closeSidebar}
           >
             <X size={18} className="text-gray-600" />
           </button>

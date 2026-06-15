@@ -17,6 +17,7 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
+import { useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { getThumbnailPath } from '@/utils/thumbnailPath';
 
@@ -69,6 +70,7 @@ export function StackTile({
   children,
   ...divProps
 }: StackTileProps) {
+  const t = useT();
   const [isNativePointerActive, setIsNativePointerActive] = useState(false);
   const [isNativeDragReady, setIsNativeDragReady] = useState(false);
   const resolvedThumbnailUrl = thumbnailUrl
@@ -109,7 +111,7 @@ export function StackTile({
       {thumbnailUrl ? (
         <img
           src={resolvedThumbnailUrl ?? undefined}
-          alt={title || 'stack'}
+          alt={title || t.common.untitled}
           className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
           loading="lazy"
           data-stack-drag-preview="true"
@@ -122,7 +124,7 @@ export function StackTile({
           className="w-full h-full flex items-center justify-center text-gray-400 bg-gray-50"
           data-stack-drag-preview="true"
         >
-          No Image
+          {t.viewerControls.noImage}
         </div>
       )}
       {isNativeDragReady && resolvedNativeImageDragUrl ? (
@@ -163,7 +165,7 @@ export function StackTile({
           'absolute bottom-2 left-2 p-1 rounded-full z-10 transition-colors',
           favorited ? 'bg-yellow-500 text-white' : 'bg-white/80 text-gray-700 hover:bg-white'
         )}
-        aria-label={favorited ? 'Remove favorite' : 'Add favorite'}
+        aria-label={favorited ? t.contextMenu.removeFavorite : t.contextMenu.addFavorite}
       >
         <Star size={16} className={favorited ? 'fill-current' : ''} />
       </button>
@@ -178,7 +180,7 @@ export function StackTile({
             onLike?.();
           }}
           className="absolute bottom-2 right-2 flex items-center gap-1 bg-like text-white px-2 py-1 rounded-full text-xs font-medium z-10 hover:opacity-90"
-          aria-label="Like"
+          aria-label={t.viewerControls.like}
         >
           <Heart size={12} className="fill-current" />
           <span>{likeCount}</span>
@@ -197,25 +199,25 @@ export function StackTile({
           : body}
       </ContextMenuTrigger>
       <ContextMenuContent className="w-48">
-        <ContextMenuItem onClick={() => onOpen?.()}>Open</ContextMenuItem>
+        <ContextMenuItem onClick={() => onOpen?.()}>{t.contextMenu.open}</ContextMenuItem>
         {onDownload ? (
           <ContextMenuItem onClick={() => onDownload()}>
             <Download className="w-4 h-4 mr-2" />
-            Download
+            {t.contextMenu.download}
           </ContextMenuItem>
         ) : null}
         <ContextMenuSeparator />
         <ContextMenuItem onClick={() => onInfo?.()}>
           <Info className="w-4 h-4 mr-2" />
-          Info
+          {t.contextMenu.info}
         </ContextMenuItem>
         <ContextMenuItem onClick={() => onFindSimilar?.()}>
           <GalleryVerticalEnd className="w-4 h-4 mr-2" />
-          Find similar
+          {t.contextMenu.findSimilar}
         </ContextMenuItem>
         <ContextMenuItem onClick={() => onAddToScratch?.()}>
           <NotebookText className="w-4 h-4 mr-2" />
-          Add to Scratch
+          {t.contextMenu.addToScratch}
         </ContextMenuItem>
         {onRemoveLike || onRemoveStack ? <ContextMenuSeparator /> : null}
         {onRemoveLike ? (
@@ -224,7 +226,7 @@ export function StackTile({
             className="text-red-600 focus:text-red-700"
           >
             <HeartOff className="w-4 h-4 mr-2" />
-            Unlike
+            {t.viewerControls.unlike}
           </ContextMenuItem>
         ) : null}
         {onRemoveLike && onRemoveStack ? <ContextMenuSeparator /> : null}
@@ -234,7 +236,7 @@ export function StackTile({
             className="text-red-600 focus:text-red-700"
           >
             <Trash2 className="w-4 h-4 mr-2" />
-            Remove Stack
+            {t.info.removeStack}
           </ContextMenuItem>
         ) : null}
       </ContextMenuContent>

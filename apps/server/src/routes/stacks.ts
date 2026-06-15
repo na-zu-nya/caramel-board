@@ -28,6 +28,7 @@ import { StandaloneLibraryRepository } from '../standalone/library-repository';
 import { isStandaloneSqliteEnabled } from '../standalone/sqlite';
 import { StandaloneStackRepository } from '../standalone/stack-repository';
 import { toPublicAssetPath, withPublicAssetArray } from '../utils/assetPath';
+import { extractPdfOriginalsFromMeta } from '../utils/pdfImport';
 import { createZipArchive } from '../utils/zip';
 
 type StackAssetSummary = {
@@ -220,6 +221,11 @@ const getUniqueFilename = (filename: string, usedNames: Map<string, number>) => 
   return getUniqueFilename(candidate, usedNames);
 };
 
+const getPdfProcessingErrorMessage = (error: unknown) => {
+  if (!(error instanceof Error)) return null;
+  return error.message.includes('PDF') ? error.message : null;
+};
+
 const resolveStoredFilePath = (
   file: string,
   dataStorage: ReturnType<typeof useDataStorage>
@@ -299,10 +305,12 @@ stacksRoute.get('/download-originals', async (c) => {
                 where: { id: { in: stackIds }, dataSetId },
                 select: {
                   id: true,
+                  meta: true,
                   assets: {
                     orderBy: { orderInStack: 'asc' },
                     select: {
                       id: true,
+                      stackId: true,
                       file: true,
                       fileType: true,
                       originalName: true,
@@ -317,6 +325,7 @@ stacksRoute.get('/download-originals', async (c) => {
                 where: { id: { in: assetIds }, stack: { dataSetId } },
                 select: {
                   id: true,
+                  stackId: true,
                   file: true,
                   fileType: true,
                   originalName: true,
@@ -325,7 +334,13 @@ stacksRoute.get('/download-originals', async (c) => {
             : [];
         const assetMap = new Map(selectedAssets.map((asset) => [asset.id, asset]));
         const stackMap = new Map(stacks.map((stack) => [stack.id, stack]));
-        const ordered: typeof selectedAssets = [];
+        const ordered: Array<{
+          id: number;
+          stackId: number;
+          file: string;
+          fileType: string | null;
+          originalName: string | null;
+        }> = [];
 
         for (const assetId of assetIds) {
           const asset = assetMap.get(assetId);
@@ -338,6 +353,15 @@ stacksRoute.get('/download-originals', async (c) => {
           if (!stack) continue;
           for (const asset of stack.assets) {
             ordered.push(asset);
+          }
+          for (const pdf of extractPdfOriginalsFromMeta(stack.meta)) {
+            ordered.push({
+              id: -stack.id,
+              stackId: stack.id,
+              file: pdf.file,
+              fileType: pdf.mimeType,
+              originalName: pdf.originalName,
+            });
           }
         }
 
@@ -1107,6 +1131,10 @@ stacksRoute.post('/:id{[0-9]+}/assets', async (c) => {
         409
       );
     }
+    const pdfErrorMessage = getPdfProcessingErrorMessage(error);
+    if (pdfErrorMessage) {
+      return c.json({ error: pdfErrorMessage }, 400);
+    }
     console.error('Error adding asset to stack:', error);
     return c.json({ error: 'Failed to add asset' }, 500);
   }
@@ -1729,6 +1757,10 @@ stacksRoute.post('/', async (c) => {
         },
         409
       );
+    }
+    const pdfErrorMessage = getPdfProcessingErrorMessage(error);
+    if (pdfErrorMessage) {
+      return c.json({ error: pdfErrorMessage }, 400);
     }
     console.error('Error creating stack with file:', error);
     return c.json({ error: 'Failed to create stack' }, 500);

@@ -6,6 +6,7 @@ import StackGrid from '@/components/StackGrid';
 import { useDataset } from '@/hooks/useDatasets';
 import { useHeaderActions } from '@/hooks/useHeaderActions';
 import { apiClient } from '@/lib/api-client';
+import { useT } from '@/lib/i18n';
 import { navigationStateAtom } from '@/stores/navigation';
 import { currentFilterAtom } from '@/stores/ui';
 import { genListToken, saveViewContext } from '@/stores/view-context';
@@ -16,6 +17,7 @@ export const Route = createFileRoute('/library/$datasetId/autotag/$autoTagKey')(
 });
 
 function AutoTagStacksPage() {
+  const t = useT();
   const { datasetId, autoTagKey } = Route.useParams();
   const { data: dataset } = useDataset(datasetId);
   const navigate = useNavigate();
@@ -264,8 +266,8 @@ function AutoTagStacksPage() {
         onItemClick={handleItemClick}
         emptyState={{
           icon: '✨',
-          title: `No stacks for AutoTag "${decodedKey}"`,
-          description: 'This AutoTag has not matched any stacks yet.',
+          title: t.emptyState.noAutoTagItems(decodedKey),
+          description: t.emptyState.autoTagDescription,
         }}
       />
       <FilterPanel

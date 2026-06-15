@@ -69,51 +69,57 @@ export default function HeaderContainer() {
   }, []);
 
   // Check if a navigation pin is active
-  const isNavigationPinActive = useCallback((pin: Pin) => {
-    const path = location.pathname;
-    if (pin.type === 'COLLECTION' && pin.collectionId) {
-      const scratch =
-        (pin.collection && isScratchCollection(pin.collection)) || pin.name === 'Scratch';
-      return scratch
-        ? path.includes(`/scratch/${pin.collectionId}`)
-        : path.includes(`/collections/${pin.collectionId}`);
-    } else if (pin.type === 'MEDIA_TYPE' && pin.mediaType) {
-      return path.includes(`/media-type/${pin.mediaType}`);
-    } else if (pin.type === 'OVERVIEW') {
-      return path === `/library/${datasetId}`;
-    } else if (pin.type === 'FAVORITES') {
-      return path === `/library/${datasetId}/favorites`;
-    } else if (pin.type === 'LIKES') {
-      return path === `/library/${datasetId}/likes`;
-    }
-    return false;
-  }, [datasetId, location.pathname]);
-
-  const handleNavigationPinClick = useCallback((pin: Pin) => {
-    if (pin.type === 'COLLECTION' && pin.collectionId) {
-      const isScratch =
-        (pin.collection && isScratchCollection(pin.collection)) || pin.name === 'Scratch';
-      if (isScratch) {
-        navigate({
-          to: '/library/$datasetId/scratch/$scratchId',
-          params: { datasetId, scratchId: String(pin.collectionId) },
-        });
-      } else {
-        navigate({
-          to: '/library/$datasetId/collections/$collectionId',
-          params: () => ({ datasetId, collectionId: String(pin.collectionId) }),
-        });
+  const isNavigationPinActive = useCallback(
+    (pin: Pin) => {
+      const path = location.pathname;
+      if (pin.type === 'COLLECTION' && pin.collectionId) {
+        const scratch =
+          (pin.collection && isScratchCollection(pin.collection)) || pin.name === 'Scratch';
+        return scratch
+          ? path.includes(`/scratch/${pin.collectionId}`)
+          : path.includes(`/collections/${pin.collectionId}`);
+      } else if (pin.type === 'MEDIA_TYPE' && pin.mediaType) {
+        return path.includes(`/media-type/${pin.mediaType}`);
+      } else if (pin.type === 'OVERVIEW') {
+        return path === `/library/${datasetId}`;
+      } else if (pin.type === 'FAVORITES') {
+        return path === `/library/${datasetId}/favorites`;
+      } else if (pin.type === 'LIKES') {
+        return path === `/library/${datasetId}/likes`;
       }
-    } else if (pin.type === 'MEDIA_TYPE' && pin.mediaType) {
-      navigate({ to: `/library/${datasetId}/media-type/${pin.mediaType}` });
-    } else if (pin.type === 'OVERVIEW') {
-      navigate({ to: `/library/${datasetId}` });
-    } else if (pin.type === 'FAVORITES') {
-      navigate({ to: `/library/${datasetId}/favorites` });
-    } else if (pin.type === 'LIKES') {
-      navigate({ to: `/library/${datasetId}/likes` });
-    }
-  }, [datasetId, navigate]);
+      return false;
+    },
+    [datasetId, location.pathname]
+  );
+
+  const handleNavigationPinClick = useCallback(
+    (pin: Pin) => {
+      if (pin.type === 'COLLECTION' && pin.collectionId) {
+        const isScratch =
+          (pin.collection && isScratchCollection(pin.collection)) || pin.name === 'Scratch';
+        if (isScratch) {
+          navigate({
+            to: '/library/$datasetId/scratch/$scratchId',
+            params: { datasetId, scratchId: String(pin.collectionId) },
+          });
+        } else {
+          navigate({
+            to: '/library/$datasetId/collections/$collectionId',
+            params: () => ({ datasetId, collectionId: String(pin.collectionId) }),
+          });
+        }
+      } else if (pin.type === 'MEDIA_TYPE' && pin.mediaType) {
+        navigate({ to: `/library/${datasetId}/media-type/${pin.mediaType}` });
+      } else if (pin.type === 'OVERVIEW') {
+        navigate({ to: `/library/${datasetId}` });
+      } else if (pin.type === 'FAVORITES') {
+        navigate({ to: `/library/${datasetId}/favorites` });
+      } else if (pin.type === 'LIKES') {
+        navigate({ to: `/library/${datasetId}/likes` });
+      }
+    },
+    [datasetId, navigate]
+  );
 
   // Responsive compact mode
   const [isCompactMode, setIsCompactMode] = useState(false);
@@ -147,7 +153,10 @@ export default function HeaderContainer() {
         <Menu size={18} />
       </HeaderIconButton>
       {headerActions.showShuffle && (
-        <HeaderIconButton aria-label={t.header.shuffle} onClick={headerActions.onShuffle ?? undefined}>
+        <HeaderIconButton
+          aria-label={t.header.shuffle}
+          onClick={headerActions.onShuffle ?? undefined}
+        >
           <Shuffle size={18} />
         </HeaderIconButton>
       )}

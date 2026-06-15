@@ -2,7 +2,7 @@ import EmojiPicker, { type EmojiClickData } from 'emoji-picker-react';
 import { Check, Edit2, Lock, Palette, RefreshCw, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { useT } from '@/lib/i18n';
+import { type Translations, useT } from '@/lib/i18n';
 import type { Dataset } from '@/types';
 
 export interface LibraryStats {
@@ -58,6 +58,21 @@ export const PRESET_COLOR_GROUPS: Array<{ label: string; colors: string[] }> = [
 
 export const DEFAULT_CARAMEL_COLOR = PRESET_COLOR_GROUPS[0].colors[0];
 
+export const getColorGroupLabel = (t: Translations, label: string) => {
+  switch (label) {
+    case 'Current':
+      return t.library.colorGroupCurrent;
+    case 'Caramel':
+      return t.library.colorGroupCaramel;
+    case 'Modern':
+      return t.library.colorGroupModern;
+    case 'Neutrals':
+      return t.library.colorGroupNeutrals;
+    default:
+      return label;
+  }
+};
+
 export function LibraryCard({
   dataset,
   stats,
@@ -70,6 +85,7 @@ export function LibraryCard({
   disableSetDefault,
 }: LibraryCardProps) {
   const t = useT();
+  const getColorLabel = t.common.useColor;
   const [isEditingName, setIsEditingName] = useState(false);
   const [nameValue, setNameValue] = useState(dataset.name ?? '');
   const [colorValue, setColorValue] = useState(dataset.themeColor ?? DEFAULT_CARAMEL_COLOR);
@@ -147,7 +163,7 @@ export function LibraryCard({
               <button
                 type="button"
                 className="w-16 h-16 flex items-center justify-center rounded-xl bg-white/10 hover:bg-white/15 transition-colors"
-                aria-label="Change library icon"
+                aria-label={t.pins.changeLibraryIcon}
               >
                 <span className="text-4xl drop-shadow-sm">{dataset.icon || '📂'}</span>
               </button>
@@ -199,7 +215,7 @@ export function LibraryCard({
             type="button"
             onClick={() => (isEditingName ? handleNameCommit() : setIsEditingName(true))}
             className="p-2 rounded-md transition-colors hover:bg-white/10 text-white"
-            aria-label={isEditingName ? 'Save library name' : 'Edit library name'}
+            aria-label={isEditingName ? t.pins.saveLibraryName : t.pins.editLibraryName}
           >
             {isEditingName ? <Check size={18} /> : <Edit2 size={18} />}
           </button>
@@ -218,7 +234,7 @@ export function LibraryCard({
             type="button"
             onClick={onDelete}
             className="p-2 rounded-md transition-colors hover:bg-white/10 text-white"
-            aria-label="Delete library"
+            aria-label={t.pins.deleteLibrary}
           >
             <Trash2 size={18} />
           </button>
@@ -255,13 +271,15 @@ export function LibraryCard({
                 type="button"
                 className="h-10 w-10 rounded-full border shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white"
                 style={{ backgroundColor: swatchColor, borderColor: 'rgba(0,0,0,0.1)' }}
-                aria-label="Change theme color"
+                aria-label={t.library.changeThemeColor}
               />
             </PopoverTrigger>
             <PopoverContent align="start" className="w-64 p-4 space-y-3">
               {colorGroups.map((group) => (
                 <div key={group.label} className="space-y-2">
-                  <div className="text-xs font-medium text-gray-600">{group.label}</div>
+                  <div className="text-xs font-medium text-gray-600">
+                    {getColorGroupLabel(t, group.label)}
+                  </div>
                   <div className="grid grid-cols-6 gap-2">
                     {group.colors.map((hex) => {
                       const isSelected = swatchColor.toLowerCase() === hex.toLowerCase();
@@ -275,7 +293,7 @@ export function LibraryCard({
                             backgroundColor: hex,
                             borderColor: isSelected ? 'rgba(59, 130, 246, 0.9)' : 'transparent',
                           }}
-                          aria-label={`Use color ${hex}`}
+                          aria-label={getColorLabel(hex)}
                           aria-pressed={isSelected}
                         >
                           {isSelected && (

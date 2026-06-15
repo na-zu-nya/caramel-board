@@ -142,7 +142,7 @@ export function SelectionActionBar({
             onClick={onClearSelection}
             className="px-3 py-1.5 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors"
           >
-            Clear
+            {t.common.clearSelection}
           </button>
 
           {/* Exit selection mode button */}

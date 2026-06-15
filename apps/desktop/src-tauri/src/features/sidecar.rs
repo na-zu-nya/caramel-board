@@ -95,6 +95,9 @@ fn start_sidecar_for_settings(
             command.env("FFPROBE_PATH", ffprobe_path);
         }
     }
+    if let Some(pdf_rasterizer_path) = effective_pdf_rasterizer_path(&settings) {
+        command.env("PDF_RASTERIZER_PATH", pdf_rasterizer_path);
+    }
 
     let child = command
         .spawn()

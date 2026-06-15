@@ -14,6 +14,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useT } from '@/lib/i18n';
 import { isVideoAsset } from '@/lib/media';
 import { cn } from '@/lib/utils';
 import type { Asset } from '@/types';
@@ -64,6 +65,7 @@ export default function AssetGrid({
   canSortAssets = false,
   onReorderToggle,
 }: AssetGridProps) {
+  const t = useT();
   const [draggedItem, setDraggedItem] = useState<number | null>(null);
   const [hoverDividerIndex, setHoverDividerIndex] = useState<number | null>(null);
 
@@ -159,8 +161,10 @@ export default function AssetGrid({
           <div className="w-full bg-black/60 text-white px-4 py-2 flex items-center justify-between gap-2 backdrop-blur-sm border-b border-white/10">
             <span className="text-sm">
               {isReorderMode
-                ? `並び替えモード ${reorderBanner?.canSave ? '(変更あり)' : ''}`
-                : '一覧'}
+                ? `${t.viewerControls.reorderMode} ${
+                    reorderBanner?.canSave ? `(${t.viewerControls.changed})` : ''
+                  }`
+                : t.viewerControls.list}
             </span>
             <div className="flex items-center gap-2">
               {showSortControl && (
@@ -169,25 +173,25 @@ export default function AssetGrid({
                     <button
                       type="button"
                       className="px-3 py-1 rounded transition-colors bg-white/10 text-white hover:bg-white/20 text-sm flex items-center gap-1"
-                      aria-label="Sort assets"
+                      aria-label={t.viewerControls.sortAssets}
                     >
-                      ソート
+                      {t.viewerControls.sort}
                       <ChevronDown size={14} />
                     </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-48">
                     <DropdownMenuItem onSelect={() => onSortPresetSelect?.('filename-asc')}>
-                      ファイル名 昇順
+                      {t.viewerControls.fileNameAsc}
                     </DropdownMenuItem>
                     <DropdownMenuItem onSelect={() => onSortPresetSelect?.('filename-desc')}>
-                      ファイル名 降順
+                      {t.viewerControls.fileNameDesc}
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onSelect={() => onSortPresetSelect?.('created-asc')}>
-                      追加順 昇順
+                      {t.viewerControls.addedAsc}
                     </DropdownMenuItem>
                     <DropdownMenuItem onSelect={() => onSortPresetSelect?.('created-desc')}>
-                      追加順 降順
+                      {t.viewerControls.addedDesc}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -202,7 +206,11 @@ export default function AssetGrid({
                       ? 'bg-green-500 text-white'
                       : 'bg-white/10 text-white hover:bg-white/20'
                   )}
-                  aria-label={isReorderMode ? 'Exit reorder mode' : 'Enter reorder mode'}
+                  aria-label={
+                    isReorderMode
+                      ? t.viewerControls.exitReorderMode
+                      : t.viewerControls.enterReorderMode
+                  }
                 >
                   <ArrowUpDown size={16} />
                 </button>
@@ -214,7 +222,7 @@ export default function AssetGrid({
                     onClick={reorderBanner.onCancel}
                     className="px-3 py-1 rounded bg-white/10 hover:bg-white/20 transition"
                   >
-                    キャンセル
+                    {t.common.cancel}
                   </button>
                   <button
                     type="button"
@@ -227,7 +235,7 @@ export default function AssetGrid({
                         : 'bg-white/20 cursor-not-allowed'
                     )}
                   >
-                    {reorderBanner.saving ? '保存中…' : '保存'}
+                    {reorderBanner.saving ? t.common.saving : t.common.save}
                   </button>
                 </>
               )}
@@ -383,7 +391,7 @@ export default function AssetGrid({
                   disabled={!onSeparateAsset}
                 >
                   <SplitSquareHorizontal className="w-4 h-4 mr-2" />
-                  Separate
+                  {t.viewerControls.separateAsset}
                 </ContextMenuItem>
                 <ContextMenuSeparator />
                 <ContextMenuItem
@@ -395,7 +403,7 @@ export default function AssetGrid({
                   disabled={!onRemoveAsset}
                 >
                   <Trash2 className="w-4 h-4 mr-2" />
-                  Remove
+                  {t.viewerControls.removeAsset}
                 </ContextMenuItem>
               </ContextMenuContent>
             </ContextMenu>

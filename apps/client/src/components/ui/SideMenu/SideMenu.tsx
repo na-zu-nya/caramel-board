@@ -1,5 +1,6 @@
 import { X } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
 export interface SideMenuProps {
@@ -15,7 +16,7 @@ export interface SideMenuProps {
 
 export function SideMenu({
   open = true,
-  title = 'Menu',
+  title,
   onClose,
   className,
   headerExtra,
@@ -23,6 +24,9 @@ export function SideMenu({
   supportLeft,
   supportRight,
 }: SideMenuProps) {
+  const t = useT();
+  const resolvedTitle = title ?? t.common.menu;
+
   return (
     <aside
       className={cn(
@@ -33,10 +37,10 @@ export function SideMenu({
     >
       <div className="flex flex-col gap-1 p-3 border-b border-gray-200">
         <div className="flex items-center justify-between">
-          {typeof title === 'string' ? (
-            <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
+          {typeof resolvedTitle === 'string' ? (
+            <h2 className="text-lg font-semibold text-gray-900">{resolvedTitle}</h2>
           ) : (
-            <div className="flex items-center text-gray-900">{title}</div>
+            <div className="flex items-center text-gray-900">{resolvedTitle}</div>
           )}
           <div className="flex items-center gap-2">
             {headerExtra}
@@ -44,7 +48,7 @@ export function SideMenu({
               type="button"
               onClick={onClose}
               className="p-1.5 hover:bg-gray-100 rounded-md transition-colors"
-              aria-label="Close sidebar"
+              aria-label={t.sidebar.closeSidebar}
             >
               <X size={18} className="text-gray-600" />
             </button>

@@ -283,9 +283,7 @@ export default function AutoTagMappingModal({
               loading={tagSearchLoading}
               autoFocus={!existingMapping}
             />
-            <p className="text-xs text-muted-foreground">
-              {t.autoTagMapping.tagHelp}
-            </p>
+            <p className="text-xs text-muted-foreground">{t.autoTagMapping.tagHelp}</p>
           </div>
         </div>
         <DialogFooter>

@@ -6,6 +6,7 @@ import {
   STACK_GRID_MAX_COLUMNS,
   STACK_GRID_MIN_COLUMNS,
 } from '@/lib/grid-layout-settings';
+import { useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
 interface GridColumnSliderProps {
@@ -29,6 +30,7 @@ export function GridColumnSlider({
   className,
   onChange,
 }: GridColumnSliderProps) {
+  const t = useT();
   const normalizedValue = clampStackGridColumns(value);
   const sliderValue = min + max - normalizedValue;
 
@@ -62,7 +64,7 @@ export function GridColumnSlider({
       </div>
       <input
         type="range"
-        aria-label="Thumbnail size"
+        aria-label={t.viewerControls.thumbnailSize}
         min={min}
         max={max}
         step={1}

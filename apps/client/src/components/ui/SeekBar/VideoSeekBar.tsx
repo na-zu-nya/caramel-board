@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/context-menu';
 import { Marker } from '@/components/ui/Marker';
 import TimeBadge from '@/components/ui/TimeBadge/TimeBadge';
+import { type Translations, useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import type { VideoMarker } from '@/types';
 
@@ -29,6 +30,31 @@ const MARKER_COLOR_OPTIONS = [
 ] as const;
 
 const VOLUME_DRAG_HEIGHT_PX = 96;
+
+type MarkerColorKey = (typeof MARKER_COLOR_OPTIONS)[number]['key'];
+
+const getMarkerColorLabel = (t: Translations, key: MarkerColorKey) => {
+  switch (key) {
+    case 'white':
+      return t.viewerControls.white;
+    case 'light-gray':
+      return t.viewerControls.lightGray;
+    case 'bright-red':
+      return t.viewerControls.brightRed;
+    case 'bright-orange':
+      return t.viewerControls.brightOrange;
+    case 'bright-yellow':
+      return t.viewerControls.brightYellow;
+    case 'bright-green':
+      return t.viewerControls.brightGreen;
+    case 'bright-cyan':
+      return t.viewerControls.brightCyan;
+    case 'bright-blue':
+      return t.viewerControls.brightBlue;
+    case 'bright-violet':
+      return t.viewerControls.brightViolet;
+  }
+};
 
 interface VideoSeekBarProps {
   currentTime: number;
@@ -82,6 +108,7 @@ export default function VideoSeekBar({
   onDeleteMarkerRequest,
   onChangeMarkerColorRequest,
 }: VideoSeekBarProps) {
+  const t = useT();
   const [isDragging, setIsDragging] = useState(false);
   const [dragTime, setDragTime] = useState(0);
   const [draggingMarker, setDraggingMarker] = useState<{ index: number; time: number } | null>(
@@ -522,7 +549,7 @@ export default function VideoSeekBar({
               'text-white hover:text-primary'
             )}
             aria-pressed={!!muted}
-            title={muted ? 'Unmute' : 'Mute'}
+            title={muted ? t.viewerControls.unmute : t.viewerControls.mute}
           >
             {muted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
           </button>
@@ -540,7 +567,7 @@ export default function VideoSeekBar({
                 className="relative h-24 w-5 cursor-ns-resize select-none"
                 style={{ touchAction: 'none' }}
                 role="slider"
-                aria-label="Volume"
+                aria-label={t.viewerControls.volume}
                 aria-orientation="vertical"
                 aria-valuemin={0}
                 aria-valuemax={100}
@@ -628,7 +655,7 @@ export default function VideoSeekBar({
                             onClick={(e) => {
                               e.stopPropagation();
                             }}
-                            aria-label={`Jump to ${m.time.toFixed(2)}s`}
+                            aria-label={t.viewerControls.jumpTo(m.time.toFixed(2))}
                           />
                         </div>
                       </ContextMenuTrigger>
@@ -641,10 +668,10 @@ export default function VideoSeekBar({
                         onContextMenu={(e) => e.stopPropagation()}
                       >
                         <ContextMenuItem onSelect={() => onEditMarkerRequest?.(m, idx)}>
-                          Edit
+                          {t.viewerControls.editMarker}
                         </ContextMenuItem>
                         <ContextMenuSub>
-                          <ContextMenuSubTrigger>Color</ContextMenuSubTrigger>
+                          <ContextMenuSubTrigger>{t.viewerControls.color}</ContextMenuSubTrigger>
                           <ContextMenuSubContent
                             className="w-44"
                             onPointerDown={(e) => e.stopPropagation()}
@@ -662,7 +689,7 @@ export default function VideoSeekBar({
                                   className="mr-2 h-3 w-3 rounded-full border border-gray-300"
                                   style={{ backgroundColor: color.hex }}
                                 />
-                                {color.label}
+                                {getMarkerColorLabel(t, color.key)}
                               </ContextMenuItem>
                             ))}
                           </ContextMenuSubContent>
@@ -672,7 +699,7 @@ export default function VideoSeekBar({
                           className="text-red-600 focus:text-red-700"
                           onSelect={() => onDeleteMarkerRequest?.(idx)}
                         >
-                          Delete
+                          {t.viewerControls.deleteMarker}
                         </ContextMenuItem>
                       </ContextMenuContent>
                     </ContextMenu>
@@ -726,7 +753,7 @@ export default function VideoSeekBar({
             'h-7 rounded-full px-2 bg-black/40 hover:bg-black/60 text-white hover:text-primary text-xs',
             'transition-colors'
           )}
-          title="Change step FPS"
+          title={t.viewerControls.changeStepFps}
         >
           <SquareStack className="w-4 h-4" />
           <span className="tabular-nums">{fps ?? 30}</span>

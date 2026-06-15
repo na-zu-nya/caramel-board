@@ -6,6 +6,7 @@ import {
   withPublicAssetArray,
   withPublicAssetPaths,
 } from '../../../utils/assetPath';
+import { appendPdfOriginalMeta, isPdfFileInput, preparePdfImport } from '../../../utils/pdfImport';
 
 export interface PaginationOptions {
   limit: number;
@@ -187,6 +188,55 @@ export const createAssetService = (deps: {
 
       if (stack.dataSetId !== dataSetId) {
         throw new Error('Stack not found in this dataset');
+      }
+
+      if (await isPdfFileInput(file)) {
+        const preparedPdf = await preparePdfImport(file, dataSetId);
+        const createdAssetIds: number[] = [];
+
+        try {
+          for (const page of preparedPdf.pages) {
+            const assetId = await AssetModel.createWithFile(
+              page.path,
+              page.originalname,
+              stackId,
+              dataSetId,
+              {
+                allowDuplicate: true,
+                storageHash: page.storageHash,
+                meta: {
+                  sourcePdfHash: preparedPdf.original.hash,
+                  sourcePdfImportId: preparedPdf.original.importId,
+                  sourcePdfPage: page.pageNumber,
+                  rasterDpi: preparedPdf.original.rasterDpi,
+                },
+              }
+            );
+            createdAssetIds.push(assetId);
+          }
+
+          await prisma.stack.update({
+            where: { id: stackId },
+            data: {
+              meta: appendPdfOriginalMeta(
+                stack.meta,
+                preparedPdf.original
+              ) as Prisma.InputJsonObject,
+            },
+          });
+          await refreshStackThumbnail(stackId);
+
+          const firstAssetId = createdAssetIds[0];
+          return firstAssetId ? this.getById(firstAssetId) : null;
+        } catch (error) {
+          if (createdAssetIds.length > 0) {
+            await prisma.asset.deleteMany({ where: { id: { in: createdAssetIds } } });
+            await refreshStackThumbnail(stackId);
+          }
+          throw error;
+        } finally {
+          preparedPdf.cleanup();
+        }
       }
 
       // Create asset using AssetModel

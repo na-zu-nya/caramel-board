@@ -130,9 +130,16 @@ fn setup_tray(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let mut builder = TrayIconBuilder::with_id("main")
         .tooltip("Caramel Board")
         .menu(&menu)
-        .show_menu_on_left_click(false)
-        .on_menu_event(handle_tray_menu_event)
-        .on_tray_icon_event(|tray, event| {
+        .on_menu_event(handle_tray_menu_event);
+
+    #[cfg(target_os = "macos")]
+    {
+        builder = builder.show_menu_on_left_click(true);
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        builder = builder.show_menu_on_left_click(false).on_tray_icon_event(|tray, event| {
             if let TrayIconEvent::Click {
                 button: MouseButton::Left,
                 button_state: MouseButtonState::Up,
@@ -142,6 +149,7 @@ fn setup_tray(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                 show_settings_window(tray.app_handle());
             }
         });
+    }
 
     if let Some(icon) = app.default_window_icon() {
         builder = builder.icon(icon.clone());

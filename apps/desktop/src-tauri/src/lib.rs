@@ -13,10 +13,14 @@ use std::{
     time::Duration,
     time::{Instant, SystemTime, UNIX_EPOCH},
 };
+#[cfg(target_os = "windows")]
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconEvent};
+#[cfg(target_os = "macos")]
+use tauri::ActivationPolicy;
 #[cfg(any(target_os = "windows", target_os = "macos"))]
 use tauri::{
     menu::{MenuBuilder, MenuEvent},
-    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    tray::TrayIconBuilder,
 };
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
@@ -47,6 +51,7 @@ pub fn run() {
             load_settings,
             save_settings,
             detect_ffmpeg,
+            detect_pdf_rasterizer,
             autotag_status,
             autotag_install_metadata,
             autotag_install_progress,

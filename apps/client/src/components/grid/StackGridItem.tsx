@@ -26,6 +26,7 @@ import { useDrag } from '@/contexts/DragContext';
 import { useScratch } from '@/hooks/useScratch';
 import { apiClient } from '@/lib/api-client';
 import { downloadStackOriginals } from '@/lib/download-originals';
+import { useT } from '@/lib/i18n';
 import { removeStackFromCache } from '@/lib/stack-cache';
 import {
   extractStackIdsFromDragPayload,
@@ -83,6 +84,7 @@ export function StackGridItem({
   allowRemoveFromScratch = false,
   onRemoveFromScratch,
 }: StackGridItemProps) {
+  const t = useT();
   const currentFavorited = overrideFavorited ?? item.favorited ?? item.isFavorite ?? false;
   const thumbnailUrl = item.thumbnail || item.thumbnailUrl || '/no-image.png';
   const favoriteKind = item.favoriteKind;
@@ -228,10 +230,8 @@ export function StackGridItem({
     const label =
       typeof item.title === 'string' && item.title.length > 0
         ? item.title
-        : item.name || 'Untitled';
-    const confirmed = window.confirm(
-      `Are you sure you want to remove the stack "${label}"? This action cannot be undone.`
-    );
+        : item.name || t.common.untitled;
+    const confirmed = window.confirm(t.info.removeConfirm(label));
     if (!confirmed) return;
 
     const numericId = toNumber(item.id);
@@ -253,7 +253,7 @@ export function StackGridItem({
       console.log('✅ Stack removed from grid');
     } catch (error) {
       console.error('❌ Failed to remove stack:', error);
-      alert('Failed to remove stack. Please try again.');
+      alert(t.info.removeFailed);
     }
   }, [
     invalidateStackData,
@@ -262,6 +262,7 @@ export function StackGridItem({
     selectedInfoId,
     setInfoOpen,
     setSelectedItemId,
+    t,
     toNumber,
   ]);
 
@@ -443,14 +444,14 @@ export function StackGridItem({
                 })
                 .catch((err) => {
                   console.error('❌ Merge failed', err);
-                  alert('スタックの結合に失敗しました');
+                  alert(t.grid.mergeStacksFailed);
                 });
             } catch (err) {
               console.error('Drop handling error', err);
             }
           }}
           tabIndex={0}
-          aria-label={`View item: ${item.name}`}
+          aria-label={t.grid.viewItem(item.name)}
         >
           <img
             src={thumbnailUrl}
@@ -548,10 +549,10 @@ export function StackGridItem({
       </ContextMenuTrigger>
       <ContextMenuContent className="w-48">
         {/* Open */}
-        <ContextMenuItem onClick={handleContextOpen}>Open</ContextMenuItem>
+        <ContextMenuItem onClick={handleContextOpen}>{t.contextMenu.open}</ContextMenuItem>
         <ContextMenuItem onClick={handleDownloadOriginals}>
           <Download className="w-4 h-4 mr-2" />
-          Download
+          {t.contextMenu.download}
         </ContextMenuItem>
         <ContextMenuSeparator />
 
@@ -563,7 +564,7 @@ export function StackGridItem({
           }}
         >
           <Info className="w-4 h-4 mr-2" />
-          Info
+          {t.contextMenu.info}
         </ContextMenuItem>
         <ContextMenuItem
           onClick={async () => {
@@ -577,7 +578,7 @@ export function StackGridItem({
           }}
         >
           <GalleryVerticalEnd className="w-4 h-4 mr-2" />
-          Find similar
+          {t.contextMenu.findSimilar}
         </ContextMenuItem>
         <ContextMenuItem
           onClick={async () => {
@@ -595,7 +596,7 @@ export function StackGridItem({
           }}
         >
           <NotebookText className="w-4 h-4 mr-2" />
-          Add to Scratch
+          {t.contextMenu.addToScratch}
         </ContextMenuItem>
         {canMergeSelectedStacks && (
           <ContextMenuItem
@@ -603,14 +604,14 @@ export function StackGridItem({
               if (!selectedStackIdsInOrder || typeof onMergeStacks !== 'function') return;
               const [targetId, ...sourceIds] = selectedStackIdsInOrder;
               const confirmed = window.confirm(
-                `選択順の先頭スタック #${targetId} に残り ${sourceIds.length} 件をマージします。実行しますか？`
+                t.grid.mergeSelectedConfirm(targetId, sourceIds.length)
               );
               if (!confirmed) return;
               await onMergeStacks();
             }}
           >
             <GitMerge className="w-4 h-4 mr-2" />
-            Merge Stacks
+            {t.grid.mergeStacks}
           </ContextMenuItem>
         )}
         {(allowRemoveFromCollection || allowRemoveFromScratch) && <ContextMenuSeparator />}
@@ -626,7 +627,7 @@ export function StackGridItem({
             className="text-red-600 focus:text-red-700"
           >
             <Trash2 className="w-4 h-4 mr-2" />
-            Remove from Collection
+            {t.contextMenu.removeFromCollection}
           </ContextMenuItem>
         )}
         {allowRemoveFromScratch && (
@@ -641,13 +642,13 @@ export function StackGridItem({
             className="text-red-600 focus:text-red-700"
           >
             <Trash2 className="w-4 h-4 mr-2" />
-            Remove from Scratch
+            {t.contextMenu.removeFromScratch}
           </ContextMenuItem>
         )}
         <ContextMenuSeparator />
         <ContextMenuItem className="text-red-600 focus:text-red-700" onClick={handleRemoveStack}>
           <Trash2 className="w-4 h-4 mr-2" />
-          Remove Stack
+          {t.info.removeStack}
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

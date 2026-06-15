@@ -20,6 +20,7 @@ import {
 import { Input } from '@/components/ui/input';
 import {
   DEFAULT_CARAMEL_COLOR,
+  getColorGroupLabel,
   LibraryCard,
   type LibraryStats,
   PRESET_COLOR_GROUPS,
@@ -45,6 +46,7 @@ export const Route = createFileRoute('/settings/libraries')({
 
 function DatasetManagement() {
   const t = useT();
+  const getColorLabel = t.common.useColor;
   const { data: datasets = [], isLoading } = useDatasets();
   const createDataset = useCreateDataset();
   const updateDataset = useUpdateDataset();
@@ -107,7 +109,7 @@ function DatasetManagement() {
       {
         onError: (error) => {
           console.error('Failed to update library:', error);
-          alert('Failed to update library. Please try again.');
+          alert(t.library.updateFailed);
         },
       }
     );
@@ -137,7 +139,7 @@ function DatasetManagement() {
       await deleteDataset.mutateAsync(String(dataset.id));
     } catch (error) {
       console.error('Failed to delete library:', error);
-      alert('Failed to delete library. Please try again.');
+      alert(t.library.deleteFailed);
     }
   };
 
@@ -163,7 +165,7 @@ function DatasetManagement() {
       setNewColor(DEFAULT_CARAMEL_COLOR);
     } catch (error) {
       console.error('Failed to create library:', error);
-      alert('Failed to create library. The name might already be in use.');
+      alert(t.library.createFailed);
     }
   };
 
@@ -191,13 +193,13 @@ function DatasetManagement() {
 
       alert(
         [
-          'Full refresh has started successfully.',
+          t.library.fullRefreshStarted,
           '',
-          `• Thumbnails: ${result.scheduled?.thumbnails ?? 0}`,
-          `• Color analysis: ${result.scheduled?.colors ?? 0}`,
-          `• Auto-tagging: ${result.scheduled?.autotags ?? 0}`,
+          `- ${t.library.scheduledThumbnails(result.scheduled?.thumbnails ?? 0)}`,
+          `- ${t.library.scheduledColors(result.scheduled?.colors ?? 0)}`,
+          `- ${t.library.scheduledAutoTags(result.scheduled?.autotags ?? 0)}`,
           '',
-          'Processing continues in the background.',
+          t.library.fullRefreshProcessing,
         ].join('\n')
       );
     },
@@ -205,7 +207,7 @@ function DatasetManagement() {
       console.error('Failed to start full refresh:', error);
       setUpdatingColors((prev) => ({ ...prev, [variables.datasetId]: false }));
       setUpdatingAutoTags((prev) => ({ ...prev, [variables.datasetId]: false }));
-      alert('Failed to start the full refresh.');
+      alert(t.library.fullRefreshFailed);
     },
   });
 
@@ -233,7 +235,7 @@ function DatasetManagement() {
       queryClient.invalidateQueries({ queryKey: ['datasets'] });
     } catch (error) {
       console.error('Failed to set default library:', error);
-      alert('Failed to set the default library.');
+      alert(t.library.setDefaultFailed);
     } finally {
       setDefaultSettingId(null);
     }
@@ -352,7 +354,7 @@ function DatasetManagement() {
                         <button
                           type="button"
                           className="w-16 h-16 flex items-center justify-center rounded-xl border border-gray-200 bg-white hover:bg-gray-50 transition-colors"
-                          aria-label="Select library icon"
+                          aria-label={t.library.selectLibraryIcon}
                         >
                           <span className="text-4xl leading-none">{newIcon || '📂'}</span>
                         </button>
@@ -387,13 +389,15 @@ function DatasetManagement() {
                         type="button"
                         className="h-10 w-10 rounded-full border shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white"
                         style={{ backgroundColor: newColor, borderColor: 'rgba(0,0,0,0.1)' }}
-                        aria-label="Change theme color"
+                        aria-label={t.library.changeThemeColor}
                       />
                     </PopoverTrigger>
                     <PopoverContent align="start" className="w-64 p-4 space-y-3">
                       {PRESET_COLOR_GROUPS.map((group) => (
                         <div key={group.label} className="space-y-2">
-                          <div className="text-xs font-medium text-gray-600">{group.label}</div>
+                          <div className="text-xs font-medium text-gray-600">
+                            {getColorGroupLabel(t, group.label)}
+                          </div>
                           <div className="grid grid-cols-6 gap-2">
                             {group.colors.map((hex) => {
                               const isSelected = newColor.toLowerCase() === hex.toLowerCase();
@@ -412,7 +416,7 @@ function DatasetManagement() {
                                       ? 'rgba(59, 130, 246, 0.9)'
                                       : 'transparent',
                                   }}
-                                  aria-label={`Use color ${hex}`}
+                                  aria-label={getColorLabel(hex)}
                                   aria-pressed={isSelected}
                                 >
                                   {isSelected && (
@@ -455,10 +459,8 @@ function DatasetManagement() {
         <Dialog open={embeddingDialogOpen} onOpenChange={setEmbeddingDialogOpen}>
           <DialogContent className="max-w-md">
             <DialogHeader>
-              <DialogTitle>Full Refresh</DialogTitle>
-              <DialogDescription>
-                Regenerate thumbnails, analyze colors, and rebuild auto-tags in one batch.
-              </DialogDescription>
+              <DialogTitle>{t.library.fullRefresh}</DialogTitle>
+              <DialogDescription>{t.library.fullRefreshDescription}</DialogDescription>
             </DialogHeader>
 
             <div className="space-y-4 py-4">
@@ -477,9 +479,9 @@ function DatasetManagement() {
                       className="mt-1"
                     />
                     <div className="space-y-1">
-                      <div className="font-medium">Incremental (recommended)</div>
+                      <div className="font-medium">{t.library.incrementalRecommended}</div>
                       <div className="text-sm text-gray-600">
-                        Only processes items that have not been analyzed yet.
+                        {t.library.incrementalDescription}
                       </div>
                     </div>
                   </label>
@@ -494,9 +496,9 @@ function DatasetManagement() {
                       className="mt-1"
                     />
                     <div className="space-y-1">
-                      <div className="font-medium">Force regenerate</div>
+                      <div className="font-medium">{t.library.forceRegenerate}</div>
                       <div className="text-sm text-gray-600">
-                        Rebuilds thumbnails, colors, and tags for all items. This may take time.
+                        {t.library.forceRegenerateDescription}
                       </div>
                     </div>
                   </label>
@@ -504,38 +506,33 @@ function DatasetManagement() {
               </RadioGroup>
 
               <div className="bg-blue-50 rounded-lg p-4 space-y-2">
-                <h4 className="text-sm font-medium text-blue-900">Included steps</h4>
+                <h4 className="text-sm font-medium text-blue-900">{t.library.includedSteps}</h4>
                 <div className="space-y-1 text-sm text-blue-800">
                   <div className="flex items-center gap-2">
                     <RefreshCw size={14} />
-                    <span>Thumbnails — regenerate the lead asset thumbnail for every stack.</span>
+                    <span>{t.library.stepThumbnails}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Palette size={14} />
-                    <span>
-                      Color analysis — extract key colors for better search and filtering.
-                    </span>
+                    <span>{t.library.stepColors}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Wand2 size={14} />
-                    <span>Auto-tagging — local AI updates descriptive tags.</span>
+                    <span>{t.library.stepAutoTagging}</span>
                   </div>
                 </div>
               </div>
 
               {regenerateMode === 'force' && (
                 <div className="p-3 bg-amber-50 border border-amber-200 rounded-md">
-                  <p className="text-sm text-amber-800">
-                    <strong>Heads-up:</strong> Force regenerate revisits every item and may take a
-                    long time for large libraries.
-                  </p>
+                  <p className="text-sm text-amber-800">{t.library.forceRegenerateWarning}</p>
                 </div>
               )}
             </div>
 
             <DialogFooter>
               <Button variant="outline" onClick={() => setEmbeddingDialogOpen(false)}>
-                Cancel
+                {t.common.cancel}
               </Button>
               <Button
                 variant="default"
@@ -554,7 +551,7 @@ function DatasetManagement() {
                 }}
               >
                 <RefreshCw className="mr-2 h-4 w-4" />
-                Start Refresh
+                {t.library.startRefresh}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -570,14 +567,18 @@ function DatasetManagement() {
           <UIDialogContent className="sm:max-w-sm">
             <UIDialogHeader>
               <UIDialogTitle>
-                {protectionDialog.mode === 'enable' ? 'Enable Protection' : 'Disable Protection'}
+                {protectionDialog.mode === 'enable'
+                  ? t.library.enableProtection
+                  : t.library.disableProtection}
               </UIDialogTitle>
             </UIDialogHeader>
             <div className="space-y-3">
               <Input
                 type="password"
                 placeholder={
-                  protectionDialog.mode === 'enable' ? 'Set password' : 'Current password'
+                  protectionDialog.mode === 'enable'
+                    ? t.library.setPassword
+                    : t.library.currentPassword
                 }
                 value={protectionPassword}
                 onChange={(e) => setProtectionPassword(e.target.value)}
@@ -602,12 +603,12 @@ function DatasetManagement() {
                     queryClient.invalidateQueries({ queryKey: ['datasets'] });
                   } catch (error) {
                     console.error('Failed to update protection:', error);
-                    alert('Failed to update protection settings.');
+                    alert(t.library.protectionUpdateFailed);
                   }
                 }}
                 disabled={!protectionPassword}
               >
-                {protectionDialog.mode === 'enable' ? 'Enable' : 'Disable'}
+                {protectionDialog.mode === 'enable' ? t.library.enable : t.library.disable}
               </Button>
             </div>
           </UIDialogContent>

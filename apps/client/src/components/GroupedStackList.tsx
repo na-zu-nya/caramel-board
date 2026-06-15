@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { MonthSectionHeader } from '@/components/ui/MonthSectionHeader';
 import { StackTile } from '@/components/ui/Stack';
 import { useStackTile } from '@/hooks/useStackTile';
+import { useLanguage, useT } from '@/lib/i18n';
 import { applyScrollbarCompensation, removeScrollbarCompensation } from '@/lib/scrollbar-utils';
 import { getSourceImageFilename, getSourceImageUrl } from '@/lib/stack-drag-data';
 import type { Stack } from '@/types';
@@ -38,6 +39,9 @@ export function GroupedStackList({
   onLoadMore,
   isLoading,
 }: GroupedStackListProps) {
+  const t = useT();
+  const language = useLanguage();
+  const dateLocale = language === 'ja' ? ja : enUS;
   // While this list is mounted, stabilize body scrollbar gutter for contextmenu reflows
   useEffect(() => {
     applyScrollbarCompensation();
@@ -105,7 +109,7 @@ export function GroupedStackList({
 
         const showMonthHeader = groupByMonth && monthKey !== 'all';
         const monthDate = showMonthHeader ? new Date(`${monthKey}-01`) : null;
-        const monthLabel = monthDate ? format(monthDate, 'MMMM', { locale: enUS }) : null;
+        const monthLabel = monthDate ? format(monthDate, 'MMMM', { locale: dateLocale }) : null;
         const monthLikeCount = monthItems.length;
 
         const itemsByDate = getGroupedByDate(monthItems);
@@ -126,7 +130,9 @@ export function GroupedStackList({
                 const dateItems = itemsByDate[dateKey];
                 const showDateBadge = groupByDate && dateKey !== 'all';
                 const dateLabel = showDateBadge
-                  ? format(new Date(dateKey), 'M月d日', { locale: ja })
+                  ? format(new Date(dateKey), language === 'ja' ? 'M月d日' : 'MMM d', {
+                      locale: dateLocale,
+                    })
                   : null;
 
                 return (
@@ -217,14 +223,14 @@ export function GroupedStackList({
       {onLoadMore && (
         <div className="flex justify-center py-4">
           {isLoading ? (
-            <div className="text-gray-500">Loading...</div>
+            <div className="text-gray-500">{t.common.loading}</div>
           ) : (
             <button
               type="button"
               onClick={onLoadMore}
               className="text-blue-500 hover:text-blue-400 transition-colors"
             >
-              Load more
+              {t.common.loadMore}
             </button>
           )}
         </div>

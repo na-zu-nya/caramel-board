@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { type Translations, useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
 type ColorKey =
@@ -26,6 +27,29 @@ const COLOR_PALETTE: { key: ColorKey; hex: string; label: string }[] = [
   { key: 'bright-violet', hex: '#8B5CF6', label: 'Bright Violet' },
 ];
 
+const getColorLabel = (t: Translations, key: ColorKey) => {
+  switch (key) {
+    case 'white':
+      return t.viewerControls.white;
+    case 'light-gray':
+      return t.viewerControls.lightGray;
+    case 'bright-red':
+      return t.viewerControls.brightRed;
+    case 'bright-orange':
+      return t.viewerControls.brightOrange;
+    case 'bright-yellow':
+      return t.viewerControls.brightYellow;
+    case 'bright-green':
+      return t.viewerControls.brightGreen;
+    case 'bright-cyan':
+      return t.viewerControls.brightCyan;
+    case 'bright-blue':
+      return t.viewerControls.brightBlue;
+    case 'bright-violet':
+      return t.viewerControls.brightViolet;
+  }
+};
+
 export interface MarkerEditorDialogProps {
   open: boolean;
   time: number;
@@ -43,6 +67,7 @@ export default function MarkerEditorDialog({
   onDelete,
   onSave,
 }: MarkerEditorDialogProps) {
+  const t = useT();
   const [localTimeStr, setLocalTimeStr] = React.useState<string>(String(time ?? 0));
   const [localColor, setLocalColor] = React.useState<string>(color);
   const [error, setError] = React.useState<string | null>(null);
@@ -54,7 +79,7 @@ export default function MarkerEditorDialog({
     e.preventDefault();
     const parsed = parseFloat(localTimeStr.replace(/,/g, '.'));
     if (!Number.isFinite(parsed) || parsed < 0) {
-      setError('Please enter a valid non-negative number.');
+      setError(t.viewerControls.invalidTime);
       return;
     }
     onSave({ time: parsed, color: (localColor as ColorKey) || 'white' });
@@ -64,13 +89,13 @@ export default function MarkerEditorDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-sm" onOpenAutoFocus={(e) => e.preventDefault()}>
         <DialogHeader>
-          <DialogTitle>Marker Settings</DialogTitle>
+          <DialogTitle>{t.viewerControls.markerSettings}</DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="mt-2">
           {/* Time input */}
           <div className="space-y-2">
-            <label className="text-sm text-gray-700">Time (sec)</label>
+            <label className="text-sm text-gray-700">{t.viewerControls.timeSeconds}</label>
             <input
               type="text"
               inputMode="decimal"
@@ -83,20 +108,20 @@ export default function MarkerEditorDialog({
                 'w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary'
               )}
               autoFocus
-              placeholder="e.g. 12.34"
+              placeholder={t.viewerControls.timePlaceholder}
             />
             {error && <p className="text-xs text-red-600">{error}</p>}
           </div>
 
           {/* Color palette */}
           <div className="space-y-2 mt-4">
-            <label className="text-sm text-gray-700">Color</label>
+            <label className="text-sm text-gray-700">{t.viewerControls.color}</label>
             <div className="grid grid-cols-8 gap-2">
-              {COLOR_PALETTE.map(({ key, hex, label }) => (
+              {COLOR_PALETTE.map(({ key, hex }) => (
                 <button
                   key={key}
                   type="button"
-                  title={label}
+                  title={getColorLabel(t, key)}
                   onClick={() => setLocalColor(key)}
                   className={cn(
                     'relative h-8 w-8 rounded-md border transition-transform',
@@ -114,9 +139,9 @@ export default function MarkerEditorDialog({
           {/* Footer: 左下=削除 / 右下=保存 */}
           <div className="mt-6 flex items-center justify-between">
             <Button type="button" variant="outline" onClick={onDelete}>
-              Delete
+              {t.common.delete}
             </Button>
-            <Button type="submit">Save</Button>
+            <Button type="submit">{t.common.save}</Button>
           </div>
         </form>
       </DialogContent>

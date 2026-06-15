@@ -3,7 +3,11 @@ import { Palette, Smile } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { DEFAULT_CARAMEL_COLOR, PRESET_COLOR_GROUPS } from '@/components/ui/LibraryCard';
+import {
+  DEFAULT_CARAMEL_COLOR,
+  getColorGroupLabel,
+  PRESET_COLOR_GROUPS,
+} from '@/components/ui/LibraryCard';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
@@ -38,6 +42,7 @@ export function LibrarySetupForm({
   focusOnMount,
 }: LibrarySetupFormProps) {
   const t = useT();
+  const getColorLabel = t.common.useColor;
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [colorOpen, setColorOpen] = useState(false);
   const nameInputRef = useRef<HTMLInputElement | null>(null);
@@ -96,10 +101,8 @@ export function LibrarySetupForm({
               >
                 <span className="text-3xl leading-none">{icon || '📚'}</span>
                 <div className="flex flex-col">
-                  <span className="text-sm font-medium text-gray-900">Choose emoji</span>
-                  <span className="text-xs text-muted-foreground">
-                    すぐに雰囲気が伝わるアイコンを選びましょう
-                  </span>
+                  <span className="text-sm font-medium text-gray-900">{t.pins.chooseEmoji}</span>
+                  <span className="text-xs text-muted-foreground">{t.library.emojiHint}</span>
                 </div>
                 <Smile className="ml-auto h-4 w-4 text-muted-foreground" />
               </button>
@@ -129,8 +132,8 @@ export function LibrarySetupForm({
                   style={{ backgroundColor: color || DEFAULT_CARAMEL_COLOR }}
                 />
                 <div className="flex flex-col">
-                  <span className="text-sm font-medium text-gray-900">Choose color</span>
-                  <span className="text-xs text-muted-foreground">カラメルカラーが既定値です</span>
+                  <span className="text-sm font-medium text-gray-900">{t.pins.chooseColor}</span>
+                  <span className="text-xs text-muted-foreground">{t.library.colorHint}</span>
                 </div>
                 <Palette className="ml-auto h-4 w-4 text-muted-foreground" />
               </button>
@@ -140,7 +143,7 @@ export function LibrarySetupForm({
                 {PRESET_COLOR_GROUPS.map((group) => (
                   <div key={group.label} className="flex flex-col gap-2">
                     <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                      {group.label}
+                      {getColorGroupLabel(t, group.label)}
                     </span>
                     <div className="flex flex-wrap gap-2">
                       {group.colors.map((hex) => {
@@ -158,6 +161,7 @@ export function LibrarySetupForm({
                             )}
                             style={{ backgroundColor: hex }}
                             onClick={() => handleColorPick(hex)}
+                            aria-label={getColorLabel(hex)}
                           />
                         );
                       })}
@@ -173,7 +177,7 @@ export function LibrarySetupForm({
       {error && <p className="text-sm text-red-500">{error}</p>}
 
       <Button type="submit" disabled={interactionsLocked} className="self-start">
-        {submitting ? 'Creating...' : 'Create library'}
+        {submitting ? t.common.creating : t.library.createLibrary}
       </Button>
     </form>
   );

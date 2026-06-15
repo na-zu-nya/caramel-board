@@ -1,5 +1,6 @@
 import { Filter, X } from 'lucide-react';
 import { useEffect, useRef } from 'react';
+import { useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
 export interface SideMenuSearchFieldProps {
@@ -13,10 +14,11 @@ export interface SideMenuSearchFieldProps {
 export function SideMenuSearchField({
   value,
   onValueChange,
-  placeholder = 'Filter... ',
+  placeholder,
   autoFocusOnMount = true,
   className,
 }: SideMenuSearchFieldProps) {
+  const t = useT();
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -41,7 +43,7 @@ export function SideMenuSearchField({
             e.stopPropagation();
           }
         }}
-        placeholder={placeholder}
+        placeholder={placeholder ?? t.common.filterPlaceholder}
         className="w-full px-7 pr-6 py-1.5 text-xs border border-gray-300 rounded-md bg-white focus:ring-1 focus:ring-primary focus:border-primary"
       />
       <Filter className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
@@ -50,7 +52,7 @@ export function SideMenuSearchField({
           type="button"
           onClick={() => onValueChange('')}
           className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-gray-100"
-          aria-label="Clear filter"
+          aria-label={t.common.clearFilter}
         >
           <X className="h-3.5 w-3.5 text-gray-500" />
         </button>

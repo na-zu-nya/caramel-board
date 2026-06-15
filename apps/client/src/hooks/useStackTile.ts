@@ -6,6 +6,7 @@ import { useDrag } from '@/contexts/DragContext';
 import { useScratch } from '@/hooks/useScratch';
 import { apiClient } from '@/lib/api-client';
 import { downloadStackOriginals } from '@/lib/download-originals';
+import { useT } from '@/lib/i18n';
 import { removeStackFromCache } from '@/lib/stack-cache';
 import {
   setExternalImageDragData,
@@ -16,6 +17,7 @@ import { navigationStateAtom } from '@/stores/navigation';
 import { infoSidebarOpenAtom, selectedItemIdAtom } from '@/stores/ui';
 
 export function useStackTile(datasetId: string) {
+  const t = useT();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { setDraggedStack, setDragKind, setIsDragging } = useDrag();
@@ -188,10 +190,8 @@ export function useStackTile(datasetId: string) {
 
   const onRemoveStack = useCallback(
     async (stackId: number | string, stackName?: string) => {
-      const label = stackName && stackName.length > 0 ? stackName : 'this stack';
-      const confirmed = window.confirm(
-        `Are you sure you want to remove ${label}? This action cannot be undone.`
-      );
+      const label = stackName && stackName.length > 0 ? stackName : t.common.untitled;
+      const confirmed = window.confirm(t.info.removeConfirm(label));
       if (!confirmed) return;
 
       const numericId =
@@ -212,7 +212,7 @@ export function useStackTile(datasetId: string) {
       invalidateAfterRemoval();
       console.log('✅ Stack removed via tile context menu');
     },
-    [invalidateAfterRemoval, queryClient, selectedInfoId, setInfoOpen, setSelectedItemId]
+    [invalidateAfterRemoval, queryClient, selectedInfoId, setInfoOpen, setSelectedItemId, t]
   );
 
   const dragProps = (
