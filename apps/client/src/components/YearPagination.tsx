@@ -1,4 +1,5 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { useT } from '@/lib/i18n';
 import { Button } from './ui/button';
 
 interface YearPaginationProps {
@@ -8,6 +9,7 @@ interface YearPaginationProps {
 }
 
 export function YearPagination({ currentYear, availableYears, onYearChange }: YearPaginationProps) {
+  const t = useT();
   const currentIndex = availableYears.indexOf(currentYear);
   const hasPrevious = currentIndex < availableYears.length - 1;
   const hasNext = currentIndex > 0;
@@ -31,7 +33,7 @@ export function YearPagination({ currentYear, availableYears, onYearChange }: Ye
         size="icon"
         onClick={handlePrevious}
         disabled={!hasPrevious}
-        aria-label="Previous year"
+        aria-label={t.common.previousYear}
       >
         <ChevronLeft className="h-4 w-4" />
       </Button>
@@ -43,7 +45,7 @@ export function YearPagination({ currentYear, availableYears, onYearChange }: Ye
         size="icon"
         onClick={handleNext}
         disabled={!hasNext}
-        aria-label="Next year"
+        aria-label={t.common.nextYear}
       >
         <ChevronRight className="h-4 w-4" />
       </Button>

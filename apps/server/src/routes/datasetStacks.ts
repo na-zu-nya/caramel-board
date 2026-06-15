@@ -21,6 +21,13 @@ import { AutoTagService } from '../shared/services/AutoTagService';
 import { CollectionService } from '../shared/services/CollectionService';
 import { DataSetService } from '../shared/services/DataSetService';
 import { ensureSuperUser } from '../shared/services/UserService';
+import { StandaloneAutoTagRepository } from '../standalone/auto-tag-repository';
+import { StandaloneColorRepository } from '../standalone/color-repository';
+import { StandaloneDatasetRepository } from '../standalone/dataset-repository';
+import { StandaloneLibraryRepository } from '../standalone/library-repository';
+import { StandaloneMetadataRepository } from '../standalone/metadata-repository';
+import { isStandaloneSqliteEnabled } from '../standalone/sqlite';
+import { StandaloneStackRepository } from '../standalone/stack-repository';
 import { toPublicAssetPath, withPublicAssetArray } from '../utils/assetPath';
 
 const app = new Hono();
@@ -29,13 +36,82 @@ const _joytagService = new AutoTagService(prisma);
 const dataSetService = new DataSetService(prisma);
 
 type StackWithAssets = Stack & {
-  assets?: Array<{ file?: string | null; thumbnail?: string | null }>;
+  assets?: Array<{ id?: number; file?: string | null; thumbnail?: string | null }>;
+};
+
+const scheduleStandaloneAutoTagPrediction = (asset: { id?: number } | null) => {
+  const assetId = Number(asset?.id ?? 0);
+  if (!assetId) return;
+
+  void new StandaloneAutoTagRepository().predictAssetTags(assetId, 0.4).catch((error) => {
+    console.error(`Failed to predict standalone AutoTags for asset ${assetId}:`, error);
+  });
 };
 
 function buildStackService(dataSetId: number) {
   const colorSearch = createColorSearchService({ prisma, dataSetId });
   return createStackService({ prisma, colorSearch, dataSetId });
 }
+
+const getStandaloneColorStackIds = (
+  dataSetId: number,
+  mediaType: 'image' | 'comic' | 'video' | undefined,
+  colorFilter:
+    | {
+        hue?: number;
+        hex?: string;
+        tones?: {
+          brightness?: { min?: number; max?: number };
+          saturation?: { min?: number; max?: number };
+        };
+        hueCategories?: string[];
+        tonePoint?: { saturation: number; lightness: number };
+        toneTolerance?: number;
+        similarityThreshold?: number;
+        customColor?: string;
+      }
+    | undefined
+) => {
+  if (!colorFilter) return undefined;
+  const hasColorFilter =
+    typeof colorFilter.hue === 'number' ||
+    Boolean(colorFilter.hex) ||
+    Boolean(colorFilter.tones?.brightness) ||
+    Boolean(colorFilter.tones?.saturation) ||
+    Boolean(colorFilter.hueCategories?.length) ||
+    Boolean(colorFilter.tonePoint) ||
+    Boolean(colorFilter.customColor);
+
+  if (!hasColorFilter) return undefined;
+
+  return new StandaloneColorRepository().getMatchingStackIdsByFilter({
+    dataSetId,
+    mediaType,
+    hue: colorFilter.hue,
+    hex: colorFilter.hex,
+    hueCategories: colorFilter.hueCategories,
+    tonePoint: colorFilter.tonePoint,
+    toneTolerance: colorFilter.toneTolerance,
+    similarityThreshold: colorFilter.similarityThreshold,
+    customColor: colorFilter.customColor,
+    saturationRange:
+      colorFilter.tones?.saturation?.min !== undefined ||
+      colorFilter.tones?.saturation?.max !== undefined
+        ? {
+            min: colorFilter.tones.saturation.min ?? 0,
+            max: colorFilter.tones.saturation.max ?? 100,
+          }
+        : undefined,
+    lightnessRange:
+      colorFilter.tones?.brightness?.min !== undefined ||
+      colorFilter.tones?.brightness?.max !== undefined
+        ? {
+            min: colorFilter.tones.brightness.min ?? 0,
+            max: colorFilter.tones.brightness.max ?? 100,
+          }
+        : undefined,
+  });
+};
 
 async function getStackFavoriteSet(stackIds: number[]) {
   if (stackIds.length === 0) {
@@ -61,6 +137,18 @@ async function getStackFavoriteSet(stackIds: number[]) {
 // Middleware to validate dataset exists
 app.use('/:dataSetId/*', async (c, next) => {
   const dataSetId = Number.parseInt(c.req.param('dataSetId'), 10);
+  if (isStandaloneSqliteEnabled()) {
+    const dataSet = new StandaloneDatasetRepository().getById(dataSetId);
+    if (!dataSet) {
+      return c.json({ error: 'DataSet not found' }, 404);
+    }
+
+    c.set('dataSet', dataSet);
+    c.set('dataSetId', dataSetId);
+    await next();
+    return;
+  }
+
   const dataSet = await dataSetService.getById(dataSetId);
 
   if (!dataSet) {
@@ -99,6 +187,56 @@ app.get(
     try {
       const dataSetId = c.req.valid('param').dataSetId;
       const queryParams = c.req.valid('query');
+
+      if (isStandaloneSqliteEnabled()) {
+        if (queryParams.mode === SearchMode.SIMILAR && queryParams.referenceStackId) {
+          const result = new StandaloneStackRepository().getSimilarByStackIds(
+            dataSetId,
+            [queryParams.referenceStackId],
+            {
+              limit: queryParams.limit,
+              offset: queryParams.offset,
+            }
+          );
+          return c.json(result);
+        }
+
+        const filters = queryParams.filters || {};
+        const sort = queryParams.sort || { by: 'recommended', order: 'desc' };
+        const mediaType =
+          filters.mediaType && filters.mediaType !== 'all' ? filters.mediaType : undefined;
+        const stackIds = getStandaloneColorStackIds(dataSetId, mediaType, filters.color);
+        const result = new StandaloneStackRepository().getPaginated({
+          dataSetId,
+          collection: filters.collectionId,
+          mediaType,
+          tag: filters.tags?.includeAny ?? filters.tags?.include,
+          author: filters.author?.includeAny ?? filters.author?.include,
+          fav:
+            filters.favorites === 'is-fav'
+              ? '1'
+              : filters.favorites === 'not-fav'
+                ? '0'
+                : undefined,
+          liked:
+            filters.likes === 'is-liked' ? '1' : filters.likes === 'not-liked' ? '0' : undefined,
+          hasNoTags: filters.tags?.includeNotSet === true,
+          hasNoAuthor: filters.author?.includeNotSet === true,
+          search: queryParams.query,
+          stackIds,
+          sort:
+            sort.by === 'dateAdded' ||
+            sort.by === 'name' ||
+            sort.by === 'likes' ||
+            sort.by === 'updated'
+              ? sort.by
+              : 'recommended',
+          order: sort.order,
+          limit: queryParams.limit,
+          offset: queryParams.offset,
+        });
+        return c.json(result);
+      }
 
       // SearchServiceを取得
       const searchService = c.get('searchService');
@@ -176,6 +314,15 @@ app.get(
       const { id } = c.req.valid('param');
       const { limit, offset, threshold } = c.req.valid('query');
 
+      if (isStandaloneSqliteEnabled()) {
+        const result = new StandaloneStackRepository().getSimilarByStackIds(dataSetId, [id], {
+          limit,
+          offset,
+          threshold,
+        });
+        return c.json(result);
+      }
+
       const searchService = c.get('searchService');
       if (!searchService) return c.json({ error: 'Search service not available' }, 500);
 
@@ -250,6 +397,31 @@ app.get(
       const dataSetId = c.get('dataSetId') as number;
       const { collectionId } = c.req.valid('param');
       const { limit, offset, threshold } = c.req.valid('query');
+
+      if (isStandaloneSqliteEnabled()) {
+        const libraryRepository = new StandaloneLibraryRepository();
+        const collection = libraryRepository.getCollection(collectionId);
+        if (!collection || collection.dataSetId !== dataSetId) {
+          return c.json({ error: 'Collection not found' }, 404);
+        }
+
+        const sourceStackIds =
+          collection.type === 'SMART'
+            ? (libraryRepository
+                .getSmartCollectionStacks(collectionId, 5000, 0)
+                ?.stacks.map((stack) => stack.id) ?? [])
+            : libraryRepository.getCollectionStackIds(collectionId);
+        const result = new StandaloneStackRepository().getSimilarByStackIds(
+          dataSetId,
+          sourceStackIds,
+          {
+            limit,
+            offset,
+            threshold,
+          }
+        );
+        return c.json(result);
+      }
 
       const collection = await prisma.collection.findUnique({
         where: { id: collectionId },
@@ -331,6 +503,15 @@ app.get(
       const dataSetId = c.get('dataSetId') as number;
       const { id } = c.req.valid('param');
       const options = c.req.valid('query');
+
+      if (isStandaloneSqliteEnabled()) {
+        const stack = new StandaloneStackRepository().getById(id, dataSetId);
+        if (!stack) {
+          return c.json({ error: 'Stack not found' }, 404);
+        }
+        return c.json(stack);
+      }
+
       const stackService = buildStackService(dataSetId);
       const stack = await stackService.getById(id, options);
 
@@ -353,7 +534,6 @@ app.post(
     try {
       const dataSetId = c.get('dataSetId') as number;
       const { id } = c.req.valid('param');
-      const stackService = buildStackService(dataSetId);
 
       let parsed: unknown = {};
       try {
@@ -365,6 +545,17 @@ app.post(
           ? (parsed as { force?: boolean }).force
           : true;
 
+      if (isStandaloneSqliteEnabled()) {
+        const result = await new StandaloneStackRepository().regeneratePreviews(id, dataSetId, {
+          force,
+        });
+        if (!result) {
+          return c.json({ error: 'Stack not found' }, 404);
+        }
+        return c.json(result);
+      }
+
+      const stackService = buildStackService(dataSetId);
       const result = await stackService.regeneratePreviews(id, { force });
       return c.json(result);
     } catch (error) {
@@ -428,6 +619,23 @@ app.post('/:dataSetId/stacks', async (c) => {
       }
     }
 
+    if (isStandaloneSqliteEnabled()) {
+      const stack = await new StandaloneStackRepository().createStackWithFile({
+        dataSetId,
+        name: name || file.name,
+        mediaType: finalMediaType as 'image' | 'comic' | 'video',
+        file: {
+          path: tempPath,
+          originalname: file.name,
+          mimetype: file.type,
+          size: file.size,
+        },
+      });
+      if (!stack) return c.json({ error: 'Failed to create stack' }, 500);
+      scheduleStandaloneAutoTagPrediction(stack.assets?.[0] ?? null);
+      return c.json(stack, 201);
+    }
+
     // Create stack with the file
     const stackService = buildStackService(dataSetId);
     const stack = await stackService.createWithFile({
@@ -458,6 +666,15 @@ app.put(
       const dataSetId = c.get('dataSetId') as number;
       const { id } = c.req.valid('param');
       const data = c.req.valid('json');
+
+      if (isStandaloneSqliteEnabled()) {
+        const stack = new StandaloneStackRepository().updateStack(id, dataSetId, data);
+        if (!stack) {
+          return c.json({ error: 'Stack not found in this dataset' }, 404);
+        }
+        return c.json(stack);
+      }
+
       const stackService = buildStackService(dataSetId);
       const stack = await stackService.update(id, data);
       return c.json(stack);
@@ -476,6 +693,16 @@ app.delete('/:dataSetId/stacks/:id', zValidator('param', IdParamSchema), async (
   try {
     const dataSetId = c.get('dataSetId') as number;
     const { id } = c.req.valid('param');
+
+    if (isStandaloneSqliteEnabled()) {
+      const repository = new StandaloneStackRepository();
+      if (!repository.stackBelongsToDataset(id, dataSetId)) {
+        return c.json({ error: 'Stack not found in this dataset' }, 404);
+      }
+      repository.deleteStack(id);
+      return c.json({ success: true });
+    }
+
     const stackService = buildStackService(dataSetId);
     await stackService.deleteStack(id);
     return c.json({ success: true });
@@ -497,6 +724,15 @@ app.post('/:dataSetId/stacks/:id/tags', zValidator('param', IdParamSchema), asyn
 
     if (!tag) {
       return c.json({ error: 'Tag is required' }, 400);
+    }
+
+    if (isStandaloneSqliteEnabled()) {
+      const repository = new StandaloneStackRepository();
+      if (!repository.stackBelongsToDataset(id, dataSetId)) {
+        return c.json({ error: 'Stack not found in this dataset' }, 404);
+      }
+      repository.addTag(id, tag);
+      return c.json({ success: true });
     }
 
     // Verify stack belongs to this dataset
@@ -521,6 +757,15 @@ app.delete('/:dataSetId/stacks/:id/tags/:tag', zValidator('param', IdParamSchema
     const { id } = c.req.valid('param');
     const tag = c.req.param('tag');
 
+    if (isStandaloneSqliteEnabled()) {
+      const repository = new StandaloneStackRepository();
+      if (!repository.stackBelongsToDataset(id, dataSetId)) {
+        return c.json({ error: 'Stack not found in this dataset' }, 404);
+      }
+      repository.removeTag(id, tag);
+      return c.json({ success: true });
+    }
+
     // Verify stack belongs to this dataset
     const stackService = buildStackService(dataSetId);
     const stack = await stackService.getById(id);
@@ -542,6 +787,15 @@ app.put('/:dataSetId/stacks/:id/author', zValidator('param', IdParamSchema), asy
     const dataSetId = c.get('dataSetId') as number;
     const { id } = c.req.valid('param');
     const { author } = await c.req.json();
+
+    if (isStandaloneSqliteEnabled()) {
+      const repository = new StandaloneStackRepository();
+      if (!repository.stackBelongsToDataset(id, dataSetId)) {
+        return c.json({ error: 'Stack not found in this dataset' }, 404);
+      }
+      repository.updateAuthor(id, author);
+      return c.json({ success: true });
+    }
 
     // Verify stack belongs to this dataset
     const stackService = buildStackService(dataSetId);
@@ -565,6 +819,15 @@ app.put('/:dataSetId/stacks/:id/favorite', zValidator('param', IdParamSchema), a
     const { id } = c.req.valid('param');
     const { favorited } = await c.req.json();
 
+    if (isStandaloneSqliteEnabled()) {
+      const repository = new StandaloneStackRepository();
+      if (!repository.stackBelongsToDataset(id, dataSetId)) {
+        return c.json({ error: 'Stack not found in this dataset' }, 404);
+      }
+      repository.toggleStackFavorite(id, Boolean(favorited));
+      return c.json({ success: true });
+    }
+
     // Verify stack belongs to this dataset
     const stackService = buildStackService(dataSetId);
     const stack = await stackService.getById(id);
@@ -585,6 +848,15 @@ app.post('/:dataSetId/stacks/:id/like', zValidator('param', IdParamSchema), asyn
   try {
     const dataSetId = c.get('dataSetId') as number;
     const { id } = c.req.valid('param');
+
+    if (isStandaloneSqliteEnabled()) {
+      const repository = new StandaloneStackRepository();
+      if (!repository.stackBelongsToDataset(id, dataSetId)) {
+        return c.json({ error: 'Stack not found in this dataset' }, 404);
+      }
+      repository.likeStack(id);
+      return c.json({ success: true });
+    }
 
     // Verify stack belongs to this dataset
     const stackService = buildStackService(dataSetId);
@@ -607,6 +879,10 @@ app.get('/:dataSetId/tags/search', async (c) => {
     const dataSetId = c.get('dataSetId') as number;
     const key = c.req.query('key') || '';
     if (!key) return c.json([]);
+    if (isStandaloneSqliteEnabled()) {
+      const rows = new StandaloneMetadataRepository().searchTags(key, dataSetId);
+      return c.json(rows.map((row) => row.title));
+    }
     const rows = await prisma.tag.findMany({
       where: {
         dataSetId,

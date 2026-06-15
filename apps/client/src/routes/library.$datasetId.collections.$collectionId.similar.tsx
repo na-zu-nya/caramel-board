@@ -12,6 +12,7 @@ import { SelectionActionBar } from '@/components/ui/selection-action-bar';
 import { useSelectionMode } from '@/hooks/features/useSelectionMode';
 import { useHeaderActions } from '@/hooks/useHeaderActions';
 import { apiClient } from '@/lib/api-client';
+import { useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import {
   currentFilterAtom,
@@ -43,6 +44,7 @@ const getStringTags = (value: unknown): string[] | undefined => {
 };
 
 function CollectionSimilarRoute() {
+  const t = useT();
   const { datasetId, collectionId } = Route.useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -344,9 +346,9 @@ function CollectionSimilarRoute() {
       await refetch();
     } catch (error) {
       console.error('Error optimizing video previews:', error);
-      alert('Failed to optimize video previews. Please try again.');
+      alert(t.grid.optimizeVideoFailed);
     }
-  }, [selectedItems, datasetId, exitSelectionMode, refetch]);
+  }, [selectedItems, datasetId, exitSelectionMode, refetch, t]);
 
   const handleMergeStacks = useCallback(async () => {
     if (selectedStackIdsInOrder.length < 2) return;
@@ -369,7 +371,7 @@ function CollectionSimilarRoute() {
       await refetch();
     } catch (error) {
       console.error('Error merging stacks:', error);
-      alert('スタックのマージに失敗しました');
+      alert(t.grid.mergeStacksFailed);
     }
   }, [
     selectedStackIdsInOrder,
@@ -379,6 +381,7 @@ function CollectionSimilarRoute() {
     collectionId,
     limit,
     refetch,
+    t,
   ]);
 
   const toggleEditPanel = useCallback(() => {
@@ -401,12 +404,13 @@ function CollectionSimilarRoute() {
   return (
     <div className="p-4">
       <div className="mb-3 text-sm text-gray-600">
-        Similar to collection{collection?.name ? `: ${collection.name}` : ''}
+        {t.similar.similarToCollection}
+        {collection?.name ? `: ${collection.name}` : ''}
       </div>
-      {isLoading && <div className="text-gray-500">Loading similar items…</div>}
-      {isError && <div className="text-red-600">Failed to load similar items</div>}
+      {isLoading && <div className="text-gray-500">{t.similar.loading}</div>}
+      {isError && <div className="text-red-600">{t.similar.failed}</div>}
       {!isLoading && items.length === 0 && (
-        <div className="text-gray-500">No similar items yet (try updating tags or AutoTags)</div>
+        <div className="text-gray-500">{t.similar.emptyTagsOrAutoTags}</div>
       )}
       <div
         className={cn(
@@ -415,7 +419,7 @@ function CollectionSimilarRoute() {
           !selectionMode && infoSidebarOpen ? 'mr-80' : 'mr-0'
         )}
         role="list"
-        aria-label="Similar stacks"
+        aria-label={t.similar.ariaLabel}
       >
         {items.map((item) => (
           <StackGridItem
@@ -440,7 +444,7 @@ function CollectionSimilarRoute() {
           <HeaderIconButton
             onClick={() => setInfoSidebarOpen(!infoSidebarOpen)}
             isActive={infoSidebarOpen}
-            aria-label={infoSidebarOpen ? 'Close info panel' : 'Open info panel'}
+            aria-label={infoSidebarOpen ? t.viewer.closeInfo : t.viewer.openInfo}
           >
             <Info size={18} />
           </HeaderIconButton>
@@ -457,41 +461,44 @@ function CollectionSimilarRoute() {
             selectedItems.size > 0
               ? [
                   {
-                    label: 'Bulk Edit',
+                    label: t.grid.bulkEdit,
                     value: 'bulk-edit',
                     onSelect: toggleEditPanel,
                     icon: <Pencil size={12} />,
                     group: 'primary' as const,
                   },
                   {
-                    label: 'Merge Stacks',
+                    label: t.grid.mergeStacks,
                     value: 'merge-stacks',
                     onSelect: handleMergeStacks,
                     icon: <GitMerge size={12} />,
                     confirmMessage:
                       selectedStackIdsInOrder.length >= 2
-                        ? `選択順の先頭スタック #${selectedStackIdsInOrder[0]} に残り ${selectedStackIdsInOrder.length - 1} 件をマージします。実行しますか？`
+                        ? t.grid.mergeStacksConfirm(
+                            selectedStackIdsInOrder[0],
+                            selectedStackIdsInOrder.length - 1
+                          )
                         : undefined,
                     group: 'primary' as const,
                   },
                   {
-                    label: 'Refresh Thumbnails',
+                    label: t.grid.refreshThumbnails,
                     value: 'refresh-thumbnails',
                     onSelect: handleRefreshThumbnails,
                     icon: <RefreshCw size={12} />,
                   },
                   {
-                    label: 'Optimize Video',
+                    label: t.grid.optimizeVideo,
                     value: 'optimize-video',
                     onSelect: handleOptimizePreviews,
                     icon: <Clapperboard size={12} />,
                   },
                   {
-                    label: 'Delete Stacks',
+                    label: t.grid.deleteStacks,
                     value: 'delete-stacks',
                     onSelect: handleRemoveStacks,
                     icon: <Trash2 size={12} />,
-                    confirmMessage: `選択した${selectedItems.size}件のスタックを削除します。元に戻せません。`,
+                    confirmMessage: t.grid.deleteStacksConfirm(selectedItems.size),
                     destructive: true,
                   },
                 ].filter(

@@ -11,10 +11,15 @@ import torch
 from pathlib import Path
 import io
 import os
+import sys
 import time
 import logging
 from threading import Event, Lock, Thread
 from typing import Optional
+
+joytag_repo_dir = Path(os.environ.get("JOYTAG_REPO_DIR", Path.cwd())).resolve()
+if str(joytag_repo_dir) not in sys.path:
+    sys.path.insert(0, str(joytag_repo_dir))
 
 # JoyTag repo dependency
 try:
@@ -132,7 +137,7 @@ def start_model_loader() -> None:
         _model_loader_thread.start()
 
 
-@app.before_first_request
+@app.before_request
 def _ensure_model_loader() -> None:  # pragma: no cover
     start_model_loader()
 

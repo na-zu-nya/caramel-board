@@ -48,6 +48,7 @@ import { SelectionActionBar } from '@/components/ui/selection-action-bar';
 import { useHeaderActions } from '@/hooks/useHeaderActions';
 import { useStackTile } from '@/hooks/useStackTile';
 import { apiClient } from '@/lib/api-client';
+import { useT } from '@/lib/i18n';
 import { getSourceImageFilename, getSourceImageUrl } from '@/lib/stack-drag-data';
 import { cn } from '@/lib/utils';
 import {
@@ -98,6 +99,7 @@ interface StacksResponse {
 }
 
 function TagsPage() {
+  const t = useT();
   const navigate = useNavigate();
   const location = useLocation();
   const { datasetId } = Route.useParams();
@@ -775,9 +777,9 @@ function TagsPage() {
       queryClient.invalidateQueries({ queryKey: ['tag-stacks', selectedTag?.id] });
     } catch (error) {
       console.error('Error optimizing video previews:', error);
-      alert('Failed to optimize video previews. Please try again.');
+      alert(t.grid.optimizeVideoFailed);
     }
-  }, [selectedStackItems, datasetId, exitSelectionMode, queryClient, selectedTag]);
+  }, [selectedStackItems, datasetId, exitSelectionMode, queryClient, selectedTag, t]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -844,25 +846,25 @@ function TagsPage() {
         <div className="sticky top-14 h-[calc(100vh-56px)] border-r bg-white">
           <div className="overflow-y-auto h-full">
             <div className="p-4 border-b">
-              <h2 className="text-lg font-semibold mb-3">Tags</h2>
+              <h2 className="text-lg font-semibold mb-3">{t.sidebar.tags}</h2>
 
               <div className="space-y-3">
                 <SmallSearchField
                   value={searchQuery}
                   onValueChange={setSearchQuery}
-                  placeholder="Search tags..."
+                  placeholder={t.tagPage.searchTags}
                 />
 
                 <div className="space-y-2">
                   <SmallSelect
                     value={sortBy}
                     onValueChange={(v) => setSortBy(v as typeof sortBy)}
-                    placeholder="Sort by..."
+                    placeholder={t.tagPage.sortBy}
                   >
-                    <SelectItem value="title-asc">Name (A-Z)</SelectItem>
-                    <SelectItem value="title-desc">Name (Z-A)</SelectItem>
-                    <SelectItem value="count-desc">Stack Count (High to Low)</SelectItem>
-                    <SelectItem value="count-asc">Stack Count (Low to High)</SelectItem>
+                    <SelectItem value="title-asc">{t.tagPage.nameAsc}</SelectItem>
+                    <SelectItem value="title-desc">{t.tagPage.nameDesc}</SelectItem>
+                    <SelectItem value="count-desc">{t.tagPage.stackCountDesc}</SelectItem>
+                    <SelectItem value="count-asc">{t.tagPage.stackCountAsc}</SelectItem>
                   </SmallSelect>
                 </div>
 
@@ -871,8 +873,8 @@ function TagsPage() {
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-muted-foreground">
                       {selectedTags.size > 0
-                        ? `${selectedTags.size} tags selected`
-                        : 'Select tags to perform actions'}
+                        ? t.tagPage.selectedTags(selectedTags.size)
+                        : t.tagPage.selectTagsPrompt}
                     </span>
                     {selectedTags.size > 0 && (
                       <Button
@@ -881,7 +883,7 @@ function TagsPage() {
                         className="h-6 px-2 text-xs"
                         onClick={() => setSelectedTags(new Set())}
                       >
-                        Clear
+                        {t.contextMenu.clear}
                       </Button>
                     )}
                   </div>
@@ -895,7 +897,7 @@ function TagsPage() {
                       className="h-7 px-2 text-xs flex-1"
                     >
                       <Edit2 className="h-3 w-3 mr-1" />
-                      Rename
+                      {t.contextMenu.rename}
                     </Button>
                     <Button
                       size="sm"
@@ -905,7 +907,7 @@ function TagsPage() {
                       className="h-7 px-2 text-xs flex-1"
                     >
                       <GitMerge className="h-3 w-3 mr-1" />
-                      Merge
+                      {t.tagPage.mergeTags}
                     </Button>
                     <Button
                       size="sm"
@@ -925,13 +927,15 @@ function TagsPage() {
             <div className="p-2">
               {tagsError ? (
                 <div className="text-center py-8 text-red-500">
-                  Error loading tags: {(tagsError as Error).message}
+                  {t.tagPage.errorLoadingTags} {(tagsError as Error).message}
                 </div>
               ) : tagsLoading ? (
-                <div className="text-center py-8 text-muted-foreground">Loading tags...</div>
+                <div className="text-center py-8 text-muted-foreground">
+                  {t.tagPage.loadingTags}
+                </div>
               ) : filteredTags.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
-                  {searchQuery ? 'No tags found' : 'No tags yet'}
+                  {searchQuery ? t.tagPage.noTagsFound : t.tagPage.noTagsYet}
                 </div>
               ) : (
                 <div className="space-y-0.5">
@@ -1002,22 +1006,24 @@ function TagsPage() {
                 </Button>
               </div>
               <p className="text-muted-foreground mt-1">
-                {stacksData?.pages[0]?.total || 0} stacks
+                {t.tagPage.stackCount(stacksData?.pages[0]?.total || 0)}
               </p>
             </div>
 
             {/* Stacks with this tag */}
             <div className="mt-6">
-              <h3 className="text-lg font-semibold mb-4">Stacks with this tag</h3>
+              <h3 className="text-lg font-semibold mb-4">{t.tagPage.stacksWithThisTag}</h3>
               {allStacks.length === 0 ? (
                 <div className="text-center py-16 text-muted-foreground">
-                  No stacks found with this tag
+                  {t.tagPage.noStacksWithThisTag}
                 </div>
               ) : (
                 <>
                   <Suspense
                     fallback={
-                      <div className="py-8 text-center text-muted-foreground">Loading…</div>
+                      <div className="py-8 text-center text-muted-foreground">
+                        {t.common.loading}
+                      </div>
                     }
                   >
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 list-stable">
@@ -1116,7 +1122,7 @@ function TagsPage() {
                       ref={loadMoreTriggerRef}
                       className="text-sm text-muted-foreground text-center mt-8"
                     >
-                      Scroll to load more...
+                      {t.common.scrollToLoadMore}
                     </div>
                   )}
                 </>
@@ -1134,7 +1140,7 @@ function TagsPage() {
         >
           <div className="text-center">
             <Tag className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-lg text-muted-foreground">Select a tag to view details</p>
+            <p className="text-lg text-muted-foreground">{t.tagPage.selectTagPrompt}</p>
           </div>
         </div>
       )}
@@ -1152,26 +1158,26 @@ function TagsPage() {
             selectedStackItems.size > 0
               ? [
                   {
-                    label: 'Bulk Edit',
+                    label: t.grid.bulkEdit,
                     value: 'bulk-edit',
                     onSelect: toggleEditPanel,
                     icon: <Pencil size={12} />,
                     group: 'primary',
                   },
                   {
-                    label: 'Refresh Thumbnails',
+                    label: t.grid.refreshThumbnails,
                     value: 'refresh-thumbnails',
                     onSelect: handleRefreshThumbnails,
                     icon: <RefreshCw size={12} />,
                   },
                   {
-                    label: 'Optimize Video',
+                    label: t.grid.optimizeVideo,
                     value: 'optimize-video',
                     onSelect: handleOptimizePreviews,
                     icon: <Clapperboard size={12} />,
                   },
                   {
-                    label: 'Delete Stacks',
+                    label: t.grid.deleteStacks,
                     value: 'delete-stacks',
                     onSelect: handleRemoveStacks,
                     icon: <Trash2 size={12} />,
@@ -1212,7 +1218,7 @@ function TagsPage() {
               }
             }}
             isActive={selectionMode}
-            aria-label={selectionMode ? 'Exit selection mode' : 'Enter selection mode'}
+            aria-label={selectionMode ? t.header.exitSelectionMode : t.header.enterSelectionMode}
           >
             <Check size={18} />
           </HeaderIconButton>
@@ -1222,7 +1228,7 @@ function TagsPage() {
             <HeaderIconButton
               onClick={() => setInfoSidebarOpen(!infoSidebarOpen)}
               isActive={infoSidebarOpen}
-              aria-label={infoSidebarOpen ? 'Close info panel' : 'Open info panel'}
+              aria-label={infoSidebarOpen ? t.viewer.closeInfo : t.viewer.openInfo}
             >
               <Info size={18} />
             </HeaderIconButton>
@@ -1235,26 +1241,26 @@ function TagsPage() {
       <Dialog open={renameDialogOpen} onOpenChange={setRenameDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Rename Tag</DialogTitle>
-            <DialogDescription>Enter a new name for the tag</DialogDescription>
+            <DialogTitle>{t.tagPage.renameTag}</DialogTitle>
+            <DialogDescription>{t.tagPage.renameTagDescription}</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="new-title">New Title</Label>
+              <Label htmlFor="new-title">{t.tagPage.newTitle}</Label>
               <Input
                 id="new-title"
                 value={newTitle}
                 onChange={(e) => setNewTitle(e.target.value)}
-                placeholder="Enter new title"
+                placeholder={t.tagPage.enterNewTitle}
               />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRenameDialogOpen(false)}>
-              Cancel
+              {t.common.cancel}
             </Button>
             <Button onClick={confirmRename} disabled={!newTitle.trim()}>
-              Rename
+              {t.contextMenu.rename}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1264,28 +1270,25 @@ function TagsPage() {
       <Dialog open={mergeDialogOpen} onOpenChange={setMergeDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Merge Tags</DialogTitle>
-            <DialogDescription>
-              Select the tag to merge into. The selected tags will be deleted and their stacks will
-              be reassigned.
-            </DialogDescription>
+            <DialogTitle>{t.tagPage.mergeTags}</DialogTitle>
+            <DialogDescription>{t.tagPage.mergeTagsDescription}</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="merge-target">Target Tag</Label>
+              <Label htmlFor="merge-target">{t.tagPage.targetTag}</Label>
               <Select
                 value={mergeTargetId?.toString() || ''}
                 onValueChange={(value) => setMergeTargetId(Number.parseInt(value, 10))}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select target tag" />
+                  <SelectValue placeholder={t.tagPage.selectTargetTag} />
                 </SelectTrigger>
                 <SelectContent>
                   {Array.from(selectedTags).map((id) => {
                     const tag = filteredTags.find((t) => t.id === id);
                     return tag ? (
                       <SelectItem key={id} value={id.toString()}>
-                        {tag.title} ({tag.stackCount} stacks)
+                        {tag.title} ({t.tagPage.stackCount(tag.stackCount)})
                       </SelectItem>
                     ) : null;
                   })}
@@ -1295,10 +1298,10 @@ function TagsPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setMergeDialogOpen(false)}>
-              Cancel
+              {t.common.cancel}
             </Button>
             <Button onClick={confirmMerge} disabled={!mergeTargetId}>
-              Merge Tags
+              {t.tagPage.mergeTags}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1308,18 +1311,15 @@ function TagsPage() {
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete Tags</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete {selectedTags.size} tag
-              {selectedTags.size > 1 ? 's' : ''}? This action cannot be undone.
-            </DialogDescription>
+            <DialogTitle>{t.tagPage.deleteTags}</DialogTitle>
+            <DialogDescription>{t.tagPage.deleteTagsConfirm(selectedTags.size)}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
-              Cancel
+              {t.common.cancel}
             </Button>
             <Button variant="destructive" onClick={confirmDelete}>
-              Delete
+              {t.common.delete}
             </Button>
           </DialogFooter>
         </DialogContent>

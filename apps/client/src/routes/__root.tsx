@@ -21,6 +21,7 @@ import { useThemeColor } from '@/hooks/useThemeColor';
 import { useUploadQueue } from '@/hooks/useUploadQueue';
 import { useKeyboardShortcuts as useGenericKeyboardShortcuts } from '@/hooks/utils/useKeyboardShortcut';
 import { apiClient } from '@/lib/api-client';
+import { useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { currentDatasetAtom, selectionModeAtom, sidebarOpenAtom } from '@/stores/ui';
 import InfoSidebar from '../components/InfoSidebar';
@@ -30,6 +31,7 @@ export const Route = createRootRoute({
 });
 
 function RootLayout() {
+  const t = useT();
   // Run upload queue globally (single runner)
   useUploadQueue();
   const [sidebarOpen, setSidebarOpen] = useAtom(sidebarOpenAtom);
@@ -123,13 +125,10 @@ function RootLayout() {
           )}
         </main>
       </div>
-      {!isSetupRoute && (
-        <>
-          <UploadProgress />
-          {/* Keep InfoSidebar mounted globally; open/close via classes for smooth transitions */}
-          <InfoSidebar />
-        </>
-      )}
+      {!isSetupRoute && <UploadProgress />}
+      {/* Keep InfoSidebar mounted globally; open/close via classes for smooth transitions.
+          setup ルートでもチュートリアル内の埋め込みビューワーから利用する */}
+      <InfoSidebar />
       <TanStackRouterDevtools />
 
       {/* Password Modal */}
@@ -147,14 +146,14 @@ function RootLayout() {
       >
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Unlock Library</DialogTitle>
+            <DialogTitle>{t.auth.unlockLibrary}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            <p className="text-sm text-gray-600">Enter the password to view this library.</p>
+            <p className="text-sm text-gray-600">{t.auth.passwordPrompt}</p>
             <Input
               type="password"
               value={passwordInput}
-              placeholder="Password"
+              placeholder={t.auth.password}
               onChange={(e) => setPasswordInput(e.target.value)}
               onKeyDown={async (e) => {
                 if (e.key === 'Enter' && passwordInput) {
@@ -165,7 +164,7 @@ function RootLayout() {
                       queryKey: ['dataset-protection', routeDatasetId],
                     });
                   } catch {
-                    alert('Invalid password');
+                    alert(t.auth.invalidPassword);
                   }
                 }
               }}
@@ -179,12 +178,12 @@ function RootLayout() {
                     queryKey: ['dataset-protection', routeDatasetId],
                   });
                 } catch {
-                  alert('Invalid password');
+                  alert(t.auth.invalidPassword);
                 }
               }}
               disabled={!passwordInput}
             >
-              Unlock
+              {t.auth.unlock}
             </Button>
           </div>
         </DialogContent>

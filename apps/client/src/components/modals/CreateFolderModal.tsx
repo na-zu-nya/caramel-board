@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { apiClient } from '@/lib/api-client';
+import { useT } from '@/lib/i18n';
 import { currentDatasetAtom } from '@/stores/ui';
 
 interface CreateFolderModalProps {
@@ -15,6 +16,7 @@ interface CreateFolderModalProps {
 }
 
 export function CreateFolderModal({ open, onOpenChange, onSuccess }: CreateFolderModalProps) {
+  const t = useT();
   const params = useParams({ strict: false });
   const currentDataset = useAtomValue(currentDatasetAtom);
   const datasetId = (params as { datasetId?: string }).datasetId || currentDataset || '1';
@@ -57,20 +59,22 @@ export function CreateFolderModal({ open, onOpenChange, onSuccess }: CreateFolde
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader className="border-b border-gray-200 pb-4">
-          <DialogTitle className="text-lg font-semibold text-gray-900">Create Folder</DialogTitle>
+          <DialogTitle className="text-lg font-semibold text-gray-900">
+            {t.collection.createFolder}
+          </DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6 pt-2">
           <div className="space-y-2">
             <Label htmlFor="folder-name" className="text-gray-700">
-              Folder name *
+              {t.collection.folderName}
             </Label>
             <Input
               id="folder-name"
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Enter folder name"
+              placeholder={t.collection.enterFolderName}
               required
               autoFocus
             />
@@ -84,14 +88,14 @@ export function CreateFolderModal({ open, onOpenChange, onSuccess }: CreateFolde
               disabled={loading}
               className="px-4 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
             >
-              Cancel
+              {t.common.cancel}
             </Button>
             <Button
               type="submit"
               disabled={loading || !name.trim() || !datasetId}
               className="px-4 py-2 text-sm text-primary-foreground bg-primary rounded-md hover:bg-primary/90 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
             >
-              {loading ? 'Creating...' : 'Create'}
+              {loading ? t.common.creating : t.common.create}
             </Button>
           </div>
         </form>

@@ -10,20 +10,26 @@ import {
   UpdateCollectionFolderSchema,
 } from '../models/CollectionFolderModel.js';
 import { CollectionFolderService } from '../shared/services/CollectionFolderService';
+import { ensureDatasetAuthorizedForCurrentStore } from '../standalone/auth';
+import { StandaloneLibraryRepository } from '../standalone/library-repository';
+import { isStandaloneSqliteEnabled } from '../standalone/sqlite';
 import { useResponse } from '../utils/useResponse.js';
 
 const app = new Hono();
 const collectionFolderService = new CollectionFolderService(getPrisma());
 
 const ensureAuthorized = async (c: Context, dataSetId: number) => {
-  const { ensureDatasetAuthorized } = await import('../utils/dataset-protection');
-  return ensureDatasetAuthorized(c, dataSetId);
+  return ensureDatasetAuthorizedForCurrentStore(c, dataSetId);
 };
 
 // フォルダ一覧取得
 app.get('/', zValidator('query', CollectionFolderQuerySchema), async (c) => {
   try {
     const query = c.req.valid('query');
+    if (isStandaloneSqliteEnabled()) {
+      const result = new StandaloneLibraryRepository().getFolderList(query);
+      return useResponse(c, result);
+    }
     const ds = query.dataSetId ?? null;
     if (ds !== null) {
       const auth = await ensureAuthorized(c, ds);
@@ -41,6 +47,12 @@ app.get('/', zValidator('query', CollectionFolderQuerySchema), async (c) => {
 app.get('/tree', zValidator('query', FolderTreeQuerySchema), async (c) => {
   try {
     const query = c.req.valid('query');
+    if (isStandaloneSqliteEnabled()) {
+      const auth = await ensureAuthorized(c, query.dataSetId);
+      if (auth) return auth;
+      const result = new StandaloneLibraryRepository().getFolderTree(query);
+      return useResponse(c, result);
+    }
     const auth = await ensureAuthorized(c, query.dataSetId);
     if (auth) return auth;
     const result = await collectionFolderService.getFolderTree(query);
@@ -55,6 +67,13 @@ app.get('/tree', zValidator('query', FolderTreeQuerySchema), async (c) => {
 app.get('/:id', zValidator('param', z.object({ id: z.coerce.number() })), async (c) => {
   try {
     const { id } = c.req.valid('param');
+    if (isStandaloneSqliteEnabled()) {
+      const folder = new StandaloneLibraryRepository().getFolder(id, { includeCollections: true });
+      if (!folder) {
+        return useResponse(c, { error: 'フォルダが見つかりません' }, 404);
+      }
+      return useResponse(c, folder);
+    }
     const folder = await collectionFolderService.findById(id);
 
     if (!folder) {
@@ -72,6 +91,10 @@ app.get('/:id', zValidator('param', z.object({ id: z.coerce.number() })), async 
 app.post('/', zValidator('json', CreateCollectionFolderSchema), async (c) => {
   try {
     const data = c.req.valid('json');
+    if (isStandaloneSqliteEnabled()) {
+      const folder = new StandaloneLibraryRepository().createFolder(data);
+      return useResponse(c, folder, 201);
+    }
     const folder = await collectionFolderService.create(data);
     return useResponse(c, folder, 201);
   } catch (error) {
@@ -94,6 +117,11 @@ app.put(
     try {
       const { id } = c.req.valid('param');
       const data = c.req.valid('json');
+      if (isStandaloneSqliteEnabled()) {
+        const folder = new StandaloneLibraryRepository().updateFolder(id, data);
+        if (!folder) return useResponse(c, { error: 'フォルダが見つかりません' }, 404);
+        return useResponse(c, folder);
+      }
       const folder = await collectionFolderService.update(id, data);
       return useResponse(c, folder);
     } catch (error) {
@@ -115,6 +143,20 @@ app.put(
 app.delete('/:id', zValidator('param', z.object({ id: z.coerce.number() })), async (c) => {
   try {
     const { id } = c.req.valid('param');
+    if (isStandaloneSqliteEnabled()) {
+      const result = new StandaloneLibraryRepository().deleteFolder(id);
+      if (!result.ok && result.reason === 'missing') {
+        return useResponse(c, { error: 'フォルダが見つかりません' }, 404);
+      }
+      if (!result.ok && result.reason === 'not-empty') {
+        return useResponse(
+          c,
+          { error: 'フォルダを削除するには、中身を空にする必要があります' },
+          400
+        );
+      }
+      return useResponse(c, { message: 'フォルダを削除しました' });
+    }
     await collectionFolderService.delete(id);
     return useResponse(c, { message: 'フォルダを削除しました' });
   } catch (error) {
@@ -155,6 +197,14 @@ app.put(
     try {
       const { id } = c.req.valid('param');
       const { parentId, folderOrders } = c.req.valid('json');
+      if (isStandaloneSqliteEnabled()) {
+        const folder = new StandaloneLibraryRepository().getFolder(id);
+        if (!folder) {
+          return useResponse(c, { error: 'フォルダが見つかりません' }, 404);
+        }
+        new StandaloneLibraryRepository().reorderFolders(folderOrders);
+        return useResponse(c, { message: 'フォルダの順序を更新しました' });
+      }
 
       // 現在のフォルダの情報を取得してdataSetIdを確認
       const folder = await collectionFolderService.findById(id);
@@ -189,6 +239,18 @@ app.put(
     try {
       const { id } = c.req.valid('param');
       const { newParentId } = c.req.valid('json');
+      if (isStandaloneSqliteEnabled()) {
+        const result = new StandaloneLibraryRepository().moveFolder(id, newParentId || null);
+        if (!result) return useResponse(c, { error: 'フォルダが見つかりません' }, 404);
+        if ('error' in result && result.error === 'cycle') {
+          return useResponse(
+            c,
+            { error: 'フォルダを自分自身や子孫フォルダに移動することはできません' },
+            400
+          );
+        }
+        return useResponse(c, result);
+      }
 
       const folder = await collectionFolderService.moveFolder(id, newParentId || null);
       return useResponse(c, folder);

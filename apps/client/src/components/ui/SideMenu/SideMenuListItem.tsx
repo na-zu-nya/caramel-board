@@ -1,6 +1,7 @@
 import type { LucideIcon } from 'lucide-react';
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import { cloneElement, createElement, isValidElement, useRef } from 'react';
+import { useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import {
   ContextMenu,
@@ -49,6 +50,7 @@ export function SideMenuListItem({
   onUnpin,
   ...props
 }: SideMenuListItemProps) {
+  const t = useT();
   const rootRef = useRef<HTMLElement | null>(null as any);
   const IconComp: any = icon;
   const style = indent > 0 ? { paddingLeft: `${indent * 0.75 + 0.5}rem` } : undefined;
@@ -110,14 +112,14 @@ export function SideMenuListItem({
       <ContextMenu>
         <ContextMenuTrigger asChild>{element}</ContextMenuTrigger>
         <ContextMenuContent>
-          <ContextMenuItem onSelect={openAction}>Open</ContextMenuItem>
+          <ContextMenuItem onSelect={openAction}>{t.contextMenu.open}</ContextMenuItem>
           {pinnable && (
             <>
               <ContextMenuSeparator />
               {pinned ? (
-                <ContextMenuItem onSelect={onUnpin}>Unpin</ContextMenuItem>
+                <ContextMenuItem onSelect={onUnpin}>{t.contextMenu.unpin}</ContextMenuItem>
               ) : (
-                <ContextMenuItem onSelect={onPin}>Pin</ContextMenuItem>
+                <ContextMenuItem onSelect={onPin}>{t.contextMenu.pin}</ContextMenuItem>
               )}
             </>
           )}
@@ -138,14 +140,14 @@ export function SideMenuListItem({
     <ContextMenu>
       <ContextMenuTrigger asChild>{button}</ContextMenuTrigger>
       <ContextMenuContent>
-        <ContextMenuItem onSelect={openAction}>Open</ContextMenuItem>
+        <ContextMenuItem onSelect={openAction}>{t.contextMenu.open}</ContextMenuItem>
         {pinnable && (
           <>
             <ContextMenuSeparator />
             {pinned ? (
-              <ContextMenuItem onSelect={onUnpin}>Unpin</ContextMenuItem>
+              <ContextMenuItem onSelect={onUnpin}>{t.contextMenu.unpin}</ContextMenuItem>
             ) : (
-              <ContextMenuItem onSelect={onPin}>Pin</ContextMenuItem>
+              <ContextMenuItem onSelect={onPin}>{t.contextMenu.pin}</ContextMenuItem>
             )}
           </>
         )}

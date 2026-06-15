@@ -9,6 +9,43 @@ import '@fontsource/tilt-warp/400.css';
 import '@fontsource/murecho/500.css';
 import './styles.css';
 
+type AppLanguage = 'en' | 'ja';
+
+declare global {
+  interface Window {
+    __CARAMEL_DEFAULT_LANGUAGE__?: AppLanguage;
+  }
+}
+
+const languageStorageKey = 'caramelboard.language';
+
+const isAppLanguage = (value: string | undefined | null): value is AppLanguage =>
+  value === 'en' || value === 'ja';
+
+const getDefaultLanguage = (): AppLanguage => {
+  if (isAppLanguage(window.__CARAMEL_DEFAULT_LANGUAGE__)) {
+    return window.__CARAMEL_DEFAULT_LANGUAGE__;
+  }
+  return navigator.language.toLowerCase().startsWith('ja') ? 'ja' : 'en';
+};
+
+const applyInitialLanguage = () => {
+  if (isAppLanguage(window.__CARAMEL_DEFAULT_LANGUAGE__)) {
+    window.localStorage.setItem(languageStorageKey, window.__CARAMEL_DEFAULT_LANGUAGE__);
+    document.documentElement.lang = window.__CARAMEL_DEFAULT_LANGUAGE__;
+    return;
+  }
+
+  const storedLanguage = window.localStorage.getItem(languageStorageKey);
+  const language = isAppLanguage(storedLanguage) ? storedLanguage : getDefaultLanguage();
+  if (!isAppLanguage(storedLanguage)) {
+    window.localStorage.setItem(languageStorageKey, language);
+  }
+  document.documentElement.lang = language;
+};
+
+applyInitialLanguage();
+
 // Create a QueryClient instance
 const queryClient = new QueryClient();
 

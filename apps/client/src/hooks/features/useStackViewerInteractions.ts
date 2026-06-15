@@ -36,9 +36,20 @@ export function useStackViewerInteractions(params: {
   stack?: Stack;
   currentPage: number;
   setCurrentPage: (fn: (p: number) => number | number) => void;
+  // 埋め込み時はルート遷移の代わりに、隣接スタックへの切り替えをコールバックで通知する
+  onNavigateStack?: (stackId: string) => void;
 }) {
-  const { datasetId, mediaType, stackId, listToken, returnTo, stack, currentPage, setCurrentPage } =
-    params;
+  const {
+    datasetId,
+    mediaType,
+    stackId,
+    listToken,
+    returnTo,
+    stack,
+    currentPage,
+    setCurrentPage,
+    onNavigateStack,
+  } = params;
   const { ctx, restore, prefetchAround, moveIndex } = useViewContext();
   const navigate = useNavigate();
 
@@ -180,12 +191,17 @@ export function useStackViewerInteractions(params: {
       currentDragOffsetRef.current = startOffset;
       setDragOffset(startOffset);
       if (ctx) moveIndex(direction);
-      navigate({
-        to: '/library/$datasetId/stacks/$stackId',
-        params: { datasetId, stackId: String(targetStackId) },
-        search: { page: 0, mediaType, listToken, returnTo },
-        replace: true,
-      });
+      if (onNavigateStack) {
+        // 埋め込み時: 親に stackId 切り替えを通知(ルート遷移しない)
+        onNavigateStack(String(targetStackId));
+      } else {
+        navigate({
+          to: '/library/$datasetId/stacks/$stackId',
+          params: { datasetId, stackId: String(targetStackId) },
+          search: { page: 0, mediaType, listToken, returnTo },
+          replace: true,
+        });
+      }
       requestAnimationFrame(() => {
         imageCarouselRef.current?.updateTranslateX(startOffset);
         const step = () => {
@@ -205,7 +221,7 @@ export function useStackViewerInteractions(params: {
         animationFrameRef.current = requestAnimationFrame(step);
       });
     },
-    [ctx, moveIndex, navigate, datasetId, mediaType, listToken, returnTo, lerp]
+    [ctx, moveIndex, navigate, datasetId, mediaType, listToken, returnTo, lerp, onNavigateStack]
   );
 
   // Drag handlers

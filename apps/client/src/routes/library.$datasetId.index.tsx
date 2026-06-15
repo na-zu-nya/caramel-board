@@ -13,6 +13,7 @@ import { useHeaderActions } from '@/hooks/useHeaderActions';
 import { isScratchCollection } from '@/hooks/useScratch';
 import { useStackTile } from '@/hooks/useStackTile';
 import { apiClient } from '@/lib/api-client';
+import { getMediaTypeLabel, useT } from '@/lib/i18n';
 import { getSourceImageFilename, getSourceImageUrl } from '@/lib/stack-drag-data';
 import { currentFilterAtom } from '@/stores/ui';
 import type { MediaType, Stack } from '@/types';
@@ -41,6 +42,7 @@ export const Route = createFileRoute('/library/$datasetId/')({
 });
 
 function DatasetHome() {
+  const t = useT();
   const { datasetId } = Route.useParams();
   const [, setCurrentFilter] = useAtom(currentFilterAtom);
   const { data: dataset } = useDataset(datasetId);
@@ -87,9 +89,9 @@ function DatasetHome() {
   }, [datasetId, setCurrentFilter]);
 
   const mediaTypeConfig: Record<MediaType, { label: string; Icon: LucideIcon }> = {
-    image: { label: 'Images', Icon: Image },
-    comic: { label: 'Comics', Icon: BookOpen },
-    video: { label: 'Videos', Icon: Film },
+    image: { label: getMediaTypeLabel(t, 'image'), Icon: Image },
+    comic: { label: getMediaTypeLabel(t, 'comic'), Icon: BookOpen },
+    video: { label: getMediaTypeLabel(t, 'video'), Icon: Film },
   };
 
   if (isLoading) {
@@ -110,11 +112,13 @@ function DatasetHome() {
       }}
     >
       <div className="container mx-auto px-4 py-6 pt-8 pb-24 space-y-8">
-        <h1 className="text-4xl font-bold">{dataset?.name || 'Library'} Overview</h1>
+        <h1 className="text-4xl font-bold">
+          {dataset?.name || t.sidebar.library} {t.overview.title}
+        </h1>
 
         {/* Media Types Section */}
         <section>
-          <SectionHeader title="Media Types" />
+          <SectionHeader title={t.overview.mediaTypes} />
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {overview?.mediaTypes.map((media) => {
               const config = mediaTypeConfig[media.mediaType as MediaType];
@@ -129,7 +133,7 @@ function DatasetHome() {
                       <span className="text-lg font-semibold">{config?.label}</span>
                     </span>
                   }
-                  subtitle={`${media.count.toLocaleString()} items`}
+                  subtitle={t.library.itemCount(media.count)}
                   thumbnailSrc={media.thumbnail || null}
                   icon={config?.Icon ? <config.Icon size={64} className="opacity-20" /> : undefined}
                 >
@@ -146,7 +150,7 @@ function DatasetHome() {
         {/* Collections Section (exclude Scratch) */}
         {overview?.collections && overview.collections.length > 0 && (
           <section>
-            <SectionHeader title="Collections" />
+            <SectionHeader title={t.sidebar.collections} />
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
               {overview.collections
                 .filter((c) => !isScratchCollection(c))
@@ -168,7 +172,7 @@ function DatasetHome() {
         {/* Tag Cloud Section */}
         {overview?.tagCloud && overview.tagCloud.length > 0 && (
           <section>
-            <SectionHeader title="Popular Tags" />
+            <SectionHeader title={t.overview.popularTags} />
             <div className="flex flex-wrap gap-2">
               {overview.tagCloud.slice(0, 30).map((tag) => (
                 <TagChip
@@ -195,14 +199,14 @@ function DatasetHome() {
         {/* Recent Likes Section */}
         {overview?.recentLikes && overview.recentLikes.length > 0 && (
           <SectionBlock
-            title="Recently Liked"
+            title={t.overview.recentlyLiked}
             action={
               <Link
                 to="/library/$datasetId/likes"
                 params={{ datasetId }}
                 className="text-blue-600 hover:text-blue-800 font-medium"
               >
-                Recently Liked ›
+                {t.overview.recentlyLiked} ›
               </Link>
             }
           >
@@ -262,14 +266,14 @@ function DatasetHome() {
         {/* Recently Scratch Section */}
         {scratchData?.stacks && scratchData.stacks.length > 0 && (
           <SectionBlock
-            title="Recently Scratch"
+            title={t.overview.recentlyScratch}
             action={
               <Link
                 to="/library/$datasetId/scratch/$scratchId"
                 params={{ datasetId, scratchId: String(scratchData.id) }}
                 className="text-blue-600 hover:text-blue-800 font-medium"
               >
-                Recently Scratch ›
+                {t.overview.recentlyScratch} ›
               </Link>
             }
           >
@@ -346,6 +350,7 @@ function CollectionCard({
   count: number;
   thumbnail?: string | null;
 }) {
+  const t = useT();
   const { data: meta } = useQuery({
     queryKey: ['collection-meta', id],
     enabled: !thumbnail || !count,
@@ -386,7 +391,7 @@ function CollectionCard({
       asChild
       aspect="1/1"
       title={name}
-      subtitle={`${displayCount} items`}
+      subtitle={t.library.itemCount(displayCount)}
       thumbnailSrc={src}
       icon={<span className="text-4xl">{icon}</span>}
     >

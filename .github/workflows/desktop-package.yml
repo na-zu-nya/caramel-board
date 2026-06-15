@@ -1,0 +1,48 @@
+name: Desktop Package
+
+on:
+  workflow_dispatch:
+
+jobs:
+  package:
+    name: Package desktop (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    env:
+      CI: 'true'
+      TURBO_TELEMETRY_DISABLED: '1'
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - macos-latest
+          - windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.node-version'
+          cache: 'npm'
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build desktop package
+        run: npm run -w @caramelboard/desktop build:app
+
+      - name: Upload desktop bundles
+        uses: actions/upload-artifact@v4
+        with:
+          name: caramel-board-desktop-${{ runner.os }}
+          path: |
+            apps/desktop/src-tauri/target/release/bundle/**/*.dmg
+            apps/desktop/src-tauri/target/release/bundle/**/*.app
+            apps/desktop/src-tauri/target/release/bundle/**/*.msi
+            apps/desktop/src-tauri/target/release/bundle/**/*.exe
+          if-no-files-found: error

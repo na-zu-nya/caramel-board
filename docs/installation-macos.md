@@ -78,6 +78,12 @@ brew doctor
 - インストール後はアプリを起動し、サインインやチュートリアルはスキップして構いません
 - 起動時にリソース割り当ての設定が表示されたら、推奨値のままで問題ありません
 
+### Desktop 版で FFmpeg / Poppler / AutoTag を使う場合
+
+Desktop 版で GIF・動画プレビュー、PDF 取り込み、自動タグを使う場合は、[Desktop 版 外部ツールセットアップ - macOS](./desktop-tools-macos.md) を参照してください。
+
+Desktop 版では初回セットアップで FFmpeg / Poppler / AutoTag を設定できます。あとから設定画面の `メディア処理`、`Poppler`、`自動タグ` でも変更できます。
+
 ## CaramelBoard のセットアップ
 
 ### アプリのダウンロード

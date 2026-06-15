@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { DroppableSideMenuItem } from '@/components/ui/DroppableSideMenuItem';
 import { SideMenuMessage, SideMenuSearchField } from '@/components/ui/SideMenu';
 import { apiClient } from '@/lib/api-client';
+import { useT } from '@/lib/i18n';
 
 interface AuthorsSectionProps {
   datasetId: string;
@@ -19,6 +20,7 @@ interface AuthorItem {
 }
 
 export function AuthorsSection({ datasetId, autoFocusOnMount = false }: AuthorsSectionProps) {
+  const t = useT();
   const [limit, setLimit] = useState(20);
   const [query, setQuery] = useState('');
   const queryClient = useQueryClient();
@@ -74,7 +76,7 @@ export function AuthorsSection({ datasetId, autoFocusOnMount = false }: AuthorsS
   };
 
   if (isLoading || !data) {
-    return <SideMenuMessage variant="info">Loading authors...</SideMenuMessage>;
+    return <SideMenuMessage variant="info">{t.sidebar.loadingAuthors}</SideMenuMessage>;
   }
 
   // Safety net sort by name (A-Z)
@@ -93,7 +95,7 @@ export function AuthorsSection({ datasetId, autoFocusOnMount = false }: AuthorsS
       <SideMenuSearchField
         value={query}
         onValueChange={setQuery}
-        placeholder="Filter Authors..."
+        placeholder={t.sidebar.filterAuthors}
         autoFocusOnMount={autoFocusOnMount}
       />
       {filteredAuthors.map((author) => {
@@ -124,7 +126,7 @@ export function AuthorsSection({ datasetId, autoFocusOnMount = false }: AuthorsS
           className="w-full text-left px-2 py-1 text-xs text-blue-600 hover:bg-gray-100 rounded transition-colors"
           style={{ paddingLeft: '2rem' }}
         >
-          Load more...
+          {t.common.loadMoreWithDots}
         </button>
       )}
     </div>

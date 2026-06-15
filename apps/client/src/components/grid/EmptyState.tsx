@@ -1,4 +1,5 @@
 import { Loader2 } from 'lucide-react';
+import { useT } from '@/lib/i18n';
 
 interface EmptyStateProps {
   isLoading: boolean;
@@ -12,6 +13,7 @@ interface EmptyStateProps {
 }
 
 export function EmptyState({ isLoading, error, itemsLength, emptyState }: EmptyStateProps) {
+  const t = useT();
   if (isLoading && itemsLength === 0) {
     return (
       <div className="fixed inset-0 flex items-center justify-center">
@@ -24,8 +26,8 @@ export function EmptyState({ isLoading, error, itemsLength, emptyState }: EmptyS
     return (
       <div className="fixed inset-0 flex items-center justify-center">
         <div className="text-center">
-          <p className="text-red-400 mb-2">Failed to load items</p>
-          <p className="text-gray-400 text-sm">Please try again later</p>
+          <p className="text-red-400 mb-2">{t.grid.failedToLoad}</p>
+          <p className="text-gray-400 text-sm">{t.grid.tryAgainLater}</p>
         </div>
       </div>
     );

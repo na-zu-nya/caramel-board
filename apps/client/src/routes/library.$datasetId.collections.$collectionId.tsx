@@ -20,6 +20,7 @@ import { useDataset } from '@/hooks/useDatasets';
 import { useHeaderActions } from '@/hooks/useHeaderActions';
 import { isScratchCollection, useScratch } from '@/hooks/useScratch';
 import { apiClient } from '@/lib/api-client';
+import { useT } from '@/lib/i18n';
 import { navigationStateAtom } from '@/stores/navigation';
 import { currentFilterAtom } from '@/stores/ui';
 import { genListToken, saveViewContext } from '@/stores/view-context';
@@ -43,6 +44,7 @@ function CollectionView() {
 }
 
 function CollectionViewContent() {
+  const t = useT();
   console.log('CollectionView');
 
   const { datasetId, collectionId } = Route.useParams();
@@ -659,15 +661,15 @@ function CollectionViewContent() {
     if (collection?.type === 'SMART') {
       return {
         icon: '🔍',
-        title: 'No items match the smart collection criteria',
-        description: 'This collection automatically includes items based on saved filters.',
+        title: t.emptyState.noItemsSmartCollection,
+        description: t.emptyState.smartCollectionDescription,
       };
     }
 
     return {
       icon: '📁',
-      title: `No items in "${collection?.name || 'this collection'}"`,
-      description: 'Drag and drop stacks here to add them to this collection.',
+      title: t.emptyState.noItemsInCollection(collection?.name || t.emptyState.thisCollection),
+      description: t.emptyState.collectionDescription,
     };
   };
 
@@ -676,7 +678,10 @@ function CollectionViewContent() {
       {/* Scratch: 右上に Clear ボタン */}
       {isScratchCollection(collection as any) &&
         createPortal(
-          <HeaderIconButton aria-label="Clear Scratch" onClick={() => setShowClearDialog(true)}>
+          <HeaderIconButton
+            aria-label={t.contextMenu.clearScratch}
+            onClick={() => setShowClearDialog(true)}
+          >
             <Eraser size={18} />
           </HeaderIconButton>,
           document.getElementById('header-actions') || document.body
@@ -685,9 +690,11 @@ function CollectionViewContent() {
       <Dialog open={showClearDialog} onOpenChange={setShowClearDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader className="border-b border-gray-200 pb-4">
-            <DialogTitle className="text-lg font-semibold text-gray-900">Clear Scratch</DialogTitle>
+            <DialogTitle className="text-lg font-semibold text-gray-900">
+              {t.contextMenu.clearScratch}
+            </DialogTitle>
             <DialogDescription className="text-gray-600 mt-2">
-              Remove all items from Scratch? This cannot be undone.
+              {t.contextMenu.clearScratchConfirm}
             </DialogDescription>
           </DialogHeader>
           <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
@@ -696,7 +703,7 @@ function CollectionViewContent() {
               onClick={() => setShowClearDialog(false)}
               disabled={isClearing}
             >
-              Cancel
+              {t.common.cancel}
             </Button>
             <Button
               className="bg-red-600 hover:bg-red-700"
@@ -711,7 +718,7 @@ function CollectionViewContent() {
               }}
               disabled={isClearing}
             >
-              {isClearing ? 'Clearing...' : 'Clear'}
+              {isClearing ? t.contextMenu.clearing : t.contextMenu.clear}
             </Button>
           </div>
         </DialogContent>

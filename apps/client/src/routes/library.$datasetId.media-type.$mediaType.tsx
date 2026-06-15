@@ -7,6 +7,7 @@ import StackGrid from '@/components/StackGrid';
 import { useDataset } from '@/hooks/useDatasets';
 import { useHeaderActions } from '@/hooks/useHeaderActions';
 import { useRangeBasedQuery } from '@/hooks/useRangeBasedQuery';
+import { useT } from '@/lib/i18n';
 import { navigationStateAtom } from '@/stores/navigation';
 import { currentFilterAtom } from '@/stores/ui';
 import { genListToken, saveViewContext } from '@/stores/view-context';
@@ -17,6 +18,7 @@ export const Route = createFileRoute('/library/$datasetId/media-type/$mediaType'
 });
 
 function MediaTypeList() {
+  const t = useT();
   const { datasetId, mediaType } = Route.useParams();
   const search = Route.useSearch() as {
     tags?: string[];
@@ -466,8 +468,8 @@ function MediaTypeList() {
         useWindowScroll
         emptyState={{
           icon: '🖼️',
-          title: 'No images found in this dataset.',
-          description: 'Try uploading some images to get started.',
+          title: t.emptyState.noImages,
+          description: t.emptyState.uploadImagesDescription,
         }}
       />
       <FilterPanel

@@ -15,6 +15,7 @@ import { HeaderIconButton } from '@/components/ui/Header/HeaderIconButton';
 import { useDatasets } from '@/hooks/useDatasets';
 import { isScratchCollection } from '@/hooks/useScratch';
 import { apiClient } from '@/lib/api-client';
+import { getDefaultPinDisplayName, useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import {
   currentDatasetAtom,
@@ -29,6 +30,7 @@ import {
 import type { Pin } from '@/types';
 
 export default function Header() {
+  const t = useT();
   const [sidebarOpen, setSidebarOpen] = useAtom(sidebarOpenAtom);
   const [currentDataset] = useAtom(currentDatasetAtom);
   const [filterOpen, setFilterOpen] = useAtom(filterOpenAtom);
@@ -163,12 +165,15 @@ export default function Header() {
           <HeaderIconButton
             onClick={() => setSidebarOpen(!sidebarOpen)}
             isActive={sidebarOpen}
-            aria-label={sidebarOpen ? 'Close menu' : 'Open menu'}
+            aria-label={sidebarOpen ? t.header.closeMenu : t.header.openMenu}
           >
             <Menu size={18} />
           </HeaderIconButton>
           {headerActions.showShuffle && (
-            <HeaderIconButton aria-label="Shuffle" onClick={headerActions.onShuffle ?? undefined}>
+            <HeaderIconButton
+              aria-label={t.header.shuffle}
+              onClick={headerActions.onShuffle ?? undefined}
+            >
               <Shuffle size={18} />
             </HeaderIconButton>
           )}
@@ -184,7 +189,7 @@ export default function Header() {
                   type="button"
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium hover:bg-white/10 transition-colors"
                 >
-                  <span>Pins</span>
+                  <span>{t.header.pins}</span>
                   <ChevronDown size={14} />
                 </button>
               </DropdownMenuTrigger>
@@ -200,7 +205,7 @@ export default function Header() {
                     )}
                   >
                     {renderIcon(pin.icon)}
-                    <span>{pin.name}</span>
+                    <span>{getDefaultPinDisplayName(t, pin)}</span>
                   </DropdownMenuItem>
                 ))}
               </DropdownMenuContent>
@@ -215,7 +220,7 @@ export default function Header() {
                     <HeaderIconButton
                       key={pin.id}
                       onClick={() => handleNavigationPinClick(pin)}
-                      title={pin.name}
+                      title={getDefaultPinDisplayName(t, pin)}
                       isActive={isNavigationPinActive(pin)}
                     >
                       {renderIcon(pin.icon)}
@@ -227,7 +232,7 @@ export default function Header() {
               {/* Separator */}
               {/* No pins message */}
               {navigationPins.length === 0 && (
-                <span className="text-sm text-white/50">No pinned items</span>
+                <span className="text-sm text-white/50">{t.header.noPinnedItems}</span>
               )}
             </>
           )}
@@ -246,10 +251,10 @@ export default function Header() {
               className={selectionMode ? 'opacity-50 cursor-not-allowed' : ''}
               aria-label={
                 selectionMode
-                  ? 'Filter disabled during selection'
+                  ? t.header.filterDisabledDuringSelection
                   : filterOpen
-                    ? 'Close filter'
-                    : 'Open filter'
+                    ? t.header.closeFilter
+                    : t.header.openFilter
               }
             >
               <Filter size={18} />
@@ -271,10 +276,10 @@ export default function Header() {
               className={selectionMode ? 'opacity-50 cursor-not-allowed' : ''}
               aria-label={
                 selectionMode
-                  ? 'Reorder disabled during selection'
+                  ? t.header.reorderDisabledDuringSelection
                   : reorderMode
-                    ? 'Exit reorder mode'
-                    : 'Enter reorder mode'
+                    ? t.header.exitReorderMode
+                    : t.header.enterReorderMode
               }
             >
               <ArrowUpDown size={18} />
@@ -300,10 +305,10 @@ export default function Header() {
               className={reorderMode ? 'opacity-50 cursor-not-allowed' : ''}
               aria-label={
                 reorderMode
-                  ? 'Selection disabled during reorder'
+                  ? t.header.selectionDisabledDuringReorder
                   : selectionMode
-                    ? 'Exit selection mode'
-                    : 'Enter selection mode'
+                    ? t.header.exitSelectionMode
+                    : t.header.enterSelectionMode
               }
             >
               <Check size={18} />

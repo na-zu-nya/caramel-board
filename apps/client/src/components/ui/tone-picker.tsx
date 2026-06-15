@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { useCallback, useEffect } from 'react';
+import { useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
 interface TonePickerProps {
@@ -19,6 +20,7 @@ export function TonePicker({
   disabled = false,
   className,
 }: TonePickerProps) {
+  const t = useT();
   const containerRef = React.useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = React.useState(false);
 
@@ -128,10 +130,10 @@ export function TonePicker({
 
           {/* Labels */}
           <div className="absolute bottom-2 left-2 text-xs font-medium text-white bg-black/50 px-1 rounded select-none pointer-events-none">
-            暗い・無彩色
+            {t.filter.toneDarkMuted}
           </div>
           <div className="absolute top-2 right-2 text-xs font-medium text-gray-800 bg-white/50 px-1 rounded select-none pointer-events-none">
-            明るい・鮮やか
+            {t.filter.toneBrightVivid}
           </div>
 
           {/* Tolerance circle */}
@@ -163,26 +165,26 @@ export function TonePicker({
 
         {/* Axis labels */}
         <div className="absolute -bottom-6 left-0 right-0 text-center text-xs text-gray-600">
-          彩度 (Saturation) →
+          {t.filter.saturationAxis}
         </div>
         <div className="absolute -left-20 top-0 bottom-0 flex items-center">
           <div className="transform -rotate-90 text-xs text-gray-600 whitespace-nowrap">
-            明度 (Lightness) →
+            {t.filter.lightnessAxis}
           </div>
         </div>
       </div>
 
       {/* Current values display */}
       <div className="flex justify-between text-xs text-gray-600 mt-8">
-        <span>彩度: {value.saturation}%</span>
-        <span>明度: {value.lightness}%</span>
+        <span>{t.filter.saturationValue(value.saturation)}</span>
+        <span>{t.filter.lightnessValue(value.lightness)}</span>
       </div>
 
       {/* Tolerance slider */}
       {onToleranceChange && (
         <div className="space-y-2">
           <div className="flex justify-between items-center">
-            <label className="text-xs font-medium text-gray-700">許容範囲</label>
+            <label className="text-xs font-medium text-gray-700">{t.filter.tolerance}</label>
             <span className="text-xs text-gray-500">{tolerance}%</span>
           </div>
           <input
@@ -204,8 +206,10 @@ export function TonePicker({
             }}
           />
           <div className="flex justify-between text-xs text-gray-400">
-            <span>狭い</span>
-            <span className="text-center">{tolerance >= 100 ? '全画像' : '広い'}</span>
+            <span>{t.filter.narrow}</span>
+            <span className="text-center">
+              {tolerance >= 100 ? t.filter.allImages : t.filter.wide}
+            </span>
           </div>
         </div>
       )}

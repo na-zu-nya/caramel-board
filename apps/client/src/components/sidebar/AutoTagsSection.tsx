@@ -4,6 +4,7 @@ import { Wand2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { SideMenuListItem, SideMenuMessage, SideMenuSearchField } from '@/components/ui/SideMenu';
 import { apiClient } from '@/lib/api-client';
+import { useT } from '@/lib/i18n';
 
 interface AutoTagsSectionProps {
   datasetId: string;
@@ -21,6 +22,7 @@ interface AutoTagMappingItem {
 }
 
 export function AutoTagsSection({ datasetId, autoFocusOnMount = false }: AutoTagsSectionProps) {
+  const t = useT();
   const [query, setQuery] = useState('');
   const trimmedQuery = query.trim();
   const isSearching = trimmedQuery.length > 0;
@@ -114,18 +116,22 @@ export function AutoTagsSection({ datasetId, autoFocusOnMount = false }: AutoTag
       <SideMenuSearchField
         value={query}
         onValueChange={setQuery}
-        placeholder="Filter AutoTags..."
+        placeholder={t.sidebar.filterAutoTags}
         autoFocusOnMount={autoFocusOnMount}
       />
 
-      {isLoadingMappings && <SideMenuMessage variant="info">Loading auto-tags...</SideMenuMessage>}
+      {isLoadingMappings && (
+        <SideMenuMessage variant="info">{t.sidebar.loadingAutoTags}</SideMenuMessage>
+      )}
 
       {!isLoadingMappings && isSearching && isFetchingStatistics && (
-        <SideMenuMessage variant="info">Searching auto-tags...</SideMenuMessage>
+        <SideMenuMessage variant="info">{t.sidebar.searchingAutoTags}</SideMenuMessage>
       )}
 
       {showEmptyMessage && (
-        <SideMenuMessage>{isSearching ? 'No matching AutoTags' : 'No AutoTags'}</SideMenuMessage>
+        <SideMenuMessage>
+          {isSearching ? t.sidebar.noMatchingAutoTags : t.sidebar.noAutoTags}
+        </SideMenuMessage>
       )}
 
       {!isLoading &&

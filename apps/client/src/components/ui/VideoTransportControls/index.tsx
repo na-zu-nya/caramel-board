@@ -1,6 +1,7 @@
 import { FastForward, Pause, Play, Rewind, StepBack, StepForward } from 'lucide-react';
 import type { MouseEvent, PointerEvent, ReactNode } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
 interface VideoTransportControlsProps {
@@ -113,6 +114,7 @@ export function VideoTransportControls({
   onShuttleStart,
   onShuttleEnd,
 }: VideoTransportControlsProps) {
+  const t = useT();
   const [activeControl, setActiveControl] = useState<ControlId | null>(null);
   const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -209,7 +211,7 @@ export function VideoTransportControls({
     >
       <HoldButton
         id="rewind"
-        label="1.5x rewind while holding"
+        label={t.viewerControls.rewindWhileHolding}
         direction={-1}
         activeControl={activeControl}
         onActivate={activateControl}
@@ -221,8 +223,8 @@ export function VideoTransportControls({
       </HoldButton>
       <button
         type="button"
-        aria-label="Step backward one frame"
-        title="Step backward one frame"
+        aria-label={t.viewerControls.stepBackwardOneFrame}
+        title={t.viewerControls.stepBackwardOneFrame}
         className={cn(
           baseButtonClassName,
           activeControl === 'step-backward' && activeButtonClassName
@@ -233,8 +235,8 @@ export function VideoTransportControls({
       </button>
       <button
         type="button"
-        aria-label={isPlaying ? 'Pause' : 'Play'}
-        title={isPlaying ? 'Pause' : 'Play'}
+        aria-label={isPlaying ? t.viewerControls.pause : t.viewerControls.play}
+        title={isPlaying ? t.viewerControls.pause : t.viewerControls.play}
         className={cn(
           baseButtonClassName,
           'w-12',
@@ -250,8 +252,8 @@ export function VideoTransportControls({
       </button>
       <button
         type="button"
-        aria-label="Step forward one frame"
-        title="Step forward one frame"
+        aria-label={t.viewerControls.stepForwardOneFrame}
+        title={t.viewerControls.stepForwardOneFrame}
         className={cn(
           baseButtonClassName,
           activeControl === 'step-forward' && activeButtonClassName
@@ -262,7 +264,7 @@ export function VideoTransportControls({
       </button>
       <HoldButton
         id="fast-forward"
-        label="1.5x fast forward while holding"
+        label={t.viewerControls.fastForwardWhileHolding}
         direction={1}
         activeControl={activeControl}
         onActivate={activateControl}

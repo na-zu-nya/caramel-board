@@ -4,6 +4,8 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { getPrisma } from '../lib/Repository.js';
 import { ColorSearchService } from '../shared/services/ColorSearchService-fix';
+import { StandaloneColorRepository } from '../standalone/color-repository';
+import { isStandaloneSqliteEnabled } from '../standalone/sqlite';
 import { useResponse } from '../utils/useResponse.js';
 
 const app = new Hono();
@@ -65,6 +67,10 @@ const ColorFilterSchema = z.object({
 app.post('/search', zValidator('json', ColorSearchSchema), async (c) => {
   try {
     const params = c.req.valid('json');
+    if (isStandaloneSqliteEnabled()) {
+      const result = new StandaloneColorRepository().searchByColor(params);
+      return useResponse(c, result);
+    }
     const result = await colorSearchService.searchByColor(params);
     return useResponse(c, result);
   } catch (error) {
@@ -77,6 +83,13 @@ app.post('/search', zValidator('json', ColorSearchSchema), async (c) => {
 app.post('/search-multi', zValidator('json', MultiColorSearchSchema), async (c) => {
   try {
     const { colors, ...options } = c.req.valid('json');
+    if (isStandaloneSqliteEnabled()) {
+      const result = new StandaloneColorRepository().searchByMultipleColors({
+        colors,
+        ...options,
+      });
+      return useResponse(c, result);
+    }
     const result = await colorSearchService.searchByMultipleColors(colors, options);
     return useResponse(c, result);
   } catch (error) {
@@ -89,6 +102,10 @@ app.post('/search-multi', zValidator('json', MultiColorSearchSchema), async (c) 
 app.post('/filter', zValidator('json', ColorFilterSchema), async (c) => {
   try {
     const params = c.req.valid('json');
+    if (isStandaloneSqliteEnabled()) {
+      const result = new StandaloneColorRepository().searchByColorFilter(params);
+      return useResponse(c, result);
+    }
     const result = await colorSearchService.searchByColorFilter(params);
     return useResponse(c, result);
   } catch (error) {
@@ -104,6 +121,22 @@ app.post(
   async (c) => {
     try {
       const { stackId } = c.req.valid('param');
+      if (isStandaloneSqliteEnabled()) {
+        const colors = new StandaloneColorRepository().updateStackColors(stackId);
+        if (!colors) {
+          return useResponse(c, {
+            success: false,
+            colors: null,
+            reason: 'STACK_ASSET_COLORS_MISSING',
+            message: 'スタックに画像アセットが見つからないか、色情報が未生成です',
+          });
+        }
+        return useResponse(c, {
+          success: true,
+          colors,
+          message: `スタック ${stackId} の色情報を更新しました`,
+        });
+      }
       const colors = await colorSearchService.updateStackColors(stackId, {
         forceRegenerate: true,
       });
@@ -136,6 +169,26 @@ app.post(
   async (c) => {
     try {
       const { datasetId } = c.req.valid('param');
+      if (isStandaloneSqliteEnabled()) {
+        const totalStacks = new StandaloneColorRepository().getDatasetUpdateCandidateCount(
+          datasetId
+        );
+        if (totalStacks === 0) {
+          return useResponse(
+            c,
+            {
+              success: false,
+              message: 'データセットに画像・動画スタックが見つかりません',
+            },
+            404
+          );
+        }
+        return useResponse(c, {
+          success: true,
+          message: `データセット ${datasetId} の ${totalStacks} 個のスタックは既存色情報を利用できます`,
+          totalStacks,
+        });
+      }
       const prisma = getPrisma();
 
       // データセット内の画像や動画を含むスタックを取得
@@ -208,6 +261,10 @@ app.get(
   async (c) => {
     try {
       const { dataSetId } = c.req.valid('query');
+      if (isStandaloneSqliteEnabled()) {
+        const stats = new StandaloneColorRepository().getStats(dataSetId);
+        return useResponse(c, stats);
+      }
       const prisma = getPrisma();
 
       console.log(`Getting color stats for dataSetId: ${dataSetId}`);

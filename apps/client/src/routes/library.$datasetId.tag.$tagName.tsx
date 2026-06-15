@@ -6,6 +6,7 @@ import StackGrid from '@/components/StackGrid';
 import { useDataset } from '@/hooks/useDatasets';
 import { useHeaderActions } from '@/hooks/useHeaderActions';
 import { useRangeBasedQuery } from '@/hooks/useRangeBasedQuery';
+import { useT } from '@/lib/i18n';
 import { navigationStateAtom } from '@/stores/navigation';
 import { currentFilterAtom } from '@/stores/ui';
 import { genListToken, saveViewContext } from '@/stores/view-context';
@@ -16,6 +17,7 @@ export const Route = createFileRoute('/library/$datasetId/tag/$tagName')({
 });
 
 function TagDetailPage() {
+  const t = useT();
   const { datasetId, tagName } = Route.useParams();
   const { data: dataset } = useDataset(datasetId);
   const navigate = useNavigate();
@@ -203,8 +205,8 @@ function TagDetailPage() {
         onRefreshAll={refreshAll}
         emptyState={{
           icon: '🏷️',
-          title: `No items tagged with "${decodedTagName}"`,
-          description: 'This tag has not been applied to any items yet.',
+          title: t.emptyState.noTaggedItems(decodedTagName),
+          description: t.emptyState.tagDescription,
         }}
       />
       <FilterPanel

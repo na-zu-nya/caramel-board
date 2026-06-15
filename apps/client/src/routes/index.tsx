@@ -5,12 +5,14 @@ import { type CSSProperties, useEffect, useMemo } from 'react';
 import { useDatasets } from '@/hooks/useDatasets';
 import { useHeaderActions } from '@/hooks/useHeaderActions';
 import { apiClient } from '@/lib/api-client';
+import { useT } from '@/lib/i18n';
 
 export const Route = createFileRoute('/')({
   component: DatasetList,
 });
 
 function DatasetList() {
+  const t = useT();
   const { data: datasets = [], isLoading } = useDatasets();
   const navigate = useNavigate();
 
@@ -60,10 +62,8 @@ function DatasetList() {
     <div className="transition-all duration-300 ease-in-out">
       <div className="container mx-auto px-4 py-8 pt-24 space-y-8">
         <div>
-          <h1 className="text-4xl font-bold mb-2">Select a Library</h1>
-          <p className="text-muted-foreground text-lg">
-            Choose a library to explore your collection
-          </p>
+          <h1 className="text-4xl font-bold mb-2">{t.library.selectLibraryTitle}</h1>
+          <p className="text-muted-foreground text-lg">{t.library.selectLibraryDescription}</p>
         </div>
 
         {isLoading ? (
@@ -103,7 +103,7 @@ function DatasetList() {
                     <h3 className="text-2xl font-bold-display">{dataset.name}</h3>
                   </div>
                   <p className="text-muted-foreground">
-                    {(countsMap?.[dataset.id] ?? dataset.itemCount ?? 0).toLocaleString()} items
+                    {t.library.itemCount(countsMap?.[dataset.id] ?? dataset.itemCount ?? 0)}
                   </p>
                 </div>
                 <div className="mt-4 h-1 w-full rounded-full bg-muted">

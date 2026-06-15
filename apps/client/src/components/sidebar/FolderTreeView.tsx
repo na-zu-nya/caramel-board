@@ -16,6 +16,7 @@ import { SideMenuMessage } from '@/components/ui/SideMenu';
 import { CountBadge } from '@/components/ui/SideMenu/CountBadge';
 import { isScratchCollection } from '@/hooks/useScratch';
 import { apiClient } from '@/lib/api-client';
+import { useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import type { Collection, CollectionFolder, FolderTreeNode } from '@/types';
 import { CollectionDropItem } from './CollectionDropItem';
@@ -69,6 +70,7 @@ export function FolderTreeView({
   onCollectionUnpin,
   onStackAdded,
 }: FolderTreeViewProps) {
+  const t = useT();
   const [expandedFolders, setExpandedFolders] =
     useState<Record<string, boolean>>(loadExpandedState);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -566,7 +568,7 @@ export function FolderTreeView({
   const treeNodes = buildTreeNodes(folders, rootCollections);
 
   if (treeNodes.length === 0) {
-    return <SideMenuMessage>No Collections or Folders</SideMenuMessage>;
+    return <SideMenuMessage>{t.sidebar.noCollectionsOrFolders}</SideMenuMessage>;
   }
 
   return (

@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import type { AvailableIcon } from '@/types';
 import { AVAILABLE_ICONS } from '@/types';
@@ -36,6 +37,7 @@ export function OverviewContextMenu({
   onPin,
   onUnpin,
 }: OverviewContextMenuProps) {
+  const t = useT();
   const [showPinDialog, setShowPinDialog] = useState(false);
   const [pinName, setPinName] = useState('Overview');
   const [selectedIcon, setSelectedIcon] = useState<AvailableIcon>('Home');
@@ -70,12 +72,12 @@ export function OverviewContextMenu({
           {isPinned ? (
             <ContextMenuItem onClick={handleUnpin}>
               <PinOff className="w-4 h-4 mr-2" />
-              Unpin from Header
+              {t.contextMenu.unpinFromHeader}
             </ContextMenuItem>
           ) : (
             <ContextMenuItem onClick={() => setShowPinDialog(true)}>
               <Pin className="w-4 h-4 mr-2" />
-              Pin to Header
+              {t.contextMenu.pinToHeader}
             </ContextMenuItem>
           )}
         </ContextMenuContent>
@@ -84,26 +86,24 @@ export function OverviewContextMenu({
       <Dialog open={showPinDialog} onOpenChange={setShowPinDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Pin Overview to Header</DialogTitle>
-            <DialogDescription>
-              This will add a quick access link to the overview page in the header navigation.
-            </DialogDescription>
+            <DialogTitle>{t.contextMenu.pinOverviewTitle}</DialogTitle>
+            <DialogDescription>{t.contextMenu.pinOverviewDesc}</DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="pin-name">Display Name</Label>
+              <Label htmlFor="pin-name">{t.contextMenu.displayName}</Label>
               <Input
                 id="pin-name"
                 type="text"
                 value={pinName}
                 onChange={(e) => setPinName(e.target.value)}
-                placeholder="Enter display name"
+                placeholder={t.contextMenu.enterDisplayName}
               />
             </div>
 
             <div className="space-y-2">
-              <Label>Icon</Label>
+              <Label>{t.contextMenu.icon}</Label>
               <div className="grid grid-cols-8 gap-2 max-h-48 overflow-y-auto border rounded-md p-2">
                 {AVAILABLE_ICONS.map((iconName) => (
                   <button
@@ -127,10 +127,10 @@ export function OverviewContextMenu({
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setShowPinDialog(false)}>
-              Cancel
+              {t.common.cancel}
             </Button>
             <Button type="button" onClick={handlePin} disabled={!pinName.trim()}>
-              Pin
+              {t.contextMenu.pin}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -3,8 +3,27 @@ import path from 'node:path';
 import { createFactory } from 'hono/factory';
 
 const factory = createFactory();
-const staticRoot = path.resolve('static');
+const staticRoot = path.resolve(process.env.STATIC_ROOT || 'static');
 const indexHtml = path.join(staticRoot, 'index.html');
+
+const normalizeLanguage = (language: string | undefined) => (language === 'ja' ? 'ja' : 'en');
+
+const runtimeLanguageScript = (language: string) => `<script>
+(() => {
+  const defaultLanguage = ${JSON.stringify(language)};
+  const key = 'caramelboard.language';
+  window.localStorage.setItem(key, defaultLanguage);
+  document.documentElement.lang = defaultLanguage;
+  window.__CARAMEL_DEFAULT_LANGUAGE__ = defaultLanguage;
+})();
+</script>`;
+
+const injectRuntimeConfig = (html: string) => {
+  const script = runtimeLanguageScript(normalizeLanguage(process.env.CARAMEL_UI_LANGUAGE));
+  return html.includes('</head>')
+    ? html.replace('</head>', `${script}</head>`)
+    : `${script}${html}`;
+};
 
 export const staticServer = factory.createMiddleware(async (c, next) => {
   const p = c.req.path;
@@ -30,9 +49,12 @@ export const staticServer = factory.createMiddleware(async (c, next) => {
       } as Record<string, string>
     )[ext] ?? 'application/octet-stream';
 
-  return new Response(fs.readFileSync(file), {
+  const body =
+    ext === '.html' ? injectRuntimeConfig(fs.readFileSync(file, 'utf-8')) : fs.readFileSync(file);
+
+  return new Response(body, {
     headers: {
-      'Content-Type': type,
+      'Content-Type': ext === '.html' ? `${type}; charset=utf-8` : type,
       'Cache-Control': ext === '.html' ? 'no-cache' : 'public,max-age=31536000',
     },
   });

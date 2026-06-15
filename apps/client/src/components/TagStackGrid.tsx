@@ -1,5 +1,6 @@
 import { Link } from '@tanstack/react-router';
 import { useEffect } from 'react';
+import { useT } from '@/lib/i18n';
 import { applyScrollbarCompensation, removeScrollbarCompensation } from '@/lib/scrollbar-utils';
 import { cn } from '@/lib/utils';
 import type { MediaGridItem } from '@/types';
@@ -17,6 +18,7 @@ export default function TagStackGrid({
   hasMore = false,
   className,
 }: TagStackGridProps) {
+  const t = useT();
   // While this grid is mounted, stabilize body scrollbar gutter for contextmenu reflows
   useEffect(() => {
     applyScrollbarCompensation();
@@ -26,7 +28,7 @@ export default function TagStackGrid({
   }, []);
 
   if (!items || items.length === 0) {
-    return <div className="text-center py-16 text-muted-foreground">No stacks found</div>;
+    return <div className="text-center py-16 text-muted-foreground">{t.grid.noStacksFound}</div>;
   }
 
   return (
@@ -93,14 +95,16 @@ export default function TagStackGrid({
                 d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
               />
             </svg>
-            Loading more...
+            {t.grid.loadingMore}
           </div>
         </div>
       )}
 
       {/* Has more indicator */}
       {!isLoading && hasMore && (
-        <div className="text-center py-4 text-sm text-muted-foreground">Scroll to load more</div>
+        <div className="text-center py-4 text-sm text-muted-foreground">
+          {t.common.scrollToLoadMore}
+        </div>
       )}
     </div>
   );
