@@ -108,16 +108,6 @@ const resolveLatestNodeVersion = async () => {
   return release.version;
 };
 
-const resolveLatestUvVersion = async () => {
-  if (process.env.CARAMEL_UV_VERSION) return process.env.CARAMEL_UV_VERSION;
-  const raw = await download('https://api.github.com/repos/astral-sh/uv/releases/latest');
-  const release = JSON.parse(raw.toString('utf8'));
-  if (!release.tag_name) {
-    throw new Error('uv release was not found');
-  }
-  return release.tag_name;
-};
-
 const nodePlatform = () => {
   if (process.platform === 'darwin') return 'darwin';
   if (process.platform === 'win32') return 'win';
@@ -211,11 +201,12 @@ const installUvRuntime = async () => {
     return;
   }
 
-  const version = await resolveLatestUvVersion();
   const target = uvTarget();
   const extension = process.platform === 'win32' ? 'zip' : 'tar.gz';
   const baseName = `uv-${target}`;
-  const url = `https://github.com/astral-sh/uv/releases/download/${version}/${baseName}.${extension}`;
+  const version = process.env.CARAMEL_UV_VERSION;
+  const releasePath = version ? `download/${version}` : 'latest/download';
+  const url = `https://github.com/astral-sh/uv/releases/${releasePath}/${baseName}.${extension}`;
   const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'caramel-uv-'));
   const archivePath = path.join(tmpRoot, `${baseName}.${extension}`);
 
@@ -237,7 +228,7 @@ const installUvRuntime = async () => {
   const targetPath = path.join(uvRuntimeResource, executableName);
   fs.copyFileSync(extractedUv, targetPath);
   fs.chmodSync(targetPath, 0o755);
-  console.log(`Installed uv runtime ${version} for ${target}`);
+  console.log(`Installed uv runtime ${version ?? 'latest'} for ${target}`);
 };
 
 const writeRuntimeServerPackageJson = () => {
