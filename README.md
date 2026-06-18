@@ -1,176 +1,106 @@
-# CaramelBoard 🍬🤎
+# Caramel Board
 
-<img src="./assets/intro.jpg" alt="caramel-board-intro"/>
+<img src="./docs/assets/intro.jpg" alt="Caramel Board の画面イメージ"/>
 
-[English version is here → README.en.md](./README.en.md)
+[English version is here -> README.en.md](./README.en.md)
 
-CaramelBoardは、画像・動画などのアセットをローカルで収集・整理するためのプライベートなWebアプリです。お使いのPCで動いて、ブラウザやLAN内の他のPC、スマホ・タブレットからアセットを快適に見ることができます。
+Caramel Board は、参考画像、素材、イラストや漫画、動画をアプリひとつに収集して、LAN内のPC・スマホ・タブレットから快適に閲覧できる、ローカル完結のプライベートなアプリです。
 
-このアプリは [nazunya](https://x.com/na_zu_nya) がゆるやかに個人開発しています。全体的にVibeCodingです。少しづつ整えていきたいです。
-安定版は main ブランチ、開発版は dev ブランチに上がってます。 dev は新機能が早いけど、バグがあるかもです。自己責任で!
+資料整理に、イラストや漫画鑑賞など、クリエイターからファンまで、創作好きに向けたアプリケーションです。
 
-#### 主な特徴
+このアプリは [nazunya](https://x.com/na_zu_nya) がゆるやかに個人開発しています。よければXのフォロー / [fanbox](https://na-zu-nya.fanbox.cc/) でご支援いただけるととっても嬉しいです。
 
-- ドラッグ&ドロップで簡単にたくさんのアセットを取り込み・整理
-- 画像、漫画（複数ページ）、動画を快適に閲覧
-- 完全にローカル動作・外部送信なし。 プライベートなデータ管理
-- 複数ライブラリ、タグ・作者設定、色抽出、(オプション)自動タグ付け、お気に入りなどなど、便利な検索・切り出し機能
+## 特徴
 
-#### 構築の難しさ
+#### ドラッグ&ドロップで簡単取り込み・使いやすいビューワ機能
 
-- **Web開発者:** ★★・・・ (比較的かんたんです)
-- **PCに慣れてる人:** ★★★・・ (ややむずかしいです)
+- リストにドラッグ&ドロップすることで、データをどんどん収集できます
+- 画像、漫画や本などの複数画像・PDF、動画、GIFが利用可能です
+  - ビューワでアイテムを開いた状態で追加でデータをドロップすることで、ページを追加します。並び替えやソート・一部削除も可能です
+  - ※動画やGIFのエンコード、PDFの自動分割は、別途OSSライブラリのインストールが必要です
+- ジェスチャ操作で直感的に操作できます
+  - ビューワではスワイプや端をクリックで画像送り・ページ送り
+  - スクロールやピンチインで拡大縮小
+  - 下スワイプで画像を閉じてリストに戻る
+- 分析のためのミニツール
+  - ペン機能で一次ペイント
+  - ピッカーで色のスポイト
 
-※セットアップ・起動はコマンドラインを使います。ちょっと難しいです！
+#### 完全なローカル完結アプリ
 
-## ご利用前に
+- 取り込んだ画像はPC内に保存され外部サービスへの送信は一切ありません
+- プライベートな画像やセンシティブな画像なども安全です
 
-#### ライセンス・使用範囲・保証について
+#### LAN経由でスマホ・タブレット・別PCからも利用できます
 
-本ソフトウェアは [**Caramel Board Source Available License 1.0**](./LICENSE) で提供しています。これはソースコードを公開するライセンスですが、OSI 定義のオープンソースライセンスではありません。
+- ローカルネットワークへ公開する機能を使うと、自宅内でさまざまなデバイスからブラウザ経由でアクセスできます
+- BASIC認証、ライブラリ単位でのパスワード設定で、簡易な保護が可能です
+- ※外出先からの利用は、別途 tailscale などの VPN アプリを導入することで利用可能です
 
-- 個人・法人を問わず、**自宅／社内での利用（商用含む）** が可能です。
+#### 充実した整理と検索機能
+
+- 複数のライブラリライブラリ、タグ、作者、コレクション、ブクマ、お気に入り、スクラッチなど、様々な切り口からデータを整理・切り出しができます
+- タグや自動タグ・作者名での検索、類似色検索、類似画像/類似コレクション検索(※自動タグの有効化が必要)が利用できます
+
+#### 自動タグ機能 ※オプション設定
+
+- 自動タグを有効にすると、取り込んだ画像の自動タグ付け、タグ検索、類似画像検索ができます
+- キャラの属性や髪型髪色、服装、装飾、描写、シチュエーション、一部有名キャラやシリーズ名などがタグ付けされます。センシティブタグにも対応しています。
+- 自動タグは無効のままでも利用でき、セットアップをスキップ可能です。この機能は学習済みのオープンソースモデルを使用して、ローカルPC内で解析します。外部送信はされず、学習にも利用されません。モデル利用自体に忌避感がある場合は、設定をしないことも可能です。
+
+## 使い始める
+
+デスクトップ利用する場合は以下のページからダウンロードできます。
+
+- Desktop 版(Windows/macOS): [GitHub Releases](https://github.com/na-zu-nya/caramel-board/releases)
+
+旧CLI/Docker版は以下
+
+- CLI / Docker 版: [CLI / Docker 版セットアップ](./docs/cli-installation.md)
+- 旧 Docker 版から Desktop 版への移行: [スタンドアロン移行メモ](./docs/standalone-migration.md)
+
+### オプション設定ガイド
+
+動画・GIFの取り込み、PDFの取り込みをするためのセットアップガイドです
+
+- Windows: [Desktop 版 外部ツールセットアップ - Windows](./docs/desktop-tools-windows.md)
+- macOS: [Desktop 版 外部ツールセットアップ - macOS](./docs/desktop-tools-macos.md)
+
+### 推奨要件
+
+Caramel Boardアプリ
+
+- OS: Windows 11+ / macOS 26+
+- メモリ: 8GB以上
+- ストレージ:
+  - アプリケーション: 1GB
+  - これに加えて、データ保存分のストレージが必要です
+
+クライアントアプリ
+
+- 各種最新のバージョンのブラウザを推奨します
+- 動作検証済み: Safari / Chrome 
+
+## プロジェクト情報
+
+- Contribution: [CONTRIBUTING.md](./CONTRIBUTING.md)
+- License: [LICENSE](./LICENSE)
+- Third Party Notices: [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md)
+
+### ライセンス
+
+本ソフトウェアは [Caramel Board Source Available License 1.0](./LICENSE) で提供しています。ソースコードは公開していますが、OSI 定義のオープンソースライセンスではありません。
+
+- 個人・法人を問わず、自宅または組織内で利用できます。商用の社内利用も可能です。
 - ソースコードの閲覧、改変、自分または組織内で使うためのビルドが可能です。
-- GitHub の fork、Issue、PR は開発・検討・貢献の目的で利用できます。
-- **ビルド済みデスクトップアプリ、インストーラー、実質的に同一のアプリやサービスの販売・頒布・第三者提供・再ブランド配布はできません**。必要な場合は [COMMERCIAL-LICENSE.md](./COMMERCIAL-LICENSE.md) を確認してください。
-- 本ソフトは**AS IS**で提供され、明示・黙示を問わずいかなる保証も行いません。
+- GitHub の fork、Issue、Pull Request は開発・検討・貢献の目的で利用できます。
+- ビルド済みデスクトップアプリ、インストーラー、実質的に同一のアプリやサービスの販売・頒布・第三者提供・再ブランド配布はできません。
+- 本ソフトウェアは AS IS で提供され、明示・黙示を問わずいかなる保証も行いません。
 
-特にユーザ制限など設定してないため、インターネット上に直接公開するのはとっても危険です。管理できる範囲内で運用してください。
+アクセス制御を十分に設定しないままインターネットへ直接公開する運用は想定していません。管理できる範囲の端末・ネットワークで利用してください！
 
-#### AIに慎重の立場の方へ
+### Contribution
 
-**自動タグ付けについて**
+バグ報告や機能要望は Issue で受け付けています。Pull Request は、承認済みメンテナまたは事前に相談いただいた contributor を中心に受け付けています。
 
-自動タグ付けは、取り込んだ画像を分析して、自動的に作品の特徴タグを生成する機能です。この機能は事前にトレーニングされたモデルを使用します。有効にすることで、取り込んだ画像への自動タグ付けに加えて、検索やスマートコレクションに利用したり、類似画像を検索したりすることができます。
-
-- **デフォルトでは無効**になっています。必要な方はセットアップ時に有効化してください。
-- 有効化すると、**第三者が配布するローカル推論ライブラリ** をダウンロードします。外部ライブラリの学習データやライセンスについての確認は利用者の責任において行なってください。
-- この機能は、登録された画像をローカルで解析して、**タグを推定する用途のみ**に使っています。 **新規生成・学習・外部送信は行いません。
-- 懸念がある場合、自動タグ付けを使用せず、手動のタグ機能をご活用ください。
-
-**開発について**
-
-このソフトウェアは、一般的なAIコーディングツールの支援を受けて開発されています。
-
-## セットアップガイド
-
-### Windows / macOS
-
-- Windows: [docs/installation-windows.md](./docs/installation-windows.md)
-- macOS: [docs/installation-macos.md](./docs/installation-macos.md)
-- Desktop 版 外部ツールセットアップ(Windows): [docs/desktop-tools-windows.md](./docs/desktop-tools-windows.md)
-- Desktop 版 外部ツールセットアップ(macOS): [docs/desktop-tools-macos.md](./docs/desktop-tools-macos.md)
-
-各プラットフォーム向けの詳細な手順は上記ドキュメントをご確認ください。
-
-### Linux クイックスタート
-
-#### 前提ソフト
-
-- Docker Engine と docker compose plugin
-- Git
-- Python 3（3.10 以上推奨）
-
-> `huggingface-hub` を利用するため、pip が利用可能な状態であることを確認してください。
-
-#### リポジトリの取得
-
-```bash
-git clone https://github.com/na-zu-nya/caramel-board.git caramel-board
-cd caramel-board
-```
-
-#### 初期セットアップ
-
-```bash
-chmod +x setup.sh serve.sh scripts/*.sh
-python3 -m pip install --upgrade pip
-python3 -m pip install huggingface-hub
-./setup.sh
-```
-
-- 先に `pip` と `huggingface-hub` を用意しておくことで、セットアップ中に必要なライブラリを利用できます
-- `./setup.sh` の途中で保存先やオプションについて質問されるので、案内に従って選択します
-
-#### 起動と停止
-
-```bash
-# 本番モードで起動
-./serve.sh prod
-
-# 開発モードで起動
-./serve.sh dev
-
-# サービスの停止
-./serve.sh stop
-```
-
-アプリが起動すると `http://localhost:6766` または `http://<ホストIP>:6766` からアクセスできます。
-
-#### 更新
-
-```bash
-./serve.sh update
-```
-
-最新の変更を取り込んで再ビルドし、必要に応じて再起動します。
-
-## バックアップ
-
-### DBバックアップ
-
-```bash
-./serve.sh backup
-```
-
-バックアップファイルは `backups/caramel-board-db-YYYYMMDD-HHMMSS.sql` に作成されます。
-保存先を指定したい場合は、次のようにパスを渡します。
-
-```bash
-./serve.sh backup backups/my-backup.sql
-./serve.sh backup backups/my-backup.sql.gz
-```
-
-`npm run db:backup` でも同じ処理を実行できます。
-
-`./serve.sh update` は、更新前に自動で
-`backups/pre-update-db-YYYYMMDD-HHMMSS.sql` を作成します。
-
-### ストレージ（画像/動画・DBの置き場所）
-
-- 推奨の既定（ローカル上書き用）
-  - 画像・動画（アプリの `/app/data`）: リポジトリの `./data/assets`
-  - PostgreSQL データ: リポジトリの `./data/postgres`
-- `docker-compose.local.yml` を使って上書きできます（存在すれば `./serve.sh` が自動で読み込みます）。
-
-例（推奨の既定をそのまま使う）
-
-```yaml
-services:
-  app:
-    environment:
-      - FILES_STORAGE=/app/data
-    volumes:
-      - ./data/assets:/app/data
-  postgres:
-    volumes:
-      - ./data/postgres:/var/lib/postgresql/data
-```
-
-Windows/WSL の例（任意の場所に保存したい場合）
-
-権限エラーが出る場合は、ホスト側ディレクトリの所有権/パーミッションを調整してください。
-
-## トラブルシューティング
-
-- 6766 番ポートを他のサービスが使っている → docker-compose.yml の `ports` 設定を変更し、`./serve.sh` を再実行
-- PostgreSQL 5432 が使用中（開発利用時） → docker-compose.dev.yml の `ports` を変更
-- JoyTag に接続できない → `curl http://localhost:5001/health` で確認し、`JOYTAG_SERVER_URL` を点検
-- PDF を取り込めない → Poppler の `pdftocairo` をインストールし、Desktop 版では設定画面の `Poppler` で選択する
-- ストレージ権限エラー → ホスト側ディレクトリの所有権/パーミッションを修正
-
-## ライセンス / 貢献 / 開発者向け
-
-- バグやリクエストはIssueでお願いします(フォーマット準備中)
-- PR は現在、承認済みメンテナまたは事前に相談いただいた contributor を中心に受け付けています。詳しくは [CONTRIBUTING.md](./CONTRIBUTING.md) を確認してください。
-- PDF 取り込み仕様: [docs/pdf-import.md](./docs/pdf-import.md)
+詳しくは [CONTRIBUTING.md](./CONTRIBUTING.md) をご確認ください。

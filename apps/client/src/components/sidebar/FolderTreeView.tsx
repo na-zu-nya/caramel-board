@@ -27,7 +27,7 @@ interface FolderTreeViewProps {
   isPinned: (type: 'COLLECTION', id: number) => boolean;
   onCollectionUpdate: () => void;
   onCollectionDelete: () => void;
-  onCollectionPin: (collection: Collection, iconName: string, name: string) => void;
+  onCollectionPin: (collection: Collection, iconName: string) => void;
   onCollectionUnpin: (collection: Collection) => void;
   onStackAdded: () => void;
 }
@@ -411,7 +411,7 @@ export function FolderTreeView({
             isPinned={isPinned('COLLECTION', node.collection!.id)}
             onUpdate={onCollectionUpdate}
             onDelete={onCollectionDelete}
-            onPin={(iconName, name) => onCollectionPin(node.collection!, iconName, name)}
+            onPin={(iconName) => onCollectionPin(node.collection!, iconName)}
             onUnpin={() => onCollectionUnpin(node.collection!)}
             onStackAdded={onStackAdded}
             level={node.level}

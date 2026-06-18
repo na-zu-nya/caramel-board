@@ -1,7 +1,7 @@
 import type { LucideIcon } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { Pin, PinOff } from 'lucide-react';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   ContextMenu,
@@ -16,8 +16,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { getMediaTypeLabel, useT } from '@/lib/i18n';
 import type { AvailableIcon, MediaType } from '@/types';
 import { AVAILABLE_ICONS } from '@/types';
 
@@ -26,15 +26,9 @@ interface MediaTypeContextMenuProps {
   mediaType: MediaType;
   datasetId: string;
   isPinned?: boolean;
-  onPin?: (iconName: string, name: string) => void;
+  onPin?: (iconName: string) => void;
   onUnpin?: () => void;
 }
-
-const MEDIA_TYPE_NAMES: Record<MediaType, string> = {
-  image: 'Images',
-  comic: 'Comics',
-  video: 'Videos',
-};
 
 const DEFAULT_MEDIA_TYPE_ICONS: Record<MediaType, AvailableIcon> = {
   image: 'Image',
@@ -49,34 +43,32 @@ export function MediaTypeContextMenu({
   onPin,
   onUnpin,
 }: MediaTypeContextMenuProps) {
+  const t = useT();
   const [showPinDialog, setShowPinDialog] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // Pin dialog state
-  const [pinName, setPinName] = useState(MEDIA_TYPE_NAMES[mediaType]);
   const [selectedIcon, setSelectedIcon] = useState<AvailableIcon>(
     DEFAULT_MEDIA_TYPE_ICONS[mediaType]
   );
 
-  const handlePin = async () => {
-    if (!pinName.trim() || !onPin) return;
+  const handlePin = useCallback(async () => {
+    if (!onPin) return;
 
     setLoading(true);
     try {
-      await onPin(selectedIcon, pinName.trim());
+      await onPin(selectedIcon);
       setShowPinDialog(false);
     } catch (error) {
       console.error('Pin creation error:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [onPin, selectedIcon]);
 
-  const openPinDialog = () => {
-    setPinName(MEDIA_TYPE_NAMES[mediaType]);
+  const openPinDialog = useCallback(() => {
     setSelectedIcon(DEFAULT_MEDIA_TYPE_ICONS[mediaType]);
     setShowPinDialog(true);
-  };
+  }, [mediaType]);
 
   // Helper function to render Lucide icons dynamically
   const renderIcon = (iconName: string) => {
@@ -98,12 +90,12 @@ export function MediaTypeContextMenu({
           {isPinned ? (
             <ContextMenuItem onClick={onUnpin}>
               <PinOff className="w-4 h-4 mr-2" />
-              ピン解除
+              {t.contextMenu.unpin}
             </ContextMenuItem>
           ) : (
             <ContextMenuItem onClick={openPinDialog}>
               <Pin className="w-4 h-4 mr-2" />
-              ピン設定
+              {t.contextMenu.pin}
             </ContextMenuItem>
           )}
         </ContextMenuContent>
@@ -114,30 +106,24 @@ export function MediaTypeContextMenu({
         <DialogContent className="sm:max-w-md">
           <DialogHeader className="border-b border-gray-200 pb-4">
             <DialogTitle className="text-lg font-semibold text-gray-900">
-              {MEDIA_TYPE_NAMES[mediaType]} をピン設定
+              {getMediaTypeLabel(t, mediaType)}
             </DialogTitle>
             <DialogDescription className="text-gray-600 mt-2">
-              ヘッダーナビゲーションに表示される名前とアイコンを設定してください。
+              {t.pins.editPinDescription}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-6 pt-2">
             <div className="space-y-2">
-              <Label htmlFor="pin-name" className="text-gray-700">
-                表示名 *
-              </Label>
-              <Input
-                id="pin-name"
-                type="text"
-                value={pinName}
-                onChange={(e) => setPinName(e.target.value)}
-                placeholder="表示名を入力"
-                required
-              />
+              <Label className="text-gray-700">{t.pins.name}</Label>
+              <div className="rounded-md border bg-gray-50 px-3 py-2 text-sm text-gray-700">
+                {getMediaTypeLabel(t, mediaType)}
+              </div>
+              <p className="text-sm text-gray-500">{t.pins.nameFixed}</p>
             </div>
 
             <div className="space-y-2">
-              <Label className="text-gray-700">アイコン</Label>
+              <Label className="text-gray-700">{t.pins.icon}</Label>
               <div className="grid grid-cols-8 gap-2 max-h-48 overflow-y-auto border border-gray-200 rounded-md p-2">
                 {AVAILABLE_ICONS.map((iconName) => (
                   <button
@@ -155,7 +141,9 @@ export function MediaTypeContextMenu({
                   </button>
                 ))}
               </div>
-              <p className="text-xs text-gray-500">選択中: {selectedIcon}</p>
+              <p className="text-xs text-gray-500">
+                {t.pins.current}: {selectedIcon}
+              </p>
             </div>
 
             <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
@@ -166,14 +154,14 @@ export function MediaTypeContextMenu({
                 disabled={loading}
                 className="px-4 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
               >
-                キャンセル
+                {t.common.cancel}
               </Button>
               <Button
                 onClick={handlePin}
-                disabled={loading || !pinName.trim()}
+                disabled={loading}
                 className="px-4 py-2 text-sm text-primary-foreground bg-primary rounded-md hover:bg-primary/90 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
               >
-                {loading ? 'ピン設定中...' : 'ピン設定'}
+                {loading ? t.common.saving : t.contextMenu.pin}
               </Button>
             </div>
           </div>

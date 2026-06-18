@@ -396,7 +396,7 @@ dependencies = [
 
 [[package]]
 name = "caramel-board-desktop"
-version = "1.0.0-beta.1"
+version = "1.0.0-beta.2"
 dependencies = [
  "serde",
  "serde_json",

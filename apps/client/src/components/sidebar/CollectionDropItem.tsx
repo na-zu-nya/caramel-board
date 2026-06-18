@@ -69,7 +69,7 @@ interface CollectionDropItemProps {
   isPinned: boolean;
   onUpdate: () => void;
   onDelete: () => void;
-  onPin: (iconName: string, name: string) => void;
+  onPin: (iconName: string) => void;
   onUnpin: () => void;
   onStackAdded: () => void;
   level?: number;

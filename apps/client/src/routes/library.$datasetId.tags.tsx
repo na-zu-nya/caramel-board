@@ -58,8 +58,16 @@ import {
   selectionModeAtom,
 } from '@/stores/ui';
 import { genListToken, saveViewContext } from '@/stores/view-context';
+import type { ColorFilter, MediaType, StackFilter } from '@/types';
+
+interface TagsSearch {
+  tagId?: string;
+}
 
 export const Route = createFileRoute('/library/$datasetId/tags')({
+  validateSearch: (search: Record<string, unknown>): TagsSearch => ({
+    tagId: typeof search.tagId === 'string' ? search.tagId : undefined,
+  }),
   component: TagsPage,
 });
 
@@ -84,24 +92,122 @@ interface StackItem {
   thumbnail?: string;
   thumbnailUrl?: string;
   liked?: number;
+  likeCount?: number;
   favorited?: boolean;
-  mediaType?: string;
-  author?: { id: number; name: string };
+  isFavorite?: boolean;
+  mediaType?: MediaType;
+  author?: string | { id: string | number; name: string };
+  tags?: Array<string | { name?: string; title?: string }>;
   assetCount?: number;
+  assetsCount?: number;
   _count?: { assets: number };
 }
 
-interface StacksResponse {
-  stacks: StackItem[];
-  total: number;
+interface BulkEditItem {
+  id: string | number;
+  tags?: string[];
+  author?: string;
+}
+
+interface TagStacksQueryParams {
+  dataSetId: number;
   limit: number;
   offset: number;
+  tag: string[];
+  mediaType?: MediaType;
+  author?: string[];
+  fav?: 0 | 1;
+  liked?: 0 | 1;
+  search?: string;
+  hasNoTags?: boolean;
+  hasNoAuthor?: boolean;
+  hueCategories?: string[];
+  toneSaturation?: number;
+  toneLightness?: number;
+  toneTolerance?: number;
+  similarityThreshold?: number;
+  customColor?: string;
+}
+
+function appendColorFilterParams(params: TagStacksQueryParams, colorFilter?: ColorFilter): void {
+  if (!colorFilter) return;
+  if (colorFilter.hueCategories?.length) params.hueCategories = colorFilter.hueCategories;
+  if (colorFilter.toneSaturation !== undefined) params.toneSaturation = colorFilter.toneSaturation;
+  if (colorFilter.toneLightness !== undefined) params.toneLightness = colorFilter.toneLightness;
+  if (colorFilter.toneTolerance !== undefined) params.toneTolerance = colorFilter.toneTolerance;
+  if (colorFilter.similarityThreshold !== undefined) {
+    params.similarityThreshold = colorFilter.similarityThreshold;
+  }
+  if (colorFilter.customColor) params.customColor = colorFilter.customColor;
+}
+
+function buildTagStacksQuery(params: {
+  datasetId: string;
+  selectedTag: TagItem;
+  filter: StackFilter;
+  limit: number;
+  offset: number;
+}): TagStacksQueryParams {
+  const query: TagStacksQueryParams = {
+    dataSetId: Number(params.datasetId),
+    limit: params.limit,
+    offset: params.offset,
+    tag: [params.selectedTag.title],
+  };
+
+  if (params.filter.mediaType) query.mediaType = params.filter.mediaType;
+  if (params.filter.tags && params.filter.tags.length > 0) {
+    const extras = params.filter.tags.filter((tag) => tag !== params.selectedTag.title);
+    if (extras.length > 0) query.tag = [...query.tag, ...extras];
+  }
+  if (params.filter.authors && params.filter.authors.length > 0) {
+    query.author = params.filter.authors;
+  }
+  if (params.filter.isFavorite === true) query.fav = 1;
+  if (params.filter.isFavorite === false) query.fav = 0;
+  if (params.filter.isLiked === true) query.liked = 1;
+  if (params.filter.isLiked === false) query.liked = 0;
+  if (params.filter.search) query.search = params.filter.search;
+  if (params.filter.hasNoTags !== undefined) query.hasNoTags = params.filter.hasNoTags;
+  if (params.filter.hasNoAuthor !== undefined) query.hasNoAuthor = params.filter.hasNoAuthor;
+  appendColorFilterParams(query, params.filter.colorFilter);
+
+  return query;
+}
+
+function toNumericId(value: string | number): number {
+  return typeof value === 'number' ? value : Number.parseInt(value, 10);
+}
+
+function isMediaType(value: unknown): value is MediaType {
+  return value === 'image' || value === 'comic' || value === 'video';
+}
+
+function getStackTagNames(tags: StackItem['tags']): string[] | undefined {
+  if (!tags) return undefined;
+  const names = tags
+    .map((tag) => (typeof tag === 'string' ? tag : tag.title || tag.name || ''))
+    .filter((tag) => tag.length > 0);
+  return names.length > 0 ? names : undefined;
+}
+
+function getStackAuthorName(author: StackItem['author']): string | undefined {
+  return typeof author === 'string' ? author : author?.name;
+}
+
+function toBulkEditItem(stack: StackItem): BulkEditItem {
+  return {
+    id: stack.id,
+    tags: getStackTagNames(stack.tags),
+    author: getStackAuthorName(stack.author),
+  };
 }
 
 function TagsPage() {
   const t = useT();
   const navigate = useNavigate();
   const location = useLocation();
+  const tagSearch = Route.useSearch();
   const { datasetId } = Route.useParams();
   const actions = useStackTile(datasetId);
   const queryClient = useQueryClient();
@@ -125,6 +231,10 @@ function TagsPage() {
   const [, setSelectedItemId] = useAtom(selectedItemIdAtom);
   const [selectionMode, setSelectionMode] = useAtom(selectionModeAtom);
   const [currentFilter, setCurrentFilter] = useAtom(currentFilterAtom);
+  const routeFilterScopeKey = useMemo(() => `tags:${datasetId}`, [datasetId]);
+  const [filterScopeKey, setFilterScopeKey] = useState<string | null>(null);
+  const tagsPageFilter = useMemo<StackFilter>(() => ({ datasetId }), [datasetId]);
+  const effectiveFilter = filterScopeKey === routeFilterScopeKey ? currentFilter : tagsPageFilter;
   const [selectedStackItems, setSelectedStackItems] = useState<Set<string | number>>(new Set());
   const [isEditPanelOpen, setIsEditPanelOpen] = useState(false);
 
@@ -158,28 +268,31 @@ function TagsPage() {
     refetchOnWindowFocus: false,
   });
 
-  // ルート入場時（このパスに戻ってきた瞬間）にローカル状態をリセット＆再取得
+  const resetTagsPageState = useCallback(() => {
+    setFilterScopeKey(routeFilterScopeKey);
+    setSelectedTag(null);
+    setSelectedTags(new Set());
+    setSearchQuery('');
+    setIsEditPanelOpen(false);
+    setSelectionMode(false);
+    setCurrentFilter(tagsPageFilter);
+    void refetchTags();
+  }, [refetchTags, routeFilterScopeKey, setCurrentFilter, setSelectionMode, tagsPageFilter]);
+
+  // ルート入場時に、他ページから持ち越された mediaType などのフィルタを切り離す
+  useEffect(() => {
+    resetTagsPageState();
+  }, [resetTagsPageState]);
+
+  // このルートが保持されたまま再入場した場合も同じ初期化を行う
   const prevPathRef = useRef(location.pathname);
   useEffect(() => {
     const isTagsPath = location.pathname.includes(`/library/${datasetId}/tags`);
     if (isTagsPath && prevPathRef.current !== location.pathname) {
-      setSelectedTag(null);
-      setSelectedTags(new Set());
-      setSearchQuery('');
-      setIsEditPanelOpen(false);
-      setSelectionMode(false);
-      // フィルタをこのページの初期状態にリセット（データセットのみ）
-      setCurrentFilter({ datasetId });
-      // タグ一覧を確実に更新
-      void refetchTags();
+      resetTagsPageState();
     }
     prevPathRef.current = location.pathname;
-  }, [location.pathname, datasetId, refetchTags, setSelectionMode, setCurrentFilter]);
-
-  // Ensure currentFilter carries dataset context (already reset above on path change)
-  useEffect(() => {
-    setCurrentFilter((prev) => ({ ...(prev || {}), datasetId }));
-  }, [datasetId, setCurrentFilter]);
+  }, [location.pathname, datasetId, resetTagsPageState]);
 
   // Filter and sort tags
   const filteredTags = useMemo(() => {
@@ -214,7 +327,7 @@ function TagsPage() {
 
   // Build a stable filter key to drive refetches (avoid object identity pitfalls)
   const filterKey = useMemo(() => {
-    const f = currentFilter || ({} as any);
+    const f = effectiveFilter;
     const key = {
       mediaType: f.mediaType ?? undefined,
       search: f.search ?? undefined,
@@ -236,7 +349,7 @@ function TagsPage() {
         : undefined,
     };
     return JSON.stringify(key);
-  }, [currentFilter]);
+  }, [effectiveFilter]);
 
   // Fetch stacks for selected tag
   const {
@@ -249,44 +362,22 @@ function TagsPage() {
     queryFn: async ({ pageParam = 0 }) => {
       if (!selectedTag) return { stacks: [], total: 0, limit: 50, offset: 0 };
 
-      // Compose unified filter params honoring currentFilter and including the selected tag
-      const qp: any = {
-        dataSetId: Number(datasetId),
+      // Compose unified filter params honoring the tags page filter and including the selected tag
+      const qp = buildTagStacksQuery({
+        datasetId,
+        selectedTag,
+        filter: effectiveFilter,
         limit: 50,
         offset: pageParam,
-        tag: [selectedTag.title],
-      };
-      if (currentFilter.mediaType) qp.mediaType = currentFilter.mediaType;
-      if (currentFilter.tags && currentFilter.tags.length > 0) {
-        const extras = currentFilter.tags.filter((t) => t !== selectedTag.title);
-        if (extras.length) qp.tag = [...qp.tag, ...extras];
-      }
-      if (currentFilter.authors && currentFilter.authors.length > 0)
-        qp.author = currentFilter.authors;
-      if (currentFilter.isFavorite === true) qp.fav = 1;
-      if (currentFilter.isFavorite === false) qp.fav = 0;
-      if (currentFilter.isLiked === true) qp.liked = 1;
-      if (currentFilter.isLiked === false) qp.liked = 0;
-      if (currentFilter.search) qp.search = currentFilter.search;
-      if (currentFilter.hasNoTags !== undefined) qp.hasNoTags = currentFilter.hasNoTags;
-      if (currentFilter.hasNoAuthor !== undefined) qp.hasNoAuthor = currentFilter.hasNoAuthor;
-      if (currentFilter.colorFilter) {
-        const cf = currentFilter.colorFilter as any;
-        if (cf.hueCategories?.length) qp.hueCategories = cf.hueCategories;
-        if (cf.toneSaturation !== undefined) qp.toneSaturation = cf.toneSaturation;
-        if (cf.toneLightness !== undefined) qp.toneLightness = cf.toneLightness;
-        if (cf.toneTolerance !== undefined) qp.toneTolerance = cf.toneTolerance;
-        if (cf.similarityThreshold !== undefined) qp.similarityThreshold = cf.similarityThreshold;
-        if (cf.customColor) qp.customColor = cf.customColor;
-      }
+      });
 
       const res = await apiClient.getStacksWithFilters(qp);
       return {
-        stacks: res.stacks as any[],
+        stacks: res.stacks,
         total: res.total,
         limit: res.limit,
         offset: res.offset,
-      } as StacksResponse;
+      };
     },
     getNextPageParam: (lastPage) => {
       const nextOffset = lastPage.offset + lastPage.limit;
@@ -299,6 +390,11 @@ function TagsPage() {
   const allStacks = useMemo(() => {
     return stacksData?.pages.flatMap((page) => page.stacks) || [];
   }, [stacksData]);
+
+  const bulkEditItems = useMemo(
+    () => allStacks.filter((stack) => selectedStackItems.has(stack.id)).map(toBulkEditItem),
+    [allStacks, selectedStackItems]
+  );
 
   // Shuffle: when a tag is selected, pick a random stack from that tag's full set
   const mtRef = useRef<MersenneTwister | null>(null);
@@ -318,57 +414,33 @@ function TagsPage() {
     const pageIndex = Math.floor(targetIndex / PAGE_SIZE);
     const withinPageIndex = targetIndex % PAGE_SIZE;
     // Fetch that page directly with current filters applied
-    const qp: any = {
-      dataSetId: Number(datasetId),
+    const qp = buildTagStacksQuery({
+      datasetId,
+      selectedTag,
+      filter: effectiveFilter,
       limit: PAGE_SIZE,
       offset: pageIndex * PAGE_SIZE,
-      tag: [selectedTag.title],
-    };
-    if (currentFilter.mediaType) qp.mediaType = currentFilter.mediaType;
-    if (currentFilter.tags && currentFilter.tags.length > 0) {
-      const extras = currentFilter.tags.filter((t) => t !== selectedTag.title);
-      if (extras.length) qp.tag = [...qp.tag, ...extras];
-    }
-    if (currentFilter.authors && currentFilter.authors.length > 0)
-      qp.author = currentFilter.authors;
-    if (currentFilter.isFavorite === true) qp.fav = 1;
-    if (currentFilter.isFavorite === false) qp.fav = 0;
-    if (currentFilter.isLiked === true) qp.liked = 1;
-    if (currentFilter.isLiked === false) qp.liked = 0;
-    if (currentFilter.search) qp.search = currentFilter.search;
-    if (currentFilter.hasNoTags !== undefined) qp.hasNoTags = currentFilter.hasNoTags;
-    if (currentFilter.hasNoAuthor !== undefined) qp.hasNoAuthor = currentFilter.hasNoAuthor;
-    if (currentFilter.colorFilter) {
-      const cf = currentFilter.colorFilter as any;
-      if (cf.hueCategories?.length) qp.hueCategories = cf.hueCategories;
-      if (cf.toneSaturation !== undefined) qp.toneSaturation = cf.toneSaturation;
-      if (cf.toneLightness !== undefined) qp.toneLightness = cf.toneLightness;
-      if (cf.toneTolerance !== undefined) qp.toneTolerance = cf.toneTolerance;
-      if (cf.similarityThreshold !== undefined) qp.similarityThreshold = cf.similarityThreshold;
-      if (cf.customColor) qp.customColor = cf.customColor;
-    }
+    });
     const page = await apiClient.getStacksWithFilters(qp);
     const item = page?.stacks?.[withinPageIndex];
     if (!item) return;
-    const ids = (page.stacks || [])
-      .map((s: any) => (typeof s.id === 'string' ? Number.parseInt(s.id, 10) : (s.id as number)))
-      .reverse();
-    const clickedId =
-      typeof item.id === 'string' ? Number.parseInt(item.id, 10) : (item.id as number);
+    const ids = (page.stacks || []).map((stack) => toNumericId(stack.id)).reverse();
+    const clickedId = toNumericId(item.id);
     const currentIndex = Math.max(
       0,
       ids.findIndex((id: number) => id === clickedId)
     );
+    const selectedTagContextFilter: StackFilter = { tags: [String(selectedTag.id)] };
     const token = genListToken({
       datasetId: String(selectedTag.dataSetId),
       mediaType: item.mediaType,
-      filters: { tags: [String(selectedTag.id)] } as any,
+      filters: selectedTagContextFilter,
     });
     saveViewContext({
       token,
       datasetId: String(selectedTag.dataSetId),
       mediaType: item.mediaType,
-      filters: { tags: [String(selectedTag.id)] } as any,
+      filters: selectedTagContextFilter,
       ids,
       currentIndex,
       createdAt: Date.now(),
@@ -379,21 +451,7 @@ function TagsPage() {
       search: { page: 0, mediaType: item.mediaType, listToken: token },
       replace: true,
     });
-  }, [
-    selectedTag,
-    stacksData,
-    navigate,
-    currentFilter.authors,
-    currentFilter.colorFilter,
-    currentFilter.hasNoAuthor,
-    currentFilter.hasNoTags,
-    currentFilter.isFavorite,
-    currentFilter.isLiked,
-    currentFilter.mediaType,
-    currentFilter.search,
-    currentFilter.tags,
-    datasetId,
-  ]);
+  }, [selectedTag, stacksData, navigate, effectiveFilter, datasetId]);
 
   useHeaderActions({
     showShuffle: true,
@@ -469,19 +527,32 @@ function TagsPage() {
     },
   });
 
-  const handleTagClick = (tag: TagItem) => {
-    // Always show stacks when clicking a tag
-    setSelectedTag(tag);
-    try {
-      const sp = new URLSearchParams(location.search);
-      sp.set('tagId', String(tag.id));
-      navigate({
-        to: '/library/$datasetId/tags',
-        params: { datasetId },
-        search: () => Object.fromEntries(sp.entries()) as any,
-      });
-    } catch {}
-  };
+  const handleTagClick = useCallback(
+    (tag: TagItem) => {
+      if (filterScopeKey !== routeFilterScopeKey) {
+        setCurrentFilter(tagsPageFilter);
+      }
+      setFilterScopeKey(routeFilterScopeKey);
+      // Always show stacks when clicking a tag
+      setSelectedTag(tag);
+      try {
+        navigate({
+          to: '/library/$datasetId/tags',
+          params: { datasetId },
+          search: { tagId: String(tag.id) },
+        });
+      } catch {}
+    },
+    [datasetId, filterScopeKey, navigate, routeFilterScopeKey, setCurrentFilter, tagsPageFilter]
+  );
+
+  const handleFilterChange = useCallback(
+    (filter: StackFilter) => {
+      setFilterScopeKey(routeFilterScopeKey);
+      setCurrentFilter({ ...filter, datasetId });
+    },
+    [datasetId, routeFilterScopeKey, setCurrentFilter]
+  );
 
   const handleTagSelect = (tag: TagItem, checked: boolean) => {
     const newSelected = new Set(selectedTags);
@@ -562,8 +633,7 @@ function TagsPage() {
   // Restore selected tag from URL when navigating back/forward
   useEffect(() => {
     try {
-      const sp = new URLSearchParams(location.search);
-      const idStr = sp.get('tagId');
+      const idStr = tagSearch.tagId;
       if (idStr && tagsData?.tags) {
         const id = Number(idStr);
         const found = (tagsData.tags || []).find((t) => t.id === id) || null;
@@ -571,7 +641,7 @@ function TagsPage() {
       }
       if (!idStr) setSelectedTag(null);
     } catch {}
-  }, [location.search, tagsData]);
+  }, [tagSearch.tagId, tagsData]);
 
   // Click handler with Cmd/Ctrl and Shift support
   const _handleStackClick = useCallback(
@@ -614,27 +684,25 @@ function TagsPage() {
       }
 
       // Normal navigation: build ids from loaded stacks (right→left)
-      const loadedIdsLtr = (allStacks || []).map((s) =>
-        typeof s.id === 'string' ? Number.parseInt(s.id as string, 10) : (s.id as number)
-      );
+      const loadedIdsLtr = (allStacks || []).map((s) => toNumericId(s.id));
       const ids = loadedIdsLtr.slice().reverse();
-      const clickedId =
-        typeof stack.id === 'string'
-          ? Number.parseInt(stack.id as string, 10)
-          : (stack.id as number);
+      const clickedId = toNumericId(stack.id);
       const currentIndex = Math.max(0, ids.indexOf(clickedId));
 
-      const mediaType = (stack as any).mediaType as string | undefined;
+      const mediaType = isMediaType(stack.mediaType) ? stack.mediaType : undefined;
+      const selectedTagContextFilter: StackFilter = selectedTag
+        ? { tags: [String(selectedTag.id)] }
+        : {};
       const token = genListToken({
         datasetId,
         mediaType,
-        filters: { tags: [String(selectedTag?.id)] } as any,
+        filters: selectedTagContextFilter,
       });
       saveViewContext({
         token,
         datasetId,
-        mediaType: mediaType as any,
-        filters: { tags: [String(selectedTag?.id)] } as any,
+        mediaType,
+        filters: selectedTagContextFilter,
         ids,
         currentIndex,
         createdAt: Date.now(),
@@ -992,12 +1060,10 @@ function TagsPage() {
                   onClick={() => {
                     setSelectedTag(null);
                     try {
-                      const sp = new URLSearchParams(location.search);
-                      sp.delete('tagId');
                       navigate({
                         to: '/library/$datasetId/tags',
                         params: { datasetId },
-                        search: () => Object.fromEntries(sp.entries()) as any,
+                        search: {},
                       });
                     } catch {}
                   }}
@@ -1028,24 +1094,14 @@ function TagsPage() {
                   >
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 list-stable">
                       {allStacks.map((stack) => {
-                        const thumb =
-                          (stack as any).thumbnail ||
-                          (stack as any).thumbnailUrl ||
-                          '/no-image.png';
+                        const thumb = stack.thumbnail || stack.thumbnailUrl || '/no-image.png';
                         const sourceImageUrl = getSourceImageUrl(stack, thumb);
                         const sourceImageFilename = sourceImageUrl
                           ? getSourceImageFilename(stack, sourceImageUrl, `stack-${stack.id}`)
                           : undefined;
-                        const likeCount = Number(
-                          (stack as any).likeCount ?? (stack as any).liked ?? 0
-                        );
-                        const pageCount =
-                          (stack as any).assetCount ||
-                          (stack as any)._count?.assets ||
-                          (stack as any).assetsCount ||
-                          0;
-                        const isFav =
-                          (stack as any).favorited || (stack as any).isFavorite || false;
+                        const likeCount = Number(stack.likeCount ?? stack.liked ?? 0);
+                        const pageCount = stack.assetCount || stack.assetsCount || 0;
+                        const isFav = stack.favorited || stack.isFavorite || false;
                         const {
                           onOpen,
                           onFindSimilar,
@@ -1198,7 +1254,7 @@ function TagsPage() {
             selectedItems={selectedStackItems}
             onClose={closeEditPanel}
             onSave={applyEditUpdates}
-            items={allStacks.filter((s) => selectedStackItems.has(s.id))}
+            items={bulkEditItems}
           />,
           document.body
         )}
@@ -1326,10 +1382,7 @@ function TagsPage() {
       </Dialog>
 
       {/* Filter panel to apply additional filters to selected tag's stacks */}
-      <FilterPanel
-        currentFilter={currentFilter as any}
-        onFilterChange={(f) => setCurrentFilter({ ...f, datasetId })}
-      />
+      <FilterPanel currentFilter={effectiveFilter} onFilterChange={handleFilterChange} />
     </div>
   );
 }

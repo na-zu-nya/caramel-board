@@ -193,7 +193,7 @@ export function LibrarySection({
           enableContextMenu
           pinnable
           pinned={isPinned('OVERVIEW')}
-          onPin={() => onPinOverview?.('Home', 'Overview')}
+          onPin={() => onPinOverview?.('Home')}
           onUnpin={onUnpinOverview}
         >
           <Link
@@ -253,8 +253,8 @@ export function LibrarySection({
           onStacksDrop={(stackIds) => handleMediaTypeDrop(stackIds, 'image')}
           enableContextMenu
           pinnable
-          pinned={isPinned('MEDIA_TYPE', undefined as any, 'image')}
-          onPin={() => onPinMediaType?.('image', 'Image', 'Images')}
+          pinned={isPinned('MEDIA_TYPE', undefined, 'image')}
+          onPin={() => onPinMediaType?.('image', 'Image')}
           onUnpin={() => onUnpinMediaType?.('image')}
         >
           <Link
@@ -272,8 +272,8 @@ export function LibrarySection({
           onStacksDrop={(stackIds) => handleMediaTypeDrop(stackIds, 'comic')}
           enableContextMenu
           pinnable
-          pinned={isPinned('MEDIA_TYPE', undefined as any, 'comic')}
-          onPin={() => onPinMediaType?.('comic', 'BookOpen', 'Comics')}
+          pinned={isPinned('MEDIA_TYPE', undefined, 'comic')}
+          onPin={() => onPinMediaType?.('comic', 'BookOpen')}
           onUnpin={() => onUnpinMediaType?.('comic')}
         >
           <Link
@@ -291,8 +291,8 @@ export function LibrarySection({
           onStacksDrop={(stackIds) => handleMediaTypeDrop(stackIds, 'video')}
           enableContextMenu
           pinnable
-          pinned={isPinned('MEDIA_TYPE', undefined as any, 'video')}
-          onPin={() => onPinMediaType?.('video', 'Film', 'Videos')}
+          pinned={isPinned('MEDIA_TYPE', undefined, 'video')}
+          onPin={() => onPinMediaType?.('video', 'Film')}
           onUnpin={() => onUnpinMediaType?.('video')}
         >
           <Link

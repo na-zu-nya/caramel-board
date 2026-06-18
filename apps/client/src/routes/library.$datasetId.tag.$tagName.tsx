@@ -72,17 +72,26 @@ function TagDetailPage() {
     () => ({ datasetId, tags: [decodedTagName] }),
     [datasetId, decodedTagName]
   );
+  const routeFilterScopeKey = useMemo(
+    () => `tag-detail:${datasetId}:${decodedTagName}`,
+    [datasetId, decodedTagName]
+  );
+  const [filterScopeKey, setFilterScopeKey] = useState<string | null>(null);
+
   useEffect(() => {
+    setFilterScopeKey(routeFilterScopeKey);
     setCurrentFilter(tagFilter);
-  }, [tagFilter, setCurrentFilter]);
+  }, [routeFilterScopeKey, tagFilter, setCurrentFilter]);
+
+  const routeFilter = filterScopeKey === routeFilterScopeKey ? currentFilter : tagFilter;
 
   const effectiveFilter: StackFilter = useMemo(
     () => ({
-      ...currentFilter,
+      ...routeFilter,
       datasetId,
       tags: [decodedTagName],
     }),
-    [currentFilter, datasetId, decodedTagName]
+    [routeFilter, datasetId, decodedTagName]
   );
 
   // Range-based query for virtual scrolling
@@ -134,9 +143,10 @@ function TagDetailPage() {
   const handleFilterChange = useCallback(
     (newFilter: StackFilter) => {
       // タグ条件と datasetId は常に固定
+      setFilterScopeKey(routeFilterScopeKey);
       setCurrentFilter({ ...newFilter, datasetId, tags: [decodedTagName] });
     },
-    [datasetId, decodedTagName, setCurrentFilter]
+    [datasetId, decodedTagName, routeFilterScopeKey, setCurrentFilter]
   );
 
   // Handle sort changes
@@ -210,7 +220,7 @@ function TagDetailPage() {
         }}
       />
       <FilterPanel
-        currentFilter={currentFilter}
+        currentFilter={effectiveFilter}
         currentSort={currentSort}
         onFilterChange={handleFilterChange}
         onSortChange={handleSortChange}

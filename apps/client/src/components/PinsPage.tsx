@@ -4,7 +4,7 @@ import { useAtom } from 'jotai';
 import type { LucideIcon } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { Grip, MoreVertical, Pencil, Plus, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Combobox } from '@/components/ui/combobox';
 import {
@@ -20,7 +20,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { isScratchCollection, useScratch } from '@/hooks/useScratch';
 import { apiClient } from '@/lib/api-client';
@@ -49,6 +48,15 @@ const FIXED_TYPE_ICONS: Record<'SCRATCH' | 'OVERVIEW' | 'FAVORITES' | 'LIKES', A
 };
 
 const capitalizeLabel = (label: string) => label.charAt(0).toUpperCase() + label.slice(1);
+
+const canCustomizePinIcon = (pin: Pin): boolean =>
+  pin.type === 'COLLECTION' &&
+  !(
+    (pin.collection && isScratchCollection(pin.collection)) ||
+    String(pin.name || '')
+      .trim()
+      .toLowerCase() === 'scratch'
+  );
 
 export default function PinsPage() {
   const t = useT();
@@ -84,7 +92,6 @@ export default function PinsPage() {
   const [loadingCollections, setLoadingCollections] = useState(false);
 
   // Edit dialog states
-  const [editName, setEditName] = useState('');
   const [editIcon, setEditIcon] = useState<AvailableIcon>('Image');
 
   // Drag state
@@ -201,13 +208,7 @@ export default function PinsPage() {
   });
 
   const updateNavigationPinMutation = useMutation({
-    mutationFn: async ({
-      pinId,
-      data,
-    }: {
-      pinId: number;
-      data: { name: string; icon: string };
-    }) => {
+    mutationFn: async ({ pinId, data }: { pinId: number; data: { icon: string } }) => {
       console.log('Updating navigation pin via API:', pinId, data);
       return apiClient.updateNavigationPin(pinId, data);
     },
@@ -303,27 +304,23 @@ export default function PinsPage() {
   };
 
   // Edit pin
-  const handleEditPin = (pin: Pin) => {
+  const handleEditPin = useCallback((pin: Pin) => {
+    if (!canCustomizePinIcon(pin)) return;
     setEditingPin(pin);
-    setEditName(pin.name);
-    const fixedIcon = resolveFixedIconForPin(pin);
-    setEditIcon((fixedIcon ?? pin.icon) as AvailableIcon);
+    setEditIcon(pin.icon as AvailableIcon);
     setShowEditDialog(true);
-  };
+  }, []);
 
-  const handleSaveEdit = () => {
-    if (!editingPin || !editName.trim()) return;
-
-    const fixedIcon = resolveFixedIconForPin(editingPin);
+  const handleSaveEdit = useCallback(() => {
+    if (!editingPin || !canCustomizePinIcon(editingPin)) return;
 
     updateNavigationPinMutation.mutate({
       pinId: editingPin.id,
       data: {
-        name: editName.trim(),
-        icon: (fixedIcon ?? editIcon) as string,
+        icon: editIcon,
       },
     });
-  };
+  }, [editIcon, editingPin, updateNavigationPinMutation]);
 
   // Drag and drop handlers
   const handleDragStart = (e: React.DragEvent, pin: Pin, index: number) => {
@@ -368,10 +365,7 @@ export default function PinsPage() {
     setDraggedItem(null);
   };
 
-  const canEditIcon = editingPin
-    ? editingPin.type === 'COLLECTION' && !isScratchPin(editingPin)
-    : false;
-  const editIconPreview = editingPin ? (resolveFixedIconForPin(editingPin) ?? editIcon) : editIcon;
+  const canEditIcon = editingPin ? canCustomizePinIcon(editingPin) : false;
 
   return (
     <div
@@ -453,10 +447,12 @@ export default function PinsPage() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onSelect={() => handleEditPin(pin)}>
-                        <Pencil className="w-4 h-4 mr-2" />
-                        {t.common.edit}
-                      </DropdownMenuItem>
+                      {canCustomizePinIcon(pin) ? (
+                        <DropdownMenuItem onSelect={() => handleEditPin(pin)}>
+                          <Pencil className="w-4 h-4 mr-2" />
+                          {t.common.edit}
+                        </DropdownMenuItem>
+                      ) : null}
                       <DropdownMenuItem
                         className="text-destructive focus:text-destructive"
                         onSelect={() => handleDeletePin(pin.id)}
@@ -667,15 +663,11 @@ export default function PinsPage() {
 
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="edit-name">{t.pins.name}</Label>
-              <Input
-                id="edit-name"
-                type="text"
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                placeholder={t.pins.enterPinName}
-                required
-              />
+              <Label>{t.pins.name}</Label>
+              <div className="rounded-md border bg-muted/50 px-3 py-2 text-sm">
+                {editingPin ? getDefaultPinDisplayName(t, editingPin) : ''}
+              </div>
+              <p className="text-sm text-muted-foreground">{t.pins.nameFixed}</p>
             </div>
 
             {canEditIcon ? (
@@ -704,7 +696,9 @@ export default function PinsPage() {
               <div className="space-y-2">
                 <Label>{t.pins.icon}</Label>
                 <div className="flex items-center gap-3 rounded-md border border-dashed bg-muted/50 p-3">
-                  <div className="rounded bg-background p-2">{renderIcon(editIconPreview, 20)}</div>
+                  <div className="rounded bg-background p-2">
+                    {renderIcon(resolveFixedIconForPin(editingPin) ?? editIcon, 20)}
+                  </div>
                   <span className="text-sm text-muted-foreground">{t.pins.iconFixed}</span>
                 </div>
               </div>
@@ -718,7 +712,7 @@ export default function PinsPage() {
             <Button
               type="button"
               onClick={handleSaveEdit}
-              disabled={updateNavigationPinMutation.isPending || !editName.trim()}
+              disabled={updateNavigationPinMutation.isPending || !canEditIcon}
             >
               {updateNavigationPinMutation.isPending ? t.common.updating : t.pins.update}
             </Button>

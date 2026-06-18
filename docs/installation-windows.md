@@ -1,4 +1,4 @@
-# インストレーションガイド - Windows
+# CLI / Docker 版インストールガイド - Windows
 
 ## 必要なソフトウェアの準備
 
@@ -66,12 +66,6 @@ wsl
 - インストールが完了したら、Docker Desktopを起動し、設定を行います。
   - サインインはSkipしても構いません
   - 初回起動時に、WSL2のインストール・更新を求められた場合は、指示に従って、Terminalを起動してインストールしてください
-
-### Desktop 版で FFmpeg / Poppler / AutoTag を使う場合
-
-Desktop 版で GIF・動画プレビュー、PDF 取り込み、自動タグを使う場合は、[Desktop 版 外部ツールセットアップ - Windows](./desktop-tools-windows.md) を参照してください。
-
-Desktop 版では初回セットアップで FFmpeg / Poppler / AutoTag を設定できます。あとから設定画面の `メディア処理`、`Poppler`、`自動タグ` でも変更できます。
 
 ## CaramelBoardのセットアップ
 

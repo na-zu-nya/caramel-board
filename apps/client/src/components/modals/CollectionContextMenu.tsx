@@ -40,7 +40,7 @@ interface CollectionContextMenuProps {
   onUpdate?: () => void;
   onDelete?: () => void;
   isPinned?: boolean;
-  onPin?: (iconName: string, name: string) => void;
+  onPin?: (iconName: string) => void;
   onUnpin?: () => void;
   onOpen?: () => void;
   onFindSimilar?: () => void;
@@ -61,7 +61,6 @@ export function CollectionContextMenu({
   const [showRenameDialog, setShowRenameDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showPinDialog, setShowPinDialog] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -80,7 +79,6 @@ export function CollectionContextMenu({
   const [name, setName] = useState(collection.name);
 
   // Pin dialog state
-  const [pinName, setPinName] = useState(collection.name);
   const [selectedPinIcon, setSelectedPinIcon] = useState<AvailableIcon>('BookText');
 
   const closeRenameDialog = useCallback(() => {
@@ -169,25 +167,24 @@ export function CollectionContextMenu({
   );
 
   const closeMenu = useCallback(() => {
-    setMenuOpen(false);
+    restoreBodyPointerEvents();
   }, []);
 
-  const handlePin = async () => {
-    if (!pinName.trim() || !onPin) return;
+  const handlePin = useCallback(async () => {
+    if (!onPin) return;
 
     setLoading(true);
     try {
-      await onPin(selectedPinIcon, pinName.trim());
+      await onPin(selectedPinIcon);
       closePinDialog();
     } catch (error) {
       console.error('Pin creation error:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [closePinDialog, onPin, selectedPinIcon]);
 
   const handleMenuOpenChange = useCallback((isOpen: boolean) => {
-    setMenuOpen(isOpen);
     if (!isOpen) {
       setLoading(false);
       restoreBodyPointerEvents();
@@ -200,12 +197,11 @@ export function CollectionContextMenu({
     setShowRenameDialog(true);
   };
 
-  const openPinDialog = () => {
+  const openPinDialog = useCallback(() => {
     closeMenu();
-    setPinName(collection.name);
     setSelectedPinIcon('BookText');
     setShowPinDialog(true);
-  };
+  }, [closeMenu]);
 
   const handleFindSimilar = useCallback(() => {
     closeMenu();
@@ -226,7 +222,7 @@ export function CollectionContextMenu({
 
   return (
     <>
-      <ContextMenu open={menuOpen} onOpenChange={handleMenuOpenChange}>
+      <ContextMenu onOpenChange={handleMenuOpenChange}>
         <ContextMenuTrigger>{children}</ContextMenuTrigger>
         <ContextMenuContent className="w-44">
           <ContextMenuItem onSelect={onOpen}>{t.contextMenu.open}</ContextMenuItem>
@@ -360,17 +356,11 @@ export function CollectionContextMenu({
 
           <div className="space-y-6 pt-2">
             <div className="space-y-2">
-              <Label htmlFor="pin-name" className="text-gray-700">
-                {t.contextMenu.displayName} *
-              </Label>
-              <Input
-                id="pin-name"
-                type="text"
-                value={pinName}
-                onChange={(e) => setPinName(e.target.value)}
-                placeholder={t.contextMenu.enterDisplayName}
-                required
-              />
+              <Label className="text-gray-700">{t.pins.name}</Label>
+              <div className="rounded-md border bg-gray-50 px-3 py-2 text-sm text-gray-700">
+                {collection.name}
+              </div>
+              <p className="text-sm text-gray-500">{t.pins.nameFixed}</p>
             </div>
 
             <div className="space-y-2">
@@ -409,7 +399,7 @@ export function CollectionContextMenu({
               </Button>
               <Button
                 onClick={handlePin}
-                disabled={loading || !pinName.trim()}
+                disabled={loading}
                 className="px-4 py-2 text-sm text-primary-foreground bg-primary rounded-md hover:bg-primary/90 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
               >
                 {loading ? t.contextMenu.pinning : t.contextMenu.pin}

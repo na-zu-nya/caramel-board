@@ -48,7 +48,7 @@ type CollectionLike = {
 
 type PinLike = {
   type: string;
-  name: string;
+  name?: string | null;
   mediaType?: string | null;
   collection?: CollectionLike | null;
 };
@@ -356,7 +356,7 @@ const en = {
     addPin: 'Add Pin',
     addPinDescription: 'Select an item to display in the header navigation',
     editPin: 'Edit Pin',
-    editPinDescription: 'Update the name and icon for this pin',
+    editPinDescription: 'Update the icon for this pin. The name is fixed automatically.',
     type: 'Type',
     mediaType: 'Media Type',
     collection: 'Collection',
@@ -369,6 +369,7 @@ const en = {
     icon: 'Icon',
     name: 'Name',
     enterPinName: 'Enter pin name',
+    nameFixed: 'The pin name is fixed by its type or collection name.',
     overview: 'Overview',
     overviewPage: 'Overview Page',
     favorites: 'Favorites',
@@ -410,7 +411,8 @@ const en = {
     deleteCollection: 'Delete Collection',
     deleteCollectionConfirm: (name: string) =>
       `Delete collection "${name}"? This action cannot be undone.`,
-    setHeaderPinDisplay: 'Set the name and icon to display in the header navigation.',
+    setHeaderPinDisplay:
+      'Choose the icon to display in the header navigation. The name follows the collection name.',
     selected: 'Selected:',
     pinCollection: (name: string) => `Pin ${name}`,
     renameFolder: 'Rename Folder',
@@ -804,12 +806,12 @@ const ja: Translations = {
     unlock: 'ロック解除',
   },
   sidebar: {
-    library: 'ライブラリ',
+    library: 'ライブラリ一覧',
     currentLibrary: '現在のライブラリ',
     scratch: 'スクラッチ',
     selectLibrary: 'ライブラリを選択',
-    tags: 'タグ',
-    autoTags: '自動タグ',
+    tags: 'タグ一覧',
+    autoTags: '自動タグ割り当て',
     authors: '作者',
     collections: 'コレクション',
     noCollectionsOrFolders: 'コレクション・フォルダがありません',
@@ -823,15 +825,15 @@ const ja: Translations = {
     overview: '概要',
     favorites: 'お気に入り',
     likes: 'Like',
-    images: '画像',
-    comics: '漫画',
+    images: 'イメージ',
+    comics: 'コミック',
     videos: '動画',
     releases: 'リリース',
     closeSidebar: 'サイドバーを閉じる',
     settings: '設定',
     general: '一般',
-    libraries: 'ライブラリ',
-    autoTag: '自動タグ',
+    libraries: 'ライブラリ一覧',
+    autoTag: '自動タグ割り当て',
     loadingAuthors: '作者を読み込み中...',
     loadingTags: 'タグを読み込み中...',
     loadingAutoTags: '自動タグを読み込み中...',
@@ -1051,7 +1053,7 @@ const ja: Translations = {
     addPin: 'ピンを追加',
     addPinDescription: 'ヘッダーのナビゲーションに表示する項目を選びます',
     editPin: 'ピンを編集',
-    editPinDescription: 'このピンの名前とアイコンを変更します',
+    editPinDescription: 'このピンのアイコンを変更します。名前は自動で固定されます',
     type: '種類',
     mediaType: 'メディアタイプ',
     collection: 'コレクション',
@@ -1064,12 +1066,13 @@ const ja: Translations = {
     icon: 'アイコン',
     name: '名前',
     enterPinName: 'ピン名を入力',
+    nameFixed: 'ピン名は種類またはコレクション名から自動で固定されます。',
     overview: '概要',
     overviewPage: '概要ページ',
     favorites: 'お気に入り',
     likes: 'Like',
-    images: '画像',
-    comics: '漫画',
+    images: 'イメージ',
+    comics: 'コミック',
     videos: '動画',
     iconFixed: 'このピンの種類ではアイコンは固定です。',
     update: '更新',
@@ -1105,7 +1108,8 @@ const ja: Translations = {
     deleteCollection: 'コレクションを削除',
     deleteCollectionConfirm: (name: string) =>
       `コレクション「${name}」を削除しますか? この操作は取り消せません。`,
-    setHeaderPinDisplay: 'ヘッダーのナビゲーションに表示する名前とアイコンを設定します。',
+    setHeaderPinDisplay:
+      'ヘッダーのナビゲーションに表示するアイコンを設定します。名前はコレクション名に固定されます。',
     selected: '選択中:',
     pinCollection: (name: string) => `「${name}」をピン留め`,
     renameFolder: 'フォルダ名を変更',
@@ -1471,11 +1475,14 @@ export function getDefaultPinDisplayName(t: Translations, pin: PinLike): string 
   if (pin.type === 'MEDIA_TYPE' && pin.mediaType) {
     return getMediaTypeLabel(t, pin.mediaType);
   }
-  if (pin.type === 'OVERVIEW' && pin.name === 'Overview') return t.pins.overview;
-  if (pin.type === 'FAVORITES' && pin.name === 'Favorites') return t.pins.favorites;
-  if (pin.type === 'LIKES' && pin.name === 'Likes') return t.pins.likes;
-  if (pin.type === 'COLLECTION' && isScratchLike(pin) && pin.name === 'Scratch') {
+  if (pin.type === 'OVERVIEW') return t.pins.overview;
+  if (pin.type === 'FAVORITES') return t.pins.favorites;
+  if (pin.type === 'LIKES') return t.pins.likes;
+  if (pin.type === 'COLLECTION' && isScratchLike(pin)) {
     return t.pins.scratch;
   }
-  return pin.name;
+  if (pin.type === 'COLLECTION') {
+    return pin.collection?.name || pin.name || t.common.untitled;
+  }
+  return pin.name || t.common.untitled;
 }

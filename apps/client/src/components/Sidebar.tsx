@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
 import { useAtom } from 'jotai';
 import { Github, Megaphone, Twitter, X } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CollectionsSection } from '@/components/sidebar/CollectionsSection';
 import { DatasetSection } from '@/components/sidebar/DatasetSection';
 import { LibrarySection } from '@/components/sidebar/LibrarySection';
@@ -15,9 +15,16 @@ import { APP_GIT_HASH, APP_VERSION } from '@/lib/app-info';
 import { useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { currentDatasetAtom, sidebarOpenAtom } from '@/stores/ui';
+import type { MediaType } from '@/types';
 
 // LocalStorage keys for collapsed state
 const COLLAPSED_STATE_KEY = 'sidebar-collapsed-groups';
+
+const DEFAULT_MEDIA_TYPE_PIN_NAMES: Record<MediaType, string> = {
+  image: 'Images',
+  comic: 'Comics',
+  video: 'Videos',
+};
 
 // Load collapsed state from localStorage
 function loadCollapsedState(): Record<string, boolean> {
@@ -42,7 +49,6 @@ export default function Sidebar() {
   const t = useT();
   const [isOpen, setIsOpen] = useAtom(sidebarOpenAtom);
   const [currentDataset] = useAtom(currentDatasetAtom);
-  // @ts-expect-error
   const params = useParams({ strict: false });
   const datasetId = (params as { datasetId?: string }).datasetId || currentDataset || '1';
   const queryClient = useQueryClient();
@@ -101,107 +107,101 @@ export default function Sidebar() {
   };
 
   // Pin management functions - implementation of NavigationPinHandlers
-  const isPinned: NavigationPinHandlers['isPinned'] = (type, id, mediaType) => {
-    return navigationPins.some(
-      (pin) =>
-        pin.dataSetId === Number.parseInt(datasetId, 10) &&
-        pin.type === type &&
-        (type === 'COLLECTION'
-          ? pin.collectionId === id
-          : type === 'MEDIA_TYPE'
-            ? pin.mediaType === mediaType
-            : type === 'OVERVIEW')
-    );
-  };
+  const isPinned: NavigationPinHandlers['isPinned'] = useCallback(
+    (type, id, mediaType) =>
+      navigationPins.some(
+        (pin) =>
+          pin.dataSetId === Number.parseInt(datasetId, 10) &&
+          pin.type === type &&
+          (type === 'COLLECTION'
+            ? pin.collectionId === id
+            : type === 'MEDIA_TYPE'
+              ? pin.mediaType === mediaType
+              : type === 'OVERVIEW')
+      ),
+    [datasetId, navigationPins]
+  );
 
-  const handlePinCollection: NavigationPinHandlers['onPinCollection'] = async (
-    collection,
-    iconName,
-    name
-  ) => {
-    console.log('Pin collection:', { collection, iconName, name });
+  const handlePinCollection: NavigationPinHandlers['onPinCollection'] = useCallback(
+    async (collection, iconName) => {
+      const newPin = {
+        type: 'COLLECTION' as const,
+        dataSetId: Number.parseInt(datasetId, 10),
+        name: collection.name || 'Collection',
+        icon: iconName,
+        order: navigationPins.length,
+        collectionId: collection.id,
+      };
 
-    const newPin = {
-      type: 'COLLECTION' as const,
-      dataSetId: Number.parseInt(datasetId, 10),
-      name,
-      icon: iconName,
-      order: navigationPins.length,
-      collectionId: collection.id,
-    };
+      createNavigationPinMutation.mutate(newPin);
+    },
+    [createNavigationPinMutation, datasetId, navigationPins.length]
+  );
 
-    createNavigationPinMutation.mutate(newPin);
-  };
+  const handleUnpinCollection: NavigationPinHandlers['onUnpinCollection'] = useCallback(
+    async (collection) => {
+      const pinToDelete = navigationPins.find(
+        (pin) =>
+          pin.type === 'COLLECTION' &&
+          pin.collectionId === collection.id &&
+          pin.dataSetId === Number.parseInt(datasetId, 10)
+      );
 
-  const handleUnpinCollection: NavigationPinHandlers['onUnpinCollection'] = async (collection) => {
-    console.log('Unpin collection:', collection);
+      if (pinToDelete) {
+        deleteNavigationPinMutation.mutate(pinToDelete.id);
+      }
+    },
+    [datasetId, deleteNavigationPinMutation, navigationPins]
+  );
 
-    // Find the pin to delete
-    const pinToDelete = navigationPins.find(
-      (pin) =>
-        pin.type === 'COLLECTION' &&
-        pin.collectionId === collection.id &&
-        pin.dataSetId === Number.parseInt(datasetId, 10)
-    );
+  const handlePinMediaType: NavigationPinHandlers['onPinMediaType'] = useCallback(
+    async (mediaType, iconName) => {
+      const newPin = {
+        type: 'MEDIA_TYPE' as const,
+        dataSetId: Number.parseInt(datasetId, 10),
+        name: DEFAULT_MEDIA_TYPE_PIN_NAMES[mediaType],
+        icon: iconName,
+        order: navigationPins.length,
+        mediaType,
+      };
 
-    if (pinToDelete) {
-      deleteNavigationPinMutation.mutate(pinToDelete.id);
-    }
-  };
+      createNavigationPinMutation.mutate(newPin);
+    },
+    [createNavigationPinMutation, datasetId, navigationPins.length]
+  );
 
-  const handlePinMediaType: NavigationPinHandlers['onPinMediaType'] = async (
-    mediaType,
-    iconName,
-    name
-  ) => {
-    console.log('Pin media type:', { mediaType, iconName, name });
+  const handleUnpinMediaType: NavigationPinHandlers['onUnpinMediaType'] = useCallback(
+    async (mediaType) => {
+      const pinToDelete = navigationPins.find(
+        (pin) =>
+          pin.type === 'MEDIA_TYPE' &&
+          pin.mediaType === mediaType &&
+          pin.dataSetId === Number.parseInt(datasetId, 10)
+      );
 
-    const newPin = {
-      type: 'MEDIA_TYPE' as const,
-      dataSetId: Number.parseInt(datasetId, 10),
-      name,
-      icon: iconName,
-      order: navigationPins.length,
-      mediaType,
-    };
+      if (pinToDelete) {
+        deleteNavigationPinMutation.mutate(pinToDelete.id);
+      }
+    },
+    [datasetId, deleteNavigationPinMutation, navigationPins]
+  );
 
-    createNavigationPinMutation.mutate(newPin);
-  };
+  const handlePinOverview: NavigationPinHandlers['onPinOverview'] = useCallback(
+    async (iconName) => {
+      const newPin = {
+        type: 'OVERVIEW' as const,
+        dataSetId: Number.parseInt(datasetId, 10),
+        name: 'Overview',
+        icon: iconName,
+        order: navigationPins.length,
+      };
 
-  const handleUnpinMediaType: NavigationPinHandlers['onUnpinMediaType'] = async (mediaType) => {
-    console.log('Unpin media type:', mediaType);
+      createNavigationPinMutation.mutate(newPin);
+    },
+    [createNavigationPinMutation, datasetId, navigationPins.length]
+  );
 
-    // Find the pin to delete
-    const pinToDelete = navigationPins.find(
-      (pin) =>
-        pin.type === 'MEDIA_TYPE' &&
-        pin.mediaType === mediaType &&
-        pin.dataSetId === Number.parseInt(datasetId, 10)
-    );
-
-    if (pinToDelete) {
-      deleteNavigationPinMutation.mutate(pinToDelete.id);
-    }
-  };
-
-  const handlePinOverview: NavigationPinHandlers['onPinOverview'] = async (iconName, name) => {
-    console.log('Pin overview:', { iconName, name });
-
-    const newPin = {
-      type: 'OVERVIEW' as const,
-      dataSetId: Number.parseInt(datasetId, 10),
-      name,
-      icon: iconName,
-      order: navigationPins.length,
-    };
-
-    createNavigationPinMutation.mutate(newPin);
-  };
-
-  const handleUnpinOverview: NavigationPinHandlers['onUnpinOverview'] = async () => {
-    console.log('Unpin overview');
-
-    // Find the pin to delete
+  const handleUnpinOverview: NavigationPinHandlers['onUnpinOverview'] = useCallback(async () => {
     const pinToDelete = navigationPins.find(
       (pin) => pin.type === 'OVERVIEW' && pin.dataSetId === Number.parseInt(datasetId, 10)
     );
@@ -209,7 +209,7 @@ export default function Sidebar() {
     if (pinToDelete) {
       deleteNavigationPinMutation.mutate(pinToDelete.id);
     }
-  };
+  }, [datasetId, deleteNavigationPinMutation, navigationPins]);
 
   // Save to localStorage whenever state changes
   useEffect(() => {
