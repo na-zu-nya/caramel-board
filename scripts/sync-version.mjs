@@ -118,7 +118,7 @@ const updateCargoVersion = () => {
   );
   replaceRequired(
     'apps/desktop/src-tauri/Cargo.lock',
-    /(\[\[package\]\]\nname = "caramel-board-desktop"\nversion = ")[^"]+(")/,
+    /(\[\[package\]\]\r?\nname = "caramel-board-desktop"\r?\nversion = ")[^"]+(")/,
     `$1${version}$2`
   );
 };
