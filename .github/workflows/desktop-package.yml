@@ -86,8 +86,16 @@ jobs:
             exit 1
           fi
 
+          release_state_args=()
+          if [[ "$TAG_NAME" == *-* ]]; then
+            release_state_args+=(--prerelease)
+          fi
+
           if gh release view "$TAG_NAME" >/dev/null 2>&1; then
             gh release upload "$TAG_NAME" "${files[@]}" --clobber
+            if [ "${#release_state_args[@]}" -gt 0 ]; then
+              gh release edit "$TAG_NAME" "${release_state_args[@]}"
+            fi
           else
-            gh release create "$TAG_NAME" "${files[@]}" --title "$TAG_NAME" --generate-notes
+            gh release create "$TAG_NAME" "${files[@]}" --title "$TAG_NAME" --generate-notes "${release_state_args[@]}"
           fi
