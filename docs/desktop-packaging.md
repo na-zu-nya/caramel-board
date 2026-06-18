@@ -34,7 +34,7 @@ npm run -w @caramelboard/desktop build:app
 macOS arm64 で確認済みの出力先:
 
 - `apps/desktop/src-tauri/target/release/bundle/macos/Caramel Board.app`
-- `apps/desktop/src-tauri/target/release/bundle/dmg/Caramel Board_1.0.0-beta.4_aarch64.dmg`
+- `apps/desktop/src-tauri/target/release/bundle/dmg/Caramel Board_1.0.0-beta.5_aarch64.dmg`
 
 ## Windows パッケージ作成
 
