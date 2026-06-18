@@ -6,6 +6,9 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: read
+
 jobs:
   package:
     name: Package desktop (${{ matrix.os }})
@@ -49,3 +52,41 @@ jobs:
             apps/desktop/src-tauri/target/release/bundle/**/*.msi
             apps/desktop/src-tauri/target/release/bundle/**/*.exe
           if-no-files-found: error
+
+  publish-release:
+    name: Publish GitHub Release
+    if: startsWith(github.ref, 'refs/tags/')
+    needs:
+      - package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG_NAME: ${{ github.ref_name }}
+
+    steps:
+      - name: Download desktop bundles
+        uses: actions/download-artifact@v4
+        with:
+          pattern: caramel-board-desktop-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Publish release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mapfile -d '' files < <(find release-assets -type f \( -name '*.dmg' -o -name '*.msi' -o -name '*.exe' \) -print0)
+
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "No release assets found." >&2
+            exit 1
+          fi
+
+          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+            gh release upload "$TAG_NAME" "${files[@]}" --clobber
+          else
+            gh release create "$TAG_NAME" "${files[@]}" --title "$TAG_NAME" --generate-notes
+          fi

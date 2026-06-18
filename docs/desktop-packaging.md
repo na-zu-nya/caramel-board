@@ -47,11 +47,19 @@ npm ci
 npm run -w @caramelboard/desktop build:app
 ```
 
-GitHub Actions で作る場合:
+GitHub Actions で作る場合、`Desktop Package` workflow が macOS / Windows の配布物を作成する。
+
+手動検証の場合:
 
 1. `Desktop Package` workflow を手動実行する
-2. `caramel-board-desktop-Windows` artifact を取得する
-3. `.msi` または `.exe` を Windows 検証機にコピーする
+2. `caramel-board-desktop-macOS` または `caramel-board-desktop-Windows` artifact を取得する
+3. `.dmg`、`.msi`、`.exe` を検証機にコピーする
+
+GitHub Release を作る場合:
+
+1. root `package.json` の `version` を更新して `npm run sync:version` を実行する
+2. `v1.0.0-beta.2` のように version と一致する tag を作成して push する
+3. `Desktop Package` workflow が完了すると、同じ tag の GitHub Release に `.dmg`、`.msi`、`.exe` が添付される
 
 ## 別 PC 検証チェックリスト
 
