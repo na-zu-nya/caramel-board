@@ -42,7 +42,7 @@ jobs:
 
       - name: Build desktop package (Windows)
         if: runner.os == 'Windows'
-        run: npm run -w @caramelboard/desktop prepare:package && npm exec -w @caramelboard/desktop -- tauri build --bundles=nsis
+        run: npm run -w @caramelboard/desktop build:app
 
       - name: Upload desktop bundles
         uses: actions/upload-artifact@v4
