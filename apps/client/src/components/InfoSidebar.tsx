@@ -512,7 +512,10 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
     mutationFn: async ({ stackId }: { stackId: number }) => {
       const thumbnailResult = await apiClient.refreshThumbnail(stackId);
       const colorResult = await apiClient.updateStackColors(stackId);
-      const autoTagResult = await apiClient.aggregateStackTags(stackId, { threshold: 0.4 });
+      const autoTagResult = await apiClient.refreshStackAutoTags(stackId, {
+        threshold: 0.4,
+        forceRegenerate: true,
+      });
 
       return {
         thumbnailResult,

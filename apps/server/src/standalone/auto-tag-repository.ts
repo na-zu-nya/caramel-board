@@ -195,6 +195,56 @@ export class StandaloneAutoTagRepository {
     return { predicted: true as const, stackId: asset.stack_id, tagCount: prediction.tag_count };
   }
 
+  async refreshStackTags(
+    stackId: number,
+    options: { threshold?: number; forceRegenerate?: boolean } = {}
+  ) {
+    const threshold = options.threshold ?? 0.4;
+    const forceRegenerate = options.forceRegenerate ?? true;
+    const stack = this.db.prepare('SELECT id FROM stacks WHERE id = ?').get(stackId);
+    if (!stack) throw new Error('Stack not found');
+
+    const assets = this.db
+      .prepare(
+        `SELECT id, stack_id
+         FROM assets
+         WHERE stack_id = ?
+           AND LOWER(REPLACE(file_type, '.', '')) IN (${AUTO_TAG_IMAGE_EXTENSION_LIST.map(() => '?').join(', ')})
+         ORDER BY order_in_stack ASC, id ASC`
+      )
+      .all(stackId, ...AUTO_TAG_IMAGE_EXTENSION_LIST) as AssetCandidateRow[];
+
+    let predicted = 0;
+    let skipped = 0;
+    let failed = 0;
+
+    for (const asset of assets) {
+      try {
+        const result = await this.predictAssetTags(asset.id, threshold, {
+          forceRegenerate,
+          aggregateStack: false,
+        });
+        if (result.predicted) {
+          predicted++;
+        } else {
+          skipped++;
+        }
+      } catch (error) {
+        failed++;
+        console.error(`Failed to refresh standalone AutoTags for asset ${asset.id}:`, error);
+      }
+    }
+
+    return {
+      stackId,
+      candidateAssets: assets.length,
+      predictedAssets: predicted,
+      skippedAssets: skipped,
+      failedAssets: failed,
+      aggregate: this.aggregateStackTags(stackId, threshold),
+    };
+  }
+
   async predictDatasetAssetTags(
     datasetId: number,
     options: { threshold?: number; forceRegenerate?: boolean } = {}

@@ -460,9 +460,14 @@ function TagsPage() {
     onShuffle: handleShuffle,
   });
 
-  // Handle infinite scroll (observe page scroll via viewport)
+  const selectedTagId = selectedTag?.id;
+
+  // Handle infinite scroll within the asset list pane
   useEffect(() => {
+    if (selectedTagId == null) return;
+
     const el = loadMoreTriggerRef.current;
+    const root = scrollContainerRef.current;
     if (!el) return;
 
     const observer = new IntersectionObserver(
@@ -475,12 +480,12 @@ function TagsPage() {
           }
         }
       },
-      { root: null, rootMargin: '400px 0px', threshold: 0.01 }
+      { root, rootMargin: '400px 0px', threshold: 0.01 }
     );
 
     observer.observe(el);
     return () => observer.disconnect();
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage, selectedTagId]);
 
   // Mutations
   const renameMutation = useMutation({
@@ -908,135 +913,131 @@ function TagsPage() {
 
   // This page uses its own layout
   return (
-    <div className="flex min-h-[calc(100vh-56px)]">
+    <div className="flex h-[calc(100vh-56px)] overflow-hidden">
       {/* Tags List - Always visible */}
-      <div className="w-80 flex-shrink-0">
-        <div className="sticky top-14 h-[calc(100vh-56px)] border-r bg-white">
-          <div className="overflow-y-auto h-full">
-            <div className="p-4 border-b">
-              <h2 className="text-lg font-semibold mb-3">{t.sidebar.tags}</h2>
+      <div className="w-80 h-full flex-shrink-0 border-r bg-white">
+        <div className="h-full overflow-y-auto">
+          <div className="p-4 border-b">
+            <h2 className="text-lg font-semibold mb-3">{t.sidebar.tags}</h2>
 
-              <div className="space-y-3">
-                <SmallSearchField
-                  value={searchQuery}
-                  onValueChange={setSearchQuery}
-                  placeholder={t.tagPage.searchTags}
-                />
+            <div className="space-y-3">
+              <SmallSearchField
+                value={searchQuery}
+                onValueChange={setSearchQuery}
+                placeholder={t.tagPage.searchTags}
+              />
 
-                <div className="space-y-2">
-                  <SmallSelect
-                    value={sortBy}
-                    onValueChange={(v) => setSortBy(v as typeof sortBy)}
-                    placeholder={t.tagPage.sortBy}
-                  >
-                    <SelectItem value="title-asc">{t.tagPage.nameAsc}</SelectItem>
-                    <SelectItem value="title-desc">{t.tagPage.nameDesc}</SelectItem>
-                    <SelectItem value="count-desc">{t.tagPage.stackCountDesc}</SelectItem>
-                    <SelectItem value="count-asc">{t.tagPage.stackCountAsc}</SelectItem>
-                  </SmallSelect>
+              <div className="space-y-2">
+                <SmallSelect
+                  value={sortBy}
+                  onValueChange={(v) => setSortBy(v as typeof sortBy)}
+                  placeholder={t.tagPage.sortBy}
+                >
+                  <SelectItem value="title-asc">{t.tagPage.nameAsc}</SelectItem>
+                  <SelectItem value="title-desc">{t.tagPage.nameDesc}</SelectItem>
+                  <SelectItem value="count-desc">{t.tagPage.stackCountDesc}</SelectItem>
+                  <SelectItem value="count-asc">{t.tagPage.stackCountAsc}</SelectItem>
+                </SmallSelect>
+              </div>
+
+              {/* Action buttons */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">
+                    {selectedTags.size > 0
+                      ? t.tagPage.selectedTags(selectedTags.size)
+                      : t.tagPage.selectTagsPrompt}
+                  </span>
+                  {selectedTags.size > 0 && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 px-2 text-xs"
+                      onClick={() => setSelectedTags(new Set())}
+                    >
+                      {t.contextMenu.clear}
+                    </Button>
+                  )}
                 </div>
 
-                {/* Action buttons */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-muted-foreground">
-                      {selectedTags.size > 0
-                        ? t.tagPage.selectedTags(selectedTags.size)
-                        : t.tagPage.selectTagsPrompt}
-                    </span>
-                    {selectedTags.size > 0 && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-6 px-2 text-xs"
-                        onClick={() => setSelectedTags(new Set())}
-                      >
-                        {t.contextMenu.clear}
-                      </Button>
-                    )}
-                  </div>
-
-                  <div className="flex gap-1.5">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={handleRename}
-                      disabled={selectedTags.size > 1 || (selectedTags.size === 0 && !selectedTag)}
-                      className="h-7 px-2 text-xs flex-1"
-                    >
-                      <Edit2 className="h-3 w-3 mr-1" />
-                      {t.contextMenu.rename}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={handleMerge}
-                      disabled={selectedTags.size < 2}
-                      className="h-7 px-2 text-xs flex-1"
-                    >
-                      <GitMerge className="h-3 w-3 mr-1" />
-                      {t.tagPage.mergeTags}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-7 px-2 text-xs text-destructive hover:text-destructive border-destructive/50 hover:border-destructive"
-                      onClick={handleDelete}
-                      disabled={selectedTags.size === 0}
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </div>
+                <div className="flex gap-1.5">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleRename}
+                    disabled={selectedTags.size > 1 || (selectedTags.size === 0 && !selectedTag)}
+                    className="h-7 px-2 text-xs flex-1"
+                  >
+                    <Edit2 className="h-3 w-3 mr-1" />
+                    {t.contextMenu.rename}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleMerge}
+                    disabled={selectedTags.size < 2}
+                    className="h-7 px-2 text-xs flex-1"
+                  >
+                    <GitMerge className="h-3 w-3 mr-1" />
+                    {t.tagPage.mergeTags}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 px-2 text-xs text-destructive hover:text-destructive border-destructive/50 hover:border-destructive"
+                    onClick={handleDelete}
+                    disabled={selectedTags.size === 0}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
                 </div>
               </div>
             </div>
+          </div>
 
-            {/* Tags list */}
-            <div className="p-2">
-              {tagsError ? (
-                <div className="text-center py-8 text-red-500">
-                  {t.tagPage.errorLoadingTags} {(tagsError as Error).message}
-                </div>
-              ) : tagsLoading ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  {t.tagPage.loadingTags}
-                </div>
-              ) : filteredTags.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  {searchQuery ? t.tagPage.noTagsFound : t.tagPage.noTagsYet}
-                </div>
-              ) : (
-                <div className="space-y-0.5">
-                  {filteredTags.map((tag) => (
-                    <div
-                      key={tag.id}
-                      onClick={() => handleTagClick(tag)}
-                      className={cn(
-                        'px-2 py-1.5 rounded transition-colors cursor-pointer group',
-                        selectedTag?.id === tag.id
-                          ? 'bg-blue-50 text-blue-700'
-                          : 'hover:bg-accent hover:text-accent-foreground'
-                      )}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 flex-1 min-w-0">
-                          <Checkbox
-                            checked={selectedTags.has(tag.id)}
-                            onCheckedChange={(checked) => handleTagSelect(tag, checked as boolean)}
-                            onClick={(e) => e.stopPropagation()}
-                            className="h-3 w-3"
-                          />
-                          <span className="text-sm truncate font-medium">{tag.title}</span>
-                        </div>
-                        <span className="text-xs text-muted-foreground ml-2 flex-shrink-0">
-                          {tag.stackCount}
-                        </span>
+          {/* Tags list */}
+          <div className="p-2">
+            {tagsError ? (
+              <div className="text-center py-8 text-red-500">
+                {t.tagPage.errorLoadingTags} {(tagsError as Error).message}
+              </div>
+            ) : tagsLoading ? (
+              <div className="text-center py-8 text-muted-foreground">{t.tagPage.loadingTags}</div>
+            ) : filteredTags.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                {searchQuery ? t.tagPage.noTagsFound : t.tagPage.noTagsYet}
+              </div>
+            ) : (
+              <div className="space-y-0.5">
+                {filteredTags.map((tag) => (
+                  <div
+                    key={tag.id}
+                    onClick={() => handleTagClick(tag)}
+                    className={cn(
+                      'px-2 py-1.5 rounded transition-colors cursor-pointer group',
+                      selectedTag?.id === tag.id
+                        ? 'bg-blue-50 text-blue-700'
+                        : 'hover:bg-accent hover:text-accent-foreground'
+                    )}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <Checkbox
+                          checked={selectedTags.has(tag.id)}
+                          onCheckedChange={(checked) => handleTagSelect(tag, checked as boolean)}
+                          onClick={(e) => e.stopPropagation()}
+                          className="h-3 w-3"
+                        />
+                        <span className="text-sm truncate font-medium">{tag.title}</span>
                       </div>
+                      <span className="text-xs text-muted-foreground ml-2 flex-shrink-0">
+                        {tag.stackCount}
+                      </span>
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -1046,7 +1047,7 @@ function TagsPage() {
         <div
           ref={scrollContainerRef}
           className={cn(
-            'flex-1 bg-gray-50 transition-all duration-300 ease-in-out',
+            'flex-1 min-w-0 h-full overflow-y-auto bg-gray-50 transition-all duration-300 ease-in-out',
             !selectionMode && infoSidebarOpen ? 'mr-80' : 'mr-0'
           )}
         >
@@ -1189,7 +1190,7 @@ function TagsPage() {
       ) : (
         <div
           className={cn(
-            'flex-1 flex items-center justify-center bg-gray-50 transition-all duration-300 ease-in-out',
+            'flex-1 min-w-0 h-full flex items-center justify-center bg-gray-50 transition-all duration-300 ease-in-out',
             !selectionMode && infoSidebarOpen ? 'mr-80' : 'mr-0',
             isEditPanelOpen && selectionMode ? 'mr-80' : ''
           )}

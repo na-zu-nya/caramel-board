@@ -853,6 +853,48 @@ class ApiClient {
     });
   }
 
+  async refreshStackAutoTags(
+    stackId: string | number,
+    options?: {
+      threshold?: number;
+      forceRegenerate?: boolean;
+    }
+  ): Promise<{
+    stackId: number;
+    candidateAssets: number;
+    predictedAssets: number;
+    skippedAssets: number;
+    failedAssets: number;
+    aggregate: {
+      stackId: number;
+      aggregatedTags: Record<string, number>;
+      topTags: Array<{ tag: string; score: number }>;
+      assetCount: number;
+      skippedAssets?: number;
+    };
+  }> {
+    return this.fetch<{
+      stackId: number;
+      candidateAssets: number;
+      predictedAssets: number;
+      skippedAssets: number;
+      failedAssets: number;
+      aggregate: {
+        stackId: number;
+        aggregatedTags: Record<string, number>;
+        topTags: Array<{ tag: string; score: number }>;
+        assetCount: number;
+        skippedAssets?: number;
+      };
+    }>(`/api/v1/stacks/${stackId}/refresh-autotags`, {
+      method: 'POST',
+      body: JSON.stringify({
+        threshold: options?.threshold || 0.4,
+        forceRegenerate: options?.forceRegenerate ?? true,
+      }),
+    });
+  }
+
   async getDatasetStats(
     datasetId: string | number
   ): Promise<{ stackCount: number; assetCount: number }> {

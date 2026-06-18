@@ -1012,6 +1012,47 @@ stacksRoute.post('/:id{[0-9]+}/aggregate-tags', async (c) => {
   }
 });
 
+// POST /stacks/:id/refresh-autotags
+stacksRoute.post('/:id{[0-9]+}/refresh-autotags', async (c) => {
+  const id = Number.parseInt(c.req.param('id'), 10);
+  const body = (await c.req.json().catch(() => null)) as {
+    threshold?: number;
+    forceRegenerate?: boolean;
+  } | null;
+  const threshold = typeof body?.threshold === 'number' ? body.threshold : 0.4;
+  const forceRegenerate = typeof body?.forceRegenerate === 'boolean' ? body.forceRegenerate : true;
+
+  if (isStandaloneSqliteEnabled()) {
+    try {
+      const result = await new StandaloneAutoTagRepository().refreshStackTags(id, {
+        threshold,
+        forceRegenerate,
+      });
+      return c.json(result);
+    } catch (error) {
+      console.error('Error refreshing stack AutoTags:', error);
+      return c.json({ error: 'Failed to refresh AutoTags' }, 500);
+    }
+  }
+
+  const prisma = usePrisma(c);
+  try {
+    const autoTagService = new AutoTagService(prisma);
+    const aggregate = await autoTagService.aggregateStackTags(id, threshold);
+    return c.json({
+      stackId: id,
+      candidateAssets: aggregate.assetCount + aggregate.skippedAssets,
+      predictedAssets: aggregate.assetCount,
+      skippedAssets: aggregate.skippedAssets,
+      failedAssets: 0,
+      aggregate,
+    });
+  } catch (error) {
+    console.error('Error refreshing stack AutoTags:', error);
+    return c.json({ error: 'Failed to refresh AutoTags' }, 500);
+  }
+});
+
 // POST /stacks/:id/tags - add a tag to stack
 stacksRoute.post('/:id{[0-9]+}/tags', async (c) => {
   const id = Number.parseInt(c.req.param('id'), 10);

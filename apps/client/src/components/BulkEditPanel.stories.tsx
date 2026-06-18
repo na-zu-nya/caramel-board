@@ -37,3 +37,36 @@ export const Default: Story = {
     </div>
   ),
 };
+
+export const WithObjectValues: Story = {
+  render: () => (
+    <div className="min-h-screen bg-slate-100">
+      <BulkEditPanel
+        isOpen
+        onClose={() => console.log('close panel')}
+        selectedItems={selectedItems}
+        onSave={(updates) => console.log('apply bulk updates', updates)}
+        items={[
+          {
+            id: 1,
+            tags: [
+              { id: 'tag-1', name: 'landscape' },
+              { id: 'tag-2', title: 'sunset' },
+            ],
+            author: { id: 1, name: 'Alice' },
+          },
+          {
+            id: 2,
+            tags: [{ id: 'tag-3', displayName: 'portrait' }],
+            author: { id: 2, name: 'Bob' },
+          },
+          {
+            id: 3,
+            tags: ['travel'],
+            author: 'Charlie',
+          },
+        ]}
+      />
+    </div>
+  ),
+};

@@ -9,6 +9,7 @@ from PIL import Image
 import torchvision.transforms.functional as TVF
 import torch
 from pathlib import Path
+import gc
 import io
 import os
 import sys
@@ -38,19 +39,30 @@ app = Flask(__name__)
 # Globals
 model = None
 top_tags: list[str] | None = None
-device = "cpu"
+device = os.environ.get("JOYTAG_DEVICE", "auto").strip().lower() or "auto"
 THRESHOLD_DEFAULT = float(os.environ.get("JOYTAG_THRESHOLD", 0.4))
+IDLE_UNLOAD_SECONDS = float(os.environ.get("JOYTAG_IDLE_UNLOAD_SECONDS", 600))
+MODEL_LOAD_TIMEOUT_SECONDS = float(os.environ.get("JOYTAG_LOAD_TIMEOUT_SECONDS", 300))
+MODEL_MONITOR_INTERVAL_SECONDS = float(os.environ.get("JOYTAG_MONITOR_INTERVAL_SECONDS", 30))
+PRELOAD_MODEL = os.environ.get("JOYTAG_PRELOAD", "false").strip().lower() in {"1", "true", "yes"}
 
 model_ready = Event()
 model_error: Optional[str] = None
 _model_loader_lock = Lock()
+_prediction_lock = Lock()
 _model_loader_thread: Optional[Thread] = None
 _model_load_started_at: Optional[float] = None
 _model_load_finished_at: Optional[float] = None
+_model_unloaded_at: Optional[float] = None
+_last_prediction_at: Optional[float] = None
+_active_predictions = 0
+_idle_monitor_started = False
 
 
 def _pick_device() -> str:
     requested_device = os.environ.get("JOYTAG_DEVICE", "").strip().lower()
+    if requested_device == "auto":
+        requested_device = ""
     if requested_device:
         if requested_device not in {"cpu", "cuda", "mps"}:
             raise RuntimeError(f"Unsupported JOYTAG_DEVICE: {requested_device}")
@@ -81,7 +93,7 @@ def _load_model_instance(model_dir: str, selected_device: str):
 
 
 def initialize_model(force_device: Optional[str] = None):
-    global model, top_tags, device
+    global model, top_tags, device, _model_unloaded_at
     model_dir = os.environ.get("JOYTAG_MODEL_DIR", str(Path(__file__).parent / "models"))
     selected_device = force_device or _pick_device()
     logger.info(f"Loading JoyTag model… (dir={model_dir}, device={selected_device})")
@@ -104,6 +116,7 @@ def initialize_model(force_device: Optional[str] = None):
     model = model_instance
     device = selected_device
     top_tags = loaded_tags
+    _model_unloaded_at = None
     logger.info(f"Model ready. tags={len(top_tags)}, device={device}")
 
 
@@ -139,11 +152,98 @@ def _predict_tensor(t: torch.Tensor) -> torch.Tensor:
 
 
 def _predict_image(img: Image.Image, threshold: float):
+    mark_model_used()
     scores_tensor = _predict_tensor(_prepare_image(img, model.image_size))
+    mark_model_used()
     # Map to dict
     scores = {top_tags[i]: float(scores_tensor[i]) for i in range(len(top_tags))}
     predicted = [tg for tg, sc in scores.items() if sc >= threshold]
     return predicted, scores
+
+
+def resolve_file_key(file_key: str) -> Path:
+    safe_key = file_key.lstrip("/")
+    library_root = os.environ.get("JOYTAG_LIBRARY_PATH", "").strip()
+
+    if library_root and safe_key.startswith("library/"):
+        return Path(library_root) / safe_key.removeprefix("library/")
+
+    files_root = os.environ.get("JOYTAG_FILES_ROOT", str(Path(__file__).resolve().parent.parent / "data"))
+    return Path(files_root) / safe_key
+
+
+def mark_model_used() -> None:
+    global _last_prediction_at
+    _last_prediction_at = time.time()
+
+
+def begin_prediction() -> None:
+    global _active_predictions
+    mark_model_used()
+    with _prediction_lock:
+        _active_predictions += 1
+
+
+def end_prediction() -> None:
+    global _active_predictions
+    mark_model_used()
+    with _prediction_lock:
+        _active_predictions = max(0, _active_predictions - 1)
+
+
+def _release_accelerator_cache() -> None:
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    mps = getattr(torch, "mps", None)
+    empty_cache = getattr(mps, "empty_cache", None)
+    if callable(empty_cache):
+        empty_cache()
+
+
+def unload_model(reason: str) -> None:
+    global model, top_tags, model_error, _model_load_started_at, _model_load_finished_at, _model_unloaded_at
+
+    with _model_loader_lock:
+        with _prediction_lock:
+            if _active_predictions > 0:
+                return
+        if _model_loader_thread and _model_loader_thread.is_alive():
+            return
+        if model is None and top_tags is None and not model_ready.is_set():
+            return
+
+        logger.info(f"Unloading JoyTag model ({reason})")
+        model = None
+        top_tags = None
+        model_error = None
+        model_ready.clear()
+        _model_load_started_at = None
+        _model_load_finished_at = None
+        _model_unloaded_at = time.time()
+
+    gc.collect()
+    _release_accelerator_cache()
+
+
+def _idle_monitor_worker() -> None:
+    while True:
+        time.sleep(max(1.0, MODEL_MONITOR_INTERVAL_SECONDS))
+        if IDLE_UNLOAD_SECONDS <= 0 or not model_ready.is_set():
+            continue
+        if _last_prediction_at is None:
+            continue
+        idle_for = time.time() - _last_prediction_at
+        if idle_for >= IDLE_UNLOAD_SECONDS:
+            unload_model(f"idle for {int(idle_for)}s")
+
+
+def start_idle_monitor() -> None:
+    global _idle_monitor_started
+    if _idle_monitor_started:
+        return
+    _idle_monitor_started = True
+    monitor = Thread(target=_idle_monitor_worker, name="joytag-idle-monitor", daemon=True)
+    monitor.start()
 
 
 def start_model_loader() -> None:
@@ -177,21 +277,37 @@ def start_model_loader() -> None:
         _model_loader_thread.start()
 
 
-@app.before_request
-def _ensure_model_loader() -> None:  # pragma: no cover
+def ensure_model_loaded(timeout: float = MODEL_LOAD_TIMEOUT_SECONDS) -> bool:
     start_model_loader()
+    deadline = time.time() + timeout
+
+    while time.time() < deadline:
+        if model_ready.is_set():
+            mark_model_used()
+            return True
+        if model_error:
+            return False
+        if _model_loader_thread and not _model_loader_thread.is_alive():
+            return False
+        time.sleep(0.2)
+
+    return False
 
 
 @app.get("/health")
 def health():
     if model_ready.is_set():
         status = "ok"
+        services_status = "ready"
     elif model_error:
         status = "error"
+        services_status = "error"
+    elif _model_loader_thread and _model_loader_thread.is_alive():
+        status = "ok"
+        services_status = "loading"
     else:
-        status = "loading"
-
-    services_status = "ready" if model_ready.is_set() else ("error" if model_error else "loading")
+        status = "ok"
+        services_status = "idle"
 
     payload = {
         "status": status,
@@ -199,6 +315,8 @@ def health():
         "device": device,
         "tags": len(top_tags or []),
         "version": "cb-joytag-bridge-1",
+        "model_state": services_status,
+        "idle_unload_seconds": IDLE_UNLOAD_SECONDS,
     }
 
     if model_error:
@@ -210,27 +328,44 @@ def health():
     if _model_load_finished_at is not None:
         payload["loading_finished_at"] = _model_load_finished_at
 
+    if _last_prediction_at is not None:
+        payload["last_prediction_at"] = _last_prediction_at
+
+    payload["active_predictions"] = _active_predictions
+
+    if _model_unloaded_at is not None:
+        payload["model_unloaded_at"] = _model_unloaded_at
+
     return jsonify(payload)
 
 
 @app.post("/api/v1/tag")
 def api_tag():
+    prediction_started = False
     try:
         t0 = time.time()
         threshold = THRESHOLD_DEFAULT
         image: Image.Image | None = None
 
+        begin_prediction()
+        prediction_started = True
+
         if not model_ready.is_set() or model is None or top_tags is None:
+            if not ensure_model_loaded():
+                status = "error" if model_error else "loading"
+                message = model_error or "JoyTag model load timed out"
+                return jsonify({"error": message, "status": status}), 503
+
+        if model is None or top_tags is None:
             status = "error" if model_error else "loading"
-            message = model_error or "JoyTag model is still loading"
+            message = model_error or "JoyTag model is unavailable"
             return jsonify({"error": message, "status": status}), 503
 
         if request.is_json:
             data = request.get_json() or {}
             threshold = float(data.get("threshold", threshold))
             if "file_key" in data:
-                files_root = os.environ.get("JOYTAG_FILES_ROOT", str(Path(__file__).resolve().parent.parent / "data"))
-                abs_path = Path(files_root) / data["file_key"]
+                abs_path = resolve_file_key(data["file_key"])
                 if not abs_path.exists():
                     return jsonify({"error": f"file not found: {abs_path}"}), 400
                 image = Image.open(abs_path).convert("RGB")
@@ -266,11 +401,18 @@ def api_tag():
     except Exception as e:  # pragma: no cover
         logger.exception("/api/v1/tag failed")
         return jsonify({"error": str(e)}), 500
+    finally:
+        if prediction_started:
+            end_prediction()
 
 
 if __name__ == "__main__":  # pragma: no cover
-    start_model_loader()
+    start_idle_monitor()
+    if PRELOAD_MODEL:
+        start_model_loader()
     port = int(os.environ.get("PORT", 5001))
     debug = (os.environ.get("DEBUG", "false").lower() == "true")
-    logger.info(f"Starting JoyTag bridge on :{port} ({device})")
+    logger.info(
+        f"Starting JoyTag bridge on :{port} ({device}); preload={PRELOAD_MODEL}; idle_unload={IDLE_UNLOAD_SECONDS}s"
+    )
     app.run(host="0.0.0.0", port=port, debug=debug)

@@ -184,12 +184,12 @@ export function LibrarySection({
   };
 
   return (
-    <SideMenuGroup label={t.sidebar.library} collapsed={isCollapsed} onToggle={onToggle}>
+    <SideMenuGroup label={t.sidebar.libraryNav} collapsed={isCollapsed} onToggle={onToggle}>
       <nav className="space-y-0.5">
         <SideMenuListItem
           asChild
           icon={Home}
-          label={t.sidebar.overview}
+          label={t.sidebar.overviewNav}
           enableContextMenu
           pinnable
           pinned={isPinned('OVERVIEW')}
@@ -307,7 +307,7 @@ export function LibrarySection({
             (
               <span className="flex items-center gap-1.5">
                 <Tag size={15} />
-                <span>{t.sidebar.tags}</span>
+                <span>{t.sidebar.tagsNav}</span>
               </span>
             ) as any
           }
@@ -333,7 +333,7 @@ export function LibrarySection({
             (
               <span className="flex items-center gap-1.5">
                 <Tag size={15} />
-                <span>{t.sidebar.autoTags}</span>
+                <span>{t.sidebar.autoTagsNav}</span>
               </span>
             ) as any
           }

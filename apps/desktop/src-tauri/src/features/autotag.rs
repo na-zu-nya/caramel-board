@@ -264,7 +264,7 @@ fn write_auto_tag_log_header(
     append_auto_tag_log(
         app,
         &format!(
-            "\n=== AutoTag start {} ===\nport: {}\nruntime_mode: {}\npython: {}\nbridge: {}\nrepo: {}\nmodel: {}\nfiles_root: {}\n",
+            "\n=== AutoTag start {} ===\nport: {}\nruntime_mode: {}\npython: {}\nbridge: {}\nrepo: {}\nmodel: {}\nlibrary: {}\n",
             now_epoch_seconds(),
             settings.auto_tag_port,
             runtime_mode.as_str(),
@@ -547,6 +547,7 @@ fn start_auto_tag_if_enabled(
         .env("PORT", settings.auto_tag_port.to_string())
         .env("JOYTAG_REPO_DIR", &settings.auto_tag_repo_dir)
         .env("JOYTAG_MODEL_DIR", &settings.auto_tag_model_dir)
+        .env("JOYTAG_LIBRARY_PATH", &settings.library_path)
         .env("JOYTAG_FILES_ROOT", &settings.library_path)
         .env("JOYTAG_DEVICE", runtime_mode.as_str())
         .env("JOYTAG_THRESHOLD", settings.auto_tag_threshold.to_string())

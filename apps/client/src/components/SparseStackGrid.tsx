@@ -300,6 +300,14 @@ export default function SparseStackGrid({
     onRefreshAll: refreshAll,
   });
 
+  const selectedBulkEditItems = useMemo(
+    () =>
+      Array.from(selectedItems)
+        .map((id) => sparseItems.find((item) => item?.id === id))
+        .filter((item): item is MediaGridItem => item !== undefined),
+    [selectedItems, sparseItems]
+  );
+
   // Cmd/Ctrl/Alt + Click はリンクのネイティブ動作へ委譲し、Shift + Click は範囲選択する
   const lastClickedIndexRef = useRef<number | null>(null);
 
@@ -773,11 +781,10 @@ export default function SparseStackGrid({
         createPortal(
           <BulkEditPanel
             isOpen={isEditPanelOpen}
-            selectedItems={Array.from(selectedItems)
-              .map((id) => sparseItems.find((item) => item?.id === id))
-              .filter((item): item is MediaGridItem => item !== undefined)}
+            selectedItems={selectedItems}
             onClose={closeEditPanel}
-            onApplyUpdates={applyEditUpdates}
+            onSave={applyEditUpdates}
+            items={selectedBulkEditItems}
           />,
           document.body
         )}

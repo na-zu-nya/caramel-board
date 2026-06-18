@@ -455,9 +455,12 @@ function AutoTagConfigPage() {
     } catch {}
   }, [location.search]);
 
-  // Handle infinite scroll (observe page scroll via viewport)
+  // Handle infinite scroll within the asset list pane
   useEffect(() => {
+    if (!selectedAutoTag) return;
+
     const el = loadMoreTriggerRef.current;
+    const root = scrollContainerRef.current;
     if (!el) return;
 
     const observer = new IntersectionObserver(
@@ -470,12 +473,12 @@ function AutoTagConfigPage() {
           }
         }
       },
-      { root: null, rootMargin: '400px 0px', threshold: 0.01 }
+      { root, rootMargin: '400px 0px', threshold: 0.01 }
     );
 
     observer.observe(el);
     return () => observer.disconnect();
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage, selectedAutoTag]);
 
   // Delete mapping mutation
   const deleteMappingMutation = useMutation({
@@ -708,145 +711,141 @@ function AutoTagConfigPage() {
   });
 
   return (
-    <div className="flex min-h-[calc(100vh-56px)]">
+    <div className="flex h-[calc(100vh-56px)] overflow-hidden">
       {/* Statistics List */}
-      <div className="w-80 flex-shrink-0">
-        <div className="sticky top-14 h-[calc(100vh-56px)] border-r bg-white">
-          <div className="overflow-y-auto h-full">
-            <div className="p-4 border-b">
-              <div className="space-y-3">
-                <div className="space-y-1">
-                  <h2 className="text-lg font-semibold">{t.autoTagPage.statistics}</h2>
-                  <JoyTagStatus
-                    status={joyTagStatusComputed.status}
-                    isLoading={joyTagStatusLoading}
-                    message={joyTagStatusComputed.message}
-                  />
-                </div>
-
-                <SmallSearchField
-                  value={searchQuery}
-                  onValueChange={setSearchQuery}
-                  placeholder={t.tagPage.searchTags}
+      <div className="w-80 h-full flex-shrink-0 border-r bg-white">
+        <div className="h-full overflow-y-auto">
+          <div className="p-4 border-b">
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <h2 className="text-lg font-semibold">{t.autoTagPage.statistics}</h2>
+                <JoyTagStatus
+                  status={joyTagStatusComputed.status}
+                  isLoading={joyTagStatusLoading}
+                  message={joyTagStatusComputed.message}
                 />
+              </div>
 
-                <div className="space-y-2">
-                  <SmallSelect
-                    value={sortBy}
-                    onValueChange={(v) => setSortBy(v as typeof sortBy)}
-                    placeholder={t.tagPage.sortBy}
-                  >
-                    <SelectItem value="name-asc">{t.tagPage.nameAsc}</SelectItem>
-                    <SelectItem value="name-desc">{t.tagPage.nameDesc}</SelectItem>
-                    <SelectItem value="count-desc">{t.autoTagPage.predictionCountDesc}</SelectItem>
-                    <SelectItem value="count-asc">{t.autoTagPage.predictionCountAsc}</SelectItem>
-                  </SmallSelect>
-                </div>
+              <SmallSearchField
+                value={searchQuery}
+                onValueChange={setSearchQuery}
+                placeholder={t.tagPage.searchTags}
+              />
+
+              <div className="space-y-2">
+                <SmallSelect
+                  value={sortBy}
+                  onValueChange={(v) => setSortBy(v as typeof sortBy)}
+                  placeholder={t.tagPage.sortBy}
+                >
+                  <SelectItem value="name-asc">{t.tagPage.nameAsc}</SelectItem>
+                  <SelectItem value="name-desc">{t.tagPage.nameDesc}</SelectItem>
+                  <SelectItem value="count-desc">{t.autoTagPage.predictionCountDesc}</SelectItem>
+                  <SelectItem value="count-asc">{t.autoTagPage.predictionCountAsc}</SelectItem>
+                </SmallSelect>
               </div>
             </div>
+          </div>
 
-            {/* Statistics list */}
-            <div className="p-2">
-              {statisticsError ? (
-                <div className="text-center py-8 text-red-500">
-                  {t.autoTagPage.errorLoadingStatistics} {(statisticsError as Error).message}
-                </div>
-              ) : statisticsLoading ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  {t.autoTagPage.loadingStatistics}
-                </div>
-              ) : filteredStatistics.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  {searchQuery ? t.tagPage.noTagsFound : t.sidebar.noAutoTags}
-                </div>
-              ) : (
-                <div className="space-y-0.5">
-                  {filteredStatistics.map((stat) => {
-                    const existingMapping = getExistingMapping(stat.autoTagKey);
-                    const isSelected = selectedAutoTag === stat.autoTagKey;
-                    return (
-                      <div
-                        key={stat.autoTagKey}
-                        data-autotag-key={stat.autoTagKey}
-                        ref={(el) => {
-                          if (el) {
-                            listItemRefs.current.set(stat.autoTagKey, el);
-                          } else {
-                            listItemRefs.current.delete(stat.autoTagKey);
-                          }
-                        }}
-                        onClick={() => handleAutoTagClick(stat.autoTagKey)}
-                        className={cn(
-                          'px-2 py-1.5 rounded transition-colors cursor-pointer group',
-                          isSelected
-                            ? 'bg-blue-50 text-blue-700'
-                            : 'hover:bg-accent hover:text-accent-foreground'
-                        )}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm truncate font-medium">
-                                {stat.autoTagKey}
-                              </span>
-                              {existingMapping && (
-                                <div className="flex items-center gap-1">
-                                  <ArrowRight className="h-3 w-3 text-muted-foreground" />
-                                  <span className="text-xs text-blue-600">
-                                    {existingMapping.displayName}
-                                  </span>
-                                </div>
-                              )}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              {strictCounts[stat.autoTagKey] ? (
-                                <>
-                                  {strictCounts[stat.autoTagKey].predictionCount}{' '}
-                                  {t.autoTagPage.predictions} -{' '}
-                                  {strictCounts[stat.autoTagKey].assetCount} {t.autoTagPage.assets}
-                                </>
-                              ) : (
-                                <>
-                                  {stat.predictionCount} {t.autoTagPage.stacksApproxAssets}{' '}
-                                  {stat.assetCount} {t.autoTagPage.assets}
-                                </>
-                              )}
-                            </div>
+          {/* Statistics list */}
+          <div className="p-2">
+            {statisticsError ? (
+              <div className="text-center py-8 text-red-500">
+                {t.autoTagPage.errorLoadingStatistics} {(statisticsError as Error).message}
+              </div>
+            ) : statisticsLoading ? (
+              <div className="text-center py-8 text-muted-foreground">
+                {t.autoTagPage.loadingStatistics}
+              </div>
+            ) : filteredStatistics.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                {searchQuery ? t.tagPage.noTagsFound : t.sidebar.noAutoTags}
+              </div>
+            ) : (
+              <div className="space-y-0.5">
+                {filteredStatistics.map((stat) => {
+                  const existingMapping = getExistingMapping(stat.autoTagKey);
+                  const isSelected = selectedAutoTag === stat.autoTagKey;
+                  return (
+                    <div
+                      key={stat.autoTagKey}
+                      data-autotag-key={stat.autoTagKey}
+                      ref={(el) => {
+                        if (el) {
+                          listItemRefs.current.set(stat.autoTagKey, el);
+                        } else {
+                          listItemRefs.current.delete(stat.autoTagKey);
+                        }
+                      }}
+                      onClick={() => handleAutoTagClick(stat.autoTagKey)}
+                      className={cn(
+                        'px-2 py-1.5 rounded transition-colors cursor-pointer group',
+                        isSelected
+                          ? 'bg-blue-50 text-blue-700'
+                          : 'hover:bg-accent hover:text-accent-foreground'
+                      )}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm truncate font-medium">{stat.autoTagKey}</span>
+                            {existingMapping && (
+                              <div className="flex items-center gap-1">
+                                <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                                <span className="text-xs text-blue-600">
+                                  {existingMapping.displayName}
+                                </span>
+                              </div>
+                            )}
                           </div>
-                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            {existingMapping ? (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleEditMapping(existingMapping);
-                                }}
-                                className="h-6 w-6 p-0"
-                              >
-                                <SquarePen className="h-3.5 w-3.5" />
-                              </Button>
+                          <div className="text-xs text-muted-foreground">
+                            {strictCounts[stat.autoTagKey] ? (
+                              <>
+                                {strictCounts[stat.autoTagKey].predictionCount}{' '}
+                                {t.autoTagPage.predictions} -{' '}
+                                {strictCounts[stat.autoTagKey].assetCount} {t.autoTagPage.assets}
+                              </>
                             ) : (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleCreateMapping(stat.autoTagKey);
-                                }}
-                                className="h-6 w-6 p-0"
-                              >
-                                <Plus className="h-3.5 w-3.5" />
-                              </Button>
+                              <>
+                                {stat.predictionCount} {t.autoTagPage.stacksApproxAssets}{' '}
+                                {stat.assetCount} {t.autoTagPage.assets}
+                              </>
                             )}
                           </div>
                         </div>
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {existingMapping ? (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEditMapping(existingMapping);
+                              }}
+                              className="h-6 w-6 p-0"
+                            >
+                              <SquarePen className="h-3.5 w-3.5" />
+                            </Button>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleCreateMapping(stat.autoTagKey);
+                              }}
+                              className="h-6 w-6 p-0"
+                            >
+                              <Plus className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
                       </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -856,7 +855,7 @@ function AutoTagConfigPage() {
         <div
           ref={scrollContainerRef}
           className={cn(
-            'flex-1 bg-gray-50 transition-all duration-300 ease-in-out',
+            'flex-1 min-w-0 h-full overflow-y-auto bg-gray-50 transition-all duration-300 ease-in-out',
             infoSidebarOpen && !selectionMode ? 'mr-80' : 'mr-0',
             isEditPanelOpen && selectionMode ? 'mr-80' : ''
           )}
@@ -1061,7 +1060,7 @@ function AutoTagConfigPage() {
       ) : (
         <div
           className={cn(
-            'flex-1 flex items-center justify-center bg-gray-50 transition-all duration-300 ease-in-out',
+            'flex-1 min-w-0 h-full flex items-center justify-center bg-gray-50 transition-all duration-300 ease-in-out',
             infoSidebarOpen && !selectionMode ? 'mr-80' : 'mr-0',
             isEditPanelOpen && selectionMode ? 'mr-80' : ''
           )}

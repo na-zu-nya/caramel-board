@@ -2,6 +2,7 @@ import { Check, ChevronDown, ChevronUp, Copy, Wand2 } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import AutoTagMappingModal from '@/components/modals/AutoTagMappingModal';
 import { Badge } from '@/components/ui/badge';
+import { useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import type { AutoTag } from '@/types';
 
@@ -43,8 +44,11 @@ export function AutoTagDisplay({
   className,
   badgeClassName = 'text-xs cursor-pointer hover:bg-purple-100 hover:text-purple-700 transition-colors',
   showIcon = true,
-  title = 'AutoTags',
+  title,
 }: AutoTagDisplayProps) {
+  const t = useT();
+  const displayTitle = title ?? t.info.autoTags;
+
   // AutoTag mapping modal state
   const [mappingModalOpen, setMappingModalOpen] = useState(false);
   const [selectedAutoTagKey, setSelectedAutoTagKey] = useState<string>('');
@@ -170,7 +174,7 @@ export function AutoTagDisplay({
       <div className="flex items-center justify-between text-sm font-medium text-gray-700">
         <div className="flex items-center gap-2">
           {showIcon && <Wand2 size={16} />}
-          {title}
+          {displayTitle}
         </div>
         <button
           type="button"
