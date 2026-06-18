@@ -117,3 +117,90 @@ fn run_command(mut command: Command, label: &str) -> Result<String, String> {
 
     Ok(format!("{stdout}{stderr}"))
 }
+
+fn pipe_lines<R>(reader: R, sender: mpsc::Sender<String>)
+-> thread::JoinHandle<()>
+where
+    R: Read + Send + 'static,
+{
+    thread::spawn(move || {
+        let mut reader = BufReader::new(reader);
+        let mut line = String::new();
+        loop {
+            line.clear();
+            match reader.read_line(&mut line) {
+                Ok(0) => break,
+                Ok(_) => {
+                    let _ = sender.send(line.trim_end_matches(['\r', '\n']).to_string());
+                }
+                Err(error) => {
+                    let _ = sender.send(format!("出力を読み取れません: {error}"));
+                    break;
+                }
+            }
+        }
+    })
+}
+
+fn run_command_streaming<F>(
+    mut command: Command,
+    label: &str,
+    mut on_output: F,
+) -> Result<String, String>
+where
+    F: FnMut(&str),
+{
+    command.stdout(Stdio::piped()).stderr(Stdio::piped());
+    let mut child = command
+        .spawn()
+        .map_err(|error| format!("{label} を実行できません: {error}"))?;
+
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| format!("{label} の標準出力を取得できません"))?;
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| format!("{label} の標準エラー出力を取得できません"))?;
+
+    let (sender, receiver) = mpsc::channel::<String>();
+    let stdout_reader = pipe_lines(stdout, sender.clone());
+    let stderr_reader = pipe_lines(stderr, sender);
+
+    let mut output = String::new();
+    let status = loop {
+        while let Ok(line) = receiver.try_recv() {
+            if !line.is_empty() {
+                on_output(&line);
+            }
+            output.push_str(&line);
+            output.push('\n');
+        }
+
+        match child
+            .try_wait()
+            .map_err(|error| format!("{label} の終了状態を確認できません: {error}"))?
+        {
+            Some(status) => break status,
+            None => thread::sleep(Duration::from_millis(80)),
+        }
+    };
+
+    let _ = stdout_reader.join();
+    let _ = stderr_reader.join();
+
+    while let Ok(line) = receiver.try_recv() {
+        if !line.is_empty() {
+            on_output(&line);
+        }
+        output.push_str(&line);
+        output.push('\n');
+    }
+
+    if !status.success() {
+        return Err(format!("{label} が失敗しました\nstatus: {status}\n{output}"));
+    }
+
+    Ok(output)
+}

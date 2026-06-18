@@ -1,7 +1,8 @@
 {
   "name": "@caramelboard/server-standalone",
   "private": true,
-  "version": "0.4.8",
+  "version": "1.0.0-beta.1",
+  "license": "SEE LICENSE IN ../../LICENSE",
   "type": "module",
   "main": "dist/entry.node.mjs",
   "scripts": {
@@ -13,7 +14,7 @@
     "clean": "rm -rf dist *.tsbuildinfo"
   },
   "dependencies": {
-    "@caramelboard/server-core": "^0.4.8",
+    "@caramelboard/server-core": "^1.0.0-beta.1",
     "@hono/node-server": "^1.14.3",
     "hono": "^4.7.10"
   },

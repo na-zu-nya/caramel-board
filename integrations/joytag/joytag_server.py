@@ -14,6 +14,7 @@ import os
 import sys
 import time
 import logging
+import traceback
 from threading import Event, Lock, Thread
 from typing import Optional
 
@@ -25,7 +26,8 @@ if str(joytag_repo_dir) not in sys.path:
 try:
     from Models import VisionModel  # provided by https://github.com/fpgaminer/joytag
 except Exception as e:  # pragma: no cover
-    raise SystemExit("Models.py not found. Ensure you run this in the JoyTag repo folder (externals/joytag).")
+    traceback.print_exc()
+    raise SystemExit(f"Failed to import JoyTag Models.py from {joytag_repo_dir}: {type(e).__name__}: {e}")
 
 
 logging.basicConfig(level=logging.INFO)
@@ -48,22 +50,50 @@ _model_load_finished_at: Optional[float] = None
 
 
 def _pick_device() -> str:
-    if torch.backends.mps.is_available():
+    requested_device = os.environ.get("JOYTAG_DEVICE", "").strip().lower()
+    if requested_device:
+        if requested_device not in {"cpu", "cuda", "mps"}:
+            raise RuntimeError(f"Unsupported JOYTAG_DEVICE: {requested_device}")
+        if not _device_available(requested_device):
+            raise RuntimeError(f"Requested JoyTag device is not available: {requested_device}")
+        return requested_device
+    if _device_available("mps"):
         return "mps"
-    if torch.cuda.is_available():
+    if _device_available("cuda"):
         return "cuda"
     return "cpu"
+
+
+def _device_available(candidate: str) -> bool:
+    if candidate == "cpu":
+        return True
+    if candidate == "cuda":
+        return torch.cuda.is_available()
+    if candidate == "mps":
+        mps_backend = getattr(torch.backends, "mps", None)
+        return bool(mps_backend and mps_backend.is_available())
+    return False
+
+
+def _load_model_instance(model_dir: str, selected_device: str):
+    model_instance = VisionModel.load_model(model_dir)
+    return model_instance.to(selected_device).eval()
 
 
 def initialize_model(force_device: Optional[str] = None):
     global model, top_tags, device
     model_dir = os.environ.get("JOYTAG_MODEL_DIR", str(Path(__file__).parent / "models"))
-    device = force_device or _pick_device()
-    logger.info(f"Loading JoyTag model… (dir={model_dir}, device={device})")
+    selected_device = force_device or _pick_device()
+    logger.info(f"Loading JoyTag model… (dir={model_dir}, device={selected_device})")
 
-    # Load VisionModel from JoyTag repo
-    model_instance = VisionModel.load_model(model_dir)
-    model_instance = model_instance.to(device).eval()
+    try:
+        model_instance = _load_model_instance(model_dir, selected_device)
+    except Exception:
+        if selected_device != "mps":
+            raise
+        logger.exception("Failed to load JoyTag model on MPS; falling back to CPU")
+        selected_device = "cpu"
+        model_instance = _load_model_instance(model_dir, selected_device)
 
     # Load tags
     tags_file = Path(model_dir) / "top_tags.txt"
@@ -72,8 +102,9 @@ def initialize_model(force_device: Optional[str] = None):
     loaded_tags = [ln.strip() for ln in tags_file.read_text(encoding="utf-8").splitlines() if ln.strip()]
 
     model = model_instance
+    device = selected_device
     top_tags = loaded_tags
-    logger.info(f"Model ready. tags={len(top_tags)}")
+    logger.info(f"Model ready. tags={len(top_tags)}, device={device}")
 
 
 def _prepare_image(image: Image.Image, target: int) -> torch.Tensor:
@@ -93,7 +124,16 @@ def _prepare_image(image: Image.Image, target: int) -> torch.Tensor:
 
 @torch.no_grad()
 def _predict_tensor(t: torch.Tensor) -> torch.Tensor:
-    out = model({"image": t.unsqueeze(0).to(device)})
+    global model, device
+    try:
+        out = model({"image": t.unsqueeze(0).to(device)})
+    except Exception:
+        if device != "mps":
+            raise
+        logger.exception("JoyTag prediction failed on MPS; falling back to CPU")
+        device = "cpu"
+        model = model.to(device).eval()
+        out = model({"image": t.unsqueeze(0).to(device)})
     # JoyTag returns logits under 'tags'
     return out["tags"].sigmoid().cpu()[0]
 

@@ -8,7 +8,10 @@ use std::{
     net::{SocketAddr, TcpStream, UdpSocket},
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
-    sync::Mutex,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc, Mutex,
+    },
     thread,
     time::Duration,
     time::{Instant, SystemTime, UNIX_EPOCH},
@@ -36,6 +39,19 @@ include!("features/sidecar.rs");
 include!("features/data_store.rs");
 include!("features/docker_migration.rs");
 include!("tray.rs");
+
+static EXIT_CLEANUP_STARTED: AtomicBool = AtomicBool::new(false);
+
+fn run_exit_cleanup_once(app: &AppHandle) {
+    if !EXIT_CLEANUP_STARTED.swap(true, Ordering::SeqCst) {
+        stop_sidecar_on_exit(app);
+    }
+}
+
+fn cleanup_and_exit(app: &AppHandle) {
+    run_exit_cleanup_once(app);
+    app.exit(0);
+}
 
 pub fn run() {
     tauri::Builder::default()
@@ -65,7 +81,8 @@ pub fn run() {
             prepare_autotag,
             start_autotag_install,
             detect_docker_source,
-            migrate_from_docker,
+            docker_migration_progress,
+            start_docker_migration,
             apply_data_store,
             inspect_data_store,
             complete_setup,
@@ -83,8 +100,14 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("failed to build Tauri application")
         .run(|app, event| match event {
-            tauri::RunEvent::ExitRequested { .. } => {
-                stop_sidecar_on_exit(app);
+            tauri::RunEvent::ExitRequested { api, .. } => {
+                if !EXIT_CLEANUP_STARTED.load(Ordering::SeqCst) {
+                    api.prevent_exit();
+                    cleanup_and_exit(app);
+                }
+            }
+            tauri::RunEvent::Exit => {
+                run_exit_cleanup_once(app);
             }
             #[cfg(target_os = "macos")]
             tauri::RunEvent::Reopen { .. } => {

@@ -26,10 +26,12 @@ The **main** branch hosts the stable releases, while **dev** carries newer featu
 
 #### License, usage scope, and warranty
 
-This software is distributed under the [**Elastic License 2.0 (ELv2)**](https://www.elastic.co/licensing/elastic-license).
+This software is distributed under the [**Caramel Board Source Available License 1.0**](./LICENSE). The source code is available, but this is not an Open Source license as defined by the Open Source Initiative.
 
-- Both individuals and companies can use it **within their own homes or offices (commercial use included)**.
-- You **may not offer it as a hosted or managed service for third parties** (SaaS is not allowed). Contact us for a separate agreement if you need that use case.
+- Both individuals and companies can use it **within their own homes or organizations (commercial internal use included)**.
+- You may read, modify, and build the source code for your own personal or internal organizational use.
+- GitHub forks, Issues, and pull requests are allowed for development, review, and contribution.
+- You **may not sell, redistribute, provide, rebrand, or otherwise make available built desktop applications, installers, or substantially similar applications or services to third parties**. See [COMMERCIAL-LICENSE.md](./COMMERCIAL-LICENSE.md) if you need a separate permission.
 - The software is provided **as-is**, without any express or implied warranties.
 
 Because there is no built-in access control, exposing the app directly to the public internet is extremely risky. Keep the deployment within environments you can manage.
@@ -164,4 +166,4 @@ If you encounter permission errors, adjust ownership or permissions on the host 
 ## License / Contributions / For developers
 
 - Please report bugs or feature requests via Issues (a template is in preparation)
-- Pull requests are currently limited to approved maintainers, though this may open up in the future
+- Pull requests are currently focused on approved maintainers and contributors who have discussed the change beforehand. See [CONTRIBUTING.md](./CONTRIBUTING.md) for details.

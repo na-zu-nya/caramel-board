@@ -1,0 +1,144 @@
+#!/usr/bin/env node
+
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __filename = fileURLToPath(import.meta.url);
+const repoRoot = path.resolve(path.dirname(__filename), '..');
+const appPackagePaths = [
+  'apps/desktop/package.json',
+  'apps/docker-migration/package.json',
+  'apps/server-standalone/package.json',
+  'packages/server-core/package.json',
+];
+
+const readText = (relativePath) => fs.readFileSync(path.join(repoRoot, relativePath), 'utf8');
+const writeText = (relativePath, content) =>
+  fs.writeFileSync(path.join(repoRoot, relativePath), content);
+const readJson = (relativePath) => JSON.parse(readText(relativePath));
+const writeJson = (relativePath, value) =>
+  writeText(relativePath, `${JSON.stringify(value, null, 2)}\n`);
+
+const rootPackage = readJson('package.json');
+const version = rootPackage.version;
+
+if (typeof version !== 'string' || !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version)) {
+  throw new Error(`package.json の version が SemVer として扱えません: ${version}`);
+}
+
+const deriveWindowsInstallerVersion = (sourceVersion) => {
+  const [core, prerelease] = sourceVersion.split('-', 2);
+  if (!prerelease) return core;
+
+  const prereleaseParts = prerelease.split('.');
+  const numericPart = prereleaseParts.findLast((part) => /^\d+$/.test(part));
+  const build = numericPart ?? '0';
+  return `${core}.${build}`;
+};
+
+const updatePackageVersion = (relativePath) => {
+  const packageJson = readJson(relativePath);
+  packageJson.version = version;
+
+  if (relativePath === 'apps/server-standalone/package.json') {
+    packageJson.dependencies = {
+      ...packageJson.dependencies,
+      '@caramelboard/server-core': `^${version}`,
+    };
+  }
+
+  writeJson(relativePath, packageJson);
+};
+
+const updatePackageLock = () => {
+  const packageLock = readJson('package-lock.json');
+  packageLock.version = version;
+
+  const packages = packageLock.packages ?? {};
+  if (packages['']) {
+    packages[''].version = version;
+  }
+
+  for (const relativePath of appPackagePaths) {
+    const packageDir = path.dirname(relativePath);
+    if (packages[packageDir]) {
+      packages[packageDir].version = version;
+    }
+  }
+
+  if (packages['apps/server-standalone']?.dependencies) {
+    packages['apps/server-standalone'].dependencies['@caramelboard/server-core'] = `^${version}`;
+  }
+
+  if (packages['node_modules/@caramelboard/server-core']) {
+    packages['node_modules/@caramelboard/server-core'].version = version;
+  }
+
+  writeJson('package-lock.json', packageLock);
+};
+
+const replaceRequired = (relativePath, pattern, replacement) => {
+  const current = readText(relativePath);
+  const nonGlobalPattern = new RegExp(pattern.source, pattern.flags.replace('g', ''));
+  if (!nonGlobalPattern.test(current)) {
+    throw new Error(`${relativePath} の更新対象が見つかりませんでした`);
+  }
+  const next = current.replace(pattern, replacement);
+  writeText(relativePath, next);
+};
+
+const updateTauriConfig = () => {
+  replaceRequired(
+    'apps/desktop/src-tauri/tauri.conf.json',
+    /^ {2}"version": ".*",$/m,
+    `  "version": "${version}",`
+  );
+};
+
+const updateWindowsTauriConfig = () => {
+  const windowsInstallerVersion = deriveWindowsInstallerVersion(version);
+  const config = {
+    bundle: {
+      windows: {
+        wix: {
+          version: windowsInstallerVersion,
+        },
+      },
+    },
+  };
+  writeJson('apps/desktop/src-tauri/tauri.windows.conf.json', config);
+};
+
+const updateCargoVersion = () => {
+  replaceRequired(
+    'apps/desktop/src-tauri/Cargo.toml',
+    /^version = ".*"$/m,
+    `version = "${version}"`
+  );
+  replaceRequired(
+    'apps/desktop/src-tauri/Cargo.lock',
+    /(\[\[package\]\]\nname = "caramel-board-desktop"\nversion = ")[^"]+(")/,
+    `$1${version}$2`
+  );
+};
+
+const updateDocs = () => {
+  replaceRequired(
+    'docs/desktop-packaging.md',
+    /Caramel Board_[^_]+_aarch64\.dmg/g,
+    `Caramel Board_${version}_aarch64.dmg`
+  );
+};
+
+for (const relativePath of appPackagePaths) {
+  updatePackageVersion(relativePath);
+}
+
+updatePackageLock();
+updateTauriConfig();
+updateWindowsTauriConfig();
+updateCargoVersion();
+updateDocs();
+
+console.log(`Synced Caramel Board version: ${version}`);

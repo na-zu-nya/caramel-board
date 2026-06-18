@@ -1,6 +1,7 @@
 {
   "name": "@caramelboard/server",
   "private": true,
+  "license": "SEE LICENSE IN ../../LICENSE",
   "main": "index.js",
   "type": "module",
   "scripts": {

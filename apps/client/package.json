@@ -1,6 +1,7 @@
 {
   "name": "@caramelboard/client",
   "private": true,
+  "license": "SEE LICENSE IN ../../LICENSE",
   "type": "module",
   "scripts": {
     "dev": "bash ./scripts/dev-with-storybook.sh",

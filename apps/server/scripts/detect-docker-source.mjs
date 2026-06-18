@@ -128,10 +128,42 @@ const storageRootCandidates = () =>
     path.join(repoRoot, 'assets'),
   ]).map(resolveUserPath);
 
+const looksLikeDatasetAssetDirectory = (candidate) => {
+  try {
+    if (!fs.statSync(candidate).isDirectory()) return false;
+  } catch {
+    return false;
+  }
+
+  const assetSubdirectories = ['files', 'assets', 'thumbnails', 'preview', 'originals'];
+  try {
+    return fs.readdirSync(candidate, { withFileTypes: true }).some((entry) => {
+      if (!entry.isDirectory()) return false;
+      if (!/^\d+$/.test(entry.name)) return false;
+      const datasetRoot = path.join(candidate, entry.name);
+      return assetSubdirectories.some((name) => fs.existsSync(path.join(datasetRoot, name)));
+    });
+  } catch {
+    return false;
+  }
+};
+
+const storageRootVariants = (candidate) => [
+  candidate,
+  path.join(candidate, 'library'),
+  path.join(candidate, 'assets'),
+  path.join(candidate, 'data', 'assets'),
+  path.join(candidate, 'data'),
+  path.join(candidate, 'files'),
+];
+
 const detectStorageRoot = () => {
   const candidates = storageRootCandidates();
-  const existing = candidates.find((candidate) => fs.existsSync(candidate));
-  const storageRoot = existing ?? candidates[0] ?? path.join(repoRoot, 'data/assets');
+  const storageRoot =
+    candidates.flatMap(storageRootVariants).find(looksLikeDatasetAssetDirectory) ??
+    candidates.find((candidate) => fs.existsSync(candidate)) ??
+    candidates[0] ??
+    path.join(repoRoot, 'data/assets');
   return {
     storageRoot,
     storageRootExists: fs.existsSync(storageRoot),

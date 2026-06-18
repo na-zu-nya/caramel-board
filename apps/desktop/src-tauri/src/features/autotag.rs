@@ -35,6 +35,10 @@ fn auto_tag_download_patterns() -> &'static [&'static str] {
     ]
 }
 
+fn auto_tag_python_version() -> &'static str {
+    "3.11"
+}
+
 fn fallback_auto_tag_metadata() -> AutoTagInstallMetadata {
     let download_bytes = 370 * 1024 * 1024;
     AutoTagInstallMetadata {
@@ -71,7 +75,11 @@ fn auto_tag_status_from(
     settings: &AppSettings,
 ) -> AutoTagStatus {
     if let Some(child) = sidecar.auto_tag_child.as_mut() {
-        if child.try_wait().ok().flatten().is_some() {
+        if let Some(status) = child.try_wait().ok().flatten() {
+            let _ = append_auto_tag_log(
+                app,
+                &format!("AutoTag child exited before status check completed: {status}"),
+            );
             sidecar.auto_tag_child = None;
         }
     }
@@ -80,9 +88,17 @@ fn auto_tag_status_from(
     let repository_ready = is_auto_tag_repository_ready(settings);
     let model_ready = is_auto_tag_model_ready(settings);
     let ready = uv_installed && repository_ready && model_ready;
-    let running = sidecar.auto_tag_child.is_some();
+    let process_running = sidecar.auto_tag_child.is_some();
+    let reachable = process_running && http_health_ok(settings.auto_tag_port);
+    let running = reachable;
+    let starting = process_running && !reachable;
     let message = if running {
         String::from("自動タグサービスが起動しています。")
+    } else if starting {
+        format!(
+            "自動タグサービスを起動中です。まだ {} に接続できません。",
+            auto_tag_url(settings)
+        )
     } else if ready {
         String::from("自動タグを利用できます。")
     } else if !uv_installed {
@@ -96,7 +112,12 @@ fn auto_tag_status_from(
     AutoTagStatus {
         enabled: settings.auto_tag_enabled,
         running,
+        starting,
+        reachable,
         url: auto_tag_url(settings),
+        log_path: auto_tag_log_path(app)
+            .map(|path| path.to_string_lossy().into_owned())
+            .unwrap_or_default(),
         uv_installed,
         repository_ready,
         model_ready,
@@ -215,6 +236,47 @@ fn auto_tag_bridge_root(app: &AppHandle) -> PathBuf {
     resource_or_repo_path(app, "integrations/joytag", "integrations/joytag")
 }
 
+fn auto_tag_log_path(app: &AppHandle) -> Result<PathBuf, String> {
+    Ok(auto_tag_root(app)?.join("autotag-service.log"))
+}
+
+fn append_auto_tag_log(app: &AppHandle, message: &str) -> Result<(), String> {
+    let log_path = auto_tag_log_path(app)?;
+    if let Some(parent) = log_path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|error| format!("AutoTag ログ保存先を作成できません: {error}"))?;
+    }
+    let mut log = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_path)
+        .map_err(|error| format!("AutoTag ログを開けません: {error}"))?;
+    writeln!(log, "[{}] {}", now_epoch_seconds(), message)
+        .map_err(|error| format!("AutoTag ログを書き込めません: {error}"))
+}
+
+fn write_auto_tag_log_header(
+    app: &AppHandle,
+    settings: &AppSettings,
+    runtime_mode: AutoTagRuntimeMode,
+    bridge_script: &Path,
+) -> Result<(), String> {
+    append_auto_tag_log(
+        app,
+        &format!(
+            "\n=== AutoTag start {} ===\nport: {}\nruntime_mode: {}\npython: {}\nbridge: {}\nrepo: {}\nmodel: {}\nfiles_root: {}\n",
+            now_epoch_seconds(),
+            settings.auto_tag_port,
+            runtime_mode.as_str(),
+            auto_tag_python_version(),
+            bridge_script.to_string_lossy(),
+            settings.auto_tag_repo_dir,
+            settings.auto_tag_model_dir,
+            settings.library_path
+        ),
+    )
+}
+
 fn auto_tag_runtime_marker_path(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(auto_tag_root(app)?.join("runtime-mode.txt"))
 }
@@ -225,6 +287,7 @@ fn read_auto_tag_runtime_mode(app: &AppHandle) -> AutoTagRuntimeMode {
     };
     match fs::read_to_string(path).map(|value| value.trim().to_ascii_lowercase()) {
         Ok(value) if value == AutoTagRuntimeMode::Cuda.as_str() => AutoTagRuntimeMode::Cuda,
+        Ok(value) if value == AutoTagRuntimeMode::Mps.as_str() => AutoTagRuntimeMode::Mps,
         _ => AutoTagRuntimeMode::Cpu,
     }
 }
@@ -257,10 +320,34 @@ fn prefer_cuda_auto_tag() -> bool {
         .unwrap_or(false)
 }
 
+fn auto_tag_candidate_runtime_modes() -> Vec<AutoTagRuntimeMode> {
+    let mut attempts = Vec::new();
+    #[cfg(target_os = "macos")]
+    attempts.push(AutoTagRuntimeMode::Mps);
+    if prefer_cuda_auto_tag() && nvidia_gpu_available() {
+        attempts.push(AutoTagRuntimeMode::Cuda);
+    }
+    attempts.push(AutoTagRuntimeMode::Cpu);
+    attempts.dedup();
+    attempts
+}
+
+fn auto_tag_runtime_mode_label(mode: AutoTagRuntimeMode) -> &'static str {
+    match mode {
+        AutoTagRuntimeMode::Cpu => "CPU",
+        AutoTagRuntimeMode::Cuda => "CUDA",
+        AutoTagRuntimeMode::Mps => "MPS",
+    }
+}
+
 fn auto_tag_dependency_command(app: &AppHandle, mode: AutoTagRuntimeMode) -> Command {
     let requirements = auto_tag_bridge_root(app).join("requirements-server.txt");
     let mut command = uv_command(app);
-    command.arg("run").arg("--no-project");
+    command
+        .arg("run")
+        .arg("--no-project")
+        .arg("--python")
+        .arg(auto_tag_python_version());
     if mode == AutoTagRuntimeMode::Cuda {
         command
             .arg("--index")
@@ -274,7 +361,7 @@ fn auto_tag_dependency_command(app: &AppHandle, mode: AutoTagRuntimeMode) -> Com
     command
 }
 
-fn auto_tag_environment_check_script(require_cuda: bool) -> String {
+fn auto_tag_environment_check_script(mode: AutoTagRuntimeMode) -> String {
     format!(
         r#"
 import flask
@@ -283,33 +370,29 @@ import torch
 import torchvision
 
 cuda_available = torch.cuda.is_available()
-print(f"AutoTag ready: torch={{torch.__version__}}, cuda_runtime={{torch.version.cuda}}, cuda_available={{cuda_available}}")
-if {require_cuda} and not cuda_available:
+mps_backend = getattr(torch.backends, "mps", None)
+mps_available = bool(mps_backend and mps_backend.is_available())
+requested = "{requested}"
+print(f"AutoTag ready: torch={{torch.__version__}}, cuda_runtime={{torch.version.cuda}}, cuda_available={{cuda_available}}, mps_available={{mps_available}}, requested={{requested}}")
+if requested == "cuda" and not cuda_available:
     raise SystemExit("CUDA PyTorch was requested but torch.cuda.is_available() is false")
+if requested == "mps" and not mps_available:
+    raise SystemExit("MPS PyTorch was requested but torch.backends.mps.is_available() is false")
 "#,
-        require_cuda = if require_cuda { "True" } else { "False" }
+        requested = mode.as_str()
     )
 }
 
 fn prepare_auto_tag_environment(app: &AppHandle) -> Result<String, String> {
-    let mut attempts = if prefer_cuda_auto_tag() && nvidia_gpu_available() {
-        vec![AutoTagRuntimeMode::Cuda, AutoTagRuntimeMode::Cpu]
-    } else {
-        vec![AutoTagRuntimeMode::Cpu]
-    };
-    attempts.dedup();
-
     let mut failures = Vec::new();
-    for mode in attempts {
+    for mode in auto_tag_candidate_runtime_modes() {
         let mut command = auto_tag_dependency_command(app, mode);
         command
             .arg("--with")
             .arg("huggingface_hub")
             .arg("python")
             .arg("-c")
-            .arg(auto_tag_environment_check_script(
-                mode == AutoTagRuntimeMode::Cuda,
-            ));
+            .arg(auto_tag_environment_check_script(mode));
 
         match run_command(command, "AutoTag 実行環境の準備") {
             Ok(output) => {
@@ -320,11 +403,11 @@ fn prepare_auto_tag_environment(app: &AppHandle) -> Result<String, String> {
                     output
                 ));
             }
-            Err(error) if mode == AutoTagRuntimeMode::Cuda => {
-                failures.push(format!("CUDA mode failed:\n{error}"));
-            }
             Err(error) => {
-                failures.push(format!("CPU mode failed:\n{error}"));
+                failures.push(format!(
+                    "{} mode failed:\n{error}",
+                    auto_tag_runtime_mode_label(mode)
+                ));
             }
         }
     }
@@ -360,12 +443,63 @@ fn auto_tag_environment_error_message(details: &str) -> String {
     )
 }
 
+fn ensure_preferred_auto_tag_runtime_mode(app: &AppHandle) -> AutoTagRuntimeMode {
+    let stored_mode = read_auto_tag_runtime_mode(app);
+
+    #[cfg(target_os = "macos")]
+    {
+        if stored_mode == AutoTagRuntimeMode::Cpu {
+            let mut command = auto_tag_dependency_command(app, AutoTagRuntimeMode::Mps);
+            command
+                .arg("--with")
+                .arg("huggingface_hub")
+                .arg("python")
+                .arg("-c")
+                .arg(auto_tag_environment_check_script(AutoTagRuntimeMode::Mps));
+
+            match run_command(command, "AutoTag MPS 実行環境の確認") {
+                Ok(output) => {
+                    let _ = write_auto_tag_runtime_mode(app, AutoTagRuntimeMode::Mps);
+                    let _ = append_auto_tag_log(
+                        app,
+                        &format!("AutoTag runtime upgraded to mps\n{output}"),
+                    );
+                    return AutoTagRuntimeMode::Mps;
+                }
+                Err(error) => {
+                    let _ = append_auto_tag_log(
+                        app,
+                        &format!("AutoTag MPS check failed; keeping cpu\n{error}"),
+                    );
+                }
+            }
+        }
+    }
+
+    stored_mode
+}
+
 fn start_auto_tag_if_enabled(
     app: &AppHandle,
     sidecar: &mut ManagedSidecar,
     settings: &AppSettings,
 ) -> Result<(), String> {
-    if !settings.auto_tag_enabled || sidecar.auto_tag_child.is_some() {
+    append_auto_tag_log(
+        app,
+        &format!(
+            "AutoTag start check: enabled={}, existing_child={}",
+            settings.auto_tag_enabled,
+            sidecar.auto_tag_child.is_some()
+        ),
+    )?;
+
+    if !settings.auto_tag_enabled {
+        append_auto_tag_log(app, "AutoTag start skipped: auto_tag_enabled=false")?;
+        return Ok(());
+    }
+
+    if sidecar.auto_tag_child.is_some() {
+        append_auto_tag_log(app, "AutoTag start skipped: child process already exists")?;
         return Ok(());
     }
 
@@ -373,6 +507,13 @@ fn start_auto_tag_if_enabled(
 
     let status = auto_tag_status_from(app, sidecar, settings);
     if !status.ready {
+        append_auto_tag_log(
+            app,
+            &format!(
+                "AutoTag start blocked: ready=false, uv_installed={}, repository_ready={}, model_ready={}, message={}",
+                status.uv_installed, status.repository_ready, status.model_ready, status.message
+            ),
+        )?;
         return Err(format!(
             "自動タグの準備が完了していません。設定の AutoTag から準備してください。\n{}",
             status.message
@@ -381,7 +522,23 @@ fn start_auto_tag_if_enabled(
 
     let bridge_root = auto_tag_bridge_root(app);
     let bridge_script = bridge_root.join("joytag_server.py");
-    let runtime_mode = read_auto_tag_runtime_mode(app);
+    let runtime_mode = ensure_preferred_auto_tag_runtime_mode(app);
+    write_auto_tag_log_header(app, settings, runtime_mode, &bridge_script)?;
+    let log_path = auto_tag_log_path(app)?;
+    if let Some(parent) = log_path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|error| format!("AutoTag ログ保存先を作成できません: {error}"))?;
+    }
+    let stdout = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_path)
+        .map_err(|error| format!("AutoTag ログを開けません: {error}"))?;
+    let stderr = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_path)
+        .map_err(|error| format!("AutoTag ログを開けません: {error}"))?;
     let mut command = auto_tag_dependency_command(app, runtime_mode);
     command
         .arg("python")
@@ -391,14 +548,19 @@ fn start_auto_tag_if_enabled(
         .env("JOYTAG_REPO_DIR", &settings.auto_tag_repo_dir)
         .env("JOYTAG_MODEL_DIR", &settings.auto_tag_model_dir)
         .env("JOYTAG_FILES_ROOT", &settings.library_path)
+        .env("JOYTAG_DEVICE", runtime_mode.as_str())
         .env("JOYTAG_THRESHOLD", settings.auto_tag_threshold.to_string())
         .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null());
+        .stdout(Stdio::from(stdout))
+        .stderr(Stdio::from(stderr));
 
     let child = command
         .spawn()
         .map_err(|error| format!("自動タグサービスを起動できません: {error}"))?;
+    append_auto_tag_log(
+        app,
+        &format!("AutoTag child spawned: pid={}", child.id()),
+    )?;
     sidecar.auto_tag_child = Some(child);
     Ok(())
 }

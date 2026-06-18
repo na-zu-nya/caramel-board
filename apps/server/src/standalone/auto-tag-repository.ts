@@ -86,6 +86,8 @@ const AUTO_TAG_IMAGE_EXTENSIONS = new Set([
   'tiff',
 ]);
 const AUTO_TAG_IMAGE_EXTENSION_LIST = [...AUTO_TAG_IMAGE_EXTENSIONS];
+const MIN_NORMALIZED_AUTO_TAG_SCORE = 0.4;
+const MAX_FALLBACK_NORMALIZED_SCORES_PER_PREDICTION = 200;
 
 const isAutoTagImageExtension = (ext: string) =>
   AUTO_TAG_IMAGE_EXTENSIONS.has(ext.replace(/^\./, '').toLowerCase());
@@ -95,13 +97,38 @@ const toFiniteScore = (value: unknown) => {
   return Number.isFinite(score) ? score : null;
 };
 
-const scoreEntriesFromPrediction = (scores: Record<string, unknown>) =>
-  Object.entries(scores)
-    .map(([tagKey, score]) => ({ tagKey, score: toFiniteScore(score) }))
-    .filter((entry): entry is { tagKey: string; score: number } => {
-      return entry.tagKey.length > 0 && entry.score !== null;
-    })
-    .sort((left, right) => right.score - left.score);
+const normalizeAutoTagKey = (tagKey: string) => tagKey.trim().toLowerCase();
+
+const predictionTagKeySet = (predictedTags: string[]) =>
+  new Set(predictedTags.map(normalizeAutoTagKey).filter(Boolean));
+
+const scoreEntriesFromPrediction = (
+  scores: Record<string, unknown>,
+  predictedTags: string[],
+  threshold: number
+) => {
+  const predictedTagKeys = predictionTagKeySet(predictedTags);
+  const usePredictedTags = predictedTagKeys.size > 0;
+  const minScore = Math.max(threshold, MIN_NORMALIZED_AUTO_TAG_SCORE);
+  const entries: Array<{ tagKey: string; score: number }> = [];
+
+  for (const [tagKey, value] of Object.entries(scores)) {
+    const normalizedTagKey = normalizeAutoTagKey(tagKey);
+    if (!normalizedTagKey) continue;
+    if (usePredictedTags && !predictedTagKeys.has(normalizedTagKey)) continue;
+    const score = toFiniteScore(value);
+    if (score === null) continue;
+    if (!usePredictedTags && score < minScore) continue;
+    entries.push({ tagKey, score });
+  }
+
+  entries.sort((left, right) => right.score - left.score);
+  if (predictedTagKeys.size > 0) {
+    return entries;
+  }
+
+  return entries.slice(0, MAX_FALLBACK_NORMALIZED_SCORES_PER_PREDICTION);
+};
 
 const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -593,9 +620,13 @@ export class StandaloneAutoTagRepository {
     threshold: number
   ) {
     const now = nowIso();
-    const scoreEntries = scoreEntriesFromPrediction(prediction.scores);
+    const scoreEntries = scoreEntriesFromPrediction(
+      prediction.scores,
+      prediction.predicted_tags,
+      threshold
+    );
     const tagCount =
-      prediction.tag_count || scoreEntries.filter((entry) => entry.score >= threshold).length;
+      prediction.tag_count || prediction.predicted_tags.length || scoreEntries.length;
 
     this.db.exec('BEGIN');
     try {

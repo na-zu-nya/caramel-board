@@ -1,12 +1,13 @@
 {
   "name": "@caramelboard/desktop",
   "private": true,
-  "version": "0.4.8",
+  "version": "1.0.0-beta.1",
+  "license": "SEE LICENSE IN ../../LICENSE",
   "type": "module",
   "scripts": {
     "dev": "tauri dev",
     "build": "npm run build:ui",
-    "build:app": "npm run prepare:package && tauri build",
+    "build:app": "node ../../scripts/sync-version.mjs && npm run prepare:package && tauri build",
     "dev:ui": "vite --host 127.0.0.1 --port 1420",
     "build:ui": "vite build",
     "lint": "biome check src",

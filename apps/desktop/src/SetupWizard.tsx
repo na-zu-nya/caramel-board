@@ -66,10 +66,16 @@ interface DockerStorageResolution {
   matched: boolean;
 }
 
-interface MigrationResult {
-  exportDir: string;
-  dbPath: string;
-  stdout: string;
+interface DockerMigrationProgress {
+  running: boolean;
+  completed: boolean;
+  phase: string;
+  message: string;
+  percent: number;
+  lastLog: string;
+  exportDir: string | null;
+  dbPath: string | null;
+  error: string | null;
 }
 
 interface FfmpegCandidate {
@@ -93,7 +99,10 @@ interface PdfRasterizerCandidate {
 interface AutoTagStatus {
   enabled: boolean;
   running: boolean;
+  starting: boolean;
+  reachable: boolean;
   url: string;
+  logPath: string;
   uvInstalled: boolean;
   repositoryReady: boolean;
   modelReady: boolean;
@@ -136,6 +145,7 @@ type WizardStep =
   | 'migrate-location'
   | 'migrate-confirm'
   | 'migrate-running'
+  | 'migrate-complete'
   | 'sharing-setup'
   | 'ffmpeg-setup'
   | 'pdf-setup'
@@ -175,6 +185,7 @@ const wizardCopy = {
       'All files and folders inside the selected folder will be deleted. This is useful when setup was interrupted and left a partial data store.',
     resetDataStoreCancel: 'Choose another folder',
     resetDataStoreConfirm: 'Clear and create',
+    resetDataStoreContinue: 'Clear and continue',
     existingTitle: 'Open your data store',
     existingBody:
       'Pick a folder that already contains your Caramel Board data (a caramel-board.sqlite file).',
@@ -197,6 +208,8 @@ const wizardCopy = {
     migrateRunningTitle: 'Migrating…',
     migrateRunningBody:
       'Copying data into the new data store. Please leave the previous version running until this finishes.',
+    migrateCompleteTitle: 'Import complete',
+    migrateCompleteBody: 'Import is complete. You can quit the command line version now.',
     doneTitle: 'All set',
     doneBody: 'Setup is complete. Start Caramel Board now?',
     launchNetworkNote:
@@ -223,13 +236,13 @@ const wizardCopy = {
     sourceStorageRoot: 'Asset folder',
     sourceStorageRootTitle: 'Confirm the asset folder',
     sourceStorageRootBody:
-      'Choose the folder from the previous version that contains the imported image and video files.',
+      'Choose the existing asset folder from the previous version. Caramel Board will reuse this folder after migration.',
     sourceStorageRootMissing: 'Choose the asset folder before continuing.',
     chooseSourceStorageRoot: 'Choose asset folder',
     storageRootAdjustedInfo: (path: string) =>
       `Asset folder was adjusted to a likely library location: ${path}`,
     storageRootCheckHint:
-      'Choose the folder that contains numbered library folders like 1/files/, 2/files/…',
+      'Choose the folder that contains numbered library folders such as 1/assets/, 2/thumbnails/, or 2/files/.',
     sharingTitle: 'Share with other devices',
     sharingBody:
       'Caramel Board can be opened from other devices on the same network — phones, tablets, or another PC. In typical home networks only devices on your local network can reach it, but depending on your router setup it may also become reachable from the Internet. Direct Internet exposure is strongly discouraged — for remote access, use a VPN like Tailscale.',
@@ -313,6 +326,7 @@ const wizardCopy = {
       '選択したフォルダ内のファイルとフォルダをすべて削除します。セットアップが途中で止まり、作成途中のデータストアが残った場合に使います。',
     resetDataStoreCancel: '別のフォルダを選ぶ',
     resetDataStoreConfirm: 'クリアして作成',
+    resetDataStoreContinue: 'クリアして次へ',
     existingTitle: 'データストアを開く',
     existingBody: 'caramel-board.sqlite が入っている、これまで使っていたフォルダを選んでください。',
     existingMissing:
@@ -334,6 +348,8 @@ const wizardCopy = {
     migrateRunningTitle: '引き継ぎ中…',
     migrateRunningBody:
       'データをコピーしています。完了するまで以前の版は起動したままにしてください。',
+    migrateCompleteTitle: '取り込みが完了しました',
+    migrateCompleteBody: '取り込み完了しました。コマンドライン版は終了できます。',
     doneTitle: '準備ができました',
     doneBody: 'セットアップが完了しました。Caramel Board を起動しますか?',
     launchNetworkNote:
@@ -360,12 +376,12 @@ const wizardCopy = {
     sourceStorageRoot: 'アセットフォルダ',
     sourceStorageRootTitle: 'アセットフォルダを確認',
     sourceStorageRootBody:
-      '以前の版で取り込んだ画像や動画ファイルが入っているフォルダを選んでください。',
+      '以前の版で取り込んだ画像や動画ファイルが入っている既存フォルダを選んでください。移行後もこのフォルダを再利用します。',
     sourceStorageRootMissing: '続ける前にアセットフォルダを選んでください。',
     chooseSourceStorageRoot: 'アセットフォルダを選ぶ',
     storageRootAdjustedInfo: (path: string) => `アセットフォルダを自動で補正しました: ${path}`,
     storageRootCheckHint:
-      '1/files/、2/files/… のような番号付きフォルダがある階層を選んでください。',
+      '1/assets/、2/thumbnails/、2/files/ などの番号付きフォルダがある階層を選んでください。',
     sharingTitle: '他の機器からのアクセス',
     sharingBody:
       '同じネットワーク上のスマートフォン・タブレット・別の PC から Caramel Board を開けるようにできます。通常はローカルネットワーク内からのみアクセスできますが、ルーターや環境によってはインターネットからアクセスできる場合があります。インターネットへの直接公開は強く非推奨です。外出先からアクセスしたい場合は Tailscale などの VPN 経由を推奨します。',
@@ -481,6 +497,8 @@ export function SetupWizard({
   const [autoTagPhase, setAutoTagPhase] = useState<AutoTagInstallPhase>('idle');
   const [autoTagMetadata, setAutoTagMetadata] = useState<AutoTagInstallMetadata | null>(null);
   const [autoTagProgress, setAutoTagProgress] = useState<AutoTagInstallProgress | null>(null);
+  const [dockerMigrationProgress, setDockerMigrationProgress] =
+    useState<DockerMigrationProgress | null>(null);
   const [launchPhase, setLaunchPhase] = useState<'idle' | 'starting' | 'ready'>('idle');
   const [launchedUrl, setLaunchedUrl] = useState('');
   const [resetDataStoreConfirmOpen, setResetDataStoreConfirmOpen] = useState(false);
@@ -499,6 +517,7 @@ export function SetupWizard({
       case 'migrate-location':
       case 'migrate-confirm':
       case 'migrate-running':
+      case 'migrate-complete':
         return 2;
       case 'sharing-setup':
         return 3;
@@ -689,6 +708,36 @@ export function SetupWizard({
     }
   }, [existingPath, handleApplyDataStore]);
 
+  const handleClearMigrationTarget = useCallback(async () => {
+    if (!targetPath.trim()) return;
+    setBusy(true);
+    setError('');
+    try {
+      const applied = await handleApplyDataStore(targetPath, {
+        resetExisting: true,
+        setupCompleted: false,
+        carryExistingData: false,
+      });
+      setAppliedSettings(applied as FullSettings);
+      await inspectTarget(targetPath);
+      setStep('migrate-confirm');
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }, [targetPath, handleApplyDataStore, inspectTarget]);
+
+  const refreshDockerMigrationProgress = useCallback(async () => {
+    const next = await invoke<DockerMigrationProgress>('docker_migration_progress');
+    setDockerMigrationProgress(next);
+    if (next.completed && !next.error) {
+      const loaded = await invoke<FullSettings>('load_settings');
+      setAppliedSettings({ ...loaded, language });
+    }
+    return next;
+  }, [language]);
+
   const handleConfirmMigrate = useCallback(async () => {
     if (!targetPath.trim() || !sourceStorageRoot.trim()) return;
     setStep('migrate-running');
@@ -704,18 +753,54 @@ export function SetupWizard({
         dockerDatabaseUrl: sourceDatabaseUrl,
         dockerStorageRoot: sourceStorageRoot,
       };
-      await invoke<MigrationResult>('migrate_from_docker', {
-        settings: settingsForMigration,
+      setDockerMigrationProgress({
+        running: true,
+        completed: false,
+        phase: 'starting',
+        message: t.migrateRunningTitle,
+        percent: 0,
+        lastLog: '',
+        exportDir: null,
+        dbPath: applied.dbPath,
+        error: null,
       });
-      setAppliedSettings(applied as FullSettings);
-      setStep('sharing-setup');
+      let completedImmediately = false;
+      try {
+        const progress = await invoke<DockerMigrationProgress>('start_docker_migration', {
+          settings: settingsForMigration,
+        });
+        setDockerMigrationProgress(progress);
+        if (progress.completed && !progress.error) {
+          completedImmediately = true;
+          const loaded = await invoke<FullSettings>('load_settings');
+          setAppliedSettings({ ...loaded, language });
+          setStep('migrate-complete');
+        } else if (progress.error) {
+          setError(progress.error);
+          setStep('migrate-confirm');
+        }
+      } catch (err) {
+        await refreshDockerMigrationProgress().catch(() => undefined);
+        throw err;
+      }
+      if (!completedImmediately) {
+        setAppliedSettings(applied as FullSettings);
+      }
     } catch (err) {
       setError(errorMessage(err));
       setStep('migrate-confirm');
     } finally {
       setBusy(false);
     }
-  }, [targetPath, handleApplyDataStore, sourceDatabaseUrl, sourceStorageRoot]);
+  }, [
+    targetPath,
+    handleApplyDataStore,
+    sourceDatabaseUrl,
+    sourceStorageRoot,
+    refreshDockerMigrationProgress,
+    language,
+    t.migrateRunningTitle,
+  ]);
 
   const completeWizard = useCallback(async () => {
     const completed = await invoke<FullSettings>('complete_setup');
@@ -1008,6 +1093,31 @@ export function SetupWizard({
     return () => window.clearInterval(timer);
   }, [step, autoTagPhase, autoTagProgress, appliedSettings, refreshAutoTagStatus]);
 
+  useEffect(() => {
+    if (step !== 'migrate-running') return;
+    if (!dockerMigrationProgress?.running) return;
+
+    const timer = window.setInterval(async () => {
+      try {
+        const next = await refreshDockerMigrationProgress();
+        if (next.completed && !next.error) {
+          setStep('migrate-complete');
+          window.clearInterval(timer);
+        } else if (next.error) {
+          setError(next.error);
+          setStep('migrate-confirm');
+          window.clearInterval(timer);
+        }
+      } catch (err) {
+        setError(errorMessage(err));
+        setStep('migrate-confirm');
+        window.clearInterval(timer);
+      }
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [step, dockerMigrationProgress?.running, refreshDockerMigrationProgress]);
+
   const handleProceedFromAutoTag = useCallback(() => {
     setStep('done');
   }, []);
@@ -1117,9 +1227,9 @@ export function SetupWizard({
       );
     })();
 
-    const blocked =
-      !targetPath.trim() ||
-      (forMigration && inspection?.exists && !inspection.isEmpty && !inspection.hasDatabase);
+    const canClearForMigration =
+      forMigration && inspection?.exists && !inspection.isEmpty && !inspection.hasDatabase;
+    const blocked = !targetPath.trim();
 
     return (
       <>
@@ -1173,6 +1283,10 @@ export function SetupWizard({
             className="primary-button"
             disabled={busy || blocked}
             onClick={() => {
+              if (canClearForMigration) {
+                setResetDataStoreConfirmOpen(true);
+                return;
+              }
               if (forMigration) {
                 setStep('migrate-confirm');
               } else {
@@ -1180,8 +1294,8 @@ export function SetupWizard({
               }
             }}
           >
-            <ArrowRight size={15} />
-            {t.next}
+            {canClearForMigration ? <AlertCircle size={15} /> : <ArrowRight size={15} />}
+            {canClearForMigration ? t.resetDataStoreContinue : t.next}
           </button>
         </div>
       </>
@@ -1360,8 +1474,52 @@ export function SetupWizard({
         <h1>{t.migrateRunningTitle}</h1>
         <p>{t.migrateRunningBody}</p>
       </div>
-      <div className="wizard-progress-card spinner">
-        <span>{t.migrateRunningTitle}</span>
+      <div
+        className={
+          dockerMigrationProgress?.running ? 'wizard-progress-card spinner' : 'wizard-progress-card'
+        }
+      >
+        <span>{dockerMigrationProgress?.message || t.migrateRunningTitle}</span>
+        <div className="progress-track">
+          <div
+            className="progress-fill"
+            style={{ width: `${Math.round(dockerMigrationProgress?.percent ?? 0)}%` }}
+          />
+        </div>
+        <span className="muted">{Math.round(dockerMigrationProgress?.percent ?? 0)}%</span>
+        {dockerMigrationProgress?.lastLog ? (
+          <span className="muted">{dockerMigrationProgress.lastLog}</span>
+        ) : null}
+      </div>
+    </>
+  );
+
+  const renderMigrateComplete = () => (
+    <>
+      <div className="wizard-heading">
+        <h1>{t.migrateCompleteTitle}</h1>
+        <p>{t.migrateCompleteBody}</p>
+      </div>
+      <div className="wizard-path-card">
+        <strong>{t.selectedFolder}</strong>
+        <span>{targetPath}</span>
+      </div>
+      {sourceStorageRoot.trim() ? (
+        <div className="wizard-path-card">
+          <strong>{t.sourceStorageRoot}</strong>
+          <span>{sourceStorageRoot}</span>
+        </div>
+      ) : null}
+      <div className="wizard-actions" style={{ justifyContent: 'flex-end' }}>
+        <button
+          type="button"
+          className="primary-button"
+          onClick={() => setStep('sharing-setup')}
+          disabled={busy}
+        >
+          <ArrowRight size={15} />
+          {t.next}
+        </button>
       </div>
     </>
   );
@@ -1796,6 +1954,7 @@ export function SetupWizard({
           {step === 'migrate-location' ? renderLocationBody(true) : null}
           {step === 'migrate-confirm' ? renderMigrateConfirm() : null}
           {step === 'migrate-running' ? renderMigrateRunning() : null}
+          {step === 'migrate-complete' ? renderMigrateComplete() : null}
           {step === 'sharing-setup' ? renderSharingSetup() : null}
           {step === 'ffmpeg-setup' ? renderFfmpegSetup() : null}
           {step === 'pdf-setup' ? renderPdfSetup() : null}
@@ -1833,11 +1992,15 @@ export function SetupWizard({
                 className="primary-button"
                 onClick={() => {
                   setResetDataStoreConfirmOpen(false);
+                  if (step === 'migrate-location') {
+                    void handleClearMigrationTarget();
+                    return;
+                  }
                   void handleConfirmNew(true);
                 }}
                 disabled={busy}
               >
-                {t.resetDataStoreConfirm}
+                {step === 'migrate-location' ? t.resetDataStoreContinue : t.resetDataStoreConfirm}
               </button>
             </div>
           </div>

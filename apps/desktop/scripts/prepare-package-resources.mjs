@@ -19,6 +19,7 @@ const nodeRuntimeResource = path.join(runtimeResource, 'node');
 const uvRuntimeResource = path.join(runtimeResource, 'uv');
 const serverRoot = path.join(repoRoot, 'apps/server');
 const clientRoot = path.join(repoRoot, 'apps/client');
+const rootPackageJson = JSON.parse(fs.readFileSync(path.join(repoRoot, 'package.json'), 'utf8'));
 const nodeMajor = Number(process.env.CARAMEL_NODE_MAJOR || 24);
 
 const npmCommand = () => (process.platform === 'win32' ? 'npm.cmd' : 'npm');
@@ -244,7 +245,7 @@ const writeRuntimeServerPackageJson = () => {
   const packageJson = {
     name: '@caramelboard/runtime-server',
     private: true,
-    version: raw.version ?? '0.4.8',
+    version: rootPackageJson.version,
     type: 'module',
     dependencies: raw.dependencies,
     devDependencies: {

@@ -69,10 +69,16 @@ interface SidecarStatus {
   startedAt: number | null;
 }
 
-interface MigrationResult {
-  exportDir: string;
-  dbPath: string;
-  stdout: string;
+interface DockerMigrationProgress {
+  running: boolean;
+  completed: boolean;
+  phase: string;
+  message: string;
+  percent: number;
+  lastLog: string;
+  exportDir: string | null;
+  dbPath: string | null;
+  error: string | null;
 }
 
 interface DockerDatasetSummary {
@@ -95,7 +101,10 @@ interface DockerSourceDetection {
 interface AutoTagStatus {
   enabled: boolean;
   running: boolean;
+  starting: boolean;
+  reachable: boolean;
   url: string;
+  logPath: string;
   uvInstalled: boolean;
   repositoryReady: boolean;
   modelReady: boolean;
@@ -289,6 +298,7 @@ const translations = {
     autoTagEnable: 'Use AutoTag',
     autoTagReadyTitle: 'AutoTag is ready',
     autoTagRunningTitle: 'AutoTag is running',
+    autoTagStartingTitle: 'AutoTag is starting',
     autoTagMissingTitle: 'AutoTag is not installed',
     autoTagOffTitle: 'AutoTag is off',
     autoTagOffDescription: 'Turn it on to start AutoTag together with Caramel Board.',
@@ -349,10 +359,10 @@ const translations = {
     moveDataStore: 'Move data store',
     dataStoreMoved: 'Data store moved.',
     dataStoreHint:
-      'The database and your library are kept together in one folder. Moving the data store moves both.',
+      'The data store is the default home for the SQLite database and library folder. The library path below is the actual file storage location; Docker migration reuses the selected existing asset folder there. Moving the data store moves the current database and current library together.',
     advancedDataStore: 'Advanced (individual paths)',
     advancedDataStoreDescription:
-      'Change the database file or library folder path individually. Only needed if you want to split storage across drives.',
+      'Change the database file or library folder path individually. Use this when the database and media files live on different drives or when reusing an existing library folder.',
     resetSetup: 'Run setup again',
     resetSetupConfirmTitle: 'Run setup again?',
     resetSetupConfirmBody:
@@ -411,6 +421,7 @@ const translations = {
     dockerMigrationCompletedSummary: 'Docker migration completed.',
     dockerMigrationCompleted: (dbPath: string, exportDir: string) =>
       `Docker migration completed.\nDB: ${dbPath}\nExport: ${exportDir}`,
+    dockerMigrationInProgress: 'Migration in progress',
     settingsAutoSaved: 'Settings are saved automatically.',
     sqliteFilterName: 'SQLite Database',
   },
@@ -479,6 +490,7 @@ const translations = {
     autoTagEnable: '自動タグを使う',
     autoTagReadyTitle: '自動タグを利用できます',
     autoTagRunningTitle: '自動タグが起動しています',
+    autoTagStartingTitle: '自動タグを起動中です',
     autoTagMissingTitle: '自動タグはインストールされていません',
     autoTagOffTitle: '自動タグはOFFです',
     autoTagOffDescription: 'ONにすると Caramel Board の起動時に自動タグも一緒に起動します。',
@@ -539,10 +551,10 @@ const translations = {
     moveDataStore: 'データストアを移動',
     dataStoreMoved: 'データストアを移動しました。',
     dataStoreHint:
-      'データベースとライブラリは 1 つのフォルダにまとめて保存されます。データストアを移動すると両方が一緒に移動します。',
+      'データストアは SQLite データベースと標準のライブラリフォルダの置き場所です。実際の画像・動画ファイルの読み書き先は下のライブラリパスで決まります。Docker 版から移行した場合は、選択した既存のアセットフォルダをライブラリパスとして再利用します。データストアを移動すると、現在のデータベースと現在のライブラリをまとめて移動します。',
     advancedDataStore: '詳細(個別パス指定)',
     advancedDataStoreDescription:
-      'データベースファイルとライブラリフォルダの場所を別々に指定できます。保存先を別ドライブに分けたい場合のみ使用します。',
+      'データベースファイルとライブラリフォルダの場所を別々に指定できます。DB とメディアファイルを別ドライブに置く場合や、既存のライブラリフォルダを再利用する場合に使います。',
     resetSetup: 'セットアップをやり直す',
     resetSetupConfirmTitle: 'セットアップをやり直しますか?',
     resetSetupConfirmBody:
@@ -600,6 +612,7 @@ const translations = {
     dockerMigrationCompletedSummary: 'Docker版からの移行が完了しました。',
     dockerMigrationCompleted: (dbPath: string, exportDir: string) =>
       `Docker版からの移行が完了しました。\nDB: ${dbPath}\nExport: ${exportDir}`,
+    dockerMigrationInProgress: '移行中',
     settingsAutoSaved: '設定は自動保存されます。',
     sqliteFilterName: 'SQLiteデータベース',
   },
@@ -616,6 +629,8 @@ export default function App() {
     useState<AutoTagInstallProgress | null>(null);
   const [dockerDetection, setDockerDetection] = useState<DockerSourceDetection | null>(null);
   const [dockerDetectionAttempted, setDockerDetectionAttempted] = useState(false);
+  const [dockerMigrationProgress, setDockerMigrationProgress] =
+    useState<DockerMigrationProgress | null>(null);
   const [ffmpegCandidates, setFfmpegCandidates] = useState<FfmpegCandidate[]>([]);
   const [pdfRasterizerCandidates, setPdfRasterizerCandidates] = useState<PdfRasterizerCandidate[]>(
     []
@@ -718,6 +733,8 @@ export default function App() {
       await refreshAutoTagStatus();
       const installProgress = await invoke<AutoTagInstallProgress>('autotag_install_progress');
       setAutoTagInstallProgress(installProgress);
+      const migrationProgress = await invoke<DockerMigrationProgress>('docker_migration_progress');
+      setDockerMigrationProgress(migrationProgress);
       try {
         const ip = await invoke<string>('local_ip_address');
         setLocalIp(ip);
@@ -1087,6 +1104,20 @@ export default function App() {
     return next;
   }, [refreshAutoTagStatus, t.autoTagInstallCompleted]);
 
+  const refreshDockerMigrationProgress = useCallback(async () => {
+    const next = await invoke<DockerMigrationProgress>('docker_migration_progress');
+    setDockerMigrationProgress(next);
+    if (next.completed && !next.error) {
+      const loaded = await invoke<AppSettings>('load_settings');
+      settingsRef.current = loaded;
+      setSettings(loaded);
+      setMessage(t.dockerMigrationCompleted(next.dbPath ?? '', next.exportDir ?? ''));
+    } else if (next.error) {
+      setMessage(next.error);
+    }
+    return next;
+  }, [t]);
+
   const handleOpenAutoTagInstallDialog = useCallback(() => {
     setMessage('');
     setAutoTagInstallMetadata(null);
@@ -1158,10 +1189,29 @@ export default function App() {
     void runAction(async () => {
       const saved = await saveSettings();
       if (!saved) return;
-      const result = await invoke<MigrationResult>('migrate_from_docker', { settings: saved });
-      return t.dockerMigrationCompleted(result.dbPath, result.exportDir);
+      setDockerMigrationProgress({
+        running: true,
+        completed: false,
+        phase: 'starting',
+        message: t.dockerMigrationInProgress,
+        percent: 0,
+        lastLog: '',
+        exportDir: null,
+        dbPath: saved.dbPath,
+        error: null,
+      });
+      try {
+        const progress = await invoke<DockerMigrationProgress>('start_docker_migration', {
+          settings: saved,
+        });
+        setDockerMigrationProgress(progress);
+        return t.dockerMigrationInProgress;
+      } catch (error) {
+        await refreshDockerMigrationProgress().catch(() => undefined);
+        throw error;
+      }
     }, t.dockerMigrationCompletedSummary);
-  }, [runAction, saveSettings, t]);
+  }, [refreshDockerMigrationProgress, runAction, saveSettings, t]);
 
   const navJumpItems = useMemo(
     () => [
@@ -1190,6 +1240,7 @@ export default function App() {
 
   const autoTagTitle = useMemo(() => {
     if (autoTagStatus?.running) return t.autoTagRunningTitle;
+    if (autoTagStatus?.starting) return t.autoTagStartingTitle;
     if (!autoTagStatus?.ready) return t.autoTagMissingTitle;
     if (!settings?.autoTagEnabled) return t.autoTagOffTitle;
     return t.autoTagReadyTitle;
@@ -1203,6 +1254,7 @@ export default function App() {
   }, [autoTagStatus, settings?.autoTagEnabled, t]);
 
   const autoTagStatusClass = useMemo(() => {
+    if (autoTagStatus?.starting) return 'migration-status waiting';
     if (autoTagStatus?.running || (settings?.autoTagEnabled && autoTagStatus?.ready)) {
       return 'migration-status ready';
     }
@@ -1254,6 +1306,30 @@ export default function App() {
       window.clearInterval(timer);
     };
   }, [autoTagInstallProgress?.running, refreshAutoTagInstallProgress]);
+
+  useEffect(() => {
+    if (!autoTagStatus?.starting) return;
+
+    const timer = window.setInterval(() => {
+      void refreshAutoTagStatus();
+    }, 1000);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [autoTagStatus?.starting, refreshAutoTagStatus]);
+
+  useEffect(() => {
+    if (!dockerMigrationProgress?.running) return;
+
+    const timer = window.setInterval(() => {
+      void refreshDockerMigrationProgress();
+    }, 1000);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [dockerMigrationProgress?.running, refreshDockerMigrationProgress]);
 
   if (!settings) {
     return (
@@ -1388,10 +1464,14 @@ export default function App() {
           {status.running ? (
             <span className="status-banner-message">{t.lockedWhileRunning}</span>
           ) : null}
-          {autoTagStatus?.enabled || autoTagStatus?.running ? (
+          {autoTagStatus?.enabled || autoTagStatus?.running || autoTagStatus?.starting ? (
             <span className={autoTagStatus.running ? 'status-pill running' : 'status-pill'}>
               <Sparkles size={10} fill="currentColor" />
-              {autoTagStatus.running ? t.autoTagRunningTitle : t.autotag}
+              {autoTagStatus.running
+                ? t.autoTagRunningTitle
+                : autoTagStatus.starting
+                  ? t.autoTagStartingTitle
+                  : t.autotag}
             </span>
           ) : null}
         </div>
@@ -1884,6 +1964,9 @@ export default function App() {
               {autoTagStatus?.url ? (
                 <span className="migration-storage">{autoTagStatus.url}</span>
               ) : null}
+              {autoTagStatus?.logPath ? (
+                <span className="migration-storage">{autoTagStatus.logPath}</span>
+              ) : null}
             </div>
           </div>
 
@@ -2069,12 +2152,46 @@ export default function App() {
               type="button"
               className="primary-button"
               onClick={handleMigrateFromDocker}
-              disabled={settingsDisabled || !settings.dockerStorageRoot.trim()}
+              disabled={
+                settingsDisabled ||
+                !settings.dockerStorageRoot.trim() ||
+                dockerMigrationProgress?.running
+              }
             >
               <Database size={15} />
               {t.migrateFromDocker}
             </button>
           </div>
+
+          {dockerMigrationProgress?.running ||
+          dockerMigrationProgress?.completed ||
+          dockerMigrationProgress?.error ? (
+            <div
+              className={
+                dockerMigrationProgress.error
+                  ? 'install-progress-card error'
+                  : dockerMigrationProgress.completed
+                    ? 'install-progress-card complete'
+                    : 'install-progress-card'
+              }
+            >
+              <div className="install-progress-heading">
+                <Database size={16} />
+                <strong>{t.dockerMigrationInProgress}</strong>
+              </div>
+              <p>{dockerMigrationProgress.message}</p>
+              <div className="progress-track">
+                <div
+                  className="progress-fill"
+                  style={{ width: `${Math.round(dockerMigrationProgress.percent)}%` }}
+                />
+              </div>
+              <span className="muted">{Math.round(dockerMigrationProgress.percent)}%</span>
+              {dockerMigrationProgress.lastLog ? (
+                <p className="muted">{dockerMigrationProgress.lastLog}</p>
+              ) : null}
+            </div>
+          ) : null}
 
           <details className="advanced-settings">
             <summary>{t.advancedSettings}</summary>

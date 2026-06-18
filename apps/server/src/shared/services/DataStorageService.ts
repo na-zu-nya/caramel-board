@@ -39,6 +39,18 @@ export const createDataStorageService = (config: DataStorageConfig) => {
   };
 
   const storageDir = resolveRoot();
+  const STORAGE_ROOT_SEGMENT = 'library';
+
+  const resolveStoragePath = (key: string): string => {
+    const safeKey = key.startsWith('/') ? key.slice(1) : key;
+    if (
+      path.basename(storageDir) === STORAGE_ROOT_SEGMENT &&
+      safeKey.startsWith(`${STORAGE_ROOT_SEGMENT}/`)
+    ) {
+      return path.join(storageDir, safeKey.replace(/^library\//, ''));
+    }
+    return path.join(storageDir, safeKey);
+  };
 
   // データセットIDを含むパスを生成
   const buildPath = (key: string, dataSetId?: number): string => {
@@ -69,11 +81,7 @@ export const createDataStorageService = (config: DataStorageConfig) => {
   };
 
   const getPath = (key: string): string => {
-    // Normalize to avoid absolute keys discarding storageDir
-    const safeKey = key.startsWith('/') ? key.slice(1) : key;
-    console.log('Storage.getPath:key:', safeKey);
-    console.log('Storage.getPath:dataDir:', storageDir);
-    return path.join(storageDir, safeKey);
+    return resolveStoragePath(key);
   };
 
   return {

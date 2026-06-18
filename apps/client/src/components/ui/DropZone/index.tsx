@@ -32,10 +32,17 @@ type FileSystemEntry = FileSystemFileEntry | FileSystemDirectoryEntry;
 
 type UrlDropHandler = (urls: string[], event: DragEvent) => void;
 
+export interface DropZoneFileScanProgress {
+  fileCount: number;
+  directoryCount: number;
+  currentPath?: string;
+}
+
 interface DropZoneProps {
   onDrop?: (files: File[]) => void;
   onFilesDrop?: (files: File[]) => void;
   onUrlDrop?: UrlDropHandler;
+  scanProgress?: DropZoneFileScanProgress | null;
   accept?: string;
   multiple?: boolean;
   children: React.ReactNode;
@@ -289,6 +296,19 @@ function debugLogDroppedDataTransfer(dataTransfer: DataTransfer | null) {
 }
 
 const RELATIVE_PATH_KEY = '__dropZoneRelativePath';
+const FILE_SCAN_NOTIFY_INTERVAL_MS = 120;
+const FILE_SCAN_YIELD_EVERY = 80;
+
+interface FileSystemEntryProvider extends DataTransferItem {
+  webkitGetAsEntry?: () => FileSystemEntry | null;
+}
+
+interface FileScanContext {
+  progress: DropZoneFileScanProgress;
+  onProgress: (progress: DropZoneFileScanProgress) => void;
+  lastNotifyAt: number;
+  operationsSinceYield: number;
+}
 
 function normalizeRelativePath(fullPath: string): string {
   if (!fullPath) return '';
@@ -296,102 +316,166 @@ function normalizeRelativePath(fullPath: string): string {
   return trimmed;
 }
 
+function getFileSystemEntry(item: DataTransferItem): FileSystemEntry | null {
+  const entryProvider = item as FileSystemEntryProvider;
+  return entryProvider.webkitGetAsEntry?.() ?? null;
+}
+
+function isFileEntry(entry: FileSystemEntry): entry is FileSystemFileEntry {
+  return entry.isFile;
+}
+
+function isDirectoryEntry(entry: FileSystemEntry): entry is FileSystemDirectoryEntry {
+  return entry.isDirectory;
+}
+
+function attachRelativePath(file: File, relativePath: string): File {
+  for (const key of ['webkitRelativePath', RELATIVE_PATH_KEY]) {
+    try {
+      Object.defineProperty(file, key, {
+        value: relativePath,
+        configurable: true,
+      });
+    } catch (error: unknown) {
+      void error;
+    }
+  }
+
+  return file;
+}
+
+function yieldToBrowser(): Promise<void> {
+  return new Promise((resolve) => {
+    if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+      window.requestAnimationFrame(() => resolve());
+      return;
+    }
+
+    setTimeout(resolve, 0);
+  });
+}
+
+function nowMs(): number {
+  if (typeof performance !== 'undefined' && typeof performance.now === 'function') {
+    return performance.now();
+  }
+
+  return Date.now();
+}
+
+async function reportFileScanProgress(context: FileScanContext, force = false): Promise<void> {
+  context.operationsSinceYield += 1;
+  const now = nowMs();
+  const shouldNotify = force || now - context.lastNotifyAt >= FILE_SCAN_NOTIFY_INTERVAL_MS;
+
+  if (shouldNotify) {
+    context.lastNotifyAt = now;
+    context.onProgress({ ...context.progress });
+    context.operationsSinceYield = 0;
+    await yieldToBrowser();
+    return;
+  }
+
+  if (context.operationsSinceYield >= FILE_SCAN_YIELD_EVERY) {
+    context.operationsSinceYield = 0;
+    await yieldToBrowser();
+  }
+}
+
 function readFileEntry(entry: FileSystemFileEntry): Promise<File> {
   return new Promise<File>((resolve, reject) => {
     entry.file((file) => {
       const relativePath = normalizeRelativePath(entry.fullPath || entry.name);
-      if (relativePath) {
-        try {
-          (file as any).webkitRelativePath = relativePath;
-        } catch (error) {
-          console.warn(
-            '[DropZone] Failed to assign webkitRelativePath via direct set',
-            relativePath,
-            error
-          );
-        }
-
-        try {
-          Object.defineProperty(file, 'webkitRelativePath', {
-            value: relativePath,
-            configurable: true,
-          });
-        } catch (error: unknown) {
-          // Some browsers disallow redefining; that's OK as long as either attempt worked
-          void error;
-        }
-
-        try {
-          Object.defineProperty(file, RELATIVE_PATH_KEY, {
-            value: relativePath,
-            configurable: true,
-          });
-        } catch (error) {
-          (file as any)[RELATIVE_PATH_KEY] = relativePath;
-          void error;
-        }
-      }
+      if (relativePath) attachRelativePath(file, relativePath);
       resolve(file);
     }, reject);
   });
 }
 
-function readEntriesRecursive(reader: FileSystemDirectoryReader): Promise<FileSystemEntry[]> {
+function readEntryBatch(reader: FileSystemDirectoryReader): Promise<FileSystemEntry[]> {
   return new Promise<FileSystemEntry[]>((resolve, reject) => {
-    const entries: FileSystemEntry[] = [];
-
-    const readBatch = () => {
-      reader.readEntries(
-        (batch) => {
-          if (batch.length === 0) {
-            resolve(entries);
-            return;
-          }
-          entries.push(...batch);
-          readBatch();
-        },
-        (error) => {
-          reject(error);
-        }
-      );
-    };
-
-    readBatch();
+    reader.readEntries(resolve, reject);
   });
 }
 
-async function traverseFileSystemEntry(entry: FileSystemEntry): Promise<File[]> {
-  if (entry.isFile) {
-    const file = await readFileEntry(entry as FileSystemFileEntry);
-    return [file];
-  }
+async function readEntriesRecursive(
+  reader: FileSystemDirectoryReader,
+  context: FileScanContext
+): Promise<FileSystemEntry[]> {
+  const entries: FileSystemEntry[] = [];
 
-  if (entry.isDirectory) {
-    const reader = (entry as FileSystemDirectoryEntry).createReader();
-    const childEntries = await readEntriesRecursive(reader);
-    const nestedFiles = await Promise.all(
-      childEntries.map((child) => traverseFileSystemEntry(child))
-    );
-    return nestedFiles.flat();
+  while (true) {
+    const batch = await readEntryBatch(reader);
+    if (batch.length === 0) {
+      return entries;
+    }
+    entries.push(...batch);
+    await reportFileScanProgress(context);
   }
-
-  return [];
 }
 
-async function extractFilesFromDataTransfer(dataTransfer: DataTransfer | null): Promise<File[]> {
+async function traverseFileSystemEntry(
+  rootEntry: FileSystemEntry,
+  context: FileScanContext
+): Promise<File[]> {
+  const files: File[] = [];
+  const pendingEntries: FileSystemEntry[] = [rootEntry];
+
+  while (pendingEntries.length > 0) {
+    const entry = pendingEntries.pop();
+    if (!entry) continue;
+
+    context.progress.currentPath = normalizeRelativePath(entry.fullPath || entry.name);
+
+    if (isFileEntry(entry)) {
+      const file = await readFileEntry(entry);
+      files.push(file);
+      context.progress.fileCount += 1;
+      await reportFileScanProgress(context);
+      continue;
+    }
+
+    if (isDirectoryEntry(entry)) {
+      context.progress.directoryCount += 1;
+      await reportFileScanProgress(context);
+      const reader = entry.createReader();
+      const childEntries = await readEntriesRecursive(reader, context);
+      for (let index = childEntries.length - 1; index >= 0; index -= 1) {
+        pendingEntries.push(childEntries[index]);
+      }
+    }
+  }
+
+  return files;
+}
+
+async function extractFilesFromDataTransfer(
+  dataTransfer: DataTransfer | null,
+  onScanProgress: (progress: DropZoneFileScanProgress) => void
+): Promise<File[]> {
   if (!dataTransfer) return [];
 
   const itemList = dataTransfer.items ? Array.from(dataTransfer.items) : [];
   const resolvedFiles: File[] = [];
+  const scanContext: FileScanContext = {
+    progress: {
+      fileCount: 0,
+      directoryCount: 0,
+    },
+    onProgress: onScanProgress,
+    lastNotifyAt: 0,
+    operationsSinceYield: 0,
+  };
 
   for (const item of itemList) {
     if (item.kind !== 'file') continue;
 
-    const entry = (item as any).webkitGetAsEntry?.() as FileSystemEntry | null;
+    const entry = getFileSystemEntry(item);
 
     if (entry?.isDirectory) {
       try {
-        const files = await traverseFileSystemEntry(entry);
+        await reportFileScanProgress(scanContext, true);
+        const files = await traverseFileSystemEntry(entry, scanContext);
         if (files.length > 0) {
           resolvedFiles.push(...files);
         }
@@ -408,7 +492,7 @@ async function extractFilesFromDataTransfer(dataTransfer: DataTransfer | null): 
 
     if (entry?.isFile) {
       try {
-        const files = await traverseFileSystemEntry(entry);
+        const files = await traverseFileSystemEntry(entry, scanContext);
         if (files.length > 0) {
           resolvedFiles.push(...files);
         }
@@ -419,16 +503,42 @@ async function extractFilesFromDataTransfer(dataTransfer: DataTransfer | null): 
   }
 
   if (resolvedFiles.length > 0) {
+    await reportFileScanProgress(scanContext, true);
     return resolvedFiles;
   }
 
   return Array.from(dataTransfer.files || []);
 }
 
+export function DropZoneScanProgressCard({ progress }: { progress: DropZoneFileScanProgress }) {
+  return (
+    <div className="rounded-lg border border-amber-200 bg-white/95 px-5 py-4 text-gray-900 shadow-xl shadow-black/15">
+      <div className="flex items-center gap-3">
+        <div className="h-4 w-4 animate-spin rounded-full border-2 border-amber-500 border-t-transparent" />
+        <div className="min-w-0">
+          <p className="text-sm font-semibold">フォルダを読み込み中</p>
+          <p className="mt-1 text-xs text-gray-600">
+            {progress.fileCount.toLocaleString()} 件のファイルを検出
+            {progress.directoryCount > 0
+              ? ` / ${progress.directoryCount.toLocaleString()} フォルダを確認`
+              : ''}
+          </p>
+          {progress.currentPath && (
+            <p className="mt-1 max-w-[320px] truncate text-[11px] text-gray-500">
+              {progress.currentPath}
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function DropZone({
   onDrop,
   onFilesDrop,
   onUrlDrop,
+  scanProgress,
   accept = 'image/*,video/*,application/pdf',
   multiple = true,
   children,
@@ -438,8 +548,12 @@ export function DropZone({
 }: DropZoneProps) {
   const { dragKind } = useDrag();
   const [isDragActive, setIsDragActive] = useState(false);
+  const [internalScanProgress, setInternalScanProgress] = useState<DropZoneFileScanProgress | null>(
+    null
+  );
   const dragCounter = useRef(0);
   const dropZoneRef = useRef<HTMLDivElement>(null);
+  const visibleScanProgress = scanProgress ?? internalScanProgress;
 
   // Use native event listeners for better drag detection
   useEffect(() => {
@@ -513,7 +627,15 @@ export function DropZone({
 
       void (async () => {
         if (hasFileHandler) {
-          const resolvedFiles = await extractFilesFromDataTransfer(dataTransfer);
+          setInternalScanProgress({
+            fileCount: 0,
+            directoryCount: 0,
+          });
+          const resolvedFiles = await extractFilesFromDataTransfer(
+            dataTransfer,
+            setInternalScanProgress
+          );
+          setInternalScanProgress(null);
 
           if (resolvedFiles.length > 0) {
             const filteredFiles = acceptedTypes.length
@@ -545,7 +667,10 @@ export function DropZone({
         if (canHandleUrls) {
           onUrlDrop?.(urls, e);
         }
-      })();
+      })().catch((error: unknown) => {
+        setInternalScanProgress(null);
+        console.warn('[DropZone] Failed to handle dropped files', error);
+      });
     };
 
     element.addEventListener('dragenter', handleDragEnter);
@@ -559,6 +684,7 @@ export function DropZone({
       element.removeEventListener('dragover', handleDragOver);
       element.removeEventListener('drop', handleDrop);
       dragCounter.current = 0;
+      setInternalScanProgress(null);
     };
   }, [onDrop, onFilesDrop, onUrlDrop, accept, multiple, disabled, dragKind]);
 
@@ -577,6 +703,12 @@ export function DropZone({
               </p>
             </div>
           </div>
+        </div>
+      )}
+
+      {visibleScanProgress && !disabled && (
+        <div className="pointer-events-none fixed bottom-4 left-4 z-[120]">
+          <DropZoneScanProgressCard progress={visibleScanProgress} />
         </div>
       )}
     </div>

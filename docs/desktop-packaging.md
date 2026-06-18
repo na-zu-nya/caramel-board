@@ -6,6 +6,16 @@
 
 Caramel Board Desktop を、開発環境に Node.js / uv / Git / repository 一式がなくても起動できる配布物として検証する。
 
+## バージョン更新
+
+アプリの表示バージョン、Tauri 設定、Cargo package、npm workspace、Windows installer の内部 version は root `package.json` を基準にする。
+
+```sh
+npm run sync:version
+```
+
+リリース前に root `package.json` の `version` を更新してから、このコマンドで関連ファイルへ反映する。
+
 ## ローカルでの macOS パッケージ作成
 
 ```sh
@@ -24,7 +34,7 @@ npm run -w @caramelboard/desktop build:app
 macOS arm64 で確認済みの出力先:
 
 - `apps/desktop/src-tauri/target/release/bundle/macos/Caramel Board.app`
-- `apps/desktop/src-tauri/target/release/bundle/dmg/Caramel Board_0.4.8_aarch64.dmg`
+- `apps/desktop/src-tauri/target/release/bundle/dmg/Caramel Board_1.0.0-beta.1_aarch64.dmg`
 
 ## Windows パッケージ作成
 

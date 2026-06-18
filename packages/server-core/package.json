@@ -1,7 +1,8 @@
 {
   "name": "@caramelboard/server-core",
   "private": true,
-  "version": "0.4.8",
+  "version": "1.0.0-beta.1",
+  "license": "SEE LICENSE IN ../../LICENSE",
   "type": "module",
   "exports": {
     ".": "./src/index.ts"

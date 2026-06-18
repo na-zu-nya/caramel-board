@@ -110,8 +110,7 @@ fn handle_tray_menu_event(app: &AppHandle, event: MenuEvent) {
             }
         }
         "quit" => {
-            stop_sidecar_on_exit(app);
-            app.exit(0);
+            cleanup_and_exit(app);
         }
         _ => {}
     }

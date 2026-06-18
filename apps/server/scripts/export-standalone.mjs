@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 import crypto from 'node:crypto';
-import { once } from 'node:events';
 import fs, { createReadStream, createWriteStream, promises as fsp } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
@@ -39,6 +38,8 @@ const prisma = new PrismaClient();
 
 const EXPORT_VERSION = 1;
 const DEFAULT_BATCH_SIZE = 1000;
+const MIN_EXPORTED_AUTO_TAG_SCORE = 0.4;
+const MAX_FALLBACK_SCORE_ROWS_PER_PREDICTION = 200;
 const args = process.argv.slice(2);
 
 const getArgValue = (name) => {
@@ -151,13 +152,39 @@ const stringifyLine = (record) =>
 
 const writeLine = async (stream, record) => {
   if (!stream.write(stringifyLine(record))) {
-    await once(stream, 'drain');
+    await waitForWritableEvent(stream, 'drain');
   }
 };
 
+const waitForWritableEvent = (stream, event) =>
+  new Promise((resolve, reject) => {
+    const cleanup = () => {
+      stream.off(event, onEvent);
+      stream.off('error', onError);
+      stream.off('close', onClose);
+    };
+    const onEvent = () => {
+      cleanup();
+      resolve();
+    };
+    const onError = (error) => {
+      cleanup();
+      reject(error);
+    };
+    const onClose = () => {
+      cleanup();
+      reject(new Error(`NDJSON write stream closed before ${event}`));
+    };
+
+    stream.once(event, onEvent);
+    stream.once('error', onError);
+    stream.once('close', onClose);
+  });
+
 const closeStream = async (stream) => {
+  const finish = waitForWritableEvent(stream, 'finish');
   stream.end();
-  await once(stream, 'finish');
+  await finish;
 };
 
 const hashFile = async (filePath) => {
@@ -179,10 +206,14 @@ const storageCandidates = (key) => {
   const normalized = normalizePathKey(key);
   if (!normalized) return [];
   const candidates = [path.join(storageRoot, normalized)];
+  if (normalized.startsWith('library/')) {
+    candidates.push(path.join(storageRoot, normalized.replace(/^library\//, '')));
+    candidates.push(path.join(path.dirname(storageRoot), normalized));
+  }
   if (normalized.startsWith('files/')) {
     candidates.push(path.join(storageRoot, normalized.replace(/^files\//, '')));
   }
-  return candidates;
+  return [...new Set(candidates)];
 };
 
 const verifyFileReference = async (key) => {
@@ -243,6 +274,7 @@ const exportPaginated = async ({ fileName, query, map }) =>
         }
       }
       skip += rows.length;
+      console.log(`[standalone-export] ${fileName}: ${skip}...`);
     }
   });
 
@@ -461,12 +493,25 @@ const finiteNumber = (value) => {
   return Number.isFinite(num) ? num : null;
 };
 
-const scoreEntriesFromObject = (scores) => {
+const normalizeAutoTagKey = (tagKey) =>
+  String(tagKey ?? '')
+    .trim()
+    .toLowerCase();
+
+const scoreEntriesFromObject = (scores, options = {}) => {
   if (!scores || typeof scores !== 'object' || Array.isArray(scores)) return [];
-  return Object.entries(scores)
-    .map(([tagKey, score]) => ({ tag_key: tagKey, score: finiteNumber(score) }))
-    .filter((entry) => entry.tag_key && entry.score !== null)
-    .sort((left, right) => right.score - left.score);
+  const entries = [];
+  for (const [tagKey, value] of Object.entries(scores)) {
+    const normalizedTagKey = normalizeAutoTagKey(tagKey);
+    if (!normalizedTagKey) continue;
+    if (options.allowedTagKeys && !options.allowedTagKeys.has(normalizedTagKey)) continue;
+    const score = finiteNumber(value);
+    if (score === null) continue;
+    if (options.minScore !== undefined && score < options.minScore) continue;
+    entries.push({ tag_key: tagKey, score });
+  }
+  entries.sort((left, right) => right.score - left.score);
+  return options.limit ? entries.slice(0, options.limit) : entries;
 };
 
 const getEntryTagKey = (entry) => {
@@ -489,6 +534,29 @@ const scoreEntriesFromTopTags = (topTags) => {
     }))
     .filter((entry) => entry.tag_key && entry.score !== null)
     .sort((left, right) => right.score - left.score);
+};
+
+const predictionTagKeySet = (tags) => {
+  if (!Array.isArray(tags)) return new Set();
+  return new Set(tags.map(getEntryTagKey).map(normalizeAutoTagKey).filter(Boolean));
+};
+
+const scoreEntriesFromPrediction = (prediction) => {
+  const predictedTagKeys = predictionTagKeySet(prediction.tags);
+  if (predictedTagKeys.size > 0) {
+    return {
+      entries: scoreEntriesFromObject(prediction.scores, { allowedTagKeys: predictedTagKeys }),
+      sourceEntries: Object.keys(prediction.scores ?? {}).length,
+    };
+  }
+
+  return {
+    entries: scoreEntriesFromObject(prediction.scores, {
+      minScore: MIN_EXPORTED_AUTO_TAG_SCORE,
+      limit: MAX_FALLBACK_SCORE_ROWS_PER_PREDICTION,
+    }),
+    sourceEntries: Object.keys(prediction.scores ?? {}).length,
+  };
 };
 
 const fileRecord = async ({ kind, datasetId: rowDatasetId, stackId, assetId, key }) => ({
@@ -666,17 +734,20 @@ const exportDefinitions = [
 const exportAutoTagPredictionScores = () =>
   writeNdjson('auto_tag_prediction_scores.ndjson', async (write) => {
     let skip = 0;
+    let scoreRows = 0;
+    let sourceScoreRows = 0;
     for (;;) {
       const rows = await prisma.autoTagPrediction.findMany({
         skip,
         take: batchSize,
         where: datasetId ? { asset: { stack: { dataSetId: datasetId } } } : {},
         orderBy: { id: 'asc' },
-        select: { id: true, assetId: true, scores: true },
+        select: { id: true, assetId: true, tags: true, scores: true },
       });
       if (rows.length === 0) break;
       for (const row of rows) {
-        const entries = scoreEntriesFromObject(row.scores);
+        const { entries, sourceEntries } = scoreEntriesFromPrediction(row);
+        sourceScoreRows += sourceEntries;
         for (const [index, entry] of entries.entries()) {
           await write({
             prediction_id: row.id,
@@ -685,15 +756,20 @@ const exportAutoTagPredictionScores = () =>
             score: entry.score,
             rank: index + 1,
           });
+          scoreRows += 1;
         }
       }
       skip += rows.length;
+      console.log(
+        `[standalone-export] auto_tag_prediction_scores.ndjson: ${skip} predictions / ${scoreRows} scores (${sourceScoreRows - scoreRows} skipped)...`
+      );
     }
   });
 
 const exportStackAutoTagScores = () =>
   writeNdjson('stack_auto_tag_scores.ndjson', async (write) => {
     let skip = 0;
+    let scoreRows = 0;
     for (;;) {
       const rows = await prisma.stackAutoTagAggregate.findMany({
         skip,
@@ -721,9 +797,13 @@ const exportStackAutoTagScores = () =>
             asset_count: row.assetCount,
             threshold: row.threshold,
           });
+          scoreRows += 1;
         }
       }
       skip += rows.length;
+      console.log(
+        `[standalone-export] stack_auto_tag_scores.ndjson: ${skip} aggregates / ${scoreRows} scores...`
+      );
     }
   });
 
@@ -752,6 +832,7 @@ const exportFiles = () =>
         );
       }
       stackSkip += stacks.length;
+      console.log(`[standalone-export] files.ndjson: ${stackSkip} stacks...`);
     }
 
     let assetSkip = 0;
@@ -788,6 +869,7 @@ const exportFiles = () =>
         }
       }
       assetSkip += assets.length;
+      console.log(`[standalone-export] files.ndjson: ${assetSkip} assets...`);
     }
   });
 

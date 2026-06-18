@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { useState } from 'react';
-import { DropZone } from '.';
+import { DropZone, DropZoneScanProgressCard } from '.';
 
 type DropEventLog = {
   id: string;
@@ -58,4 +58,30 @@ export const Default: Story = {
       </DropZone>
     );
   },
+};
+
+export const ScanningFolder: Story = {
+  render: () => (
+    <div className="w-[480px] space-y-4">
+      <DropZone
+        onDrop={() => undefined}
+        scanProgress={{
+          fileCount: 12840,
+          directoryCount: 42,
+          currentPath: 'Reference/Characters/pose-library/standing/front-001.png',
+        }}
+      >
+        <div className="rounded-xl border border-dashed border-gray-400 bg-white px-8 py-10 text-center">
+          <p className="text-lg font-semibold text-gray-800">フォルダ走査中の表示</p>
+        </div>
+      </DropZone>
+      <DropZoneScanProgressCard
+        progress={{
+          fileCount: 12840,
+          directoryCount: 42,
+          currentPath: 'Reference/Characters/pose-library/standing/front-001.png',
+        }}
+      />
+    </div>
+  ),
 };

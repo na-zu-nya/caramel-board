@@ -4,6 +4,7 @@ const PYTORCH_CUDA_INDEX_URL: &str = "https://download.pytorch.org/whl/cu128";
 enum AutoTagRuntimeMode {
     Cpu,
     Cuda,
+    Mps,
 }
 
 impl AutoTagRuntimeMode {
@@ -11,6 +12,7 @@ impl AutoTagRuntimeMode {
         match self {
             Self::Cpu => "cpu",
             Self::Cuda => "cuda",
+            Self::Mps => "mps",
         }
     }
 }
@@ -92,6 +94,20 @@ struct MigrationResult {
     stdout: String,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DockerMigrationProgress {
+    running: bool,
+    completed: bool,
+    phase: String,
+    message: String,
+    percent: f64,
+    last_log: String,
+    export_dir: Option<String>,
+    db_path: Option<String>,
+    error: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct DockerDatasetSummary {
@@ -118,7 +134,10 @@ struct DockerSourceDetection {
 struct AutoTagStatus {
     enabled: bool,
     running: bool,
+    starting: bool,
+    reachable: bool,
     url: String,
+    log_path: String,
     uv_installed: bool,
     repository_ready: bool,
     model_ready: bool,
@@ -174,11 +193,28 @@ impl Default for AutoTagInstallProgress {
     }
 }
 
+impl Default for DockerMigrationProgress {
+    fn default() -> Self {
+        Self {
+            running: false,
+            completed: false,
+            phase: String::from("idle"),
+            message: String::new(),
+            percent: 0.0,
+            last_log: String::new(),
+            export_dir: None,
+            db_path: None,
+            error: None,
+        }
+    }
+}
+
 #[derive(Default)]
 struct ManagedSidecar {
     child: Option<Child>,
     auto_tag_child: Option<Child>,
     auto_tag_install: AutoTagInstallProgress,
+    docker_migration: DockerMigrationProgress,
     settings: Option<AppSettings>,
     started_at: Option<u64>,
 }

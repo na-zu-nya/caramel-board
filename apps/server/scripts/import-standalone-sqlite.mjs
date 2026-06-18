@@ -39,6 +39,7 @@ const schemaPath = path.resolve(
 );
 const force = hasFlag('force');
 const verifyFiles = hasFlag('verify-files');
+const progressInterval = Number(getArgValue('progress-interval') ?? 1000);
 const storageRoot = path.resolve(
   resolveUserPath(getArgValue('storage-root') ?? path.join(repoRoot, 'data/assets'))
 );
@@ -307,8 +308,206 @@ const sqlLiteral = (value) => {
 };
 
 const writeSql = async (stdin, sql) => {
-  if (!stdin.write(sql)) {
-    await once(stdin, 'drain');
+  if (!stdin.write(sql)) await once(stdin, 'drain');
+};
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const compactErrorMessage = (error) => {
+  if (error instanceof Error) return error.message;
+  return String(error);
+};
+
+const formatWriteContext = (context) => {
+  const parts = [];
+  if (context?.phase) parts.push(`phase=${context.phase}`);
+  if (context?.table) parts.push(`table=${context.table}`);
+  if (context?.file) parts.push(`file=${context.file}`);
+  if (context?.lineNumber) parts.push(`line=${context.lineNumber}`);
+  if (context?.rowId !== undefined && context?.rowId !== null)
+    parts.push(`row.id=${context.rowId}`);
+  return parts.join(', ');
+};
+
+const countSqlInputLines = (sql) => {
+  const newlineCount = sql.match(/\n/g)?.length ?? 0;
+  if (newlineCount > 0) return newlineCount;
+  return sql.length > 0 ? 1 : 0;
+};
+
+const summarizeWriteContext = (context) => ({
+  phase: context?.phase,
+  table: context?.table,
+  file: context?.file,
+  lineNumber: context?.lineNumber,
+  rowId: context?.rowId,
+});
+
+const trackSqlWrite = (context, sql) => {
+  const tracker = context?.sqlLineTracker;
+  if (!tracker) return null;
+
+  const lineCount = countSqlInputLines(sql);
+  if (lineCount === 0) return null;
+
+  const start = tracker.lineNumber + 1;
+  const end = tracker.lineNumber + lineCount;
+  tracker.lineNumber = end;
+  tracker.ranges.push({
+    start,
+    end,
+    context: summarizeWriteContext(context),
+  });
+
+  return { start, end };
+};
+
+const findSqlLineContext = (tracker, lineNumber) => {
+  if (!tracker || !Number.isInteger(lineNumber)) return null;
+
+  for (let index = tracker.ranges.length - 1; index >= 0; index -= 1) {
+    const range = tracker.ranges[index];
+    if (range.start <= lineNumber && lineNumber <= range.end) {
+      return range;
+    }
+  }
+
+  return null;
+};
+
+const extractSqliteErrorLine = (output) => {
+  const match = output.match(/near line (\d+)/);
+  if (!match) return null;
+  const lineNumber = Number(match[1]);
+  return Number.isInteger(lineNumber) ? lineNumber : null;
+};
+
+const sqliteNoCaseKey = (value) =>
+  String(value ?? '').replace(/[A-Z]/g, (character) => character.toLowerCase());
+
+const createImportContext = () => ({
+  authorCanonicalIds: new Map(),
+  authorIdMap: new Map(),
+  tagCanonicalIds: new Map(),
+  tagIdMap: new Map(),
+  stackTagKeys: new Set(),
+  duplicateAuthors: 0,
+  duplicateTags: 0,
+  duplicateStackTags: 0,
+});
+
+const prepareRowForImport = (row, definition, importContext) => {
+  if (definition.table === 'authors') {
+    const key = `${row.dataset_id}\u0000${sqliteNoCaseKey(row.name)}`;
+    const existingId = importContext.authorCanonicalIds.get(key);
+    if (existingId !== undefined) {
+      importContext.authorIdMap.set(String(row.id), existingId);
+      importContext.duplicateAuthors += 1;
+      return null;
+    }
+
+    importContext.authorCanonicalIds.set(key, row.id);
+    importContext.authorIdMap.set(String(row.id), row.id);
+    return row;
+  }
+
+  if (definition.table === 'stacks' && row.author_id !== null && row.author_id !== undefined) {
+    const mappedAuthorId = importContext.authorIdMap.get(String(row.author_id));
+    if (mappedAuthorId !== undefined && mappedAuthorId !== row.author_id) {
+      return {
+        ...row,
+        author_id: mappedAuthorId,
+      };
+    }
+  }
+
+  if (definition.table === 'tags') {
+    const key = `${row.dataset_id}\u0000${sqliteNoCaseKey(row.title)}`;
+    const existingId = importContext.tagCanonicalIds.get(key);
+    if (existingId !== undefined) {
+      importContext.tagIdMap.set(String(row.id), existingId);
+      importContext.duplicateTags += 1;
+      return null;
+    }
+
+    importContext.tagCanonicalIds.set(key, row.id);
+    importContext.tagIdMap.set(String(row.id), row.id);
+    return row;
+  }
+
+  if (definition.table === 'stack_tags') {
+    const mappedTagId = importContext.tagIdMap.get(String(row.tag_id)) ?? row.tag_id;
+    const preparedRow =
+      mappedTagId !== row.tag_id
+        ? {
+            ...row,
+            tag_id: mappedTagId,
+          }
+        : row;
+    const key = `${preparedRow.stack_id}\u0000${preparedRow.tag_id}`;
+    if (importContext.stackTagKeys.has(key)) {
+      importContext.duplicateStackTags += 1;
+      return null;
+    }
+    importContext.stackTagKeys.add(key);
+    return preparedRow;
+  }
+
+  if (definition.table === 'auto_tag_mappings' && row.tag_id !== null && row.tag_id !== undefined) {
+    const mappedTagId = importContext.tagIdMap.get(String(row.tag_id));
+    if (mappedTagId !== undefined && mappedTagId !== row.tag_id) {
+      return {
+        ...row,
+        tag_id: mappedTagId,
+      };
+    }
+  }
+
+  return row;
+};
+
+const formatTableImportSummary = (table, count, importContext) => {
+  if (table === 'authors' && importContext.duplicateAuthors > 0) {
+    return `[standalone-import] ${table}: ${count} (${importContext.duplicateAuthors} duplicates merged)`;
+  }
+
+  if (table === 'tags' && importContext.duplicateTags > 0) {
+    return `[standalone-import] ${table}: ${count} (${importContext.duplicateTags} duplicates merged)`;
+  }
+
+  if (table === 'stack_tags' && importContext.duplicateStackTags > 0) {
+    return `[standalone-import] ${table}: ${count} (${importContext.duplicateStackTags} duplicates skipped after tag merge)`;
+  }
+
+  return `[standalone-import] ${table}: ${count}`;
+};
+
+const writeSqlWithContext = async (stdin, sql, context = {}) => {
+  const sqlRange = trackSqlWrite(context, sql);
+  try {
+    await writeSql(stdin, sql);
+  } catch (error) {
+    if (typeof context.waitForClose === 'function') {
+      await Promise.race([context.waitForClose(), sleep(250)]).catch(() => undefined);
+    }
+
+    const processOutput =
+      typeof context.processOutput === 'function' ? context.processOutput().trim() : '';
+    const writeContext = formatWriteContext(context);
+    const sqlLine =
+      sqlRange && sqlRange.start === sqlRange.end
+        ? `SQL line ${sqlRange.start}`
+        : sqlRange
+          ? `SQL lines ${sqlRange.start}-${sqlRange.end}`
+          : '';
+    const details = [
+      `SQLite import への書き込みに失敗しました: ${compactErrorMessage(error)}`,
+      sqlLine,
+      writeContext ? `直前の書き込み: ${writeContext}` : '',
+      processOutput ? `sqlite3 output:\n${processOutput}` : '',
+    ].filter(Boolean);
+
+    throw new Error(details.join('\n'), { cause: error });
   }
 };
 
@@ -323,6 +522,8 @@ const runSqliteImport = async () => {
 
   let stdout = '';
   let stderr = '';
+  let stdinError = null;
+  let closeCode = null;
   child.stdout.setEncoding('utf8');
   child.stderr.setEncoding('utf8');
   child.stdout.on('data', (chunk) => {
@@ -331,31 +532,85 @@ const runSqliteImport = async () => {
   child.stderr.on('data', (chunk) => {
     stderr += chunk;
   });
+  child.stdin.on('error', (error) => {
+    stdinError = error;
+  });
 
-  await writeSql(child.stdin, '.bail on\n');
-  await writeSql(child.stdin, 'PRAGMA foreign_keys = OFF;\n');
-  await writeSql(child.stdin, 'PRAGMA journal_mode = OFF;\n');
-  await writeSql(child.stdin, 'PRAGMA synchronous = OFF;\n');
-  await writeSql(child.stdin, await fsp.readFile(schemaPath, 'utf8'));
-  await writeSql(child.stdin, '\nPRAGMA foreign_keys = OFF;\nBEGIN IMMEDIATE;\n');
+  const closePromise = once(child, 'close').then(([code]) => {
+    closeCode = code;
+    return code;
+  });
+  const sqlLineTracker = {
+    lineNumber: 0,
+    ranges: [],
+  };
+  const sqliteContext = {
+    processOutput: () => [stderr, stdout].filter(Boolean).join('\n'),
+    waitForClose: () => closePromise,
+    sqlLineTracker,
+  };
+
+  await writeSqlWithContext(child.stdin, '.bail on\n', {
+    ...sqliteContext,
+    phase: 'sqlite setup',
+  });
+  await writeSqlWithContext(child.stdin, 'PRAGMA foreign_keys = OFF;\n', {
+    ...sqliteContext,
+    phase: 'sqlite setup',
+  });
+  await writeSqlWithContext(child.stdin, 'PRAGMA journal_mode = OFF;\n', {
+    ...sqliteContext,
+    phase: 'sqlite setup',
+  });
+  await writeSqlWithContext(child.stdin, 'PRAGMA synchronous = OFF;\n', {
+    ...sqliteContext,
+    phase: 'sqlite setup',
+  });
+  await writeSqlWithContext(child.stdin, await fsp.readFile(schemaPath, 'utf8'), {
+    ...sqliteContext,
+    phase: 'schema',
+  });
+  await writeSqlWithContext(child.stdin, '\nPRAGMA foreign_keys = OFF;\nBEGIN IMMEDIATE;\n', {
+    ...sqliteContext,
+    phase: 'transaction start',
+  });
 
   const counts = {};
+  const importContext = createImportContext();
 
   for (const definition of tableImports) {
     const filePath = path.join(dataDir, definition.file);
     await requireFile(filePath, definition.file);
-    const count = await importNdjsonTable(child.stdin, filePath, definition);
+    const count = await importNdjsonTable(
+      child.stdin,
+      filePath,
+      definition,
+      sqliteContext,
+      importContext
+    );
     counts[definition.table] = count;
-    console.log(`[standalone-import] ${definition.table}: ${count}`);
+    console.log(formatTableImportSummary(definition.table, count, importContext));
   }
 
-  await writeSql(child.stdin, 'COMMIT;\nPRAGMA foreign_keys = ON;\n');
+  await writeSqlWithContext(child.stdin, 'COMMIT;\nPRAGMA foreign_keys = ON;\n', {
+    ...sqliteContext,
+    phase: 'commit',
+  });
   child.stdin.end();
 
-  const [code] = await once(child, 'close');
+  const code = closeCode ?? (await closePromise);
   if (code !== 0) {
     await fsp.rm(tmpDbPath, { force: true });
-    throw new Error(`sqlite3 import failed (${code})\n${stderr || stdout}`);
+    const pipeMessage = stdinError ? `\nstdin: ${compactErrorMessage(stdinError)}` : '';
+    const sqliteOutput = stderr || stdout;
+    const errorLine = extractSqliteErrorLine(sqliteOutput);
+    const errorRange = errorLine ? findSqlLineContext(sqlLineTracker, errorLine) : null;
+    const contextMessage = errorRange
+      ? `\nSQLite error location: SQL line ${errorLine} (${formatWriteContext(errorRange.context)})`
+      : '';
+    throw new Error(
+      `sqlite3 import failed (${code})${pipeMessage}${contextMessage}\n${sqliteOutput}`
+    );
   }
 
   const fkErrors = await runSqliteScalarList(tmpDbPath, 'PRAGMA foreign_key_check;');
@@ -373,24 +628,52 @@ const runSqliteImport = async () => {
   }
 
   await fsp.rename(tmpDbPath, dbPath);
-  return counts;
+  return {
+    ...counts,
+    _merged_duplicate_authors: importContext.duplicateAuthors,
+    _merged_duplicate_tags: importContext.duplicateTags,
+    _skipped_duplicate_stack_tags: importContext.duplicateStackTags,
+  };
 };
 
-const importNdjsonTable = async (stdin, filePath, definition) => {
+const importNdjsonTable = async (stdin, filePath, definition, sqliteContext, importContext) => {
   const input = createReadStream(filePath, { encoding: 'utf8' });
   const lines = createInterface({ input, crlfDelay: Infinity });
   const columnSql = definition.columns.map(sqlIdentifier).join(', ');
   let count = 0;
+  let lineNumber = 0;
 
   for await (const line of lines) {
+    lineNumber += 1;
     if (!line.trim()) continue;
-    const row = JSON.parse(line);
-    const values = definition.columns.map((column) => sqlLiteral(row[column])).join(', ');
-    await writeSql(
+    let row;
+    try {
+      row = JSON.parse(line);
+    } catch (error) {
+      throw new Error(
+        `${definition.file}:${lineNumber} のJSONを読み取れません: ${compactErrorMessage(error)}`
+      );
+    }
+    const preparedRow = prepareRowForImport(row, definition, importContext);
+    if (!preparedRow) continue;
+
+    const values = definition.columns.map((column) => sqlLiteral(preparedRow[column])).join(', ');
+    await writeSqlWithContext(
       stdin,
-      `INSERT INTO ${sqlIdentifier(definition.table)} (${columnSql}) VALUES (${values});\n`
+      `INSERT INTO ${sqlIdentifier(definition.table)} (${columnSql}) VALUES (${values});\n`,
+      {
+        ...sqliteContext,
+        phase: 'table import',
+        table: definition.table,
+        file: definition.file,
+        lineNumber,
+        rowId: preparedRow.id,
+      }
     );
     count += 1;
+    if (progressInterval > 0 && count % progressInterval === 0) {
+      console.log(`[standalone-import] ${definition.table}: ${count}...`);
+    }
   }
 
   return count;
@@ -429,6 +712,20 @@ const normalizePathKey = (key) => {
   return withoutProtocol.replace(/^\/+/, '');
 };
 
+const storageCandidates = (key) => {
+  const normalized = normalizePathKey(key);
+  if (!normalized) return [];
+  const candidates = [path.join(storageRoot, normalized)];
+  if (normalized.startsWith('library/')) {
+    candidates.push(path.join(storageRoot, normalized.replace(/^library\//, '')));
+    candidates.push(path.join(path.dirname(storageRoot), normalized));
+  }
+  if (normalized.startsWith('files/')) {
+    candidates.push(path.join(storageRoot, normalized.replace(/^files\//, '')));
+  }
+  return [...new Set(candidates)];
+};
+
 const verifyFileReferences = async () => {
   if (!verifyFiles) return null;
 
@@ -444,12 +741,12 @@ const verifyFileReferences = async () => {
     const row = JSON.parse(line);
     summary.total += 1;
     const key = normalizePathKey(row.normalized_key ?? row.key);
-    const target = path.join(storageRoot, key);
-    if (!fs.existsSync(target)) {
+    const candidates = storageCandidates(key);
+    if (!candidates.some((candidate) => fs.existsSync(candidate))) {
       summary.missing += 1;
       summary.missing_by_kind[row.kind] = (summary.missing_by_kind[row.kind] ?? 0) + 1;
       if (summary.missing_samples.length < 10) {
-        summary.missing_samples.push({ kind: row.kind, key, target });
+        summary.missing_samples.push({ kind: row.kind, key, target: candidates[0] ?? '' });
       }
     }
   }
