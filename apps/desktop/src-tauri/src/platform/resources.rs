@@ -58,6 +58,10 @@ fn bundled_node_path(app: &AppHandle) -> Option<PathBuf> {
 }
 
 fn node_command(app: &AppHandle) -> Command {
+    if cfg!(debug_assertions) {
+        return hidden_command("node");
+    }
+
     match bundled_node_path(app) {
         Some(node) => hidden_command(child_process_path(node)),
         None => hidden_command("node"),

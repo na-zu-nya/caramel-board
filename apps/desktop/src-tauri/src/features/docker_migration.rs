@@ -385,6 +385,13 @@ fn run_docker_migration_task(
         });
     })?;
 
+    update_docker_migration_progress(&app, |progress| {
+        progress.phase = String::from("db-migration");
+        progress.message = String::from("SQLite DB の更新を適用しています...");
+        progress.percent = 90.0;
+    });
+    apply_standalone_migration_blocking(&app, settings.clone())?;
+
     write_settings(&app, &settings)?;
 
     update_docker_migration_progress(&app, |progress| {

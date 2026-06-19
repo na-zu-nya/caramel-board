@@ -1,6 +1,6 @@
 {
   "name": "caramel-board",
-  "version": "1.0.0-beta.5",
+  "version": "1.0.0-beta.6",
   "private": true,
   "license": "SEE LICENSE IN LICENSE",
   "packageManager": "npm@10.9.2",
@@ -12,6 +12,7 @@
     "sync:version": "node scripts/sync-version.mjs",
     "build": "npm run sync:version && turbo run build",
     "dev": "turbo run dev --parallel",
+    "dev:desktop": "node scripts/dev-desktop.mjs",
     "dev:next": "turbo run dev:next --parallel",
     "dev:db": "docker-compose -f docker-compose.dev.yml up -d postgres",
     "dev:db:down": "docker-compose -f docker-compose.dev.yml down",

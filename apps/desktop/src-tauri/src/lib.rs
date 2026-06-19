@@ -22,10 +22,11 @@ use tauri::tray::{MouseButton, MouseButtonState, TrayIconEvent};
 use tauri::ActivationPolicy;
 #[cfg(any(target_os = "windows", target_os = "macos"))]
 use tauri::{
-    menu::{MenuBuilder, MenuEvent},
+    image::Image,
+    menu::{Menu, MenuBuilder, MenuEvent, MenuItem},
     tray::TrayIconBuilder,
 };
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
 use tauri_plugin_opener::OpenerExt;
 

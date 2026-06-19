@@ -11,6 +11,8 @@ export interface AuthorLinkDraft {
   url: string;
 }
 
+const EMPTY_AUTHOR_LINK_DRAFTS: AuthorLinkDraft[] = [];
+
 interface AuthorLinkEditorCopy {
   links: string;
   url: string;
@@ -21,7 +23,7 @@ interface AuthorLinkEditorCopy {
 }
 
 interface AuthorLinkEditorProps {
-  links: AuthorLinkDraft[];
+  links?: AuthorLinkDraft[] | null;
   copy: AuthorLinkEditorCopy;
   disabled?: boolean;
   onChange: (links: AuthorLinkDraft[]) => void;
@@ -33,22 +35,24 @@ export function AuthorLinkEditor({
   disabled = false,
   onChange,
 }: AuthorLinkEditorProps) {
+  const safeLinks = Array.isArray(links) ? links : EMPTY_AUTHOR_LINK_DRAFTS;
+
   const handleAdd = useCallback(() => {
-    if (links.length >= MAX_AUTHOR_LINKS) return;
-    onChange([...links, { url: '' }]);
-  }, [links, onChange]);
+    if (safeLinks.length >= MAX_AUTHOR_LINKS) return;
+    onChange([...safeLinks, { url: '' }]);
+  }, [safeLinks, onChange]);
 
   const handleRemove = useCallback(
     (index: number) => {
-      onChange(links.filter((_, currentIndex) => currentIndex !== index));
+      onChange(safeLinks.filter((_, currentIndex) => currentIndex !== index));
     },
-    [links, onChange]
+    [safeLinks, onChange]
   );
 
   const handleLinkChange = useCallback(
     (index: number, patch: Partial<AuthorLinkDraft>) => {
       onChange(
-        links.map((link, currentIndex) =>
+        safeLinks.map((link, currentIndex) =>
           currentIndex === index
             ? {
                 ...link,
@@ -58,7 +62,7 @@ export function AuthorLinkEditor({
         )
       );
     },
-    [links, onChange]
+    [safeLinks, onChange]
   );
 
   return (
@@ -69,7 +73,7 @@ export function AuthorLinkEditor({
       </div>
 
       <div className="space-y-3">
-        {links.map((link, index) => {
+        {safeLinks.map((link, index) => {
           const preview = getAuthorLinkPreview(link.url);
           return (
             <div
@@ -134,7 +138,7 @@ export function AuthorLinkEditor({
         variant="outline"
         size="sm"
         onClick={handleAdd}
-        disabled={disabled || links.length >= MAX_AUTHOR_LINKS}
+        disabled={disabled || safeLinks.length >= MAX_AUTHOR_LINKS}
       >
         <Plus size={15} />
         {copy.addLink}

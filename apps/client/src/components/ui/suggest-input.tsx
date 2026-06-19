@@ -12,6 +12,7 @@ interface SuggestInputProps {
   suggestions: string[];
   loading?: boolean;
   onSearch?: (query: string) => void;
+  onCancel?: () => void;
   autoFocus?: boolean;
 }
 
@@ -24,6 +25,7 @@ export function SuggestInput({
   suggestions,
   loading = false,
   onSearch,
+  onCancel,
   autoFocus = false,
 }: SuggestInputProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -121,11 +123,12 @@ export function SuggestInput({
         }
         // Just blur the input; this will also close the suggestion list via onBlur
         inputRef.current?.blur();
+        onCancel?.();
         e.preventDefault();
         e.stopPropagation();
       },
     });
-  }, [createKeyDownHandler, handleEnter, isOpen, visibleSuggestions.length]);
+  }, [createKeyDownHandler, handleEnter, isOpen, onCancel, visibleSuggestions.length]);
 
   const handleBlur = useCallback(() => {
     clearBlurTimeout();

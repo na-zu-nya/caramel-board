@@ -1,12 +1,11 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useCallback, useMemo, useState } from 'react';
-import type { AuthorLinkDraft } from '@/components/authors/AuthorLinkEditor';
 import { AuthorManagementView } from '@/components/authors/AuthorManagementView';
 import { useHeaderActions } from '@/hooks/useHeaderActions';
 import { apiClient } from '@/lib/api-client';
 import { useT } from '@/lib/i18n';
-import type { Author } from '@/types';
+import type { Author, AuthorLink, MediaGridItem, Stack } from '@/types';
 
 interface AuthorsSearch {
   authorId?: string;
@@ -15,7 +14,6 @@ interface AuthorsSearch {
 interface AuthorDraftState {
   authorId: number;
   name: string;
-  links: AuthorLinkDraft[];
 }
 
 export const Route = createFileRoute('/library/$datasetId/authors')({
@@ -27,11 +25,23 @@ export const Route = createFileRoute('/library/$datasetId/authors')({
 
 const normalizeAuthorId = (value: string | number) => Number(value);
 
-const linkDraftsFromAuthor = (author: Author | null): AuthorLinkDraft[] =>
-  (author?.links ?? []).map((link) => ({
-    id: link.id,
-    url: link.url,
-  }));
+const getAuthorLinks = (author: Author | null): AuthorLink[] =>
+  Array.isArray(author?.links) ? author.links : [];
+
+const toAuthorLinkPayload = (links: AuthorLink[]) =>
+  links
+    .map((link) => ({
+      id: link.id,
+      url: link.url.trim(),
+    }))
+    .filter((link) => link.url.length > 0);
+
+const toMediaGridItem = (stack: Stack, datasetId: string): MediaGridItem => ({
+  ...stack,
+  dataSetId: datasetId,
+  name: stack.name || String(stack.id),
+  thumbnail: stack.thumbnail ?? stack.thumbnailUrl,
+});
 
 function AuthorsPage() {
   const t = useT();
@@ -59,18 +69,19 @@ function AuthorsPage() {
     queryFn: () => apiClient.getAuthors({ datasetId, limit: 1000, offset: 0 }),
   });
 
-  const authors = authorsQuery.data?.authors ?? [];
+  const authors = Array.isArray(authorsQuery.data?.authors) ? authorsQuery.data.authors : [];
   const filteredAuthors = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     if (!query) return authors;
     return authors.filter((author) => {
       const nameMatches = author.name.toLowerCase().includes(query);
-      const linkMatches = (author.links ?? []).some((link) => {
+      const links = Array.isArray(author.links) ? author.links : [];
+      const linkMatches = links.some((link) => {
         const externalId = link.externalId?.toLowerCase() ?? '';
         return (
           externalId.includes(query) ||
-          link.url.toLowerCase().includes(query) ||
-          link.label.toLowerCase().includes(query)
+          (link.url ?? '').toLowerCase().includes(query) ||
+          (link.label ?? '').toLowerCase().includes(query)
         );
       });
       return nameMatches || linkMatches;
@@ -82,13 +93,42 @@ function AuthorsPage() {
     if (routeAuthorId && Number.isFinite(routeAuthorId)) {
       return authors.find((author) => normalizeAuthorId(author.id) === routeAuthorId) ?? null;
     }
-    return filteredAuthors[0] ?? authors[0] ?? null;
-  }, [authors, filteredAuthors, routeAuthorId]);
+    return null;
+  }, [authors, routeAuthorId]);
 
   const selectedAuthorId = selectedAuthor ? normalizeAuthorId(selectedAuthor.id) : null;
+  const selectedAuthorLinks = useMemo(() => getAuthorLinks(selectedAuthor), [selectedAuthor]);
   const activeDraft = draft && draft.authorId === selectedAuthorId ? draft : null;
   const draftName = activeDraft?.name ?? selectedAuthor?.name ?? '';
-  const draftLinks = activeDraft?.links ?? linkDraftsFromAuthor(selectedAuthor);
+
+  const authorStacksQuery = useInfiniteQuery({
+    queryKey: ['author-stacks', datasetId, selectedAuthorId, selectedAuthor?.name],
+    queryFn: async ({ pageParam = 0 }) => {
+      if (!selectedAuthor?.name) return { stacks: [], total: 0, limit: 50, offset: 0 };
+      return apiClient.getStacksWithFilters({
+        dataSetId: datasetId,
+        author: [selectedAuthor.name],
+        limit: 50,
+        offset: pageParam,
+      });
+    },
+    getNextPageParam: (lastPage) => {
+      const nextOffset = lastPage.offset + lastPage.limit;
+      return nextOffset < lastPage.total ? nextOffset : undefined;
+    },
+    enabled: Boolean(selectedAuthor?.name),
+    initialPageParam: 0,
+  });
+
+  const authorStacks = useMemo(
+    () =>
+      (authorStacksQuery.data?.pages ?? [])
+        .flatMap((page) => page.stacks)
+        .map((stack) => toMediaGridItem(stack, datasetId)),
+    [authorStacksQuery.data?.pages, datasetId]
+  );
+
+  const authorStacksTotal = authorStacksQuery.data?.pages[0]?.total;
 
   const invalidateAuthors = useCallback(async () => {
     await Promise.allSettled([
@@ -105,12 +145,6 @@ function AuthorsPage() {
       return apiClient.updateAuthor(selectedAuthorId, {
         datasetId,
         name: draftName.trim(),
-        links: draftLinks
-          .map((link) => ({
-            id: link.id,
-            url: link.url.trim(),
-          }))
-          .filter((link) => link.url.length > 0),
       });
     },
     onSuccess: async (author) => {
@@ -121,6 +155,32 @@ function AuthorsPage() {
         params: { datasetId },
         search: { authorId: String(author.id) },
       });
+    },
+  });
+
+  const addAuthorLinkMutation = useMutation({
+    mutationFn: async (input: { url: string }) => {
+      if (!selectedAuthorId) throw new Error('Author is not selected');
+      return apiClient.addAuthorLink(selectedAuthorId, {
+        datasetId,
+        url: input.url,
+      });
+    },
+    onSuccess: async () => {
+      await invalidateAuthors();
+    },
+  });
+
+  const updateAuthorLinksMutation = useMutation({
+    mutationFn: async (links: AuthorLink[]) => {
+      if (!selectedAuthorId) throw new Error('Author is not selected');
+      return apiClient.updateAuthor(selectedAuthorId, {
+        datasetId,
+        links: toAuthorLinkPayload(links),
+      });
+    },
+    onSuccess: async () => {
+      await invalidateAuthors();
     },
   });
 
@@ -160,7 +220,7 @@ function AuthorsPage() {
 
   const handleToggleMergeAuthor = useCallback((authorId: number) => {
     setSelectedMergeIds((current) => {
-      const next = new Set(current);
+      const next = new Set(current ?? []);
       if (next.has(authorId)) {
         next.delete(authorId);
       } else {
@@ -176,28 +236,53 @@ function AuthorsPage() {
       setDraft({
         authorId: selectedAuthorId,
         name,
-        links: draftLinks,
       });
     },
-    [draftLinks, selectedAuthorId]
-  );
-
-  const handleDraftLinksChange = useCallback(
-    (links: AuthorLinkDraft[]) => {
-      if (!selectedAuthorId) return;
-      setDraft({
-        authorId: selectedAuthorId,
-        name: draftName,
-        links,
-      });
-    },
-    [draftName, selectedAuthorId]
+    [selectedAuthorId]
   );
 
   const handleSave = useCallback(() => {
     if (!selectedAuthorId || !draftName.trim()) return;
     updateAuthorMutation.mutate();
   }, [draftName, selectedAuthorId, updateAuthorMutation]);
+
+  const handleAddAuthorLink = useCallback(
+    (input: { url: string }) => {
+      if (!selectedAuthorId) return;
+      addAuthorLinkMutation.mutate(input);
+    },
+    [addAuthorLinkMutation, selectedAuthorId]
+  );
+
+  const handleUpdateAuthorLink = useCallback(
+    (linkId: AuthorLink['id'], input: { url: string }) => {
+      if (!selectedAuthorId) return;
+      const nextLinks = selectedAuthorLinks.map((link) =>
+        link.id === linkId
+          ? {
+              ...link,
+              url: input.url,
+            }
+          : link
+      );
+      updateAuthorLinksMutation.mutate(nextLinks);
+    },
+    [selectedAuthorId, selectedAuthorLinks, updateAuthorLinksMutation]
+  );
+
+  const handleRemoveAuthorLink = useCallback(
+    (linkId: AuthorLink['id']) => {
+      if (!selectedAuthorId) return;
+      const nextLinks = selectedAuthorLinks.filter((link) => link.id !== linkId);
+      updateAuthorLinksMutation.mutate(nextLinks);
+    },
+    [selectedAuthorId, selectedAuthorLinks, updateAuthorLinksMutation]
+  );
+
+  const handleLoadMoreAuthorStacks = useCallback(() => {
+    if (!authorStacksQuery.hasNextPage || authorStacksQuery.isFetchingNextPage) return;
+    void authorStacksQuery.fetchNextPage();
+  }, [authorStacksQuery]);
 
   const handleMerge = useCallback(() => {
     if (!selectedAuthor || selectedMergeIds.size === 0) return;
@@ -215,16 +300,24 @@ function AuthorsPage() {
       selectedAuthorId={selectedAuthorId}
       searchQuery={searchQuery}
       draftName={draftName}
-      draftLinks={draftLinks}
+      authorStacks={authorStacks}
+      authorStacksTotal={authorStacksTotal}
       selectedMergeIds={selectedMergeIds}
       loading={authorsQuery.isLoading}
+      authorStacksLoading={authorStacksQuery.isLoading}
+      authorStacksLoadingMore={authorStacksQuery.isFetchingNextPage}
+      authorStacksHasMore={Boolean(authorStacksQuery.hasNextPage)}
       saving={updateAuthorMutation.isPending}
       merging={mergeAuthorsMutation.isPending}
+      linkSubmitting={addAuthorLinkMutation.isPending || updateAuthorLinksMutation.isPending}
       onSearchChange={setSearchQuery}
       onSelectAuthor={handleSelectAuthor}
       onToggleMergeAuthor={handleToggleMergeAuthor}
       onDraftNameChange={handleDraftNameChange}
-      onDraftLinksChange={handleDraftLinksChange}
+      onAddAuthorLink={handleAddAuthorLink}
+      onUpdateAuthorLink={handleUpdateAuthorLink}
+      onRemoveAuthorLink={handleRemoveAuthorLink}
+      onLoadMoreAuthorStacks={handleLoadMoreAuthorStacks}
       onSave={handleSave}
       onMerge={handleMerge}
       copy={{
@@ -246,6 +339,11 @@ function AuthorsPage() {
         removeLink: t.authorManagement.removeLink,
         maxLinks: t.authorManagement.maxLinks,
         openLink: t.authorManagement.openLink,
+        updateLink: t.authorManagement.updateLink,
+        editLink: t.authorManagement.editLink,
+        assignedStacks: t.authorManagement.assignedStacks,
+        noAssignedStacks: t.authorManagement.noAssignedStacks,
+        loadMore: t.common.loadMore,
         save: t.authorManagement.save,
         saving: t.authorManagement.saving,
         mergeIntoSelected: t.authorManagement.mergeIntoSelected,

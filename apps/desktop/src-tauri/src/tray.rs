@@ -1,3 +1,25 @@
+#[cfg(target_os = "windows")]
+const WINDOWS_TRAY_ICON: &[u8] = include_bytes!("../icons/tray/tray-color.png");
+#[cfg(target_os = "macos")]
+const MACOS_TRAY_RUNNING_ICON: &[u8] = include_bytes!("../icons/tray/tray-menubar-running.png");
+#[cfg(target_os = "macos")]
+const MACOS_TRAY_STOPPED_ICON: &[u8] = include_bytes!("../icons/tray/tray-menubar-stopped.png");
+
+#[cfg(target_os = "windows")]
+fn tray_icon_for_status(_running: bool) -> tauri::Result<Image<'static>> {
+    Image::from_bytes(WINDOWS_TRAY_ICON)
+}
+
+#[cfg(target_os = "macos")]
+fn tray_icon_for_status(running: bool) -> tauri::Result<Image<'static>> {
+    let bytes = if running {
+        MACOS_TRAY_RUNNING_ICON
+    } else {
+        MACOS_TRAY_STOPPED_ICON
+    };
+    Image::from_bytes(bytes)
+}
+
 fn stop_sidecar_on_exit(app: &tauri::AppHandle) {
     let settings = read_settings(app).ok();
     let state = app.state::<Mutex<ManagedSidecar>>();
@@ -18,11 +40,48 @@ fn start_saved_sidecar(app: &AppHandle) -> Result<SidecarStatus, String> {
     if !settings.setup_completed {
         return Err(String::from("セットアップが完了していません。"));
     }
+    let status = {
+        let state = app.state::<Mutex<ManagedSidecar>>();
+        let mut sidecar = state
+            .lock()
+            .map_err(|_| String::from("Caramel Board の状態を確認できません"))?;
+        start_sidecar_for_settings(app, &mut sidecar, settings)
+    }?;
+    refresh_tray_menu(app);
+    emit_sidecar_status_changed(app, &status);
+    Ok(status)
+}
+
+fn stop_saved_sidecar(app: &AppHandle) -> Result<SidecarStatus, String> {
+    let settings = read_settings(app)?;
+    let status = {
+        let state = app.state::<Mutex<ManagedSidecar>>();
+        let mut sidecar = state
+            .lock()
+            .map_err(|_| String::from("Caramel Board の状態を確認できません"))?;
+        stop_sidecar_for_settings(&mut sidecar, &settings)
+    }?;
+    refresh_tray_menu(app);
+    emit_sidecar_status_changed(app, &status);
+    Ok(status)
+}
+
+fn saved_sidecar_status(app: &AppHandle) -> Result<SidecarStatus, String> {
+    let settings = read_settings(app)?;
     let state = app.state::<Mutex<ManagedSidecar>>();
     let mut sidecar = state
         .lock()
         .map_err(|_| String::from("Caramel Board の状態を確認できません"))?;
-    start_sidecar_for_settings(app, &mut sidecar, settings)
+    status_from(&mut sidecar, &settings)
+}
+
+fn toggle_saved_sidecar(app: &AppHandle) -> Result<(), String> {
+    if saved_sidecar_status(app)?.running {
+        stop_saved_sidecar(app)?;
+    } else {
+        start_saved_sidecar(app)?;
+    }
+    Ok(())
 }
 
 fn open_saved_server_url(app: &AppHandle) -> Result<(), String> {
@@ -98,10 +157,19 @@ fn close_settings_window(window: &tauri::Window) {
 #[cfg(any(target_os = "windows", target_os = "macos"))]
 fn handle_tray_menu_event(app: &AppHandle, event: MenuEvent) {
     match event.id().as_ref() {
+        "toggle_sidecar" => {
+            if let Err(error) = toggle_saved_sidecar(app) {
+                eprintln!("Toggle Caramel Board from tray failed: {error}");
+                show_settings_window(app);
+                refresh_tray_menu(app);
+            }
+        }
         "show_settings" => show_settings_window(app),
         "open_browser" => {
             if let Err(error) = open_saved_server_url(app) {
                 eprintln!("Open browser from tray failed: {error}");
+                show_settings_window(app);
+                refresh_tray_menu(app);
             }
         }
         "copy_url" => {
@@ -117,17 +185,88 @@ fn handle_tray_menu_event(app: &AppHandle, event: MenuEvent) {
 }
 
 #[cfg(any(target_os = "windows", target_os = "macos"))]
-fn setup_tray(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
-    let menu = MenuBuilder::new(app)
-        .text("show_settings", "Settings")
-        .text("open_browser", "Open Browser")
+fn build_tray_menu(app: &AppHandle, running: bool) -> tauri::Result<Menu<tauri::Wry>> {
+    let status_label = if running {
+        "Status: Running"
+    } else {
+        "Status: Stopped"
+    };
+    let toggle_label = if running {
+        "Stop Caramel Board"
+    } else {
+        "Start Caramel Board"
+    };
+    let status_item = MenuItem::with_id(app, "sidecar_status", status_label, false, None::<&str>)?;
+
+    MenuBuilder::new(app)
+        .item(&status_item)
+        .text("toggle_sidecar", toggle_label)
+        .separator()
+        .text("show_settings", "Open Settings")
+        .separator()
+        .text("open_browser", "Open in Browser")
         .text("copy_url", "Copy URL")
         .separator()
         .text("quit", "Quit")
-        .build()?;
+        .build()
+}
+
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+fn refresh_tray_icon(app: &AppHandle, running: bool) {
+    let Some(tray) = app.tray_by_id("main") else {
+        return;
+    };
+    let icon = match tray_icon_for_status(running) {
+        Ok(icon) => icon,
+        Err(error) => {
+            eprintln!("Load tray icon failed: {error}");
+            return;
+        }
+    };
+    #[cfg(target_os = "macos")]
+    let result = tray.set_icon_with_as_template(Some(icon), false);
+    #[cfg(target_os = "windows")]
+    let result = tray.set_icon(Some(icon));
+    if let Err(error) = result {
+        eprintln!("Update tray icon failed: {error}");
+    }
+}
+
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+fn refresh_tray_menu(app: &AppHandle) {
+    let running = saved_sidecar_status(app)
+        .map(|status| status.running)
+        .unwrap_or(false);
+    refresh_tray_icon(app, running);
+
+    let Some(tray) = app.tray_by_id("main") else {
+        return;
+    };
+    match build_tray_menu(app, running) {
+        Ok(menu) => {
+            if let Err(error) = tray.set_menu(Some(menu)) {
+                eprintln!("Update tray menu failed: {error}");
+            }
+        }
+        Err(error) => {
+            eprintln!("Build tray menu failed: {error}");
+        }
+    }
+}
+
+#[cfg(not(any(target_os = "windows", target_os = "macos")))]
+fn refresh_tray_menu(_app: &AppHandle) {}
+
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+fn setup_tray(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    let running = saved_sidecar_status(app.handle())
+        .map(|status| status.running)
+        .unwrap_or(false);
+    let menu = build_tray_menu(app.handle(), running)?;
 
     let mut builder = TrayIconBuilder::with_id("main")
         .tooltip("Caramel Board")
+        .icon(tray_icon_for_status(running)?)
         .menu(&menu)
         .on_menu_event(handle_tray_menu_event);
 
@@ -148,10 +287,6 @@ fn setup_tray(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                 show_settings_window(tray.app_handle());
             }
         });
-    }
-
-    if let Some(icon) = app.default_window_icon() {
-        builder = builder.icon(icon.clone());
     }
 
     builder.build(app)?;

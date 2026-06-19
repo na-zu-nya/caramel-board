@@ -25,7 +25,8 @@ export default meta;
 type Story = StoryObj<typeof AuthorLinkEditor>;
 
 function AuthorLinkEditorStory(args: ComponentProps<typeof AuthorLinkEditor>) {
-  const [links, setLinks] = useState<AuthorLinkDraft[]>(args.links);
+  const initialLinks = Array.isArray(args.links) ? args.links : [];
+  const [links, setLinks] = useState<AuthorLinkDraft[]>(initialLinks);
   return (
     <div className="max-w-2xl bg-gray-50 p-6">
       <AuthorLinkEditor {...args} links={links} onChange={setLinks} />

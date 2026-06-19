@@ -1,0 +1,1 @@
+function i(r){return r?r.startsWith("/library/")?`/files${r}`:r.startsWith("/files/")?r:r.startsWith("library/")?`/files/${r}`:r.startsWith("files/")?`/${r}`:r.match(/^\/\d+\//)?`/files/library${r}`:r:"/no-image.png"}export{i as g};

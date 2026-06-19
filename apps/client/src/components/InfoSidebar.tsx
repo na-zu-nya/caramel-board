@@ -8,11 +8,11 @@ import {
   Clapperboard,
   Copy,
   Download,
-  ExternalLink,
   GalleryVerticalEnd,
   Hash,
   Heart,
   Image,
+  Link as LinkIcon,
   Loader2,
   NotebookText,
   Palette,
@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AuthorLinkQuickAdd } from '@/components/authors/AuthorLinkQuickAdd';
+import { authorLinkStyles } from '@/components/authors/authorLinkStyles';
 import { AutoTagDisplay } from '@/components/ui/autotag-display';
 import { Badge } from '@/components/ui/badge';
 import { ColorPalette } from '@/components/ui/color-ball';
@@ -40,7 +41,7 @@ import { SuggestInput } from '@/components/ui/suggest-input';
 import { useSwipeClose } from '@/hooks/features/useSwipeClose';
 import { useScratch } from '@/hooks/useScratch';
 import { apiClient } from '@/lib/api-client';
-import { getAuthorLinkLabel, getAuthorLinkTone, MAX_AUTHOR_LINKS } from '@/lib/author-links';
+import { getAuthorLinkLabel, MAX_AUTHOR_LINKS } from '@/lib/author-links';
 import { copyText } from '@/lib/clipboard';
 import { downloadStackOriginals } from '@/lib/download-originals';
 import { useT } from '@/lib/i18n';
@@ -461,23 +462,80 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
     }
   };
 
-  const handleAuthorChange = (author: string) => {
-    if (selectedItem) {
+  const handleAuthorChange = useCallback(
+    (author: string) => {
+      const nextAuthor = author.trim();
+      setAuthorInput(nextAuthor);
+      setAuthorEditing(false);
+      setAuthorSuggestions([]);
+
+      if (!selectedItem) return;
+
       // Get current author name
       const currentAuthorName =
         typeof selectedItem.author === 'string'
           ? selectedItem.author
           : (selectedItem.author as Author)?.name || '';
 
-      if (author !== currentAuthorName) {
-        updateAuthorMutation.mutate({ stackId: Number(selectedItem.id), author });
+      if (nextAuthor !== currentAuthorName) {
+        updateAuthorMutation.mutate({ stackId: Number(selectedItem.id), author: nextAuthor });
         // Add to recent authors
-        if (author) {
-          setRecentAuthors((prev) => [author, ...prev.filter((a) => a !== author)].slice(0, 10));
+        if (nextAuthor) {
+          setRecentAuthors((prev) =>
+            [nextAuthor, ...prev.filter((a) => a !== nextAuthor)].slice(0, 10)
+          );
         }
       }
+    },
+    [selectedItem, updateAuthorMutation]
+  );
+
+  const handleAuthorSuggestionSelect = useCallback(
+    (author: string) => {
+      handleAuthorChange(author);
+    },
+    [handleAuthorChange]
+  );
+
+  const handleAuthorSearch = useCallback(
+    async (query: string) => {
+      setAuthorLoading(true);
+      try {
+        const results = await apiClient.searchAuthors(query, datasetId);
+        const suggestions = results
+          .map((author) => (typeof author === 'string' ? author : author.name))
+          .filter((name): name is string => name !== undefined && name !== null);
+        setAuthorSuggestions(suggestions);
+      } catch (error) {
+        console.error('Error searching authors:', error);
+        setAuthorSuggestions([]);
+      } finally {
+        setAuthorLoading(false);
+      }
+    },
+    [datasetId]
+  );
+
+  const handleStartAuthorEditing = useCallback(() => {
+    if (selectedItem) {
+      const current =
+        typeof selectedItem.author === 'string'
+          ? selectedItem.author
+          : (selectedItem.author as Author)?.name || '';
+      setAuthorInput(current);
+      setAuthorEditing(true);
     }
-  };
+  }, [selectedItem]);
+
+  const handleCancelAuthorEditing = useCallback(() => {
+    const current =
+      typeof selectedItem?.author === 'string'
+        ? selectedItem.author
+        : (selectedItem?.author as Author | undefined)?.name || '';
+    setAuthorInput(current);
+    setAuthorEditing(false);
+    setAuthorSuggestions([]);
+  }, [selectedItem?.author]);
 
   const handleOpenAuthorManagement = useCallback(() => {
     if (!selectedAuthor) return;
@@ -799,50 +857,40 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
             </div>
 
             {/* Author */}
-            <div className="space-y-2">
-              <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                <Calendar size={16} />
-                {t.info.author}
-              </label>
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                  <Calendar size={16} />
+                  {t.info.author}
+                </label>
+                {selectedAuthor && (
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 text-[11px] leading-4 text-gray-500 transition-colors hover:text-gray-700"
+                    onClick={handleOpenAuthorManagement}
+                  >
+                    <UserPen size={12} />
+                    {t.info.editAuthor}
+                  </button>
+                )}
+              </div>
               {!authorEditing ? (
                 <button
                   type="button"
-                  className="px-3 py-2 w-full text-left border border-transparent rounded-md hover:bg-gray-50"
-                  onClick={() => {
-                    const current =
-                      (typeof selectedItem.author === 'string'
-                        ? selectedItem.author
-                        : (selectedItem.author as Author)?.name) || '';
-                    setAuthorInput(current);
-                    setAuthorEditing(true);
-                  }}
+                  className="w-full rounded px-3 py-1 text-left text-sm leading-5 text-gray-900 transition-colors hover:bg-gray-50"
+                  onClick={handleStartAuthorEditing}
                 >
-                  <span className="text-gray-900">
-                    {(typeof selectedItem.author === 'string'
-                      ? selectedItem.author
-                      : (selectedItem.author as Author)?.name) || '—'}
-                  </span>
+                  {(typeof selectedItem.author === 'string'
+                    ? selectedItem.author
+                    : (selectedItem.author as Author)?.name) || '—'}
                 </button>
               ) : (
                 <SuggestInput
                   value={authorInput}
                   onChange={setAuthorInput}
-                  onSelect={handleAuthorChange}
-                  onSearch={async (query) => {
-                    setAuthorLoading(true);
-                    try {
-                      const results = await apiClient.searchAuthors(query, datasetId);
-                      const suggestions = results
-                        .map((author) => (typeof author === 'string' ? author : author.name))
-                        .filter((name): name is string => name !== undefined && name !== null);
-                      setAuthorSuggestions(suggestions);
-                    } catch (error) {
-                      console.error('Error searching authors:', error);
-                      setAuthorSuggestions([]);
-                    } finally {
-                      setAuthorLoading(false);
-                    }
-                  }}
+                  onSelect={handleAuthorSuggestionSelect}
+                  onSearch={handleAuthorSearch}
+                  onCancel={handleCancelAuthorEditing}
                   placeholder={t.info.typeAuthorEnter}
                   suggestions={authorSuggestions}
                   loading={authorLoading}
@@ -850,20 +898,17 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
                 />
               )}
               {!authorEditing && selectedAuthor && (
-                <div className="flex flex-wrap items-center gap-1.5 px-3">
+                <div className="flex flex-wrap items-center gap-1 px-3">
                   {selectedAuthorLinks.map((link) => (
                     <a
                       key={link.id}
                       href={link.url}
                       target="_blank"
                       rel="noreferrer"
-                      className={cn(
-                        'inline-flex min-h-7 max-w-full items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium',
-                        getAuthorLinkTone(link.provider)
-                      )}
+                      className={cn(authorLinkStyles.pillBase, authorLinkStyles.pillCompact)}
                       title={link.url}
                     >
-                      <ExternalLink size={12} />
+                      <LinkIcon size={10} className={authorLinkStyles.icon} />
                       <span className="truncate">{getAuthorLinkLabel(link)}</span>
                     </a>
                   ))}
@@ -873,20 +918,12 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
                       addLabel={t.info.addAuthorLink}
                       urlLabel={t.info.authorLinkUrl}
                       urlPlaceholder={t.info.authorLinkUrlPlaceholder}
-                      submitLabel={t.info.addAuthorLink}
+                      submitLabel={t.common.add}
                       submitting={addAuthorLinkMutation.isPending}
                       onOpenChange={setAuthorLinkQuickAddOpen}
                       onSubmit={handleAddAuthorLink}
                     />
                   )}
-                  <button
-                    type="button"
-                    className="ml-auto inline-flex min-h-7 items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-                    onClick={handleOpenAuthorManagement}
-                  >
-                    <UserPen size={13} />
-                    {t.info.editAuthor}
-                  </button>
                 </div>
               )}
               {/* Recent Authors */}

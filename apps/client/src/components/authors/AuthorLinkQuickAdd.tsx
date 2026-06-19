@@ -1,9 +1,10 @@
-import { Check, Link as LinkIcon, Loader2, Plus } from 'lucide-react';
+import { Check, Loader2 } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { getAuthorLinkPreview, getAuthorLinkTone } from '@/lib/author-links';
+import { getAuthorLinkPreview } from '@/lib/author-links';
 import { cn } from '@/lib/utils';
 
 interface AuthorLinkQuickAddProps {
@@ -14,6 +15,11 @@ interface AuthorLinkQuickAddProps {
   submitLabel: string;
   submitting: boolean;
   disabled?: boolean;
+  initialUrl?: string;
+  showPrefix?: boolean;
+  showTriggerLabel?: boolean;
+  triggerIcon?: ReactNode;
+  triggerTitle?: string;
   triggerClassName?: string;
   onOpenChange: (open: boolean) => void;
   onSubmit: (input: { url: string }) => void;
@@ -27,21 +33,28 @@ export function AuthorLinkQuickAdd({
   submitLabel,
   submitting,
   disabled = false,
+  initialUrl = '',
+  showPrefix = true,
+  showTriggerLabel = true,
+  triggerIcon,
+  triggerTitle,
   triggerClassName,
   onOpenChange,
   onSubmit,
 }: AuthorLinkQuickAddProps) {
-  const [url, setUrl] = useState('');
+  const [url, setUrl] = useState(initialUrl);
   const preview = useMemo(() => getAuthorLinkPreview(url), [url]);
 
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
-      if (!nextOpen) {
+      if (nextOpen) {
+        setUrl(initialUrl);
+      } else {
         setUrl('');
       }
       onOpenChange(nextOpen);
     },
-    [onOpenChange]
+    [initialUrl, onOpenChange]
   );
 
   const handleSubmit = useCallback(() => {
@@ -55,19 +68,24 @@ export function AuthorLinkQuickAdd({
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="sm"
           className={cn(
-            'inline-flex min-h-7 items-center gap-1.5 rounded-md border border-dashed border-gray-300 bg-white px-2 py-1 text-xs font-medium text-gray-600 hover:border-primary/50 hover:text-primary disabled:pointer-events-none disabled:opacity-50',
+            'h-auto min-h-6 min-w-0 justify-start gap-1.5 rounded-[3px] px-1.5 py-0 text-[11px] leading-4 text-slate-500 hover:bg-slate-100 hover:text-slate-600',
             triggerClassName
           )}
           disabled={disabled || submitting}
+          title={triggerTitle}
+          aria-label={triggerTitle ?? addLabel}
         >
-          <Plus size={12} />
-          {addLabel}
-        </button>
+          {triggerIcon}
+          {showPrefix && <span aria-hidden="true">+</span>}
+          {showTriggerLabel && <span className="truncate">{addLabel}</span>}
+        </Button>
       </PopoverTrigger>
-      <PopoverContent align="start" side="bottom" className="w-72 p-3">
+      <PopoverContent align="start" side="bottom" className="w-60 p-2">
         <div className="space-y-2">
           <Input
             value={url}
@@ -75,18 +93,13 @@ export function AuthorLinkQuickAdd({
             placeholder={urlPlaceholder}
             aria-label={urlLabel}
             disabled={submitting}
+            className="h-8 px-2 py-1 text-xs"
             autoFocus
           />
-          <div className="flex min-h-8 items-center justify-between gap-2">
+          <div className="flex min-h-7 items-center justify-between gap-2">
             {preview ? (
               <div className="flex min-w-0 items-center gap-1.5">
-                <span
-                  className={cn(
-                    'inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-medium',
-                    getAuthorLinkTone(preview.provider)
-                  )}
-                >
-                  <LinkIcon size={12} />
+                <span className="rounded-[3px] bg-slate-100 px-1.5 text-[11px] leading-4 text-slate-600">
                   {preview.label}
                 </span>
                 <span className="truncate text-xs text-gray-500">{preview.externalLabel}</span>
@@ -97,9 +110,9 @@ export function AuthorLinkQuickAdd({
               size="sm"
               onClick={handleSubmit}
               disabled={submitting || !url.trim()}
-              className="ml-auto h-8 shrink-0 px-2"
+              className="ml-auto h-7 shrink-0 px-2 text-xs"
             >
-              {submitting ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+              {submitting ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
               {submitLabel}
             </Button>
           </div>

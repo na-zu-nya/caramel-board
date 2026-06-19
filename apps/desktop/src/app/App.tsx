@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import {
@@ -296,6 +297,27 @@ export default function App() {
     const next = await invoke<AutoTagStatus>('autotag_status');
     setAutoTagStatus(next);
   }, []);
+
+  useEffect(() => {
+    let disposed = false;
+    let unlisten: UnlistenFn | null = null;
+
+    void listen<SidecarStatus>('sidecar-status-changed', (event) => {
+      setStatus(event.payload);
+      void refreshAutoTagStatus();
+    }).then((nextUnlisten) => {
+      if (disposed) {
+        nextUnlisten();
+        return;
+      }
+      unlisten = nextUnlisten;
+    });
+
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [refreshAutoTagStatus]);
 
   const refreshStandaloneMigrationStatus = useCallback(async (targetSettings: AppSettings) => {
     try {
