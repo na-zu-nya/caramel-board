@@ -74,6 +74,28 @@ fn settings_path(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(config_dir.join("settings.json"))
 }
 
+fn legacy_settings_paths(current_path: &Path) -> Vec<PathBuf> {
+    let Some(config_dir) = current_path.parent() else {
+        return Vec::new();
+    };
+    let Some(parent_dir) = config_dir.parent() else {
+        return Vec::new();
+    };
+    let Some(current_dir_name) = config_dir.file_name() else {
+        return Vec::new();
+    };
+    ["app.caramelboard.desktop", "Caramel Board"]
+        .iter()
+        .filter_map(|directory_name| {
+            let legacy_dir = parent_dir.join(directory_name);
+            if legacy_dir.file_name() == Some(current_dir_name) {
+                return None;
+            }
+            Some(legacy_dir.join("settings.json"))
+        })
+        .collect()
+}
+
 fn default_settings(app: &AppHandle) -> Result<AppSettings, String> {
     let data_dir = app
         .path()
@@ -122,16 +144,13 @@ fn default_settings(app: &AppHandle) -> Result<AppSettings, String> {
     })
 }
 
-fn read_settings(app: &AppHandle) -> Result<AppSettings, String> {
-    let path = settings_path(app)?;
-    if !path.exists() {
-        let settings = default_settings(app)?;
-        write_settings(app, &settings)?;
-        return Ok(settings);
-    }
-
-    let raw = fs::read_to_string(&path)
-        .map_err(|error| format!("設定ファイルを読み込めません: {error}"))?;
+fn read_settings_file(path: &Path) -> Result<AppSettings, String> {
+    let raw = fs::read_to_string(path).map_err(|error| {
+        format!(
+            "設定ファイルを読み込めません: {}: {error}",
+            path.to_string_lossy()
+        )
+    })?;
     let value: serde_json::Value = serde_json::from_str(&raw)
         .map_err(|error| format!("設定ファイルの形式が不正です: {error}"))?;
     let had_setup_field = value.get("setupCompleted").is_some();
@@ -141,7 +160,91 @@ fn read_settings(app: &AppHandle) -> Result<AppSettings, String> {
         // 旧バージョンの設定ファイルが残っている既存ユーザーはセットアップ済みとして扱う
         parsed.setup_completed = true;
     }
-    normalize_settings_for_app(app, parsed)
+    Ok(parsed)
+}
+
+fn sqlite_family_size(db_path: &str) -> u64 {
+    let paths = [
+        PathBuf::from(db_path),
+        PathBuf::from(format!("{db_path}-wal")),
+        PathBuf::from(format!("{db_path}-shm")),
+        PathBuf::from(format!("{db_path}-journal")),
+    ];
+    paths
+        .iter()
+        .filter_map(|path| fs::metadata(path).ok().map(|metadata| metadata.len()))
+        .sum()
+}
+
+fn path_is_inside(path: &Path, parent: &Path) -> bool {
+    let normalized_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    let normalized_parent = parent.canonicalize().unwrap_or_else(|_| parent.to_path_buf());
+    normalized_path.starts_with(normalized_parent)
+}
+
+fn find_legacy_settings(current_path: &Path) -> Option<AppSettings> {
+    for legacy_path in legacy_settings_paths(current_path) {
+        if !legacy_path.exists() {
+            continue;
+        }
+        match read_settings_file(&legacy_path) {
+            Ok(settings) if sqlite_family_size(&settings.db_path) > 0 => return Some(settings),
+            Ok(_) => {}
+            Err(error) => eprintln!("Legacy settings skipped: {error}"),
+        }
+    }
+    None
+}
+
+fn merge_legacy_data_store(mut current: AppSettings, legacy: AppSettings) -> AppSettings {
+    current.db_path = legacy.db_path;
+    current.library_path = legacy.library_path;
+    current.setup_completed = current.setup_completed || legacy.setup_completed;
+    current
+}
+
+fn recover_legacy_data_store_if_needed(
+    app: &AppHandle,
+    current_path: &Path,
+    current: AppSettings,
+) -> Result<AppSettings, String> {
+    let Some(legacy) = find_legacy_settings(current_path) else {
+        return Ok(current);
+    };
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| format!("データディレクトリを解決できません: {error}"))?;
+    let current_db_path = PathBuf::from(&current.db_path);
+    let current_size = sqlite_family_size(&current.db_path);
+    let legacy_size = sqlite_family_size(&legacy.db_path);
+    let current_is_app_default = path_is_inside(&current_db_path, &app_data_dir);
+    let current_looks_empty = current_size <= 1024 * 1024;
+
+    if current_is_app_default && current_looks_empty && legacy_size > current_size {
+        let recovered = merge_legacy_data_store(current, legacy);
+        write_settings(app, &recovered)?;
+        return Ok(recovered);
+    }
+
+    Ok(current)
+}
+
+fn read_settings(app: &AppHandle) -> Result<AppSettings, String> {
+    let path = settings_path(app)?;
+    if !path.exists() {
+        if let Some(legacy) = find_legacy_settings(&path) {
+            write_settings(app, &legacy)?;
+            return normalize_settings_for_app(app, legacy);
+        }
+        let settings = default_settings(app)?;
+        write_settings(app, &settings)?;
+        return Ok(settings);
+    }
+
+    let parsed = read_settings_file(&path)?;
+    let recovered = recover_legacy_data_store_if_needed(app, &path, parsed)?;
+    normalize_settings_for_app(app, recovered)
 }
 
 fn write_settings(app: &AppHandle, settings: &AppSettings) -> Result<(), String> {
