@@ -28,13 +28,20 @@ if (typeof version !== 'string' || !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(v
 }
 
 const deriveWindowsInstallerVersion = (sourceVersion) => {
-  const [core, prerelease] = sourceVersion.split('-', 2);
-  if (!prerelease) return core;
+  const [core] = sourceVersion.split('-', 2);
+  const [major, minor, patch] = core.split('.').map((part) => Number.parseInt(part, 10));
 
-  const prereleaseParts = prerelease.split('.');
-  const numericPart = prereleaseParts.findLast((part) => /^\d+$/.test(part));
-  const build = numericPart ?? '0';
-  return `${core}.${build}`;
+  if (![major, minor, patch].every(Number.isInteger)) {
+    throw new Error(`Windows インストーラーバージョンを導出できません: ${sourceVersion}`);
+  }
+
+  if (major > 255 || minor > 255 || patch > 65535) {
+    throw new Error(`Windows インストーラーバージョンの数値が大きすぎます: ${sourceVersion}`);
+  }
+
+  // beta / rc / stable は suffix ではなく数値部分で順序を管理する。
+  // Windows Installer にはラベルを除いた 3 フィールドだけを渡す。
+  return `${major}.${minor}.${patch}`;
 };
 
 const updatePackageVersion = (relativePath) => {
@@ -88,16 +95,20 @@ const replaceRequired = (relativePath, pattern, replacement) => {
   writeText(relativePath, next);
 };
 
-const updateTauriConfig = () => {
+const updateTauriConfig = (windowsInstallerVersion) => {
   replaceRequired(
     'apps/desktop/src-tauri/tauri.conf.json',
     /^ {2}"version": ".*",$/m,
     `  "version": "${version}",`
   );
+  replaceRequired(
+    'apps/desktop/src-tauri/tauri.conf.json',
+    /("template": "wix\/main\.wxs")(,\r?\n {8}"version": ".*")?/,
+    `$1,\n        "version": "${windowsInstallerVersion}"`
+  );
 };
 
-const updateWindowsTauriConfig = () => {
-  const windowsInstallerVersion = deriveWindowsInstallerVersion(version);
+const updateWindowsTauriConfig = (windowsInstallerVersion) => {
   const config = {
     bundle: {
       windows: {
@@ -135,9 +146,11 @@ for (const relativePath of appPackagePaths) {
   updatePackageVersion(relativePath);
 }
 
+const windowsInstallerVersion = deriveWindowsInstallerVersion(version);
+
 updatePackageLock();
-updateTauriConfig();
-updateWindowsTauriConfig();
+updateTauriConfig(windowsInstallerVersion);
+updateWindowsTauriConfig(windowsInstallerVersion);
 updateCargoVersion();
 updateDocs();
 
