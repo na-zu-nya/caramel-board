@@ -20,6 +20,7 @@
     "db:studio": "prisma studio",
     "export:standalone": "node scripts/export-standalone.mjs",
     "import:standalone": "node scripts/import-standalone-sqlite.mjs",
+    "migrate:standalone": "node scripts/migrate-standalone-sqlite.mjs",
     "migrate:assets": "node scripts/migrate-assets.mjs",
     "migrate:users": "node scripts/migrate-single-user-to-users.mjs",
     "migrate:stack-favorites": "node scripts/migrate-stack-favorites.mjs",

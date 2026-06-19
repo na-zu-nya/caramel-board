@@ -12,7 +12,7 @@ This app is developed gradually by [nazunya](https://x.com/na_zu_nya) as a perso
 
 ## Features
 
-#### Easy Drag-And-Drop Import And A Comfortable Viewer
+### Easy Drag-And-Drop Import And A Comfortable Viewer
 
 - Drop files into a list to keep collecting assets quickly.
 - Images, multi-image works such as comics and books, PDFs, videos, and GIFs are supported.
@@ -26,26 +26,26 @@ This app is developed gradually by [nazunya](https://x.com/na_zu_nya) as a perso
   - Quick paint with the pen tool
   - Color picking with the picker
 
-#### Fully Local-First
+### Fully Local-First
 
 - Imported images are stored on your PC and are never sent to external services.
 - Private or sensitive images can be managed locally.
 
-#### Use From Phones, Tablets, And Other PCs Over LAN
+### Use From Phones, Tablets, And Other PCs Over LAN
 
 - With local network access enabled, you can open Caramel Board from browsers on devices in your home network.
 - Basic authentication and per-library password settings provide simple protection.
 - For access from outside your home, use a VPN app such as Tailscale.
 
-#### Rich Organization And Search
+### Rich Organization And Search
 
 - Organize and slice your data by libraries, tags, authors, collections, bookmarks, favorites, scratches, and more.
 - Search by tags, AutoTags, and author names. Similar-color search and similar-image/similar-collection search are also available. Similar-image features require AutoTag.
 
-#### AutoTag Feature (Optional Setup)
+### AutoTag Feature (Optional Setup)
 
 - Enabling AutoTag lets Caramel Board automatically tag imported images, search by those tags, and find similar images.
-- It can tag character attributes, hair style and color, clothing, accessories, visual descriptions, situations, some well-known characters and series names, and sensitive tags.
+- It can tag character attributes, hair style and color, clothing, accessories, visual descriptions, situations, some well-known characters and series names, and NSFW tags.
 - AutoTag can be left disabled, and setup can be skipped. This feature uses a trained open source model and analyzes images locally on your PC. Images are not sent externally and are not used for training. If you are uncomfortable with model-based analysis itself, you can leave it unconfigured.
 
 ## Getting Started

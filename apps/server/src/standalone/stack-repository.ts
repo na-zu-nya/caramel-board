@@ -51,6 +51,18 @@ interface StackRow {
   is_favorite: number;
 }
 
+interface AuthorLinkRow {
+  id: number;
+  author_id: number;
+  provider: string | null;
+  label: string;
+  url: string;
+  external_id: string | null;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
 interface AssetRow {
   id: number;
   stack_id: number;
@@ -342,12 +354,21 @@ export class StandaloneStackRepository {
         a.name LIKE ? COLLATE NOCASE OR
         EXISTS (
           SELECT 1
+          FROM author_links al
+          WHERE al.author_id = s.author_id
+            AND (
+              al.external_id LIKE ? COLLATE NOCASE OR
+              al.url LIKE ? COLLATE NOCASE
+            )
+        ) OR
+        EXISTS (
+          SELECT 1
           FROM stack_tags st
           JOIN tags t ON t.id = st.tag_id
           WHERE st.stack_id = s.id AND t.title LIKE ? COLLATE NOCASE
         )
       )`);
-      sqlParams.push(like, like, like);
+      sqlParams.push(like, like, like, like, like);
     }
 
     return where.join(' AND ');
@@ -390,7 +411,7 @@ export class StandaloneStackRepository {
       case 'id':
         return `s.id ${direction}`;
       default:
-        return `s.updated_at ${direction}, s.created_at ${direction}, s.id ${direction}`;
+        return `s.created_at ${direction}, s.id ${direction}`;
     }
   }
 
@@ -949,9 +970,7 @@ export class StandaloneStackRepository {
     const now = nowIso();
     this.db.exec('BEGIN');
     try {
-      this.db
-        .prepare('UPDATE stacks SET liked = liked + 1, updated_at = ? WHERE id = ?')
-        .run(now, stackId);
+      this.db.prepare('UPDATE stacks SET liked = liked + 1 WHERE id = ?').run(stackId);
       this.db
         .prepare(
           'INSERT INTO like_activities (stack_id, asset_id, user_id, created_at) VALUES (?, ?, ?, ?)'
@@ -1424,6 +1443,29 @@ export class StandaloneStackRepository {
     };
   }
 
+  private getAuthorLinks(authorId: number | null) {
+    if (authorId === null) return [];
+    const rows = this.db
+      .prepare(
+        `SELECT id, author_id, provider, label, url, external_id, sort_order, created_at, updated_at
+         FROM author_links
+         WHERE author_id = ?
+         ORDER BY sort_order ASC, id ASC`
+      )
+      .all(authorId) as AuthorLinkRow[];
+    return rows.map((link) => ({
+      id: link.id,
+      authorId: link.author_id,
+      provider: link.provider,
+      label: link.label,
+      url: link.url,
+      externalId: link.external_id,
+      sortOrder: link.sort_order,
+      createdAt: link.created_at,
+      updatedAt: link.updated_at,
+    }));
+  }
+
   private toStack(row: StackRow, options: { includeAssets?: boolean; includeTags?: boolean } = {}) {
     const assets = options.includeAssets ? this.getAssetsByStackId(row.id, row.dataset_id) : [];
     const tags = options.includeTags ? this.getTagsByStackId(row.id) : undefined;
@@ -1437,7 +1479,9 @@ export class StandaloneStackRepository {
       dataSetId: row.dataset_id,
       datasetId: String(row.dataset_id),
       authorId: row.author_id,
-      author: row.author_name ? { id: row.author_id, name: row.author_name } : null,
+      author: row.author_name
+        ? { id: row.author_id, name: row.author_name, links: this.getAuthorLinks(row.author_id) }
+        : null,
       name: row.name,
       thumbnail,
       mediaType: row.media_type,

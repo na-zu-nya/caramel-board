@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router';
-import { Database, Pin as PinIcon, Settings2, Tag, Wand2 } from 'lucide-react';
+import { Database, Pin as PinIcon, Settings2, Tag, UsersRound, Wand2 } from 'lucide-react';
 import type { SettingsSectionProps } from '@/components/sidebar/types';
 import { SideMenuGroup, SideMenuListItem } from '@/components/ui/SideMenu';
 import { useT } from '@/lib/i18n';
@@ -30,6 +30,13 @@ export function SettingsSection({
         <SideMenuListItem asChild icon={Wand2} label={t.sidebar.autoTag}>
           <Link
             to="/library/$datasetId/autotag-config"
+            params={() => ({ datasetId })}
+            activeProps={{ className: 'bg-gray-100 font-medium' }}
+          />
+        </SideMenuListItem>
+        <SideMenuListItem asChild icon={UsersRound} label={t.sidebar.authors}>
+          <Link
+            to="/library/$datasetId/authors"
             params={() => ({ datasetId })}
             activeProps={{ className: 'bg-gray-100 font-medium' }}
           />

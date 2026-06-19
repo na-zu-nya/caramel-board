@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useAtom } from 'jotai';
 import { Clapperboard, GitMerge, Info, Pencil, RefreshCw, Trash2 } from 'lucide-react';
+import MersenneTwister from 'mersenne-twister';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import BulkEditPanel, { type EditUpdates } from '@/components/BulkEditPanel';
@@ -21,11 +22,28 @@ import {
   selectionModeAtom,
 } from '@/stores/ui';
 import { genListToken, saveViewContext } from '@/stores/view-context';
-import type { MediaGridItem, StackPaginatedResponse } from '@/types';
+import type { MediaGridItem, StackFilter, StackPaginatedResponse } from '@/types';
 
 export const Route = createFileRoute('/library/$datasetId/stacks/$stackId/similar')({
   component: SimilarStacksRoute,
 });
+
+type SimilarStackFilter = StackFilter & { similarTo: number };
+
+const toStackId = (id: string | number): number | null => {
+  const numericId = typeof id === 'string' ? Number.parseInt(id, 10) : id;
+  return Number.isFinite(numericId) ? numericId : null;
+};
+
+const getRandomIndex = (rng: MersenneTwister, total: number) => {
+  const max = 0x100000000;
+  const bound = max - (max % total);
+  let value = 0;
+  do {
+    value = rng.random_int();
+  } while (value >= bound);
+  return value % total;
+};
 
 function SimilarStacksRoute() {
   const t = useT();
@@ -39,6 +57,8 @@ function SimilarStacksRoute() {
   const [selectedItemId, setSelectedItemId] = useAtom(selectedItemIdAtom);
   const [favoritePending, setFavoritePending] = useState<Set<string | number>>(() => new Set());
   const lastClickedIndexRef = useRef<number | null>(null);
+  const mtRef = useRef<MersenneTwister | null>(null);
+  if (!mtRef.current) mtRef.current = new MersenneTwister();
   const {
     selectedItems,
     selectedItemOrder,
@@ -56,10 +76,10 @@ function SimilarStacksRoute() {
     staleTime: 30_000,
   });
 
-  const items = useMemo(() => (data?.stacks ?? []) as unknown as MediaGridItem[], [data]);
-
-  // Header buttons: enable Selection toggle
-  useHeaderActions({ showShuffle: false, showFilter: false, showSelection: true });
+  const items = useMemo<MediaGridItem[]>(
+    () => (data?.stacks ?? []).map((stack) => ({ ...stack, stackId: stack.stackId ?? stack.id })),
+    [data]
+  );
 
   // Ensure currentFilter carries dataset context for downstream components
   useEffect(() => {
@@ -89,6 +109,57 @@ function SimilarStacksRoute() {
     }
     return stackIds;
   }, [selectedItemOrder]);
+
+  const navigateToItem = useCallback(
+    (item: MediaGridItem) => {
+      const ids = items
+        .map((similarItem) => toStackId(similarItem.id))
+        .filter((id): id is number => id !== null)
+        .reverse();
+      const clickedId = toStackId(item.id);
+      if (clickedId === null) return;
+      const currentIndex = Math.max(0, ids.indexOf(clickedId));
+      const mediaType = item.mediaType;
+      const filters: SimilarStackFilter = { datasetId, similarTo: Number(stackId) };
+      const token = genListToken({
+        datasetId,
+        mediaType,
+        filters,
+      });
+
+      saveViewContext({
+        token,
+        datasetId,
+        mediaType,
+        filters,
+        ids,
+        currentIndex,
+        createdAt: Date.now(),
+      });
+
+      navigate({
+        to: '/library/$datasetId/stacks/$stackId',
+        params: { datasetId, stackId: String(item.id) },
+        search: { page: 0, mediaType, listToken: token },
+      });
+    },
+    [datasetId, items, navigate, stackId]
+  );
+
+  const handleShuffle = useCallback(() => {
+    if (items.length === 0 || !mtRef.current) return;
+    const targetIndex = getRandomIndex(mtRef.current, items.length);
+    const item = items[targetIndex];
+    if (!item) return;
+    navigateToItem(item);
+  }, [items, navigateToItem]);
+
+  useHeaderActions({
+    showShuffle: true,
+    showFilter: false,
+    showSelection: true,
+    onShuffle: handleShuffle,
+  });
 
   // Click handler with Cmd/Ctrl and Shift support
   const handleItemClick = useCallback(
@@ -136,48 +207,17 @@ function SimilarStacksRoute() {
         return;
       }
 
-      // Normal navigation with ViewContext tracking (right→左 order)
-      const loadedIdsLtr = items.map((s) =>
-        typeof s.id === 'string' ? Number.parseInt(s.id as string, 10) : (s.id as number)
-      );
-      const ids = loadedIdsLtr.slice().reverse();
-      const clickedId =
-        typeof item.id === 'string' ? Number.parseInt(item.id as string, 10) : (item.id as number);
-      const currentIndex = Math.max(0, ids.indexOf(clickedId));
-
-      const mediaType = (item as any).mediaType as string | undefined;
-      const token = genListToken({
-        datasetId,
-        mediaType,
-        filters: { similarTo: Number(stackId) } as any,
-      });
-      saveViewContext({
-        token,
-        datasetId,
-        mediaType: mediaType as any,
-        filters: { similarTo: Number(stackId) } as any,
-        ids,
-        currentIndex,
-        createdAt: Date.now(),
-      });
-
-      navigate({
-        to: '/library/$datasetId/stacks/$stackId',
-        params: { datasetId, stackId: String(item.id) },
-        search: { page: 0, mediaType, listToken: token },
-      });
+      navigateToItem(item);
     },
     [
       items,
       selectionMode,
-      datasetId,
-      stackId,
       setSelectionMode,
       toggleItemSelection,
       selectItemRange,
-      navigate,
       infoSidebarOpen,
       setSelectedItemId,
+      navigateToItem,
     ]
   );
 

@@ -20,6 +20,7 @@ import { Route as LibraryDatasetIdPinsRouteImport } from './routes/library.$data
 import { Route as LibraryDatasetIdLikesRouteImport } from './routes/library.$datasetId.likes'
 import { Route as LibraryDatasetIdFavoritesRouteImport } from './routes/library.$datasetId.favorites'
 import { Route as LibraryDatasetIdAutotagConfigRouteImport } from './routes/library.$datasetId.autotag-config'
+import { Route as LibraryDatasetIdAuthorsRouteImport } from './routes/library.$datasetId.authors'
 import { Route as LibraryDatasetIdTagTagNameRouteImport } from './routes/library.$datasetId.tag.$tagName'
 import { Route as LibraryDatasetIdStacksStackIdRouteImport } from './routes/library.$datasetId.stacks.$stackId'
 import { Route as LibraryDatasetIdScratchScratchIdRouteImport } from './routes/library.$datasetId.scratch.$scratchId'
@@ -87,6 +88,11 @@ const LibraryDatasetIdAutotagConfigRoute =
     path: '/autotag-config',
     getParentRoute: () => LibraryDatasetIdRoute,
   } as any)
+const LibraryDatasetIdAuthorsRoute = LibraryDatasetIdAuthorsRouteImport.update({
+  id: '/authors',
+  path: '/authors',
+  getParentRoute: () => LibraryDatasetIdRoute,
+} as any)
 const LibraryDatasetIdTagTagNameRoute =
   LibraryDatasetIdTagTagNameRouteImport.update({
     id: '/tag/$tagName',
@@ -148,6 +154,7 @@ export interface FileRoutesByFullPath {
   '/library/$datasetId': typeof LibraryDatasetIdRouteWithChildren
   '/settings/general': typeof SettingsGeneralRoute
   '/settings/libraries': typeof SettingsLibrariesRoute
+  '/library/$datasetId/authors': typeof LibraryDatasetIdAuthorsRoute
   '/library/$datasetId/autotag-config': typeof LibraryDatasetIdAutotagConfigRoute
   '/library/$datasetId/favorites': typeof LibraryDatasetIdFavoritesRoute
   '/library/$datasetId/likes': typeof LibraryDatasetIdLikesRoute
@@ -169,6 +176,7 @@ export interface FileRoutesByTo {
   '/setup': typeof SetupRoute
   '/settings/general': typeof SettingsGeneralRoute
   '/settings/libraries': typeof SettingsLibrariesRoute
+  '/library/$datasetId/authors': typeof LibraryDatasetIdAuthorsRoute
   '/library/$datasetId/autotag-config': typeof LibraryDatasetIdAutotagConfigRoute
   '/library/$datasetId/favorites': typeof LibraryDatasetIdFavoritesRoute
   '/library/$datasetId/likes': typeof LibraryDatasetIdLikesRoute
@@ -192,6 +200,7 @@ export interface FileRoutesById {
   '/library/$datasetId': typeof LibraryDatasetIdRouteWithChildren
   '/settings/general': typeof SettingsGeneralRoute
   '/settings/libraries': typeof SettingsLibrariesRoute
+  '/library/$datasetId/authors': typeof LibraryDatasetIdAuthorsRoute
   '/library/$datasetId/autotag-config': typeof LibraryDatasetIdAutotagConfigRoute
   '/library/$datasetId/favorites': typeof LibraryDatasetIdFavoritesRoute
   '/library/$datasetId/likes': typeof LibraryDatasetIdLikesRoute
@@ -216,6 +225,7 @@ export interface FileRouteTypes {
     | '/library/$datasetId'
     | '/settings/general'
     | '/settings/libraries'
+    | '/library/$datasetId/authors'
     | '/library/$datasetId/autotag-config'
     | '/library/$datasetId/favorites'
     | '/library/$datasetId/likes'
@@ -237,6 +247,7 @@ export interface FileRouteTypes {
     | '/setup'
     | '/settings/general'
     | '/settings/libraries'
+    | '/library/$datasetId/authors'
     | '/library/$datasetId/autotag-config'
     | '/library/$datasetId/favorites'
     | '/library/$datasetId/likes'
@@ -259,6 +270,7 @@ export interface FileRouteTypes {
     | '/library/$datasetId'
     | '/settings/general'
     | '/settings/libraries'
+    | '/library/$datasetId/authors'
     | '/library/$datasetId/autotag-config'
     | '/library/$datasetId/favorites'
     | '/library/$datasetId/likes'
@@ -363,6 +375,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LibraryDatasetIdAutotagConfigRouteImport
       parentRoute: typeof LibraryDatasetIdRoute
     }
+    '/library/$datasetId/authors': {
+      id: '/library/$datasetId/authors'
+      path: '/authors'
+      fullPath: '/library/$datasetId/authors'
+      preLoaderRoute: typeof LibraryDatasetIdAuthorsRouteImport
+      parentRoute: typeof LibraryDatasetIdRoute
+    }
     '/library/$datasetId/tag/$tagName': {
       id: '/library/$datasetId/tag/$tagName'
       path: '/tag/$tagName'
@@ -460,6 +479,7 @@ const LibraryDatasetIdStacksStackIdRouteWithChildren =
   )
 
 interface LibraryDatasetIdRouteChildren {
+  LibraryDatasetIdAuthorsRoute: typeof LibraryDatasetIdAuthorsRoute
   LibraryDatasetIdAutotagConfigRoute: typeof LibraryDatasetIdAutotagConfigRoute
   LibraryDatasetIdFavoritesRoute: typeof LibraryDatasetIdFavoritesRoute
   LibraryDatasetIdLikesRoute: typeof LibraryDatasetIdLikesRoute
@@ -476,6 +496,7 @@ interface LibraryDatasetIdRouteChildren {
 }
 
 const LibraryDatasetIdRouteChildren: LibraryDatasetIdRouteChildren = {
+  LibraryDatasetIdAuthorsRoute: LibraryDatasetIdAuthorsRoute,
   LibraryDatasetIdAutotagConfigRoute: LibraryDatasetIdAutotagConfigRoute,
   LibraryDatasetIdFavoritesRoute: LibraryDatasetIdFavoritesRoute,
   LibraryDatasetIdLikesRoute: LibraryDatasetIdLikesRoute,

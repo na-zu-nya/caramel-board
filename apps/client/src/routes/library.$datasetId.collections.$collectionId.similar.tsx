@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useAtom } from 'jotai';
 import { Clapperboard, GitMerge, Info, Pencil, RefreshCw, Trash2 } from 'lucide-react';
+import MersenneTwister from 'mersenne-twister';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import BulkEditPanel, { type EditUpdates } from '@/components/BulkEditPanel';
@@ -32,6 +33,16 @@ const toStackId = (id: string | number): number | null => {
   return Number.isFinite(numericId) ? numericId : null;
 };
 
+const getRandomIndex = (rng: MersenneTwister, total: number) => {
+  const max = 0x100000000;
+  const bound = max - (max % total);
+  let value = 0;
+  do {
+    value = rng.random_int();
+  } while (value >= bound);
+  return value % total;
+};
+
 const getStringTags = (value: unknown): string[] | undefined => {
   if (!Array.isArray(value)) return undefined;
   const tags: string[] = [];
@@ -55,6 +66,8 @@ function CollectionSimilarRoute() {
   const [selectedItemId, setSelectedItemId] = useAtom(selectedItemIdAtom);
   const [favoritePending, setFavoritePending] = useState<Set<string | number>>(() => new Set());
   const lastClickedIndexRef = useRef<number | null>(null);
+  const mtRef = useRef<MersenneTwister | null>(null);
+  if (!mtRef.current) mtRef.current = new MersenneTwister();
   const {
     selectedItems,
     selectedItemOrder,
@@ -83,9 +96,10 @@ function CollectionSimilarRoute() {
     staleTime: 30_000,
   });
 
-  const items = useMemo<MediaGridItem[]>(() => data?.stacks ?? [], [data]);
-
-  useHeaderActions({ showShuffle: false, showFilter: false, showSelection: true });
+  const items = useMemo<MediaGridItem[]>(
+    () => (data?.stacks ?? []).map((stack) => ({ ...stack, stackId: stack.stackId ?? stack.id })),
+    [data]
+  );
 
   useEffect(() => {
     const filter: StackFilter = {
@@ -105,6 +119,59 @@ function CollectionSimilarRoute() {
     }
     return stackIds;
   }, [selectedItemOrder]);
+
+  const navigateToItem = useCallback(
+    (item: MediaGridItem) => {
+      const ids = items
+        .map((loadedItem) => toStackId(loadedItem.id))
+        .filter((id): id is number => id !== null)
+        .reverse();
+      const clickedId = toStackId(item.id);
+      if (clickedId === null) return;
+      const currentIndex = Math.max(0, ids.indexOf(clickedId));
+      const mediaType = item.mediaType;
+      const filters: StackFilter = { datasetId, collectionId };
+      const token = genListToken({
+        datasetId,
+        mediaType,
+        filters,
+        collectionId,
+      });
+
+      saveViewContext({
+        token,
+        datasetId,
+        mediaType,
+        filters,
+        collectionId,
+        ids,
+        currentIndex,
+        createdAt: Date.now(),
+      });
+
+      navigate({
+        to: '/library/$datasetId/stacks/$stackId',
+        params: { datasetId, stackId: String(item.id) },
+        search: { page: 0, mediaType, listToken: token },
+      });
+    },
+    [collectionId, datasetId, items, navigate]
+  );
+
+  const handleShuffle = useCallback(() => {
+    if (items.length === 0 || !mtRef.current) return;
+    const targetIndex = getRandomIndex(mtRef.current, items.length);
+    const item = items[targetIndex];
+    if (!item) return;
+    navigateToItem(item);
+  }, [items, navigateToItem]);
+
+  useHeaderActions({
+    showShuffle: true,
+    showFilter: false,
+    showSelection: true,
+    onShuffle: handleShuffle,
+  });
 
   const handleItemClick = useCallback(
     (item: MediaGridItem, event?: React.MouseEvent) => {
@@ -150,49 +217,17 @@ function CollectionSimilarRoute() {
         return;
       }
 
-      const loadedIds = items
-        .map((loadedItem) => toStackId(loadedItem.id))
-        .filter((id): id is number => id !== null)
-        .reverse();
-      const clickedId = toStackId(item.id);
-      const currentIndex = clickedId !== null ? Math.max(0, loadedIds.indexOf(clickedId)) : 0;
-      const mediaType = item.mediaType;
-      const filters: StackFilter = { datasetId, collectionId };
-      const token = genListToken({
-        datasetId,
-        mediaType,
-        filters,
-        collectionId,
-      });
-
-      saveViewContext({
-        token,
-        datasetId,
-        mediaType,
-        filters,
-        collectionId,
-        ids: loadedIds,
-        currentIndex,
-        createdAt: Date.now(),
-      });
-
-      navigate({
-        to: '/library/$datasetId/stacks/$stackId',
-        params: { datasetId, stackId: String(item.id) },
-        search: { page: 0, mediaType, listToken: token },
-      });
+      navigateToItem(item);
     },
     [
       items,
       selectionMode,
       infoSidebarOpen,
-      datasetId,
-      collectionId,
       setSelectionMode,
       selectItemRange,
       toggleItemSelection,
       setSelectedItemId,
-      navigate,
+      navigateToItem,
     ]
   );
 

@@ -110,6 +110,44 @@ struct DockerMigrationProgress {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct StandaloneMigrationItem {
+    id: String,
+    title: String,
+    checksum: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct StandaloneMigrationStatus {
+    status: String,
+    db_path: String,
+    current_version: Option<String>,
+    latest_version: Option<String>,
+    applied_count: u64,
+    pending: Vec<StandaloneMigrationItem>,
+    legacy_baseline: bool,
+    requires_backup: bool,
+    backup_path: Option<String>,
+    message: String,
+    error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct StandaloneMigrationProgress {
+    running: bool,
+    completed: bool,
+    phase: String,
+    message: String,
+    percent: f64,
+    last_log: String,
+    db_path: Option<String>,
+    backup_path: Option<String>,
+    error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct DockerDatasetSummary {
     id: i64,
     name: String,
@@ -209,12 +247,29 @@ impl Default for DockerMigrationProgress {
     }
 }
 
+impl Default for StandaloneMigrationProgress {
+    fn default() -> Self {
+        Self {
+            running: false,
+            completed: false,
+            phase: String::from("idle"),
+            message: String::new(),
+            percent: 0.0,
+            last_log: String::new(),
+            db_path: None,
+            backup_path: None,
+            error: None,
+        }
+    }
+}
+
 #[derive(Default)]
 struct ManagedSidecar {
     child: Option<Child>,
     auto_tag_child: Option<Child>,
     auto_tag_install: AutoTagInstallProgress,
     docker_migration: DockerMigrationProgress,
+    standalone_migration: StandaloneMigrationProgress,
     settings: Option<AppSettings>,
     started_at: Option<u64>,
 }

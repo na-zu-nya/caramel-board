@@ -809,6 +809,28 @@ select:disabled {
   text-decoration: underline;
 }
 
+.migration-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px;
+  border: 1px solid #d6dee8;
+  border-radius: 6px;
+  background: #f8fafc;
+  color: #3b4c60;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.migration-list strong {
+  color: #263747;
+  font-size: 12px;
+}
+
+.migration-list span {
+  overflow-wrap: anywhere;
+}
+
 .modal-actions {
   display: flex;
   justify-content: flex-end;

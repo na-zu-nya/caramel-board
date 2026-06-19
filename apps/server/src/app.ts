@@ -9,6 +9,7 @@ import { memMonitor } from './middlewares/memory-monitor';
 import { staticServer } from './middlewares/static';
 import { apiRoutes } from './routes';
 import { diMiddleware } from './shared/di';
+import { StandaloneMigrationRequiredError } from './standalone/migrations';
 import { getStandaloneSqlite, isStandaloneSqliteEnabled } from './standalone/sqlite';
 
 if (process.env.NODE_ENV !== 'production') {
@@ -29,9 +30,19 @@ app.use('*', basicAuthMiddleware);
 app.get('/health', (c) => {
   if (isStandaloneSqliteEnabled()) {
     try {
-      // 初回アクセス時にスキーマ適用まで済ませ、準備が整うまで 503 を返す
+      // 未適用の standalone migration が残っている間は通常利用を開始しない
       getStandaloneSqlite();
     } catch (error) {
+      if (error instanceof StandaloneMigrationRequiredError) {
+        return c.json(
+          {
+            status: 'migration_required',
+            migration: error.status,
+            ts: new Date().toISOString(),
+          },
+          503
+        );
+      }
       return c.json(
         {
           status: 'initializing',

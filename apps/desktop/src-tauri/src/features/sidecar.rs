@@ -35,6 +35,14 @@ fn start_sidecar_for_settings(
     }
     terminate_listeners_on_port(settings.port, &[]);
 
+    let migration_status = standalone_migration_status_for_settings(app, &settings)?;
+    if migration_status.status != "ready" {
+        return Err(format!(
+            "データベース更新が必要です。デスクトップアプリでマイグレーションを実行してください。\n{}",
+            migration_status.message
+        ));
+    }
+
     let server_root = resource_or_repo_path(app, "server", "apps/server");
     let server_entry = server_root.join("dist/entry.node.mjs");
     if !server_entry.exists() {

@@ -741,6 +741,17 @@ export const createSearchService = (deps: {
           select: { id: true },
           take: 3000,
         });
+        const authorLinkRows = await prisma.$queryRaw<Array<{ id: number }>>`
+          SELECT DISTINCT s."id"
+          FROM "Stack" s
+          JOIN "AuthorLink" al ON al."authorId" = s."authorId"
+          WHERE s."dataSetId" = ${dataSetId}
+            AND (
+              al."externalId" ILIKE ${likePattern}
+              OR al."url" ILIKE ${likePattern}
+            )
+          LIMIT 3000
+        `;
 
         // 手動タグ
         const tagRows = await prisma.stack.findMany({
@@ -785,7 +796,7 @@ export const createSearchService = (deps: {
         const idSet = new Set<number>();
         const scoreMap = new Map<number, number>();
 
-        for (const r of authorRows) {
+        for (const r of [...authorRows, ...authorLinkRows]) {
           idSet.add(r.id);
           scoreMap.set(r.id, Math.max(scoreMap.get(r.id) || 0, WEIGHTS.author));
         }

@@ -1,6 +1,5 @@
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { assertStandaloneMigrationsReady } from './migrations';
 
 let database: DatabaseSync | null = null;
 
@@ -12,28 +11,6 @@ export const getStandaloneSqlitePath = () =>
 
 export const isStandaloneSqliteEnabled = () => getStandaloneSqlitePath().trim().length > 0;
 
-const resolveSchemaPath = () =>
-  process.env.STANDALONE_SCHEMA_PATH ||
-  path.join(process.cwd(), 'prisma', 'standalone', 'schema.sql');
-
-const ensureSchema = (db: DatabaseSync) => {
-  const hasDatasets = db
-    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'datasets'")
-    .get();
-  if (hasDatasets) return;
-
-  const schemaPath = resolveSchemaPath();
-  let schemaSql: string;
-  try {
-    schemaSql = readFileSync(schemaPath, 'utf8');
-  } catch (error) {
-    throw new Error(
-      `Standalone schema file not found at ${schemaPath}: ${error instanceof Error ? error.message : String(error)}`
-    );
-  }
-  db.exec(schemaSql);
-};
-
 export const getStandaloneSqlite = () => {
   const dbPath = getStandaloneSqlitePath();
   if (!dbPath) {
@@ -43,7 +20,7 @@ export const getStandaloneSqlite = () => {
   if (!database) {
     const next = new DatabaseSync(dbPath);
     next.exec('PRAGMA foreign_keys = ON');
-    ensureSchema(next);
+    assertStandaloneMigrationsReady(next);
     database = next;
   }
 

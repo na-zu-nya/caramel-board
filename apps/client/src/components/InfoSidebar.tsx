@@ -8,6 +8,7 @@ import {
   Clapperboard,
   Copy,
   Download,
+  ExternalLink,
   GalleryVerticalEnd,
   Hash,
   Heart,
@@ -19,9 +20,11 @@ import {
   Star,
   Tag,
   Trash2,
+  UserPen,
   X,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { AuthorLinkQuickAdd } from '@/components/authors/AuthorLinkQuickAdd';
 import { AutoTagDisplay } from '@/components/ui/autotag-display';
 import { Badge } from '@/components/ui/badge';
 import { ColorPalette } from '@/components/ui/color-ball';
@@ -37,6 +40,7 @@ import { SuggestInput } from '@/components/ui/suggest-input';
 import { useSwipeClose } from '@/hooks/features/useSwipeClose';
 import { useScratch } from '@/hooks/useScratch';
 import { apiClient } from '@/lib/api-client';
+import { getAuthorLinkLabel, getAuthorLinkTone, MAX_AUTHOR_LINKS } from '@/lib/author-links';
 import { copyText } from '@/lib/clipboard';
 import { downloadStackOriginals } from '@/lib/download-originals';
 import { useT } from '@/lib/i18n';
@@ -46,6 +50,7 @@ import {
   currentFilterAtom,
   customColorAtom,
   infoSidebarOpenAtom,
+  selectedInfoAssetIdAtom,
   selectedItemIdAtom,
 } from '@/stores/ui';
 import { addUploadNotificationAtom } from '@/stores/upload';
@@ -64,10 +69,16 @@ const getStackTagName = (tag: StackTagValue) => {
   return tag.name || tag.displayName || tag.title || tag.tag || '';
 };
 
+const isSameEntityId = (left: string | number | undefined, right: string | number | null) => {
+  if (left === undefined || right === null) return false;
+  return String(left) === String(right);
+};
+
 export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps) {
   const t = useT();
   const [isOpen, setIsOpen] = useAtom(infoSidebarOpenAtom);
   const [selectedItemId, setSelectedItemId] = useAtom(selectedItemIdAtom);
+  const [selectedInfoAssetId, setSelectedInfoAssetId] = useAtom(selectedInfoAssetIdAtom);
   const [, setCustomColor] = useAtom(customColorAtom);
   const [currentFilter, setCurrentFilter] = useAtom(currentFilterAtom);
   const queryClient = useQueryClient();
@@ -113,6 +124,19 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
     },
     enabled: !!selectedItemId && isOpen,
   });
+
+  const selectedAssetIdForLike = useMemo(() => {
+    if (!selectedItem?.assets || selectedInfoAssetId === null) return undefined;
+    return selectedItem.assets.find((asset) => isSameEntityId(asset.id, selectedInfoAssetId))?.id;
+  }, [selectedInfoAssetId, selectedItem?.assets]);
+
+  useEffect(() => {
+    if (selectedInfoAssetId === null || !selectedItem?.assets) return;
+    const hasAsset = selectedItem.assets.some((asset) =>
+      isSameEntityId(asset.id, selectedInfoAssetId)
+    );
+    if (!hasAsset) setSelectedInfoAssetId(null);
+  }, [selectedInfoAssetId, selectedItem?.assets, setSelectedInfoAssetId]);
 
   const handleRemoveStack = useCallback(async () => {
     if (!selectedItem) return;
@@ -181,6 +205,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
   const [authorLoading, setAuthorLoading] = useState(false);
   const [recentTags, setRecentTags] = useState<string[]>([]);
   const [recentAuthors, setRecentAuthors] = useState<string[]>([]);
+  const [authorLinkQuickAddOpen, setAuthorLinkQuickAddOpen] = useState(false);
 
   // Color details state
   const [showColorDetails, setShowColorDetails] = useState(false);
@@ -242,6 +267,13 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
       setAuthorInput('');
     }
   }, [selectedItem]);
+
+  const selectedAuthor = useMemo(() => {
+    if (!selectedItem?.author || typeof selectedItem.author === 'string') return null;
+    return selectedItem.author;
+  }, [selectedItem?.author]);
+
+  const selectedAuthorLinks = selectedAuthor?.links ?? [];
 
   // Mutations for immediate updates
   const addTagMutation = useMutation({
@@ -315,6 +347,28 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
       queryClient.invalidateQueries({ queryKey: ['library-counts', datasetId] });
     },
   });
+
+  const addAuthorLinkMutation = useMutation({
+    mutationFn: async ({ authorId, url }: { authorId: string | number; url: string }) => {
+      return apiClient.addAuthorLink(authorId, { datasetId, url });
+    },
+    onSuccess: () => {
+      setAuthorLinkQuickAddOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['stack', datasetId, selectedItemId] });
+      queryClient.invalidateQueries({ queryKey: ['stacks'], refetchType: 'all' });
+      queryClient.invalidateQueries({ queryKey: ['authors', datasetId] });
+      queryClient.invalidateQueries({ queryKey: ['authors', datasetId, 'management'] });
+      addNotification({ type: 'success', message: t.info.authorLinkAdded });
+    },
+    onError: () => {
+      addNotification({ type: 'error', message: t.info.authorLinkAddFailed });
+    },
+  });
+
+  const canAddAuthorLink =
+    !!selectedAuthor &&
+    selectedAuthorLinks.length < MAX_AUTHOR_LINKS &&
+    !addAuthorLinkMutation.isPending;
 
   const toggleFavoriteMutation = useMutation({
     mutationFn: async ({ stackId, favorited }: { stackId: number; favorited: boolean }) => {
@@ -425,6 +479,26 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
     }
   };
 
+  const handleOpenAuthorManagement = useCallback(() => {
+    if (!selectedAuthor) return;
+    void navigate({
+      to: '/library/$datasetId/authors',
+      params: { datasetId },
+      search: { authorId: String(selectedAuthor.id) },
+    });
+  }, [datasetId, navigate, selectedAuthor]);
+
+  const handleAddAuthorLink = useCallback(
+    (input: { url: string }) => {
+      if (!selectedAuthor) return;
+      addAuthorLinkMutation.mutate({
+        authorId: selectedAuthor.id,
+        url: input.url,
+      });
+    },
+    [addAuthorLinkMutation, selectedAuthor]
+  );
+
   const handleToggleFavorite = () => {
     if (selectedItem) {
       const currentFavorited = selectedItem.favorited ?? false;
@@ -442,25 +516,29 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
   };
 
   const likeMutation = useMutation({
-    mutationFn: async ({ stackId }: { stackId: number }) => {
-      const response = await fetch(`/api/v1/stacks/${stackId}/like`, {
-        method: 'POST',
-      });
-      if (!response.ok) throw new Error('Failed to like');
-      return response.json();
+    mutationFn: async ({ stackId, assetId }: { stackId: number; assetId?: string | number }) => {
+      if (assetId !== undefined) {
+        return apiClient.likeAsset(assetId);
+      }
+      return apiClient.likeStack(stackId);
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['stack'] });
       queryClient.invalidateQueries({ queryKey: ['stack', datasetId, selectedItemId] });
       queryClient.invalidateQueries({ queryKey: ['stacks'] });
       queryClient.invalidateQueries({ queryKey: ['library-counts', datasetId] });
+      queryClient.invalidateQueries({ queryKey: ['likes', 'yearly'] });
     },
   });
 
-  const handleLike = () => {
+  const handleLike = useCallback(() => {
     if (selectedItem) {
-      likeMutation.mutate({ stackId: Number(selectedItem.id) });
+      likeMutation.mutate({
+        stackId: Number(selectedItem.id),
+        assetId: selectedAssetIdForLike,
+      });
     }
-  };
+  }, [likeMutation, selectedAssetIdForLike, selectedItem]);
 
   const updateColorsMutation = useMutation({
     mutationFn: async ({ stackId }: { stackId: number }) => {
@@ -770,6 +848,46 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
                   loading={authorLoading}
                   autoFocus
                 />
+              )}
+              {!authorEditing && selectedAuthor && (
+                <div className="flex flex-wrap items-center gap-1.5 px-3">
+                  {selectedAuthorLinks.map((link) => (
+                    <a
+                      key={link.id}
+                      href={link.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className={cn(
+                        'inline-flex min-h-7 max-w-full items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium',
+                        getAuthorLinkTone(link.provider)
+                      )}
+                      title={link.url}
+                    >
+                      <ExternalLink size={12} />
+                      <span className="truncate">{getAuthorLinkLabel(link)}</span>
+                    </a>
+                  ))}
+                  {canAddAuthorLink && (
+                    <AuthorLinkQuickAdd
+                      open={authorLinkQuickAddOpen}
+                      addLabel={t.info.addAuthorLink}
+                      urlLabel={t.info.authorLinkUrl}
+                      urlPlaceholder={t.info.authorLinkUrlPlaceholder}
+                      submitLabel={t.info.addAuthorLink}
+                      submitting={addAuthorLinkMutation.isPending}
+                      onOpenChange={setAuthorLinkQuickAddOpen}
+                      onSubmit={handleAddAuthorLink}
+                    />
+                  )}
+                  <button
+                    type="button"
+                    className="ml-auto inline-flex min-h-7 items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                    onClick={handleOpenAuthorManagement}
+                  >
+                    <UserPen size={13} />
+                    {t.info.editAuthor}
+                  </button>
+                </div>
               )}
               {/* Recent Authors */}
               {recentAuthors.length > 0 && (

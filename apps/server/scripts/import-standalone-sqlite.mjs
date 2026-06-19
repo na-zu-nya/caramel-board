@@ -77,6 +77,21 @@ const tableImports = [
     columns: ['id', 'dataset_id', 'name'],
   },
   {
+    table: 'author_links',
+    file: 'author_links.ndjson',
+    columns: [
+      'id',
+      'author_id',
+      'provider',
+      'label',
+      'url',
+      'external_id',
+      'sort_order',
+      'created_at',
+      'updated_at',
+    ],
+  },
+  {
     table: 'collection_folders',
     file: 'collection_folders.ndjson',
     columns: [
@@ -412,6 +427,20 @@ const prepareRowForImport = (row, definition, importContext) => {
   }
 
   if (definition.table === 'stacks' && row.author_id !== null && row.author_id !== undefined) {
+    const mappedAuthorId = importContext.authorIdMap.get(String(row.author_id));
+    if (mappedAuthorId !== undefined && mappedAuthorId !== row.author_id) {
+      return {
+        ...row,
+        author_id: mappedAuthorId,
+      };
+    }
+  }
+
+  if (
+    definition.table === 'author_links' &&
+    row.author_id !== null &&
+    row.author_id !== undefined
+  ) {
     const mappedAuthorId = importContext.authorIdMap.get(String(row.author_id));
     if (mappedAuthorId !== undefined && mappedAuthorId !== row.author_id) {
       return {

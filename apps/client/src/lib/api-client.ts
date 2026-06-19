@@ -1,5 +1,7 @@
 import type {
   Asset,
+  Author,
+  AuthorLink,
   Collection,
   CollectionFolder,
   Dataset,
@@ -27,6 +29,7 @@ type StackWire = Stack & {
   assetCount?: unknown;
   assetsCount?: unknown;
 };
+type AuthorRecord = Omit<Author, 'id'> & { id: number; dataSetId?: number };
 
 const LEGACY_SORT_FIELD_MAP: Record<string, ApiSortField> = {
   id: 'dateAdded',
@@ -640,7 +643,7 @@ class ApiClient {
     limit?: number;
     offset?: number;
   }): Promise<{
-    authors: Array<{ id: number; name: string; stackCount?: number }>;
+    authors: AuthorRecord[];
     total: number;
     limit: number;
     offset: number;
@@ -650,6 +653,55 @@ class ApiClient {
     if (params.limit !== undefined) query.append('limit', String(params.limit));
     if (params.offset !== undefined) query.append('offset', String(params.offset));
     return this.fetch(`/api/v1/authors?${query.toString()}`);
+  }
+
+  async getAuthor(authorId: string | number, datasetId: string | number): Promise<AuthorRecord> {
+    const query = new URLSearchParams({ dataSetId: String(datasetId) });
+    return this.fetch(`/api/v1/authors/${authorId}?${query.toString()}`);
+  }
+
+  async updateAuthor(
+    authorId: string | number,
+    params: {
+      datasetId: string | number;
+      name?: string;
+      links?: Array<{ id?: AuthorLink['id']; label?: string; url: string }>;
+    }
+  ): Promise<AuthorRecord> {
+    const query = new URLSearchParams({ dataSetId: String(params.datasetId) });
+    return this.fetch(`/api/v1/authors/${authorId}?${query.toString()}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        name: params.name,
+        links: params.links,
+      }),
+    });
+  }
+
+  async addAuthorLink(
+    authorId: string | number,
+    params: { datasetId: string | number; label?: string; url: string }
+  ): Promise<AuthorRecord> {
+    const query = new URLSearchParams({ dataSetId: String(params.datasetId) });
+    return this.fetch(`/api/v1/authors/${authorId}/links?${query.toString()}`, {
+      method: 'POST',
+      body: JSON.stringify({ label: params.label, url: params.url }),
+    });
+  }
+
+  async mergeAuthors(params: {
+    datasetId: string | number;
+    targetAuthorId: string | number;
+    sourceAuthorIds: Array<string | number>;
+  }): Promise<AuthorRecord> {
+    return this.fetch('/api/v1/authors/merge', {
+      method: 'POST',
+      body: JSON.stringify({
+        dataSetId: Number(params.datasetId),
+        targetAuthorId: Number(params.targetAuthorId),
+        sourceAuthorIds: params.sourceAuthorIds.map((id) => Number(id)),
+      }),
+    });
   }
 
   // Bulk operations

@@ -29,12 +29,19 @@ use tauri::{AppHandle, Manager, State};
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
 use tauri_plugin_opener::OpenerExt;
 
+const APPLY_STANDALONE_MIGRATIONS_ARG: &str = "--apply-standalone-migrations";
+
+fn has_cli_arg(name: &str) -> bool {
+    env::args().any(|arg| arg == name)
+}
+
 include!("domain.rs");
 include!("settings.rs");
 include!("platform/process.rs");
 include!("platform/resources.rs");
 include!("features/ffmpeg.rs");
 include!("features/autotag.rs");
+include!("features/standalone_migration.rs");
 include!("features/sidecar.rs");
 include!("features/data_store.rs");
 include!("features/docker_migration.rs");
@@ -83,6 +90,9 @@ pub fn run() {
             detect_docker_source,
             docker_migration_progress,
             start_docker_migration,
+            standalone_migration_status,
+            standalone_migration_progress,
+            start_standalone_migration,
             apply_data_store,
             inspect_data_store,
             complete_setup,

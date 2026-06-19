@@ -283,6 +283,44 @@ const directDatasetWhere = datasetId ? { dataSetId: datasetId } : {};
 const stackWhere = datasetId ? { dataSetId: datasetId } : {};
 const assetWhere = datasetId ? { stack: { dataSetId: datasetId } } : {};
 
+const queryAuthorLinks = (page) => {
+  if (datasetId) {
+    return prisma.$queryRaw`
+      SELECT
+        l."id",
+        l."authorId",
+        l."provider",
+        l."label",
+        l."url",
+        l."externalId",
+        l."sortOrder",
+        l."createdAt",
+        l."updatedAt"
+      FROM "AuthorLink" l
+      JOIN "Author" a ON a."id" = l."authorId"
+      WHERE a."dataSetId" = ${datasetId}
+      ORDER BY l."id" ASC
+      LIMIT ${page.take} OFFSET ${page.skip}
+    `;
+  }
+
+  return prisma.$queryRaw`
+    SELECT
+      l."id",
+      l."authorId",
+      l."provider",
+      l."label",
+      l."url",
+      l."externalId",
+      l."sortOrder",
+      l."createdAt",
+      l."updatedAt"
+    FROM "AuthorLink" l
+    ORDER BY l."id" ASC
+    LIMIT ${page.take} OFFSET ${page.skip}
+  `;
+};
+
 const mapDataset = (row) => ({
   id: row.id,
   name: row.name,
@@ -312,6 +350,18 @@ const mapAuthor = (row) => ({
   id: row.id,
   dataset_id: row.dataSetId,
   name: row.name,
+});
+
+const mapAuthorLink = (row) => ({
+  id: row.id,
+  author_id: row.authorId,
+  provider: row.provider,
+  label: row.label,
+  url: row.url,
+  external_id: row.externalId,
+  sort_order: row.sortOrder,
+  created_at: toIso(row.createdAt),
+  updated_at: toIso(row.updatedAt),
 });
 
 const mapStack = (row) => ({
@@ -586,6 +636,11 @@ const exportDefinitions = [
     query: (page) =>
       prisma.author.findMany({ ...page, where: directDatasetWhere, orderBy: { id: 'asc' } }),
     map: mapAuthor,
+  },
+  {
+    fileName: 'author_links.ndjson',
+    query: queryAuthorLinks,
+    map: mapAuthorLink,
   },
   {
     fileName: 'stacks.ndjson',

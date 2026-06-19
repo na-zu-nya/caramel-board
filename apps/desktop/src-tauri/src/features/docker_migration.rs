@@ -140,6 +140,64 @@ fn looks_like_docker_storage(path: &Path) -> bool {
     false
 }
 
+fn docker_storage_content_root(source_root: &Path) -> PathBuf {
+    if looks_like_docker_storage(source_root) {
+        return source_root.to_path_buf();
+    }
+    let nested_library = source_root.join("library");
+    if nested_library.is_dir() {
+        return nested_library;
+    }
+    source_root.to_path_buf()
+}
+
+fn associated_sqlite_file_exists(db_path: &str) -> bool {
+    Path::new(db_path).exists()
+        || PathBuf::from(format!("{db_path}-wal")).exists()
+        || PathBuf::from(format!("{db_path}-shm")).exists()
+        || PathBuf::from(format!("{db_path}-journal")).exists()
+}
+
+fn ensure_docker_migration_target_is_empty(settings: &AppSettings) -> Result<(), String> {
+    if associated_sqlite_file_exists(&settings.db_path) {
+        return Err(String::from(
+            "移行先のSQLite DBが既に存在します。既存データを上書きしないため、空のデータストアを選択してください。",
+        ));
+    }
+
+    let library_path = Path::new(&settings.library_path);
+    if library_path.exists() && !directory_is_empty(library_path)? {
+        return Err(String::from(
+            "移行先のライブラリフォルダが空ではありません。既存ファイルを上書きしないため、空のデータストアを選択してください。",
+        ));
+    }
+
+    Ok(())
+}
+
+fn copy_docker_storage_to_library(
+    source_root: &Path,
+    target_library: &Path,
+) -> Result<(), String> {
+    let source = docker_storage_content_root(source_root);
+    if is_same_path(&source, target_library) {
+        return Ok(());
+    }
+    if !source.is_dir() {
+        return Err(format!(
+            "旧Docker版のアセットフォルダが見つかりません: {}",
+            source.to_string_lossy()
+        ));
+    }
+    if target_library.exists() && !directory_is_empty(target_library)? {
+        return Err(String::from(
+            "移行先のライブラリフォルダが空ではありません。空のデータストアを選択してください。",
+        ));
+    }
+
+    copy_dir_recursive(&source, target_library)
+}
+
 #[tauri::command]
 fn detect_docker_source(
     app: AppHandle,
@@ -225,10 +283,20 @@ fn run_docker_migration_task(
             detected.message
         ));
     }
+    let source_storage_root = if detected.storage_root.trim().is_empty() {
+        settings.docker_storage_root.clone()
+    } else {
+        detected.storage_root.clone()
+    };
+    if source_storage_root.trim().is_empty() {
+        return Err(String::from(
+            "旧Docker版のアセットフォルダを確認できません。アセットフォルダを選択してから再実行してください。",
+        ));
+    }
     if !detected.storage_root.trim().is_empty() {
-        settings.library_path = detected.storage_root.clone();
         settings.docker_storage_root = detected.storage_root.clone();
     }
+    ensure_docker_migration_target_is_empty(&settings)?;
 
     let root = resource_or_repo_path(&app, "server", "apps/server");
     let migration_root = app
@@ -256,9 +324,7 @@ fn run_docker_migration_task(
         .current_dir(child_process_path(&root))
         .env("DATABASE_URL", &detected.database_url);
 
-    if !detected.storage_root.trim().is_empty() {
-        export_command.arg(format!("--storage-root={}", detected.storage_root));
-    }
+    export_command.arg(format!("--storage-root={}", source_storage_root));
     if !settings.docker_dataset_id.trim().is_empty() {
         export_command.arg(format!("--dataset={}", settings.docker_dataset_id.trim()));
     }
@@ -277,6 +343,16 @@ fn run_docker_migration_task(
     })?;
 
     update_docker_migration_progress(&app, |progress| {
+        progress.phase = String::from("copy-library");
+        progress.message = String::from("アセットファイルを新しいライブラリへコピーしています...");
+        progress.percent = 50.0;
+    });
+    copy_docker_storage_to_library(
+        Path::new(&source_storage_root),
+        Path::new(&settings.library_path),
+    )?;
+
+    update_docker_migration_progress(&app, |progress| {
         progress.phase = String::from("import");
         progress.message = String::from("SQLiteへデータを取り込んでいます...");
         progress.percent = 55.0;
@@ -292,12 +368,9 @@ fn run_docker_migration_task(
             child_process_path_string(&export_dir)
         ))
         .arg(format!("--db={}", settings.db_path))
-        .arg("--force")
         .current_dir(child_process_path(&root));
 
-    if !settings.library_path.trim().is_empty() {
-        import_command.arg(format!("--storage-root={}", settings.library_path));
-    }
+    import_command.arg(format!("--storage-root={}", source_storage_root));
     if settings.docker_verify_files {
         import_command.arg("--verify-files");
     }

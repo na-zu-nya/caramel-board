@@ -173,7 +173,8 @@ fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         apply_app_shell_settings_if_available(&handle);
     }
 
-    let background_launch = env::args().any(|arg| arg == "--background");
+    let background_launch = has_cli_arg("--background");
+    let auto_apply_standalone_migrations = has_cli_arg(APPLY_STANDALONE_MIGRATIONS_ARG);
     if background_launch {
         if let Some(window) = handle.get_webview_window("main") {
             match settings.as_ref() {
@@ -188,8 +189,31 @@ fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         }
         if let Some(settings) = settings.as_ref() {
             if settings.setup_completed && settings.launch_on_startup {
-                if let Err(error) = start_saved_sidecar(&handle) {
-                    eprintln!("Background server start failed: {error}");
+                if auto_apply_standalone_migrations {
+                    match normalize_settings_for_app(&handle, settings.clone())
+                        .and_then(|settings| apply_standalone_migration_blocking(&handle, settings))
+                    {
+                        Ok(()) => {}
+                        Err(error) => {
+                            eprintln!("Background standalone migration failed: {error}");
+                            show_settings_window(&handle);
+                            return Ok(());
+                        }
+                    }
+                }
+                match standalone_migration_status_for_settings(&handle, settings) {
+                    Ok(migration_status) if migration_status.status == "ready" => {
+                        if let Err(error) = start_saved_sidecar(&handle) {
+                            eprintln!("Background server start failed: {error}");
+                        }
+                    }
+                    Ok(_) => {
+                        show_settings_window(&handle);
+                    }
+                    Err(error) => {
+                        eprintln!("Background migration status check failed: {error}");
+                        show_settings_window(&handle);
+                    }
                 }
             }
         }

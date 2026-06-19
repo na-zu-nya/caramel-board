@@ -39,6 +39,20 @@ type AutoTagAggregateEntry = {
   score?: number;
 };
 
+interface AuthorLinkRow {
+  id: number;
+  authorId: number;
+  provider: string | null;
+  label: string;
+  url: string;
+  externalId: string | null;
+  sortOrder: number;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+}
+
+const toIso = (value: Date | string) => (value instanceof Date ? value.toISOString() : value);
+
 const extractAutoTagEntries = (
   value: Prisma.JsonValue | null | undefined
 ): AutoTagAggregateEntry[] => {
@@ -134,6 +148,36 @@ export const createStackService = (deps: {
   dataSetId: number;
 }) => {
   const { prisma, colorSearch, dataSetId } = deps;
+
+  const getAuthorLinks = async (authorId: number | null | undefined) => {
+    if (!authorId) return [];
+    const rows = await prisma.$queryRaw<AuthorLinkRow[]>`
+      SELECT
+        "id",
+        "authorId",
+        "provider",
+        "label",
+        "url",
+        "externalId",
+        "sortOrder",
+        "createdAt",
+        "updatedAt"
+      FROM "AuthorLink"
+      WHERE "authorId" = ${authorId}
+      ORDER BY "sortOrder" ASC, "id" ASC
+    `;
+    return rows.map((link) => ({
+      id: link.id,
+      authorId: link.authorId,
+      provider: link.provider,
+      label: link.label,
+      url: link.url,
+      externalId: link.externalId,
+      sortOrder: link.sortOrder,
+      createdAt: toIso(link.createdAt),
+      updatedAt: toIso(link.updatedAt),
+    }));
+  };
 
   async function annotateFavorites<T extends { id: number }>(
     stacks: T[]
@@ -706,9 +750,16 @@ export const createStackService = (deps: {
 
     const thumbnailSource = normalizedAssetsList[0]?.thumbnail || stack.thumbnail || '';
     const thumbnail = toPublicAssetPath(thumbnailSource, stack.dataSetId);
+    const authorWithLinks = stack.author
+      ? {
+          ...stack.author,
+          links: await getAuthorLinks(stack.author.id),
+        }
+      : stack.author;
 
     const transformedStack = {
       ...stack,
+      author: authorWithLinks,
       ...(tags
         ? {
             tags: stack.tags.map((relation) => relation?.tag.title),

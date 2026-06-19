@@ -1,10 +1,22 @@
 import { createFactory } from 'hono/factory';
+import { StandaloneMigrationRequiredError } from '../standalone/migrations';
 
-export const errorBoundary = createFactory().createMiddleware(async (c, next) => {
-  try {
-    await next();
-  } catch (err) {
-    console.error('[Unhandled]', err);
-    return c.json({ error: 'Internal Server Error' }, 500);
+export const errorBoundary = createFactory().createMiddleware(
+  async (c, next): Promise<Response | undefined> => {
+    try {
+      await next();
+    } catch (err) {
+      if (err instanceof StandaloneMigrationRequiredError) {
+        return c.json(
+          {
+            error: 'Standalone migration required',
+            migration: err.status,
+          },
+          503
+        );
+      }
+      console.error('[Unhandled]', err);
+      return c.json({ error: 'Internal Server Error' }, 500);
+    }
   }
-});
+);
