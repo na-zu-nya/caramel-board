@@ -14,13 +14,9 @@ import { useSelectionMode } from '@/hooks/features/useSelectionMode';
 import { useHeaderActions } from '@/hooks/useHeaderActions';
 import { apiClient } from '@/lib/api-client';
 import { useT } from '@/lib/i18n';
+import { getSelectedMediaGridStackIds } from '@/lib/media-grid-selection';
 import { cn } from '@/lib/utils';
-import {
-  currentFilterAtom,
-  infoSidebarOpenAtom,
-  selectedItemIdAtom,
-  selectionModeAtom,
-} from '@/stores/ui';
+import { currentFilterAtom, infoSidebarOpenAtom, selectedItemIdAtom } from '@/stores/ui';
 import { genListToken, saveViewContext } from '@/stores/view-context';
 import type { MediaGridItem, StackFilter, StackPaginatedResponse } from '@/types';
 
@@ -60,7 +56,7 @@ function CollectionSimilarRoute() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [limit] = useState(50);
-  const [selectionMode, setSelectionMode] = useAtom(selectionModeAtom);
+  const selectionMode = false;
   const [_currentFilter, setCurrentFilter] = useAtom(currentFilterAtom);
   const [infoSidebarOpen, setInfoSidebarOpen] = useAtom(infoSidebarOpenAtom);
   const [selectedItemId, setSelectedItemId] = useAtom(selectedItemIdAtom);
@@ -78,6 +74,10 @@ function CollectionSimilarRoute() {
     clearSelection,
     exitSelectionMode,
   } = useSelectionMode(selectionMode);
+
+  useEffect(() => {
+    exitSelectionMode();
+  }, [exitSelectionMode]);
 
   const { data: collection } = useQuery({
     queryKey: ['collection', collectionId],
@@ -110,15 +110,8 @@ function CollectionSimilarRoute() {
   }, [collectionId, datasetId, setCurrentFilter]);
 
   const selectedStackIdsInOrder = useMemo(() => {
-    const stackIds: number[] = [];
-    for (const selectedId of selectedItemOrder) {
-      const stackId = toStackId(selectedId);
-      if (stackId !== null) {
-        stackIds.push(stackId);
-      }
-    }
-    return stackIds;
-  }, [selectedItemOrder]);
+    return getSelectedMediaGridStackIds(selectedItemOrder, items);
+  }, [items, selectedItemOrder]);
 
   const navigateToItem = useCallback(
     (item: MediaGridItem) => {
@@ -169,7 +162,7 @@ function CollectionSimilarRoute() {
   useHeaderActions({
     showShuffle: true,
     showFilter: false,
-    showSelection: true,
+    showSelection: false,
     onShuffle: handleShuffle,
   });
 
@@ -186,9 +179,8 @@ function CollectionSimilarRoute() {
         return;
       }
 
-      if (event?.shiftKey) {
+      if (event?.shiftKey && selectionMode) {
         event.preventDefault();
-        if (!selectionMode) setSelectionMode(true);
         const last = lastClickedIndexRef.current ?? idx;
         if (last >= 0 && idx >= 0) {
           const step = last <= idx ? 1 : -1;
@@ -221,9 +213,7 @@ function CollectionSimilarRoute() {
     },
     [
       items,
-      selectionMode,
       infoSidebarOpen,
-      setSelectionMode,
       selectItemRange,
       toggleItemSelection,
       setSelectedItemId,
@@ -233,7 +223,7 @@ function CollectionSimilarRoute() {
 
   const handleToggleSelection = useCallback(
     (itemId: string | number) => {
-      if (!selectionMode) setSelectionMode(true);
+      if (!selectionMode) return;
       toggleItemSelection(itemId);
 
       const idx = items.findIndex((item) => item?.id === itemId);
@@ -241,7 +231,7 @@ function CollectionSimilarRoute() {
         lastClickedIndexRef.current = idx;
       }
     },
-    [items, selectionMode, setSelectionMode, toggleItemSelection]
+    [items, toggleItemSelection]
   );
 
   const similarQueryKey = useMemo(

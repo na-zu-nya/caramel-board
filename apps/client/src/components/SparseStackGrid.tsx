@@ -21,6 +21,7 @@ import {
   uploadFolderAsSingleStack,
 } from '@/lib/folder-import';
 import { useT } from '@/lib/i18n';
+import { getSelectedMediaGridStackIds } from '@/lib/media-grid-selection';
 import { applyScrollbarCompensation, removeScrollbarCompensation } from '@/lib/scrollbar-utils';
 import { cn } from '@/lib/utils';
 import { reorderModeAtom, selectionModeAtom } from '@/stores/ui';
@@ -286,6 +287,7 @@ export default function SparseStackGrid({
     selectItemRange,
     handleToggleFavorite,
     handleDeselectAll,
+    clearSelection,
     applyEditUpdates,
     closeEditPanel,
     exitSelectionMode,
@@ -327,6 +329,14 @@ export default function SparseStackGrid({
 
       if (e?.shiftKey) {
         e.preventDefault();
+        if (!isSelectionMode) {
+          setSelectionMode(true);
+          clearSelection();
+          handleToggleSelection(id);
+          lastClickedIndexRef.current = idx >= 0 ? idx : lastClickedIndexRef.current;
+          return;
+        }
+
         setSelectionMode(true);
         const last = lastClickedIndexRef.current ?? idx;
         if (last >= 0 && idx >= 0) {
@@ -349,24 +359,19 @@ export default function SparseStackGrid({
     },
     [
       sparseItems,
+      isSelectionMode,
       setSelectionMode,
       handleToggleSelection,
       selectItemRange,
+      clearSelection,
       handleItemClick,
       onItemClick,
     ]
   );
 
   const selectedStackIdsInOrder = useMemo(() => {
-    const stackIds: number[] = [];
-    for (const selectedId of selectedItemOrder) {
-      const stackId = typeof selectedId === 'string' ? Number.parseInt(selectedId, 10) : selectedId;
-      if (Number.isFinite(stackId)) {
-        stackIds.push(stackId);
-      }
-    }
-    return stackIds;
-  }, [selectedItemOrder]);
+    return getSelectedMediaGridStackIds(selectedItemOrder, sparseItems);
+  }, [selectedItemOrder, sparseItems]);
 
   const handleMergeStacks = useCallback(async () => {
     if (selectedStackIdsInOrder.length < 2) return;

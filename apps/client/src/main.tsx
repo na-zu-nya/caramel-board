@@ -4,6 +4,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 // Import the generated route tree
 import { initializeLanguagePreference } from './lib/language';
+import { installThumbnailBlurConsoleCommand } from './lib/thumbnail-blur';
 import { routeTree } from './routeTree.gen';
 import '@fontsource/tilt-warp/400.css';
 import '@fontsource/murecho/500.css';
@@ -19,6 +20,7 @@ const applyInitialLanguage = () => {
 };
 
 applyInitialLanguage();
+installThumbnailBlurConsoleCommand(window);
 
 // Create a QueryClient instance
 const queryClient = new QueryClient();

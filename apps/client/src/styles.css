@@ -32,6 +32,7 @@ code {
     "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
   --font-display: "Tilt Warp", "Murecho", var(--font-sans);
   --font-display-ja: "Murecho", "Tilt Warp", var(--font-sans);
+  --caramel-thumbnail-blur-radius: 10px;
   --font-weight-semibold: 500;
   --font-weight-bold: 500;
   --font-weight-bold-display: 700;
@@ -239,6 +240,15 @@ code {
 
   .animate-slide-in-right {
     animation: slide-in-right 0.3s ease-out;
+  }
+
+  .caramel-thumbnail-blur-target {
+    transform-origin: center;
+  }
+
+  .caramel-thumbnail-blur-active .caramel-thumbnail-blur-target {
+    filter: blur(var(--caramel-thumbnail-blur-radius));
+    transform: scale(1.08);
   }
 }
 

@@ -3,6 +3,11 @@ import '../src/styles.css';
 import { type ReactNode, useEffect } from 'react';
 import { DragProvider } from '../src/contexts/DragContext';
 import { type AppLanguage, isAppLanguage, useSetLanguage } from '../src/lib/i18n';
+import { installThumbnailBlurConsoleCommand } from '../src/lib/thumbnail-blur';
+
+if (typeof window !== 'undefined') {
+  installThumbnailBlurConsoleCommand(window);
+}
 
 function StorybookProviders({
   children,

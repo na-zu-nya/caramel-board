@@ -14,9 +14,9 @@ interface UseStackGridKeyboardShortcutsProps {
  */
 export function useKeyboardShortcuts({
   onToggleEditPanel,
-  hasSelectedItems: _hasSelectedItems = false,
+  hasSelectedItems = false,
 }: UseStackGridKeyboardShortcutsProps = {}) {
-  const [, setFilterOpen] = useAtom(filterOpenAtom);
+  const [filterOpen, setFilterOpen] = useAtom(filterOpenAtom);
   const [selectionMode, setSelectionMode] = useAtom(selectionModeAtom);
   const [infoSidebarOpen, setInfoSidebarOpen] = useAtom(infoSidebarOpenAtom);
 
@@ -30,17 +30,28 @@ export function useKeyboardShortcuts({
       setSelectionMode(!selectionMode);
     },
     e: () => {
-      // If in selection mode and have items selected, open edit panel
-      if (selectionMode && onToggleEditPanel) {
+      if (selectionMode && hasSelectedItems && onToggleEditPanel) {
         onToggleEditPanel();
-      } else {
-        // Toggle info sidebar (single selection)
-        // If turning on info sidebar, turn off selection mode
-        if (!infoSidebarOpen && selectionMode) {
-          setSelectionMode(false);
-        }
-        setInfoSidebarOpen((prev: boolean) => !prev);
+        setInfoSidebarOpen(false);
+        return;
       }
+
+      if (!infoSidebarOpen && selectionMode) {
+        setSelectionMode(false);
+      }
+      setInfoSidebarOpen(!infoSidebarOpen);
+    },
+    i: () => {
+      if (selectionMode && hasSelectedItems && onToggleEditPanel) {
+        onToggleEditPanel();
+        setInfoSidebarOpen(false);
+        return;
+      }
+
+      if (!infoSidebarOpen && selectionMode) {
+        setSelectionMode(false);
+      }
+      setInfoSidebarOpen(!infoSidebarOpen);
     },
     escape: () => {
       // Exit selection mode with Escape key
@@ -51,7 +62,7 @@ export function useKeyboardShortcuts({
     f: () => {
       // Toggle filter panel (only if not in selection mode)
       if (!selectionMode) {
-        setFilterOpen((prev: boolean) => !prev);
+        setFilterOpen(!filterOpen);
       }
     },
   };

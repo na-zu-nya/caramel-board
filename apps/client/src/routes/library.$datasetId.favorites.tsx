@@ -18,6 +18,35 @@ export const Route = createFileRoute('/library/$datasetId/favorites')({
   component: FavoritesPage,
 });
 
+const FAVORITES_PAGE_SIZE = 500;
+
+async function fetchAllFavoriteItems(datasetId: string) {
+  const stacks: MediaGridItem[] = [];
+  let offset = 0;
+  let total = 0;
+
+  while (true) {
+    const page = await apiClient.getFavoriteItems({
+      datasetId,
+      limit: FAVORITES_PAGE_SIZE,
+      offset,
+    });
+    total = page.total;
+    stacks.push(...page.stacks);
+
+    if (page.stacks.length === 0 || stacks.length >= total) {
+      return {
+        stacks,
+        total,
+        limit: FAVORITES_PAGE_SIZE,
+        offset: 0,
+      };
+    }
+
+    offset += page.stacks.length;
+  }
+}
+
 function FavoritesPage() {
   const t = useT();
   const { datasetId } = Route.useParams();
@@ -52,7 +81,7 @@ function FavoritesPage() {
     refetch,
   } = useQuery({
     queryKey: ['favorite-items', datasetId],
-    queryFn: () => apiClient.getFavoriteItems({ datasetId, limit: 500, offset: 0 }),
+    queryFn: () => fetchAllFavoriteItems(datasetId),
   });
 
   const stableLoadedItems = useMemo(() => {

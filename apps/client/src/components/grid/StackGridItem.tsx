@@ -37,6 +37,7 @@ import {
   setNativeImageDragPreview,
   setStackDragData,
 } from '@/lib/stack-drag-data';
+import { THUMBNAIL_BLUR_TARGET_CLASS } from '@/lib/thumbnail-blur';
 import { cn } from '@/lib/utils';
 import { navigationStateAtom } from '@/stores/navigation';
 import { currentFilterAtom, infoSidebarOpenAtom, selectedItemIdAtom } from '@/stores/ui';
@@ -171,10 +172,11 @@ export function StackGridItem({
     });
   }, [datasetId, favoriteKind, getStackId, item.favoritePage, navigate, saveNavigationPosition]);
   const enableNativeImageDrag = useCallback(() => {
+    if (isSelectionMode) return;
     if (sourceImageUrl) {
       setIsNativeDragReady(true);
     }
-  }, [sourceImageUrl]);
+  }, [isSelectionMode, sourceImageUrl]);
   const disableNativeImageDrag = useCallback(() => {
     if (!isDragging) {
       setIsNativeDragReady(false);
@@ -273,7 +275,10 @@ export function StackGridItem({
             setIsNativeDragReady(false);
           }}
           onDragStart={(e) => {
-            if ((e.target as HTMLElement | null)?.dataset.nativeImageDrag === 'true') {
+            if (
+              !isSelectionMode &&
+              (e.target as HTMLElement | null)?.dataset.nativeImageDrag === 'true'
+            ) {
               setIsDragging(true);
               setGlobalDragging(true);
               setDragKind('native-image');
@@ -285,6 +290,7 @@ export function StackGridItem({
             console.log('Drag started for item:', item.id);
             setIsDragging(true);
             setGlobalDragging(true);
+            setDragKind('stack');
             setDraggedStack({ stackId: getStackId(), collectionIds: [] });
 
             // Check if this item is part of a selection
@@ -367,12 +373,12 @@ export function StackGridItem({
                 .then((resp) => {
                   console.log('✅ Merge completed', { targetId, sourceIds });
                   // Optimistically update any loaded pages to remove sources and update target
-                  const pages = queryClient.getQueriesData(['stacks', 'page']);
+                  const pages = queryClient.getQueriesData<{ stacks?: MediaGridItem[] }>({
+                    queryKey: ['stacks', 'page'],
+                  });
                   for (const [key, data] of pages) {
-                    if (!data || typeof data !== 'object') continue;
-                    const typedData = data as { stacks?: MediaGridItem[] };
-                    if (!Array.isArray(typedData.stacks)) continue;
-                    const stacks = typedData.stacks;
+                    if (!data || !Array.isArray(data.stacks)) continue;
+                    const stacks = data.stacks;
                     const filtered = stacks.filter(
                       (s) =>
                         !sourceIds.includes(
@@ -386,17 +392,17 @@ export function StackGridItem({
                     if (targetIdx >= 0 && resp?.stack) {
                       filtered[targetIdx] = { ...filtered[targetIdx], ...resp.stack };
                     }
-                    queryClient.setQueryData(key, { ...typedData, stacks: filtered });
+                    queryClient.setQueryData(key, { ...data, stacks: filtered });
                   }
                   // Also update count cache down by number of removed sources
-                  const counts = queryClient.getQueriesData(['stacks', 'count']);
+                  const counts = queryClient.getQueriesData<{ total?: number }>({
+                    queryKey: ['stacks', 'count'],
+                  });
                   for (const [key, data] of counts) {
-                    if (!data || typeof data !== 'object') continue;
-                    const typedData = data as { total?: number };
-                    if (typeof typedData.total !== 'number') continue;
+                    if (!data || typeof data.total !== 'number') continue;
                     queryClient.setQueryData(key, {
-                      ...typedData,
-                      total: Math.max(0, typedData.total - sourceIds.length),
+                      ...data,
+                      total: Math.max(0, data.total - sourceIds.length),
                     });
                   }
 
@@ -421,12 +427,15 @@ export function StackGridItem({
           <img
             src={thumbnailUrl}
             alt={item.name}
-            className="w-full h-full object-cover transition-transform duration-200"
+            className={cn(
+              'w-full h-full object-cover transition-[filter,transform] duration-200',
+              THUMBNAIL_BLUR_TARGET_CLASS
+            )}
             loading="eager"
             decoding="async"
             data-stack-drag-preview="true"
           />
-          {isNativeDragReady && sourceImageUrl ? (
+          {isNativeDragReady && sourceImageUrl && !isSelectionMode ? (
             <img
               src={sourceImageUrl}
               alt=""

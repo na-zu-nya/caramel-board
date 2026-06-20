@@ -3,7 +3,6 @@ import { createFileRoute, Link, useLocation, useNavigate } from '@tanstack/react
 import { useAtom } from 'jotai';
 import {
   ArrowRight,
-  Check,
   Edit2,
   Filter,
   Info,
@@ -29,8 +28,8 @@ import { JoyTagStatus } from '@/components/ui/JoyTagStatus';
 import { StackTile } from '@/components/ui/Stack';
 import { SelectItem } from '@/components/ui/select';
 import { SelectionActionBar } from '@/components/ui/selection-action-bar';
-import { useKeyboardShortcuts } from '@/hooks/features/useKeyboardShortcuts';
 import { useStackTile } from '@/hooks/useStackTile';
+import { useKeyboardShortcuts } from '@/hooks/utils/useKeyboardShortcut';
 import { apiClient } from '@/lib/api-client';
 import { useT } from '@/lib/i18n';
 import { getSourceImageFilename, getSourceImageUrl } from '@/lib/stack-drag-data';
@@ -124,7 +123,8 @@ function AutoTagConfigPage() {
     'count-desc'
   );
   const [infoSidebarOpen, setInfoSidebarOpen] = useAtom(infoSidebarOpenAtom);
-  const [selectionMode, setSelectionMode] = useAtom(selectionModeAtom);
+  const [, setSelectionMode] = useAtom(selectionModeAtom);
+  const selectionMode = false;
   const [selectedItems, setSelectedItems] = useState<Set<string | number>>(new Set());
   const [isEditPanelOpen, setIsEditPanelOpen] = useState(false);
   const lastClickedIndexRef = useRef<number | null>(null);
@@ -555,6 +555,10 @@ function AutoTagConfigPage() {
     setIsEditPanelOpen(false);
   }, [clearSelection, setSelectionMode]);
 
+  useEffect(() => {
+    exitSelectionMode();
+  }, [exitSelectionMode]);
+
   // Edit panel handlers
   const toggleEditPanel = useCallback(() => {
     if (selectedItems.size === 0) return;
@@ -588,12 +592,8 @@ function AutoTagConfigPage() {
         return;
       }
 
-      if (event.shiftKey) {
+      if (event.shiftKey && selectionMode) {
         event.preventDefault();
-        if (!selectionMode) {
-          setSelectionMode(true);
-        }
-
         const lastIndex = lastClickedIndexRef.current ?? stackIndex;
         if (lastIndex !== null && stackIndex >= 0 && lastIndex >= 0) {
           const [start, end] =
@@ -628,7 +628,7 @@ function AutoTagConfigPage() {
         recordLastClicked();
       }
     },
-    [allStacks, selectionMode, infoSidebarOpen, setSelectionMode, handleItemSelect, onInfo]
+    [allStacks, infoSidebarOpen, handleItemSelect, onInfo]
   );
 
   const applyEditUpdates = useCallback(
@@ -677,30 +677,16 @@ function AutoTagConfigPage() {
 
   // Keyboard shortcuts
   useKeyboardShortcuts({
-    r: () => {
-      if (!selectionMode) {
-        setInfoSidebarOpen(false);
-        setSelectionMode(true);
-      } else {
+    i: () => {
+      if (!infoSidebarOpen && selectionMode) {
         exitSelectionMode();
       }
-    },
-    i: () => {
-      if (!infoSidebarOpen) {
-        if (selectionMode) {
-          exitSelectionMode();
-        }
-      }
+
       setInfoSidebarOpen(!infoSidebarOpen);
     },
     f: () => {
       if (!selectionMode) {
         setFilterOpen(!filterOpen);
-      }
-    },
-    e: () => {
-      if (selectionMode && selectedItems.size > 0) {
-        toggleEditPanel();
       }
     },
     Escape: () => {
@@ -1149,22 +1135,6 @@ function AutoTagConfigPage() {
             }
           >
             <Filter size={18} />
-          </HeaderIconButton>
-
-          {/* Selection mode button */}
-          <HeaderIconButton
-            onClick={() => {
-              if (!selectionMode) {
-                setInfoSidebarOpen(false); // Close info sidebar when entering selection mode
-                setSelectionMode(true);
-              } else {
-                exitSelectionMode(); // Use exitSelectionMode to properly clean up
-              }
-            }}
-            isActive={selectionMode}
-            aria-label={selectionMode ? t.header.exitSelectionMode : t.header.enterSelectionMode}
-          >
-            <Check size={18} />
           </HeaderIconButton>
 
           {/* Info button - only show when not in selection mode */}

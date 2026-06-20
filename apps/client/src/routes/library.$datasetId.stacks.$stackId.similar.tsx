@@ -14,13 +14,9 @@ import { useSelectionMode } from '@/hooks/features/useSelectionMode';
 import { useHeaderActions } from '@/hooks/useHeaderActions';
 import { apiClient } from '@/lib/api-client';
 import { useT } from '@/lib/i18n';
+import { getSelectedMediaGridStackIds } from '@/lib/media-grid-selection';
 import { cn } from '@/lib/utils';
-import {
-  currentFilterAtom,
-  infoSidebarOpenAtom,
-  selectedItemIdAtom,
-  selectionModeAtom,
-} from '@/stores/ui';
+import { currentFilterAtom, infoSidebarOpenAtom, selectedItemIdAtom } from '@/stores/ui';
 import { genListToken, saveViewContext } from '@/stores/view-context';
 import type { MediaGridItem, StackFilter, StackPaginatedResponse } from '@/types';
 
@@ -51,7 +47,7 @@ function SimilarStacksRoute() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [limit] = useState(50);
-  const [selectionMode, setSelectionMode] = useAtom(selectionModeAtom);
+  const selectionMode = false;
   const [_currentFilter, setCurrentFilter] = useAtom(currentFilterAtom);
   const [infoSidebarOpen, setInfoSidebarOpen] = useAtom(infoSidebarOpenAtom);
   const [selectedItemId, setSelectedItemId] = useAtom(selectedItemIdAtom);
@@ -69,6 +65,10 @@ function SimilarStacksRoute() {
     clearSelection,
     exitSelectionMode,
   } = useSelectionMode(selectionMode);
+
+  useEffect(() => {
+    exitSelectionMode();
+  }, [exitSelectionMode]);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['similar-stacks', datasetId, stackId, limit],
@@ -100,15 +100,8 @@ function SimilarStacksRoute() {
   }, [selectedItems.size, setIsEditPanelOpen]);
 
   const selectedStackIdsInOrder = useMemo(() => {
-    const stackIds: number[] = [];
-    for (const selectedId of selectedItemOrder) {
-      const stackId = typeof selectedId === 'string' ? Number.parseInt(selectedId, 10) : selectedId;
-      if (Number.isFinite(stackId)) {
-        stackIds.push(stackId);
-      }
-    }
-    return stackIds;
-  }, [selectedItemOrder]);
+    return getSelectedMediaGridStackIds(selectedItemOrder, items);
+  }, [items, selectedItemOrder]);
 
   const navigateToItem = useCallback(
     (item: MediaGridItem) => {
@@ -157,7 +150,7 @@ function SimilarStacksRoute() {
   useHeaderActions({
     showShuffle: true,
     showFilter: false,
-    showSelection: true,
+    showSelection: false,
     onShuffle: handleShuffle,
   });
 
@@ -175,9 +168,8 @@ function SimilarStacksRoute() {
         return;
       }
 
-      if (event?.shiftKey) {
+      if (event?.shiftKey && selectionMode) {
         event.preventDefault();
-        if (!selectionMode) setSelectionMode(true);
         const last = lastClickedIndexRef.current ?? idx;
         if (last >= 0 && idx >= 0) {
           const step = last <= idx ? 1 : -1;
@@ -211,8 +203,6 @@ function SimilarStacksRoute() {
     },
     [
       items,
-      selectionMode,
-      setSelectionMode,
       toggleItemSelection,
       selectItemRange,
       infoSidebarOpen,
@@ -223,7 +213,7 @@ function SimilarStacksRoute() {
 
   const handleToggleSelection = useCallback(
     (itemId: string | number) => {
-      if (!selectionMode) setSelectionMode(true);
+      if (!selectionMode) return;
       toggleItemSelection(itemId);
 
       const idx = items.findIndex((item) => item?.id === itemId);
@@ -231,7 +221,7 @@ function SimilarStacksRoute() {
         lastClickedIndexRef.current = idx;
       }
     },
-    [items, selectionMode, setSelectionMode, toggleItemSelection]
+    [items, toggleItemSelection]
   );
 
   // Favorite toggle

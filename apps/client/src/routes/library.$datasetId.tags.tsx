@@ -2,7 +2,6 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 import { createFileRoute, Link, useLocation, useNavigate } from '@tanstack/react-router';
 import { useAtom } from 'jotai';
 import {
-  Check,
   Clapperboard,
   Edit2,
   GitMerge,
@@ -229,7 +228,8 @@ function TagsPage() {
   // Info panel and selection mode states
   const [infoSidebarOpen, setInfoSidebarOpen] = useAtom(infoSidebarOpenAtom);
   const [, setSelectedItemId] = useAtom(selectedItemIdAtom);
-  const [selectionMode, setSelectionMode] = useAtom(selectionModeAtom);
+  const [, setSelectionMode] = useAtom(selectionModeAtom);
+  const selectionMode = false;
   const [currentFilter, setCurrentFilter] = useAtom(currentFilterAtom);
   const routeFilterScopeKey = useMemo(() => `tags:${datasetId}`, [datasetId]);
   const [filterScopeKey, setFilterScopeKey] = useState<string | null>(null);
@@ -456,7 +456,7 @@ function TagsPage() {
   useHeaderActions({
     showShuffle: true,
     showFilter: true,
-    showSelection: true,
+    showSelection: false,
     onShuffle: handleShuffle,
   });
 
@@ -662,9 +662,8 @@ function TagsPage() {
         return;
       }
 
-      if (event.shiftKey) {
+      if (event.shiftKey && selectionMode) {
         event.preventDefault();
-        if (!selectionMode) setSelectionMode(true);
         const last = lastClickedIndexRef.current ?? idx;
         if (last >= 0 && idx >= 0) {
           const [start, end] = last < idx ? [last, idx] : [idx, last];
@@ -719,16 +718,7 @@ function TagsPage() {
         search: { page: 0, mediaType, listToken: token },
       });
     },
-    [
-      selectionMode,
-      allStacks,
-      datasetId,
-      selectedTag,
-      selectedStackItems,
-      handleStackItemSelect,
-      navigate,
-      setSelectionMode,
-    ]
+    [allStacks, datasetId, selectedTag, selectedStackItems, handleStackItemSelect, navigate]
   );
 
   const clearStackSelection = useCallback(() => {
@@ -740,6 +730,10 @@ function TagsPage() {
     clearStackSelection();
     setIsEditPanelOpen(false);
   }, [clearStackSelection, setSelectionMode]);
+
+  useEffect(() => {
+    exitSelectionMode();
+  }, [exitSelectionMode]);
 
   // Edit panel handlers
   const toggleEditPanel = useCallback(() => {
@@ -863,29 +857,12 @@ function TagsPage() {
       }
 
       switch (e.key) {
-        case 'r':
-          e.preventDefault();
-          if (!selectionMode) {
-            setInfoSidebarOpen(false); // Close info sidebar when entering selection mode
-            setSelectionMode(true);
-          } else {
-            exitSelectionMode(); // Use exitSelectionMode to properly clean up
-          }
-          break;
         case 'i':
           e.preventDefault();
-          if (!infoSidebarOpen) {
-            if (selectionMode) {
-              exitSelectionMode(); // Exit selection mode properly when opening info sidebar
-            }
+          if (!infoSidebarOpen && selectionMode) {
+            exitSelectionMode(); // Exit selection mode properly when opening info sidebar
           }
           setInfoSidebarOpen(!infoSidebarOpen);
-          break;
-        case 'e':
-          e.preventDefault();
-          if (selectionMode && selectedStackItems.size > 0) {
-            toggleEditPanel();
-          }
           break;
         case 'Escape':
           if (selectionMode) {
@@ -899,17 +876,7 @@ function TagsPage() {
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [
-    selectionMode,
-    infoSidebarOpen,
-    setSelectionMode,
-    setInfoSidebarOpen,
-    exitSelectionMode,
-    selectedStackItems.size,
-    toggleEditPanel,
-    isEditPanelOpen,
-    closeEditPanel,
-  ]);
+  }, [infoSidebarOpen, setInfoSidebarOpen, exitSelectionMode, isEditPanelOpen, closeEditPanel]);
 
   // This page uses its own layout
   return (
@@ -1263,23 +1230,6 @@ function TagsPage() {
       {/* Portal for header actions */}
       {createPortal(
         <>
-          {/* Selection mode button */}
-          <HeaderIconButton
-            onClick={() => {
-              if (!selectionMode) {
-                setInfoSidebarOpen(false); // Close info sidebar when entering selection mode
-                setIsEditPanelOpen(false); // Close edit panel
-                setSelectionMode(true);
-              } else {
-                exitSelectionMode(); // Use exitSelectionMode to properly clean up
-              }
-            }}
-            isActive={selectionMode}
-            aria-label={selectionMode ? t.header.exitSelectionMode : t.header.enterSelectionMode}
-          >
-            <Check size={18} />
-          </HeaderIconButton>
-
           {/* Info button - only show when not in selection mode */}
           {!selectionMode && (
             <HeaderIconButton

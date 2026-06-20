@@ -21,6 +21,7 @@ import {
   uploadFolderAsSingleStack,
 } from '@/lib/folder-import';
 import { useT } from '@/lib/i18n';
+import { getSelectedMediaGridStackIds } from '@/lib/media-grid-selection';
 import { applyScrollbarCompensation, removeScrollbarCompensation } from '@/lib/scrollbar-utils';
 import { cn } from '@/lib/utils';
 import { currentFilterAtom, reorderModeAtom, selectionModeAtom } from '@/stores/ui';
@@ -240,6 +241,14 @@ export default function StackGrid({
       // Shift + Click → range select from last clicked
       if (e?.shiftKey) {
         e.preventDefault();
+        if (!isSelectionMode) {
+          setSelectionMode(true);
+          clearSelection();
+          handleToggleSelection(id);
+          lastClickedIndexRef.current = idx >= 0 ? idx : lastClickedIndexRef.current;
+          return;
+        }
+
         setSelectionMode(true);
         const last = lastClickedIndexRef.current ?? idx;
         if (last >= 0 && idx >= 0) {
@@ -263,9 +272,11 @@ export default function StackGrid({
     },
     [
       actualItems,
+      isSelectionMode,
       setSelectionMode,
       handleToggleSelection,
       selectItemRange,
+      clearSelection,
       handleItemClick,
       onItemClick,
       findIndexById,
@@ -273,15 +284,8 @@ export default function StackGrid({
   );
 
   const selectedStackIdsInOrder = useMemo(() => {
-    const stackIds: number[] = [];
-    for (const selectedId of selectedItemOrder) {
-      const stackId = typeof selectedId === 'string' ? Number.parseInt(selectedId, 10) : selectedId;
-      if (Number.isFinite(stackId)) {
-        stackIds.push(stackId);
-      }
-    }
-    return stackIds;
-  }, [selectedItemOrder]);
+    return getSelectedMediaGridStackIds(selectedItemOrder, actualItems);
+  }, [actualItems, selectedItemOrder]);
 
   // Track processed notification IDs to avoid duplicate refreshes
   const processedNotificationIds = useRef<Set<string>>(new Set());
