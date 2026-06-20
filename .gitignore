@@ -59,6 +59,7 @@ pids
 # Application specific
 data/
 apps/server/static/**/*
+apps/client/storybook-static/
 lib/JoyTagTool/venv/
 lib/JoyTagTool/__pycache__/
 lib/JoyTagTool/*.pyc

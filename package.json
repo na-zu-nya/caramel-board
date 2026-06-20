@@ -1,12 +1,11 @@
 {
   "name": "caramel-board",
-  "version": "1.0.7-beta",
+  "version": "1.0.8",
   "private": true,
   "license": "SEE LICENSE IN LICENSE",
   "packageManager": "npm@10.9.2",
   "workspaces": [
-    "apps/*",
-    "packages/*"
+    "apps/*"
   ],
   "scripts": {
     "sync:version": "node scripts/sync-version.mjs",
@@ -14,35 +13,19 @@
     "dev": "turbo run dev --parallel",
     "dev:desktop": "node scripts/dev-desktop.mjs",
     "dev:next": "turbo run dev:next --parallel",
-    "dev:db": "docker-compose -f docker-compose.dev.yml up -d postgres",
-    "dev:db:down": "docker-compose -f docker-compose.dev.yml down",
     "lint": "turbo run lint",
     "format": "turbo run format",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "test:watch": "turbo run test:watch",
     "clean": "turbo run clean --parallel && rm -rf node_modules/.cache node_modules/.vite .turbo",
-    "clean:all": "npm run clean && rm -rf node_modules apps/*/node_modules packages/*/node_modules",
-    "docker:build": "docker-compose build --no-cache",
-    "docker:up": "docker-compose up -d",
-    "docker:down": "docker-compose down",
-    "docker:logs": "docker-compose logs -f",
-    "db:backup": "./serve.sh backup",
-    "db:restore": "docker-compose -f docker-compose.dev.yml exec -T postgres psql -U caramel_user -d caramel_board_db < backup.sql",
+    "clean:all": "npm run clean && rm -rf node_modules apps/*/node_modules",
     "standalone:export": "npm run -w @caramelboard/docker-migration export:standalone --",
     "standalone:import": "npm run -w @caramelboard/docker-migration import:standalone --",
-    "standalone:server:build": "npm run -w @caramelboard/server-standalone build",
-    "standalone:server:check": "npm run -w @caramelboard/server-standalone check:no-prisma",
     "desktop:prepare": "npm run -w @caramelboard/desktop prepare:sidecar",
     "desktop:dev": "npm run -w @caramelboard/desktop dev",
     "desktop:build": "npm run -w @caramelboard/desktop build:app",
-    "update:icon": "node scripts/update-icons.mjs",
-    "db:push": "npm run -w @caramelboard/server db:push",
-    "prisma:push": "npm run db:push",
-    "prisma:generate": "npm run -w @caramelboard/server db:generate",
-    "prisma:studio": "npm run -w @caramelboard/server db:studio",
-    "prisma:migrate:dev": "npm run -w @caramelboard/server db:migrate:dev",
-    "prisma:migrate:deploy": "npm run -w @caramelboard/server db:migrate:prod"
+    "update:icon": "node scripts/update-icons.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.2.4",

@@ -1,19 +1,21 @@
 import { atom, useAtom, useAtomValue } from 'jotai';
+import {
+  type AppLanguage,
+  LANGUAGE_STORAGE_KEY,
+  persistAppLanguage,
+  resolveAppLanguage,
+} from './language';
 
-export type AppLanguage = 'en' | 'ja';
-
-const LANGUAGE_STORAGE_KEY = 'caramelboard.language';
-
-export const isAppLanguage = (value: string | undefined | null): value is AppLanguage =>
-  value === 'en' || value === 'ja';
+export type { AppLanguage } from './language';
+export { isAppLanguage } from './language';
 
 const detectInitialLanguage = (): AppLanguage => {
   if (typeof window === 'undefined') return 'en';
-  const injected = window.__CARAMEL_DEFAULT_LANGUAGE__;
-  if (isAppLanguage(injected)) return injected;
-  const stored = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
-  if (isAppLanguage(stored)) return stored;
-  return navigator.language.toLowerCase().startsWith('ja') ? 'ja' : 'en';
+  return resolveAppLanguage({
+    storedLanguage: window.localStorage.getItem(LANGUAGE_STORAGE_KEY),
+    defaultLanguage: window.__CARAMEL_DEFAULT_LANGUAGE__,
+    navigatorLanguage: navigator.language,
+  });
 };
 
 // 言語のグローバル状態。localStorage と document.lang に同期する。
@@ -24,8 +26,7 @@ const persistedLanguageAtom = atom(
   (_get, set, next: AppLanguage) => {
     set(languageAtom, next);
     if (typeof window !== 'undefined') {
-      window.localStorage.setItem(LANGUAGE_STORAGE_KEY, next);
-      document.documentElement.lang = next;
+      persistAppLanguage(window.localStorage, document, next);
     }
   }
 );

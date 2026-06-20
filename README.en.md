@@ -54,9 +54,9 @@ For desktop use, download the app from the releases page.
 
 - Desktop (Windows/macOS): [GitHub Releases](https://github.com/na-zu-nya/caramel-board/releases)
 
-The old CLI/Docker version is available here:
+The CLI / Docker edition is frozen at the `release/v1.0.8` checkpoint and is no longer maintained on mainline. Use the Desktop edition for normal use.
 
-- CLI / Docker: [CLI / Docker setup](./docs/cli-installation.md)
+- CLI / Docker freeze notes: [CLI / Docker setup](./docs/cli-installation.md)
 - Migration from the old Docker setup to Desktop: [Standalone migration notes](./docs/standalone-migration.md)
 
 ### Optional Setup Guides

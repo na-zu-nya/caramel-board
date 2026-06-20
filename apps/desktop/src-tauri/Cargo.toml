@@ -1,6 +1,6 @@
 [package]
 name = "caramel-board-desktop"
-version = "1.0.7-beta"
+version = "1.0.8"
 description = "Caramel Board standalone launcher"
 authors = ["Caramel Board"]
 edition = "2021"

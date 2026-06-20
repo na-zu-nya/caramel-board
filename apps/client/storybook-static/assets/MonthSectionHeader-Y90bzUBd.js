@@ -1,3 +1,0 @@
-import{j as n}from"./iframe-CTdOwArN.js";import{a as r}from"./utils-nhH0VOCT.js";const i=e=>{const t=e===1?"like":"likes";return`${e.toLocaleString("en-US")} ${t}`};function a({month:e,likeCount:t,className:o,...s}){return n.jsxs("h2",{className:r("flex items-baseline gap-2 text-2xl font-semibold",o),...s,children:[n.jsx("span",{children:e}),n.jsx("span",{className:"text-base font-normal text-muted-foreground",children:i(t)})]})}a.__docgenInfo={description:`月別のセクション見出し (プレゼンテーショナル)
-- 月名は英語表記
-- 隣にその月のいいね件数を表示`,methods:[],displayName:"MonthSectionHeader",props:{month:{required:!0,tsType:{name:"string"},description:""},likeCount:{required:!0,tsType:{name:"number"},description:""}},composes:["HTMLAttributes"]};export{a as M};

@@ -1,113 +1,29 @@
 # CLI / Docker 版セットアップ
 
-このページは、Docker Compose とスクリプトで Caramel Board を起動する CLI / Docker 版の手順です。Desktop 版を使う場合は、[GitHub Releases](https://github.com/na-zu-nya/caramel-board/releases) からインストーラーを取得してください。
+CLI / Docker 版は `release/v1.0.8` をチェックポイントとして凍結しました。現在の mainline は Desktop / SQLite 版の開発ラインで、Docker Compose での運用ファイルは含みません。
 
-## 対象
+通常利用は [GitHub Releases](https://github.com/na-zu-nya/caramel-board/releases) から Desktop 版をインストールしてください。
 
-CLI / Docker 版は、既存の Docker 環境を運用している場合や、開発・検証のためにコンテナ構成を直接扱いたい場合に使います。通常利用では Desktop 版を推奨します。
+## 旧 Docker 版を継続利用する場合
 
-## Windows / macOS
-
-Windows と macOS は、OS ごとの準備手順を確認してください。
-
-- Windows: [CLI / Docker 版インストールガイド - Windows](./installation-windows.md)
-- macOS: [CLI / Docker 版インストールガイド - macOS](./installation-macos.md)
-
-## Linux クイックスタート
-
-### 必要なソフトウェア
-
-- Docker Engine と docker compose plugin
-- Git
-- Python 3（3.10 以上推奨）
-
-`huggingface-hub` を利用するため、pip が利用可能な状態にします。
-
-### リポジトリの取得
+既存の Docker 版を起動・バックアップしたい場合は、チェックポイントブランチへ切り替えてください。
 
 ```bash
-git clone https://github.com/na-zu-nya/caramel-board.git caramel-board
-cd caramel-board
-```
-
-### 初期セットアップ
-
-```bash
-chmod +x setup.sh serve.sh scripts/*.sh
-python3 -m pip install --upgrade pip
-python3 -m pip install huggingface-hub
-./setup.sh
-```
-
-`./setup.sh` の途中で保存先やオプションについて質問されます。画面の案内に従って選択してください。
-
-## 起動と停止
-
-```bash
-# 本番モードで起動
+git fetch origin release/v1.0.8
+git checkout release/v1.0.8
 ./serve.sh prod
-
-# 開発モードで起動
-./serve.sh dev
-
-# サービスの停止
-./serve.sh stop
 ```
 
-起動後は `http://localhost:6766` または `http://<ホストIP>:6766` からアクセスできます。
+Windows の `setup.bat` / `serve.bat` / `update.bat` も mainline では実行処理を持ちません。旧 Docker 版で必要な場合は、同じく `release/v1.0.8` に切り替えてから利用してください。
 
-## 更新
+## Desktop 版へ移行する場合
 
-```bash
-./serve.sh update
-```
+1. 旧 Docker 版を `release/v1.0.8` で起動します。
+2. Desktop 版をインストールします。
+3. 初回セットアップの「以前の版から引き継ぐ」、または Settings の「Docker版からの移行」を実行します。
 
-最新の変更を取り込んで再ビルドし、必要に応じて再起動します。更新前には `backups/pre-update-db-YYYYMMDD-HHMMSS.sql` が自動作成されます。
+移行機能は、起動中の旧 Docker / PostgreSQL 環境からデータを書き出し、Desktop 版の SQLite データストアへ取り込みます。
 
-## バックアップ
+## 更新について
 
-### DB バックアップ
-
-```bash
-./serve.sh backup
-```
-
-バックアップファイルは `backups/caramel-board-db-YYYYMMDD-HHMMSS.sql` に作成されます。保存先を指定したい場合は、パスを渡します。
-
-```bash
-./serve.sh backup backups/my-backup.sql
-./serve.sh backup backups/my-backup.sql.gz
-```
-
-`npm run db:backup` でも同じ処理を実行できます。
-
-## ストレージ
-
-推奨の既定値は次の通りです。
-
-- 画像・動画（コンテナ内の `/app/data`）: リポジトリの `./data/assets`
-- PostgreSQL データ: リポジトリの `./data/postgres`
-
-保存先は `docker-compose.local.yml` で上書きできます。このファイルが存在する場合、`./serve.sh` が自動で読み込みます。
-
-```yaml
-services:
-  app:
-    environment:
-      - FILES_STORAGE=/app/data
-    volumes:
-      - ./data/assets:/app/data
-  postgres:
-    volumes:
-      - ./data/postgres:/var/lib/postgresql/data
-```
-
-権限エラーが出る場合は、ホスト側ディレクトリの所有権とパーミッションを確認してください。
-
-## トラブルシューティング
-
-- 6766 番ポートを他のサービスが使っている場合は、`docker-compose.yml` の `ports` 設定を変更して `./serve.sh` を再実行します。
-- PostgreSQL 5432 が使用中の場合は、開発用の `docker-compose.dev.yml` の `ports` を変更します。
-- JoyTag に接続できない場合は、`JOYTAG_SERVER_URL` を確認します。
-- PDF を取り込めない場合は、Docker image に含まれる `pdftocairo` が利用できるか確認します。
-- ストレージ権限エラーが出る場合は、ホスト側ディレクトリの所有権とパーミッションを修正します。
+`./serve.sh update` は廃止しました。Docker 版として継続利用する場合は mainline へ更新せず、`release/v1.0.8` のチェックポイントへ固定してください。

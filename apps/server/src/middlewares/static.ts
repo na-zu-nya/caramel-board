@@ -12,8 +12,22 @@ const runtimeLanguageScript = (language: string) => `<script>
 (() => {
   const defaultLanguage = ${JSON.stringify(language)};
   const key = 'caramelboard.language';
-  window.localStorage.setItem(key, defaultLanguage);
-  document.documentElement.lang = defaultLanguage;
+  const isLanguage = (value) => value === 'en' || value === 'ja';
+  let storedLanguage = null;
+  try {
+    storedLanguage = window.localStorage.getItem(key);
+  } catch {
+    storedLanguage = null;
+  }
+  const language = isLanguage(storedLanguage) ? storedLanguage : defaultLanguage;
+  try {
+    if (!isLanguage(storedLanguage)) {
+      window.localStorage.setItem(key, language);
+    }
+  } catch {
+    // localStorage may be unavailable in private or restricted contexts.
+  }
+  document.documentElement.lang = language;
   window.__CARAMEL_DEFAULT_LANGUAGE__ = defaultLanguage;
 })();
 </script>`;

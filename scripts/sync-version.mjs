@@ -9,8 +9,6 @@ const repoRoot = path.resolve(path.dirname(__filename), '..');
 const appPackagePaths = [
   'apps/desktop/package.json',
   'apps/docker-migration/package.json',
-  'apps/server-standalone/package.json',
-  'packages/server-core/package.json',
 ];
 
 const readText = (relativePath) => fs.readFileSync(path.join(repoRoot, relativePath), 'utf8');
@@ -48,13 +46,6 @@ const updatePackageVersion = (relativePath) => {
   const packageJson = readJson(relativePath);
   packageJson.version = version;
 
-  if (relativePath === 'apps/server-standalone/package.json') {
-    packageJson.dependencies = {
-      ...packageJson.dependencies,
-      '@caramelboard/server-core': `^${version}`,
-    };
-  }
-
   writeJson(relativePath, packageJson);
 };
 
@@ -72,14 +63,6 @@ const updatePackageLock = () => {
     if (packages[packageDir]) {
       packages[packageDir].version = version;
     }
-  }
-
-  if (packages['apps/server-standalone']?.dependencies) {
-    packages['apps/server-standalone'].dependencies['@caramelboard/server-core'] = `^${version}`;
-  }
-
-  if (packages['node_modules/@caramelboard/server-core']) {
-    packages['node_modules/@caramelboard/server-core'].version = version;
   }
 
   writeJson('package-lock.json', packageLock);

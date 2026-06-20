@@ -54,9 +54,9 @@ Caramel Board は、参考画像、素材、イラストや漫画、動画をア
 
 - Desktop 版(Windows/macOS): [GitHub Releases](https://github.com/na-zu-nya/caramel-board/releases)
 
-旧CLI/Docker版は以下
+CLI / Docker 版は `release/v1.0.8` をチェックポイントとして凍結し、現在の mainline では運用対象から外しています。通常利用は Desktop 版を利用してください。
 
-- CLI / Docker 版: [CLI / Docker 版セットアップ](./docs/cli-installation.md)
+- CLI / Docker 版の凍結について: [CLI / Docker 版セットアップ](./docs/cli-installation.md)
 - 旧 Docker 版から Desktop 版への移行: [スタンドアロン移行メモ](./docs/standalone-migration.md)
 
 ### オプション設定ガイド

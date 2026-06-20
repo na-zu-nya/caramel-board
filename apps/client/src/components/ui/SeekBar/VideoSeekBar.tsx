@@ -1,5 +1,5 @@
 import { SquareStack, Volume2, VolumeX } from 'lucide-react';
-import type { KeyboardEvent, MouseEvent, PointerEvent } from 'react';
+import type { MouseEvent, PointerEvent, KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ContextMenu,
@@ -149,10 +149,10 @@ export default function VideoSeekBar({
   const _hitTop = `calc(${APEX_CSS} - ${HIT_HEIGHT_PX}px)`; // = calc(50% + 4px - 16px)
 
   useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
       if (event.key === 'Meta') setIsMarkerMoveMode(true);
     };
-    const handleKeyUp = (event: KeyboardEvent) => {
+    const handleKeyUp = (event: globalThis.KeyboardEvent) => {
       if (event.key === 'Meta') setIsMarkerMoveMode(false);
     };
     const handleBlur = () => setIsMarkerMoveMode(false);
@@ -503,7 +503,7 @@ export default function VideoSeekBar({
   }, [cancelVolumeHoverClose]);
 
   const handleVolumeTrackKeyDown = useCallback(
-    (e: KeyboardEvent<HTMLDivElement>) => {
+    (e: ReactKeyboardEvent<HTMLDivElement>) => {
       if (!onVolumeChange) return;
       if (e.key === 'ArrowUp' || e.key === 'ArrowRight') {
         e.preventDefault();

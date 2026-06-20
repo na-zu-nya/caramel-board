@@ -1,1 +1,0 @@
-import{f as c,g as n,i as m}from"./ui-CFa6Bw_N.js";import{a0 as l}from"./SettingsSection.stories-BZEPHE2s.js";import{u as o}from"./iframe-CTdOwArN.js";function b({onToggleEditPanel:f,hasSelectedItems:p=!1}={}){const[,a]=o(c),[e,s]=o(n),[r,i]=o(m);l({w:()=>{e||i(!1),s(!e)},e:()=>{e&&f?f():(!r&&e&&s(!1),i(t=>!t))},escape:()=>{e&&s(!1)},f:()=>{e||a(t=>!t)}},{})}export{b as u};
