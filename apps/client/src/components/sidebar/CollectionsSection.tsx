@@ -104,6 +104,7 @@ export function CollectionsSection({
             <SideMenuMessage>{t.sidebar.noCollectionsOrFolders}</SideMenuMessage>
           ) : (
             <FolderTreeView
+              datasetId={datasetId}
               folders={folders}
               rootCollections={rootCollections}
               isPinned={isPinned}

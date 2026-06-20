@@ -65,6 +65,7 @@ const extractStackIdsFromDragData = (dragData: unknown): number[] => {
 };
 
 interface CollectionDropItemProps {
+  datasetId: string;
   collection: Collection;
   isPinned: boolean;
   onUpdate: () => void;
@@ -76,6 +77,7 @@ interface CollectionDropItemProps {
 }
 
 export function CollectionDropItem({
+  datasetId,
   collection,
   isPinned,
   onUpdate,
@@ -88,11 +90,6 @@ export function CollectionDropItem({
   const dropElementRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const location = useLocation();
-
-  const getDatasetIdFromPath = useCallback(() => {
-    const pathMatch = location.pathname.match(/\/library\/([^/]+)/);
-    return pathMatch ? pathMatch[1] : '1';
-  }, [location.pathname]);
 
   const addStacksToCollection = useCallback(
     async (stackIds: number[]) => {
@@ -191,29 +188,27 @@ export function CollectionDropItem({
     [showDropIndicator, isTouchDragOver]
   );
 
-  const isActive = location.pathname.includes(`/collections/${collection.id}`);
+  const isActive = location.pathname.includes(`/library/${datasetId}/collections/${collection.id}`);
 
   const handleCollectionClick = useCallback(() => {
-    const datasetId = getDatasetIdFromPath();
     navigate({
       to: '/library/$datasetId/collections/$collectionId',
-      params: () => ({
+      params: {
         datasetId: String(datasetId),
         collectionId: String(collection.id),
-      }),
+      },
     });
-  }, [collection.id, getDatasetIdFromPath, navigate]);
+  }, [collection.id, datasetId, navigate]);
 
   const handleFindSimilar = useCallback(() => {
-    const datasetId = getDatasetIdFromPath();
     navigate({
       to: '/library/$datasetId/collections/$collectionId/similar',
-      params: () => ({
+      params: {
         datasetId: String(datasetId),
         collectionId: String(collection.id),
-      }),
+      },
     });
-  }, [collection.id, getDatasetIdFromPath, navigate]);
+  }, [collection.id, datasetId, navigate]);
 
   const combinedRef = useCallback((node: HTMLDivElement | null) => {
     dropElementRef.current = node;

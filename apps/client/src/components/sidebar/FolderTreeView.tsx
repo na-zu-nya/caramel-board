@@ -22,6 +22,7 @@ import type { Collection, CollectionFolder, FolderTreeNode } from '@/types';
 import { CollectionDropItem } from './CollectionDropItem';
 
 interface FolderTreeViewProps {
+  datasetId: string;
   folders: CollectionFolder[];
   rootCollections: Collection[];
   isPinned: (type: 'COLLECTION', id: number) => boolean;
@@ -61,6 +62,7 @@ function saveExpandedState(state: Record<string, boolean>) {
 }
 
 export function FolderTreeView({
+  datasetId,
   folders,
   rootCollections,
   isPinned,
@@ -407,6 +409,7 @@ export function FolderTreeView({
       <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
         <div className={cn('cursor-grab active:cursor-grabbing rounded')}>
           <CollectionDropItem
+            datasetId={datasetId}
             collection={node.collection!}
             isPinned={isPinned('COLLECTION', node.collection!.id)}
             onUpdate={onCollectionUpdate}
