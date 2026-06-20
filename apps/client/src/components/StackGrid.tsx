@@ -786,11 +786,6 @@ export default function StackGrid({
         targetMediaType = 'image';
       }
 
-      addNotification({
-        type: 'info',
-        message: t.grid.urlDownloading(urls.length),
-      });
-
       try {
         const { results } = await apiClient.importAssetsFromUrls({
           urls,

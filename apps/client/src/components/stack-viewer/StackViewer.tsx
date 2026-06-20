@@ -971,11 +971,6 @@ export default function StackViewer({
     async (urls: string[]) => {
       if (!stack || urls.length === 0) return;
 
-      addNotification({
-        type: 'info',
-        message: t.grid.urlDownloading(urls.length),
-      });
-
       try {
         const { results } = await apiClient.importAssetsFromUrls({
           stackId: Number(stack.id),

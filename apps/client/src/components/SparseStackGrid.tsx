@@ -523,11 +523,6 @@ export default function SparseStackGrid({
       const collectionId = collectionMatch ? Number.parseInt(collectionMatch[1], 10) : undefined;
       const targetMediaType = collectionId ? 'image' : mediaType || undefined;
 
-      addNotification({
-        type: 'info',
-        message: t.grid.urlDownloading(urls.length),
-      });
-
       try {
         const { results } = await apiClient.importAssetsFromUrls({
           urls,

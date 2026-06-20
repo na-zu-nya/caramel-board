@@ -515,7 +515,6 @@ const en = {
     mergeSelectedFailed: 'Failed to merge stacks.',
     datasetNotFound: 'Could not resolve the dataset.',
     folderImportFailed: 'Folder import failed.',
-    urlDownloading: (count: number) => `Downloading ${count.toLocaleString()} URL(s)...`,
     urlUploaded: (count: number) => `Uploaded from ${count.toLocaleString()} URL(s).`,
     urlDuplicatesSkipped: (count: number) =>
       `Skipped ${count.toLocaleString()} URL(s) because they were already imported.`,
@@ -1270,7 +1269,6 @@ const ja: Translations = {
     mergeSelectedFailed: 'スタックのマージに失敗しました。',
     datasetNotFound: 'データセットが特定できませんでした。',
     folderImportFailed: 'フォルダの取り込みに失敗しました。',
-    urlDownloading: (count: number) => `${count.toLocaleString()} 件の URL をダウンロード中です`,
     urlUploaded: (count: number) => `${count.toLocaleString()} 件の URL からアップロードしました`,
     urlDuplicatesSkipped: (count: number) =>
       `${count.toLocaleString()} 件の URL は既に取り込み済みのためスキップしました`,
