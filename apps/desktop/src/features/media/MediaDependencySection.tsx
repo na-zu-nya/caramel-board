@@ -1,9 +1,13 @@
 import type { LucideIcon } from 'lucide-react';
-import { AlertCircle, CheckCircle2, Folder, RefreshCcw } from 'lucide-react';
-import type { ChangeEvent } from 'react';
+import { AlertCircle, CheckCircle2, ExternalLink, Folder, RefreshCcw } from 'lucide-react';
+import type { ChangeEvent, MouseEvent } from 'react';
 import type { FfmpegCandidate, PdfRasterizerCandidate } from '../../app/types';
 
 type MediaDependencyCandidate = FfmpegCandidate | PdfRasterizerCandidate;
+type MediaDependencyLink = {
+  label: string;
+  href: string;
+};
 
 interface MediaDependencySectionProps {
   id: string;
@@ -24,11 +28,13 @@ interface MediaDependencySectionProps {
   statusClass: string;
   selectedCandidate: MediaDependencyCandidate | null;
   candidates: MediaDependencyCandidate[];
+  links: MediaDependencyLink[];
   value: string;
   disabled: boolean;
   onSelectChange: (event: ChangeEvent<HTMLSelectElement>) => void;
   onRefresh: () => void;
   onChoose: () => void;
+  onOpenLink: (event: MouseEvent<HTMLAnchorElement>) => void;
 }
 
 export function MediaDependencySection({
@@ -50,11 +56,13 @@ export function MediaDependencySection({
   statusClass,
   selectedCandidate,
   candidates,
+  links,
   value,
   disabled,
   onSelectChange,
   onRefresh,
   onChoose,
+  onOpenLink,
 }: MediaDependencySectionProps) {
   return (
     <div id={id} className="section-panel">
@@ -64,6 +72,14 @@ export function MediaDependencySection({
           <h2>{title}</h2>
           <p>{description}</p>
         </div>
+      </div>
+      <div className="dependency-link-row">
+        {links.map((link) => (
+          <a key={link.href} className="link-button" href={link.href} onClick={onOpenLink}>
+            <ExternalLink size={14} />
+            {link.label}
+          </a>
+        ))}
       </div>
 
       <div className={statusClass}>

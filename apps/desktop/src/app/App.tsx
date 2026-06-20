@@ -46,6 +46,11 @@ import { ResetSetupDialog } from './components/ResetSetupDialog';
 import { SettingsSidebar } from './components/SettingsSidebar';
 import { defaultStatus } from './constants';
 import {
+  FFMPEG_OFFICIAL_URL,
+  getDesktopToolsGuideUrl,
+  getPopplerOfficialUrl,
+} from './external-links';
+import {
   isAppLanguage,
   isBooleanSettingKey,
   isDockerTextSettingKey,
@@ -1046,6 +1051,20 @@ export default function App() {
     [selectedPdfRasterizerCandidate]
   );
 
+  const externalToolLinks = useMemo(() => {
+    const installGuideUrl = getDesktopToolsGuideUrl();
+    return {
+      ffmpeg: [
+        { label: t.officialPage, href: FFMPEG_OFFICIAL_URL },
+        { label: t.installationGuide, href: installGuideUrl },
+      ],
+      poppler: [
+        { label: t.officialPage, href: getPopplerOfficialUrl() },
+        { label: t.installationGuide, href: installGuideUrl },
+      ],
+    };
+  }, [t]);
+
   const standaloneMigrationCanApply = useMemo(
     () =>
       Boolean(
@@ -1262,11 +1281,13 @@ export default function App() {
           statusClass={ffmpegStatusClass}
           selectedCandidate={selectedFfmpegCandidate}
           candidates={ffmpegCandidates}
+          links={externalToolLinks.ffmpeg}
           value={settings.ffmpegPath}
           disabled={settingsDisabled}
           onSelectChange={handleFfmpegSelectChange}
           onRefresh={handleRefreshFfmpeg}
           onChoose={handleChooseFfmpeg}
+          onOpenLink={handleOpenExternalLink}
         />
 
         <MediaDependencySection
@@ -1288,11 +1309,13 @@ export default function App() {
           statusClass={pdfRasterizerStatusClass}
           selectedCandidate={selectedPdfRasterizerCandidate}
           candidates={pdfRasterizerCandidates}
+          links={externalToolLinks.poppler}
           value={settings.pdfRasterizerPath}
           disabled={settingsDisabled}
           onSelectChange={handlePdfRasterizerSelectChange}
           onRefresh={handleRefreshPdfRasterizer}
           onChoose={handleChoosePdfRasterizer}
+          onOpenLink={handleOpenExternalLink}
         />
 
         <AutoTagSettingsSection

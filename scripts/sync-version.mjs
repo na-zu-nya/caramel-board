@@ -9,6 +9,7 @@ const repoRoot = path.resolve(path.dirname(__filename), '..');
 const appPackagePaths = [
   'apps/desktop/package.json',
   'apps/docker-migration/package.json',
+  'apps/chrome-extension/package.json',
 ];
 
 const readText = (relativePath) => fs.readFileSync(path.join(repoRoot, relativePath), 'utf8');
@@ -40,6 +41,17 @@ const deriveWindowsInstallerVersion = (sourceVersion) => {
   // beta / rc / stable は suffix ではなく数値部分で順序を管理する。
   // Windows Installer にはラベルを除いた 3 フィールドだけを渡す。
   return `${major}.${minor}.${patch}`;
+};
+
+const deriveChromeExtensionVersion = (sourceVersion) => {
+  const [core] = sourceVersion.split('-', 2);
+  const segments = core.split('.').map((part) => Number.parseInt(part, 10));
+
+  if (segments.length !== 3 || !segments.every(Number.isInteger)) {
+    throw new Error(`Chrome拡張バージョンを導出できません: ${sourceVersion}`);
+  }
+
+  return segments.join('.');
 };
 
 const updatePackageVersion = (relativePath) => {
@@ -75,6 +87,23 @@ const replaceRequired = (relativePath, pattern, replacement) => {
     throw new Error(`${relativePath} の更新対象が見つかりませんでした`);
   }
   const next = current.replace(pattern, replacement);
+  writeText(relativePath, next);
+};
+
+const replaceOrInsertAfter = (relativePath, pattern, replacement, insertAfterPattern) => {
+  const current = readText(relativePath);
+  const nonGlobalPattern = new RegExp(pattern.source, pattern.flags.replace('g', ''));
+
+  if (nonGlobalPattern.test(current)) {
+    writeText(relativePath, current.replace(pattern, replacement));
+    return;
+  }
+
+  const next = current.replace(insertAfterPattern, `$&\n${replacement}`);
+  if (next === current) {
+    throw new Error(`${relativePath} の挿入位置が見つかりませんでした`);
+  }
+
   writeText(relativePath, next);
 };
 
@@ -125,6 +154,20 @@ const updateDocs = () => {
   );
 };
 
+const updateChromeExtensionManifest = (chromeExtensionVersion) => {
+  replaceRequired(
+    'apps/chrome-extension/manifest.json',
+    /^ {2}"version": ".*",$/m,
+    `  "version": "${chromeExtensionVersion}",`
+  );
+  replaceOrInsertAfter(
+    'apps/chrome-extension/manifest.json',
+    /^ {2}"version_name": ".*",$/m,
+    `  "version_name": "${version}",`,
+    /^ {2}"version": ".*",$/m
+  );
+};
+
 for (const relativePath of appPackagePaths) {
   updatePackageVersion(relativePath);
 }
@@ -136,5 +179,6 @@ updateTauriConfig(windowsInstallerVersion);
 updateWindowsTauriConfig(windowsInstallerVersion);
 updateCargoVersion();
 updateDocs();
+updateChromeExtensionManifest(deriveChromeExtensionVersion(version));
 
 console.log(`Synced Caramel Board version: ${version}`);

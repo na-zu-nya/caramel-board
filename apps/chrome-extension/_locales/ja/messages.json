@@ -1,0 +1,179 @@
+{
+  "addFailure": {
+    "message": "追加に失敗しました"
+  },
+  "addedToLibraryName": {
+    "message": "「{libraryName}」に追加しました"
+  },
+  "addingToCaramelBoard": {
+    "message": "Caramel Boardに追加しています"
+  },
+  "apiBaseUrlLabel": {
+    "message": "API URL"
+  },
+  "apiDetected": {
+    "message": "{apiBaseUrl} に接続しました"
+  },
+  "apiDetectedWithDatasets": {
+    "message": "{apiBaseUrl} に接続しました。{count}件のライブラリを読み込みました"
+  },
+  "apiNotDetected": {
+    "message": "起動中のCaramel Boardを検出できませんでした"
+  },
+  "authorizedBadge": {
+    "message": "認証済み"
+  },
+  "authorizeButton": {
+    "message": "認証"
+  },
+  "basicAuthPasswordLabel": {
+    "message": "Basic Auth パスワード"
+  },
+  "basicAuthUsernameLabel": {
+    "message": "Basic Auth ユーザー"
+  },
+  "clipperApiKeyLabel": {
+    "message": "Clipper連携キー"
+  },
+  "clipperApiKeyPlaceholder": {
+    "message": "cb_clip_..."
+  },
+  "clipperKeySaved": {
+    "message": "Clipper連携キーを保存しました"
+  },
+  "clipperKeySavedSyncFailure": {
+    "message": "Clipper連携キーを保存しました。ライブラリ更新に失敗しました: {message}"
+  },
+  "clipperKeySavedWithDatasets": {
+    "message": "Clipper連携キーを保存しました。{count}件のライブラリを読み込みました"
+  },
+  "connectionFailure": {
+    "message": "接続に失敗しました"
+  },
+  "connectionSuccess": {
+    "message": "接続できました"
+  },
+  "connectionSuccessSyncFailure": {
+    "message": "接続できました。ライブラリ更新に失敗しました: {message}"
+  },
+  "connectionSuccessWithDatasets": {
+    "message": "接続できました。{count}件のライブラリを読み込みました"
+  },
+  "connectionTestFailure": {
+    "message": "接続できませんでした"
+  },
+  "contextMenuAdd": {
+    "message": "Caramel Boardに追加"
+  },
+  "contextMenuOpenOptions": {
+    "message": "設定を開く"
+  },
+  "contextMenuRefreshLibraries": {
+    "message": "ライブラリ一覧を更新"
+  },
+  "datasetAuthFailure": {
+    "message": "認証に失敗しました"
+  },
+  "datasetAuthorized": {
+    "message": "ライブラリを認証しました"
+  },
+  "datasetsLoaded": {
+    "message": "{count}件のライブラリを読み込みました"
+  },
+  "detectButton": {
+    "message": "自動検出"
+  },
+  "directVideoOnly": {
+    "message": "直URLの動画だけ追加できます"
+  },
+  "duplicateSkipped": {
+    "message": "重複のためスキップしました"
+  },
+  "emptyFile": {
+    "message": "空のファイルが返却されました"
+  },
+  "emptyLibraries": {
+    "message": "ライブラリが読み込まれていません"
+  },
+  "extensionActionTitle": {
+    "message": "Caramel Board"
+  },
+  "extensionDescription": {
+    "message": "THIS EXTENSION IS FOR BETA TESTING. 画像と直URL動画をCaramel Boardへ追加します。"
+  },
+  "extensionName": {
+    "message": "Caramel Board Clipper BETA"
+  },
+  "fallbackLibraryName": {
+    "message": "Library {id}"
+  },
+  "fileFetchFailure": {
+    "message": "ファイル取得に失敗しました"
+  },
+  "httpFetchFailure": {
+    "message": "HTTP {status}で取得できませんでした"
+  },
+  "invalidDatasetsResponse": {
+    "message": "ライブラリ一覧の形式が不正です"
+  },
+  "librariesHeading": {
+    "message": "ライブラリ"
+  },
+  "openStackAriaLabel": {
+    "message": "スタックを開く: {message}"
+  },
+  "openStackTitle": {
+    "message": "スタックを開く"
+  },
+  "optionsEyebrow": {
+    "message": "Caramel Board"
+  },
+  "optionsHeading": {
+    "message": "Clipper"
+  },
+  "optionsPageTitle": {
+    "message": "Caramel Board Clipper"
+  },
+  "passwordPlaceholder": {
+    "message": "パスワード"
+  },
+  "saveButton": {
+    "message": "保存"
+  },
+  "saveFailure": {
+    "message": "保存に失敗しました"
+  },
+  "saveSuccess": {
+    "message": "保存しました"
+  },
+  "saveSuccessSyncFailure": {
+    "message": "保存しました。ライブラリ更新に失敗しました: {message}"
+  },
+  "saveSuccessWithDatasets": {
+    "message": "保存しました。{count}件のライブラリを読み込みました"
+  },
+  "streamingUnsupported": {
+    "message": "ストリーミング形式の動画は対象外です"
+  },
+  "syncLibrariesButton": {
+    "message": "ライブラリ更新"
+  },
+  "syncLibrariesFailure": {
+    "message": "ライブラリ更新に失敗しました"
+  },
+  "targetUrlMissing": {
+    "message": "追加対象のURLを取得できませんでした"
+  },
+  "testConnectionButton": {
+    "message": "接続を確認"
+  },
+  "unauthorizedBadge": {
+    "message": "未認証"
+  },
+  "urlImportCompleted": {
+    "message": "URL取り込みを実行しました"
+  },
+  "urlImportFailure": {
+    "message": "URL取り込みに失敗しました"
+  }
+}

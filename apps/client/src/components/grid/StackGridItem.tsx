@@ -14,7 +14,7 @@ import {
   Star,
   Trash2,
 } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -193,39 +193,6 @@ export function StackGridItem({
     ]);
   }, [datasetId, queryClient]);
 
-  // Fade-in animation state
-  const [isVisible, setIsVisible] = useState(false);
-  const [hasBeenSeen, setHasBeenSeen] = useState(false);
-  const itemRef = useRef<HTMLAnchorElement>(null);
-
-  // Intersection Observer for fade-in animation
-  useEffect(() => {
-    const element = itemRef.current;
-    if (!element || hasBeenSeen) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting && !hasBeenSeen) {
-            setIsVisible(true);
-            setHasBeenSeen(true);
-            observer.unobserve(element);
-          }
-        }
-      },
-      {
-        threshold: 0.1, // Trigger when 10% visible
-        rootMargin: '50px', // Start animation slightly before fully in view
-      }
-    );
-
-    observer.observe(element);
-
-    return () => {
-      observer.disconnect();
-    };
-  }, [hasBeenSeen]);
-
   const handleRemoveStack = useCallback(async () => {
     const label =
       typeof item.title === 'string' && item.title.length > 0
@@ -270,7 +237,6 @@ export function StackGridItem({
     <ContextMenu>
       <ContextMenuTrigger asChild>
         <Link
-          ref={itemRef}
           key={item.id}
           to="/library/$datasetId/stacks/$stackId"
           params={{ datasetId, stackId: String(getStackId()) }}
@@ -279,7 +245,6 @@ export function StackGridItem({
           className={cn(
             'group relative aspect-square overflow-hidden cursor-pointer transition-transform duration-150 box-border block',
             isInfoSelected && 'ring-2 ring-primary ring-inset',
-            isVisible ? 'opacity-100' : 'opacity-0',
             isDragging ? 'border-8 border-gray-300 scale-95 opacity-50 rounded-lg' : '',
             isDragOver && 'border-8 border-accent'
           )}
@@ -457,7 +422,8 @@ export function StackGridItem({
             src={thumbnailUrl}
             alt={item.name}
             className="w-full h-full object-cover transition-transform duration-200"
-            loading="lazy"
+            loading="eager"
+            decoding="async"
             data-stack-drag-preview="true"
           />
           {isNativeDragReady && sourceImageUrl ? (

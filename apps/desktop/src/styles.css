@@ -398,6 +398,12 @@ select:disabled {
   line-height: 1.35;
 }
 
+.dependency-link-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .general-panel {
   gap: 12px;
 }
@@ -838,13 +844,21 @@ select:disabled {
 }
 
 .link-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   width: fit-content;
   min-height: 32px;
   padding: 0 10px;
-  border-color: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
   background: #f1f6fb;
   color: #1b5f9f;
   font-weight: 600;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
 }
 
 .link-button:hover:not(:disabled) {

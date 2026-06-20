@@ -59,6 +59,7 @@ function CollectionViewContent() {
   const [smartTotal, setSmartTotal] = useState(0);
   const [smartLoadedPages, setSmartLoadedPages] = useState<Record<number, boolean>>({});
   const [isSmartLoading, setIsSmartLoading] = useState(false);
+  const [filterReadyCollectionId, setFilterReadyCollectionId] = useState<string | null>(null);
   const smartInFlightOffsetsRef = useRef<Set<number>>(new Set());
 
   // Fetch collection details
@@ -200,8 +201,11 @@ function CollectionViewContent() {
           collectionId,
         });
       }
+      setFilterReadyCollectionId(collectionId);
     }
   }, [datasetId, collectionId, collection, setCurrentFilter]);
+
+  const isCollectionFilterReady = filterReadyCollectionId === collectionId;
 
   // Check if filters have been modified from the original smart collection config
   const isFilterModified = useMemo(() => {
@@ -369,7 +373,7 @@ function CollectionViewContent() {
         return apiClient.getStacksWithFilters(filterParams);
       }
     },
-    enabled: !!collection,
+    enabled: !!collection && isCollectionFilterReady,
   });
 
   useEffect(() => {
@@ -502,8 +506,9 @@ function CollectionViewContent() {
   const handleFilterChange = useCallback(
     (newFilter: StackFilter) => {
       setCurrentFilter(newFilter);
+      setFilterReadyCollectionId(collectionId);
     },
-    [setCurrentFilter]
+    [collectionId, setCurrentFilter]
   );
 
   // Handle sort changes

@@ -30,6 +30,15 @@ type StackWire = Stack & {
   assetsCount?: unknown;
 };
 type AuthorRecord = Omit<Author, 'id'> & { id: number; dataSetId?: number };
+export type ClipperApiKeyState = {
+  configured: boolean;
+  keyPreview: string | null;
+  createdAt: string | null;
+};
+
+export type IssuedClipperApiKey = ClipperApiKeyState & {
+  apiKey: string;
+};
 
 const LEGACY_SORT_FIELD_MAP: Record<string, ApiSortField> = {
   id: 'dateAdded',
@@ -180,6 +189,22 @@ class ApiClient {
     id: string | number
   ): Promise<{ isProtected: boolean; authorized: boolean }> {
     return this.fetch(`/api/v1/datasets/${id}/protection-status`);
+  }
+
+  async getClipperApiKeyState(): Promise<ClipperApiKeyState> {
+    return this.fetch<ClipperApiKeyState>('/api/v1/clipper/api-key');
+  }
+
+  async issueClipperApiKey(): Promise<IssuedClipperApiKey> {
+    return this.fetch<IssuedClipperApiKey>('/api/v1/clipper/api-key', {
+      method: 'POST',
+    });
+  }
+
+  async revokeClipperApiKey(): Promise<{ success: boolean } & ClipperApiKeyState> {
+    return this.fetch<{ success: boolean } & ClipperApiKeyState>('/api/v1/clipper/api-key', {
+      method: 'DELETE',
+    });
   }
 
   // Default dataset

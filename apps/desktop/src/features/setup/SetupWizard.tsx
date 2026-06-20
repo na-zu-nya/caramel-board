@@ -16,6 +16,11 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  FFMPEG_OFFICIAL_URL,
+  getDesktopToolsGuideUrl,
+  getPopplerOfficialUrl,
+} from '../../app/external-links';
 import { CaramelBoardLogo } from '../../shared/brand/CaramelBoardLogo';
 
 export type WizardLanguage = 'en' | 'ja';
@@ -263,6 +268,7 @@ const wizardCopy = {
     mediaNotFound: 'No FFmpeg was found on this computer.',
     mediaInstallHint:
       'After installing FFmpeg, click "Re-detect" or set it up later from the settings screen.',
+    officialPage: 'Official page',
     mediaInstallGuide: 'How to install FFmpeg',
     pdfTitle: 'PDF import',
     pdfBody:
@@ -401,6 +407,7 @@ const wizardCopy = {
     mediaDetectedHint: '使う FFmpeg を選んでください。',
     mediaNotFound: 'このコンピュータに FFmpeg は見つかりませんでした。',
     mediaInstallHint: 'FFmpeg をインストールして「再検出」を押すか、後から設定画面で設定できます。',
+    officialPage: '公式ページ',
     mediaInstallGuide: 'FFmpeg のインストール方法',
     pdfTitle: 'PDF 取り込み',
     pdfBody:
@@ -442,9 +449,6 @@ interface SetupWizardProps {
   onComplete: (settings: unknown) => void;
 }
 
-const FFMPEG_INSTALL_URL = 'https://ffmpeg.org/download.html';
-const POPPLER_WINDOWS_INSTALL_URL = 'https://github.com/oschwartz10612/poppler-windows/releases';
-const POPPLER_MACOS_INSTALL_URL = 'https://formulae.brew.sh/formula/poppler';
 const JOYTAG_URL = 'https://github.com/fpgaminer/joytag';
 
 const errorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
@@ -1122,13 +1126,20 @@ export function SetupWizard({
     setStep('done');
   }, []);
 
+  const handleOpenFfmpegOfficialPage = useCallback(() => {
+    void openUrl(FFMPEG_OFFICIAL_URL);
+  }, []);
+
   const handleOpenFfmpegInstallGuide = useCallback(() => {
-    void openUrl(FFMPEG_INSTALL_URL);
+    void openUrl(getDesktopToolsGuideUrl());
+  }, []);
+
+  const handleOpenPopplerOfficialPage = useCallback(() => {
+    void openUrl(getPopplerOfficialUrl());
   }, []);
 
   const handleOpenPopplerInstallGuide = useCallback(() => {
-    const isMac = navigator.platform.toLowerCase().includes('mac');
-    void openUrl(isMac ? POPPLER_MACOS_INSTALL_URL : POPPLER_WINDOWS_INSTALL_URL);
+    void openUrl(getDesktopToolsGuideUrl());
   }, []);
 
   const renderIntro = () => (
@@ -1641,6 +1652,15 @@ export function SetupWizard({
           <button
             type="button"
             className="link-button"
+            onClick={handleOpenFfmpegOfficialPage}
+            disabled={busy}
+          >
+            <ExternalLink size={15} />
+            {t.officialPage}
+          </button>
+          <button
+            type="button"
+            className="link-button"
             onClick={handleOpenFfmpegInstallGuide}
             disabled={busy}
           >
@@ -1707,6 +1727,15 @@ export function SetupWizard({
           <button type="button" onClick={() => void refreshPdfRasterizer()} disabled={busy}>
             <RefreshCcw size={15} />
             {t.redetect}
+          </button>
+          <button
+            type="button"
+            className="link-button"
+            onClick={handleOpenPopplerOfficialPage}
+            disabled={busy}
+          >
+            <ExternalLink size={15} />
+            {t.officialPage}
           </button>
           <button
             type="button"

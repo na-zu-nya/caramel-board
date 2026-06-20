@@ -367,22 +367,21 @@ export class StandaloneStackRepository {
           JOIN tags t ON t.id = st.tag_id
           WHERE st.stack_id = s.id AND t.title LIKE ? COLLATE NOCASE
         ) OR
-        EXISTS (
-          SELECT 1
+        s.id IN (
+          SELECT DISTINCT scores.stack_id
           FROM stack_auto_tag_scores scores
           LEFT JOIN auto_tag_mappings m
-            ON m.dataset_id = s.dataset_id
+            ON m.dataset_id = ?
            AND m.is_active = 1
-           AND lower(m.auto_tag_key) = lower(scores.tag_key)
-          WHERE scores.stack_id = s.id
-            AND scores.score >= ?
+           AND m.auto_tag_key = scores.tag_key COLLATE NOCASE
+          WHERE scores.score >= ?
             AND (
               scores.tag_key LIKE ? COLLATE NOCASE OR
               m.display_name LIKE ? COLLATE NOCASE
             )
         )
       )`);
-      sqlParams.push(like, like, like, like, like, 0.4, like, like);
+      sqlParams.push(like, like, like, like, like, params.dataSetId, 0.4, like, like);
     }
 
     return where.join(' AND ');

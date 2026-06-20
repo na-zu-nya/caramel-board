@@ -46,6 +46,8 @@ export const translations = {
     ffmpegNoCandidates: 'No FFmpeg executable was found on PATH.',
     ffmpegSelected: 'FFmpeg path selected.',
     ffmpegChecked: 'FFmpeg detection completed.',
+    officialPage: 'Official page',
+    installationGuide: 'Installation guide',
     pdf: 'PDF import',
     poppler: 'Poppler',
     popplerDescription:
@@ -269,6 +271,8 @@ export const translations = {
     ffmpegNoCandidates: 'PATH 上に FFmpeg は見つかりませんでした。',
     ffmpegSelected: 'FFmpeg のパスを選択しました。',
     ffmpegChecked: 'FFmpeg の検出が完了しました。',
+    officialPage: '公式ページ',
+    installationGuide: 'インストールガイド',
     pdf: 'PDF 取り込み',
     poppler: 'Poppler',
     popplerDescription: 'PDF ページを画像として取り込むために使用する Poppler を設定します。',
