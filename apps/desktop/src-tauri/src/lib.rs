@@ -63,6 +63,10 @@ fn cleanup_and_exit(app: &AppHandle) {
 
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            show_settings_window(app);
+            refresh_tray_menu(app);
+        }))
         .plugin(tauri_plugin_autostart::init(
             MacosLauncher::LaunchAgent,
             Some(vec!["--background"]),

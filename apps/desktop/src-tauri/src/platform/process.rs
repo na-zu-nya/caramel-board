@@ -39,6 +39,51 @@ fn child_process_path_string(path: impl AsRef<Path>) -> String {
     child_process_path(path).to_string_lossy().into_owned()
 }
 
+#[cfg(target_os = "windows")]
+fn local_address_matches_port(address: &str, port: &str) -> bool {
+    address
+        .rsplit_once(':')
+        .map(|(_, address_port)| address_port == port)
+        .unwrap_or(false)
+}
+
+#[cfg(target_os = "windows")]
+fn listener_pids(port: u16) -> Vec<u32> {
+    let output = hidden_command("netstat")
+        .arg("-ano")
+        .arg("-p")
+        .arg("tcp")
+        .output();
+    let Ok(output) = output else {
+        return Vec::new();
+    };
+    if !output.status.success() {
+        return Vec::new();
+    }
+
+    let port = port.to_string();
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .filter_map(|line| {
+            let columns = line.split_whitespace().collect::<Vec<_>>();
+            if columns.len() < 5 {
+                return None;
+            }
+            if !columns[0].eq_ignore_ascii_case("tcp") {
+                return None;
+            }
+            if !columns[3].eq_ignore_ascii_case("LISTENING") {
+                return None;
+            }
+            if !local_address_matches_port(columns[1], &port) {
+                return None;
+            }
+            columns.last()?.parse::<u32>().ok()
+        })
+        .collect()
+}
+
+#[cfg(not(target_os = "windows"))]
 fn listener_pids(port: u16) -> Vec<u32> {
     let output = hidden_command("lsof")
         .arg(format!("-tiTCP:{port}"))
@@ -56,6 +101,7 @@ fn listener_pids(port: u16) -> Vec<u32> {
         .collect()
 }
 
+#[cfg(not(target_os = "windows"))]
 fn process_exists(pid: u32) -> bool {
     hidden_command("kill")
         .arg("-0")
@@ -65,6 +111,21 @@ fn process_exists(pid: u32) -> bool {
         .unwrap_or(false)
 }
 
+#[cfg(target_os = "windows")]
+fn terminate_pid(pid: u32) {
+    if pid == std::process::id() {
+        return;
+    }
+
+    let _ = hidden_command("taskkill")
+        .arg("/PID")
+        .arg(pid.to_string())
+        .arg("/T")
+        .arg("/F")
+        .status();
+}
+
+#[cfg(not(target_os = "windows"))]
 fn terminate_pid(pid: u32) {
     if pid == std::process::id() {
         return;
@@ -91,7 +152,6 @@ fn terminate_listeners_on_port(port: u16, protected_pids: &[u32]) {
         terminate_pid(pid);
     }
 }
-
 
 fn ensure_parent(path: &Path) -> Result<(), String> {
     if let Some(parent) = path.parent() {

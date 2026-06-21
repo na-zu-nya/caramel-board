@@ -152,11 +152,11 @@ fn close_settings_window(window: &tauri::Window) {
     {
         let tray_resident = read_settings(window.app_handle())
             .map(|settings| settings.setup_completed && is_tray_resident(&settings))
-            .unwrap_or(true);
+            .unwrap_or(false);
         if tray_resident {
             let _ = window.hide();
         } else {
-            let _ = window.minimize();
+            cleanup_and_exit(window.app_handle());
         }
     }
 }
