@@ -11,10 +11,7 @@ import {
   Heart,
   Image as ImageIcon,
   Maximize2,
-  Palette,
   Plus,
-  Smartphone,
-  Sparkles,
   Star,
   Tags,
   Upload,
@@ -560,9 +557,8 @@ export function SetupPageContainer({ preview = false }: SetupPageContainerProps)
               </div>
               <h4 className="mb-1 font-bold text-[#46301D]">ローカル完結</h4>
               <p className="text-sm leading-relaxed text-[#8A6A4F]">
-                データはすべてこのコンピュータの中に。
-                <Smartphone className="mx-0.5 inline h-3.5 w-3.5" />
-                同じネットワークなら iPad や iPhone からも見られます。
+                データはすべてこのコンピュータの中に。同じネットワークなら iPad や iPhone
+                からも見られます。
               </p>
             </div>
             <div className="group rounded-2xl border border-[#F3E3CF] bg-white p-5 shadow-[0_10px_30px_-14px_rgba(199,116,60,0.3)] transition-all hover:-translate-y-1 hover:rotate-0 hover:shadow-[0_16px_40px_-14px_rgba(199,116,60,0.45)] sm:rotate-1">
@@ -578,7 +574,7 @@ export function SetupPageContainer({ preview = false }: SetupPageContainerProps)
               <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-400 to-purple-500 text-white shadow-md">
                 <Maximize2 className="h-5 w-5" />
               </div>
-              <h4 className="mb-1 font-bold text-[#46301D]">気持ちいいビューワー</h4>
+              <h4 className="mb-1 font-bold text-[#46301D]">使いやすいビューワー</h4>
               <p className="text-sm leading-relaxed text-[#8A6A4F]">
                 拡大・スワイプ・連続閲覧がなめらか。こだわりの操作感。
               </p>
@@ -598,10 +594,7 @@ export function SetupPageContainer({ preview = false }: SetupPageContainerProps)
               </div>
               <h4 className="mb-1 font-bold text-[#46301D]">タグ・作者・自動タグ・色味検索</h4>
               <p className="text-sm leading-relaxed text-[#8A6A4F]">
-                <Sparkles className="mr-0.5 inline h-3.5 w-3.5" />
-                タグ付けや作者設定、AI による自動タグ、
-                <Palette className="mx-0.5 inline h-3.5 w-3.5" />
-                色味からの検索で、見たい一枚がすぐ見つかる。
+                タグ付けや作者設定、AI による自動タグ、色味からの検索で、見たい一枚がすぐ見つかる。
               </p>
             </div>
           </div>

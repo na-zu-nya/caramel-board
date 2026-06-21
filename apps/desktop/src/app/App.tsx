@@ -3,6 +3,7 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import {
+  AlertCircle,
   Circle,
   Database,
   FileText,
@@ -26,6 +27,7 @@ import {
   type AutoTagSettingsCopy,
   AutoTagSettingsSection,
 } from '../features/autotag/AutoTagSettingsSection';
+import type { AutoTagProgressCopy } from '../features/autotag/progressText';
 import { MediaDependencySection } from '../features/media/MediaDependencySection';
 import { DockerMigrationPanel } from '../features/migrations/docker/DockerMigrationPanel';
 import type { DockerMigrationCopy } from '../features/migrations/docker/types';
@@ -139,6 +141,21 @@ export default function App() {
 
   const language = settings?.language ?? getInitialLanguage();
   const t = translations[language];
+  const showAutoTagCudaNote = useMemo(() => !navigator.platform.toLowerCase().includes('mac'), []);
+  const autoTagInstallIntroDetail = useMemo(
+    () =>
+      showAutoTagCudaNote
+        ? `${t.autoTagInstallIntroDetail} ${t.autoTagCudaNote}`
+        : t.autoTagInstallIntroDetail,
+    [showAutoTagCudaNote, t]
+  );
+  const autoTagDownloadConfirm = useCallback(
+    (size: string) =>
+      showAutoTagCudaNote
+        ? `${t.autoTagDownloadConfirm(size)} ${t.autoTagCudaNote}`
+        : t.autoTagDownloadConfirm(size),
+    [showAutoTagCudaNote, t]
+  );
   const generalSettingsCopy = useMemo<GeneralSettingsCopy>(
     () => ({
       general: t.general,
@@ -207,24 +224,37 @@ export default function App() {
     }),
     [t]
   );
+  const autoTagProgressCopy = useMemo<AutoTagProgressCopy>(
+    () => ({
+      starting: t.autoTagInstallStarting,
+      repository: t.autoTagInstallRepository,
+      model: t.autoTagInstallModel,
+      environment: t.autoTagInstallEnvironment,
+      completed: t.autoTagInstallCompleted,
+      failed: t.autoTagInstallFailed,
+      fallback: t.autoTagInstallInProgress,
+    }),
+    [t]
+  );
   const autoTagInstallCopy = useMemo(
     () => ({
       introTitle: t.autoTagInstallIntroTitle,
       introLead: t.autoTagInstallIntroLead,
-      introDetail: t.autoTagInstallIntroDetail,
+      introDetail: autoTagInstallIntroDetail,
       introLocal: t.autoTagInstallIntroLocal,
       introTraining: t.autoTagInstallIntroTraining,
       reference: t.autoTagInstallReference,
       metadataLoading: t.autoTagMetadataLoading,
       downloadConfirmTitle: t.autoTagDownloadConfirmTitle,
-      downloadConfirm: t.autoTagDownloadConfirm,
+      downloadConfirm: autoTagDownloadConfirm,
       inProgress: t.autoTagInstallInProgress,
       backgroundContinue: t.autoTagBackgroundContinue,
       continue: t.continue,
       cancel: t.cancel,
       close: t.close,
+      progress: autoTagProgressCopy,
     }),
-    [t]
+    [autoTagDownloadConfirm, autoTagInstallIntroDetail, autoTagProgressCopy, t]
   );
   const autoTagSettingsCopy = useMemo<AutoTagSettingsCopy>(
     () => ({
@@ -245,8 +275,9 @@ export default function App() {
       chooseCodeFolder: t.chooseAutoTagCodeFolder,
       chooseModelFolder: t.chooseAutoTagModelFolder,
       port: t.autoTagPort,
+      progress: autoTagProgressCopy,
     }),
-    [t]
+    [autoTagProgressCopy, t]
   );
   const dockerMigrationCopy = useMemo<DockerMigrationCopy>(
     () => ({
@@ -292,6 +323,19 @@ export default function App() {
   const statusLabel = status.running ? t.runningOn(displayUrl) : t.stopped;
   const headerActionLabel = status.running ? t.stop : t.start;
   const HeaderActionIcon = status.running ? Square : Play;
+  const standaloneMigrationIssue =
+    standaloneMigrationStatus && standaloneMigrationStatus.status !== 'ready'
+      ? standaloneMigrationStatus
+      : null;
+  const migrationBlocksStart = Boolean(
+    !status.running && (standaloneMigrationIssue || standaloneMigrationRunning)
+  );
+  const databaseWarningTitle =
+    standaloneMigrationIssue?.status === 'history_mismatch'
+      ? t.databaseUpdateErrorTitle
+      : t.databaseUpdatePendingTitle;
+  const databaseWarningCanOpen =
+    Boolean(standaloneMigrationIssue) && !status.running && !standaloneMigrationRunning && !busy;
 
   const refreshStatus = useCallback(async () => {
     const next = await invoke<SidecarStatus>('sidecar_status');
@@ -330,14 +374,10 @@ export default function App() {
         settings: targetSettings,
       });
       setStandaloneMigrationStatus(next);
-      if (next.status !== 'ready') {
-        setStandaloneMigrationDialogOpen(true);
-      }
       return next;
     } catch (error) {
       const next = createStandaloneMigrationErrorStatus(targetSettings, error);
       setStandaloneMigrationStatus(next);
-      setStandaloneMigrationDialogOpen(true);
       setMessage(next.message);
       return next;
     }
@@ -549,7 +589,6 @@ export default function App() {
       const migrationStatus = await refreshStandaloneMigrationStatus(saved);
       if (migrationStatus.status !== 'ready') {
         startAfterStandaloneMigrationRef.current = saved;
-        setStandaloneMigrationDialogOpen(true);
         return t.databaseUpdateRequiredMessage;
       }
       await startSidecarWithSettings(saved);
@@ -855,7 +894,6 @@ export default function App() {
       if (!saved) return;
       const next = await refreshStandaloneMigrationStatus(saved);
       if (next.status === 'ready') return t.databaseUpdateReadyDescription;
-      setStandaloneMigrationDialogOpen(true);
       return next.message;
     }, t.statusUpdated);
   }, [refreshStandaloneMigrationStatus, runAction, saveSettings, t]);
@@ -1209,6 +1247,7 @@ export default function App() {
         openBrowserLabel={t.openBrowser}
         refreshStatusLabel={t.refreshStatus}
         actionLabel={headerActionLabel}
+        actionDisabled={migrationBlocksStart}
         ActionIcon={HeaderActionIcon}
         onRefreshStatus={handleRefreshStatus}
         onOpenBrowser={handleOpenBrowser}
@@ -1220,6 +1259,23 @@ export default function App() {
       <SettingsSidebar label={t.settingsNavigation} items={navJumpItems} onJump={scrollToSection} />
 
       <section className="settings-content" aria-disabled={settingsDisabled}>
+        {standaloneMigrationIssue ? (
+          <div className="status-banner warning">
+            <AlertCircle size={15} />
+            <span className="status-banner-message">
+              <strong className="status-banner-title">{databaseWarningTitle}</strong>
+            </span>
+            <button
+              type="button"
+              className="status-banner-action"
+              onClick={handleOpenStandaloneMigrationDialog}
+              disabled={!databaseWarningCanOpen}
+            >
+              <Database size={14} />
+              {t.databaseUpdateReview}
+            </button>
+          </div>
+        ) : null}
         <div className={status.running ? 'status-banner running' : 'status-banner'}>
           <span className={status.running ? 'status-pill running' : 'status-pill'}>
             <Circle size={10} fill="currentColor" />

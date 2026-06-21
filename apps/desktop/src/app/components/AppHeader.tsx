@@ -11,6 +11,7 @@ interface AppHeaderProps {
   openBrowserLabel: string;
   refreshStatusLabel: string;
   actionLabel: string;
+  actionDisabled: boolean;
   ActionIcon: LucideIcon;
   onRefreshStatus: () => void;
   onOpenBrowser: () => void;
@@ -26,6 +27,7 @@ export function AppHeader({
   openBrowserLabel,
   refreshStatusLabel,
   actionLabel,
+  actionDisabled,
   ActionIcon,
   onRefreshStatus,
   onOpenBrowser,
@@ -85,7 +87,7 @@ export function AppHeader({
           type="button"
           className={running ? 'fixed-service-button stop' : 'fixed-service-button start'}
           onClick={onToggleSidecar}
-          disabled={busy}
+          disabled={busy || actionDisabled}
         >
           <ActionIcon size={16} />
           {actionLabel}

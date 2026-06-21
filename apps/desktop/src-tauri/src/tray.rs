@@ -144,13 +144,20 @@ fn show_settings_window(app: &tauri::AppHandle) {
 }
 
 fn close_settings_window(window: &tauri::Window) {
-    let tray_resident = read_settings(window.app_handle())
-        .map(|settings| settings.setup_completed && is_tray_resident(&settings))
-        .unwrap_or(true);
-    if tray_resident {
+    #[cfg(target_os = "macos")]
+    {
         let _ = window.hide();
-    } else {
-        let _ = window.minimize();
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let tray_resident = read_settings(window.app_handle())
+            .map(|settings| settings.setup_completed && is_tray_resident(&settings))
+            .unwrap_or(true);
+        if tray_resident {
+            let _ = window.hide();
+        } else {
+            let _ = window.minimize();
+        }
     }
 }
 

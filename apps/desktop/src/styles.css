@@ -354,12 +354,40 @@ select:disabled {
   color: #146c46;
 }
 
+.status-banner.warning {
+  border-color: #ead49f;
+  background: #fff9e9;
+  color: #8a5a18;
+}
+
+.status-banner-action {
+  flex-shrink: 0;
+  min-height: 30px;
+  padding: 0 10px;
+}
+
+.status-banner.warning .status-banner-action {
+  border-color: #9a6216;
+  background: #9a6216;
+  color: #ffffff;
+}
+
+.status-banner.warning .status-banner-action:hover:not(:disabled) {
+  border-color: #7c4f12;
+  background: #7c4f12;
+}
+
 .status-banner .status-banner-message {
   flex: 1;
   min-width: 0;
   color: inherit;
   font-weight: 500;
   line-height: 1.4;
+}
+
+.status-banner-title,
+.status-banner-detail {
+  display: block;
 }
 
 .status-banner .status-pill {
@@ -982,13 +1010,17 @@ select:disabled {
 .wizard-panel {
   display: flex;
   width: min(100%, 560px);
+  height: min(720px, calc(100vh - 96px));
+  min-height: min(620px, calc(100vh - 96px));
   flex-direction: column;
   gap: 18px;
+  overflow: auto;
   padding: 28px;
   border: 1px solid #cfd8e3;
   border-radius: 10px;
   background: #ffffff;
   box-shadow: 0 18px 46px rgb(24 33 44 / 12%);
+  scrollbar-gutter: stable;
 }
 
 .wizard-step-indicator {
@@ -1125,6 +1157,16 @@ select:disabled {
 
 .wizard-actions.between {
   justify-content: space-between;
+}
+
+.wizard-step-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  flex-shrink: 0;
+  margin-top: auto;
+  padding-top: 12px;
+  background: #ffffff;
 }
 
 .wizard-footer {

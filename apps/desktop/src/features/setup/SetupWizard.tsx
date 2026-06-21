@@ -22,6 +22,11 @@ import {
   getPopplerOfficialUrl,
 } from '../../app/external-links';
 import { CaramelBoardLogo } from '../../shared/brand/CaramelBoardLogo';
+import { type AutoTagProgressCopy, getAutoTagProgressText } from '../autotag/progressText';
+import type {
+  StandaloneMigrationProgress,
+  StandaloneMigrationStatus,
+} from '../migrations/standalone/types';
 
 export type WizardLanguage = 'en' | 'ja';
 
@@ -151,6 +156,7 @@ type WizardStep =
   | 'migrate-confirm'
   | 'migrate-running'
   | 'migrate-complete'
+  | 'database-setup'
   | 'sharing-setup'
   | 'ffmpeg-setup'
   | 'pdf-setup'
@@ -222,7 +228,7 @@ const wizardCopy = {
     launchNow: 'Start Caramel Board',
     launchLater: 'Start later',
     launchPreparing: 'Starting Caramel Board…',
-    launchPreparingBody: 'Getting the database ready. This can take a moment on first launch.',
+    launchPreparingBody: 'Starting the local Caramel Board server.',
     launchTimeout:
       'Caramel Board is taking longer than expected to start. It may still finish in the background — try opening the URL in a moment.',
     launchedTitle: 'Caramel Board is running',
@@ -248,6 +254,20 @@ const wizardCopy = {
       `Asset folder was adjusted to a likely library location: ${path}`,
     storageRootCheckHint:
       'Choose the folder that contains numbered library folders such as 1/assets/, 2/thumbnails/, or 2/files/.',
+    databaseSetupTitle: 'Prepare the database',
+    databaseSetupBody:
+      'The selected data store must match this app version before media setup continues.',
+    databaseSetupChecking: 'Checking database…',
+    databaseSetupReadyTitle: 'Database is ready',
+    databaseSetupReadyBody: 'No database update is required.',
+    databaseSetupPendingTitle: 'Database update required',
+    databaseSetupPendingBody: (count: number) =>
+      count > 0
+        ? `${count} database update(s) will be applied before continuing.`
+        : 'The database will be initialized before continuing.',
+    databaseSetupErrorTitle: 'Database update cannot continue',
+    databaseSetupUpdate: 'Update database',
+    databaseSetupUpdating: 'Updating database…',
     sharingTitle: 'Share with other devices',
     sharingBody:
       'Caramel Board can be opened from other devices on the same network — phones, tablets, or another PC. In typical home networks only devices on your local network can reach it, but depending on your router setup it may also become reachable from the Internet. Direct Internet exposure is strongly discouraged — for remote access, use a VPN like Tailscale.',
@@ -284,7 +304,9 @@ const wizardCopy = {
     useThis: 'Use this',
     autoTagTitle: 'Auto-tagging',
     autoTagBody:
-      'Caramel Board can automatically tag imported images and enable similar-image search using the open-source JoyTag model. Everything runs on this computer — your images are never sent anywhere, and they are never used to train AI. CUDA is not required for normal CPU tagging. If you want GPU acceleration and CUDA setup fails, install the latest NVIDIA driver and CUDA Toolkit, then try again.',
+      'Caramel Board can automatically tag imported images and enable similar-image search using the open-source JoyTag model. Everything runs on this computer — your images are never sent anywhere, and they are never used to train AI.',
+    autoTagCudaNote:
+      'CUDA is not required for normal CPU tagging. If you want GPU acceleration and CUDA setup fails, install the latest NVIDIA driver and CUDA Toolkit, then try again.',
     aboutJoyTag: 'About JoyTag',
     autoTagEnable: 'I want to use auto-tagging',
     autoTagEnableHint:
@@ -293,13 +315,21 @@ const wizardCopy = {
     autoTagInstallNow: 'Install now',
     autoTagFetchMetadata: 'Checking model size…',
     autoTagConfirmTitle: 'Download model data',
-    autoTagConfirmBody: (size: string) =>
-      `About ${size} of data will be downloaded. Continue? CUDA is not required for CPU tagging. If you want GPU acceleration and CUDA setup fails, install the latest NVIDIA driver and CUDA Toolkit, then try again.`,
+    autoTagConfirmBody: (size: string) => `About ${size} of data will be downloaded. Continue?`,
     autoTagInstallStart: 'Start install',
     autoTagInstalling: 'Installing auto-tag…',
+    autoTagInstallStarting: 'Starting auto-tag installation…',
+    autoTagInstallRepository: 'Preparing auto-tag code…',
+    autoTagInstallModel: 'Downloading model data…',
+    autoTagInstallEnvironment: 'Preparing auto-tag runtime…',
     autoTagInstallDone: 'Auto-tag installation completed.',
     autoTagInstallFailed: 'Auto-tag installation failed.',
     autoTagAlreadyReady: 'Auto-tag is already installed.',
+    autoTagStatusReady: 'The model and runtime are ready on this computer.',
+    autoTagStatusNeedsRuntime:
+      'The auto-tag runtime could not be found. Reinstall Caramel Board, then try again.',
+    autoTagStatusNeedsCode: 'JoyTag code still needs to be prepared.',
+    autoTagStatusNeedsModel: 'The JoyTag model still needs to be downloaded.',
   },
   ja: {
     stepLabel: (current: number, total: number) => `Step ${current} / ${total}`,
@@ -363,7 +393,7 @@ const wizardCopy = {
     launchNow: 'Caramel Board を起動',
     launchLater: 'あとで起動する',
     launchPreparing: 'Caramel Board を起動しています…',
-    launchPreparingBody: 'データベースを準備しています。初回起動は少し時間がかかることがあります。',
+    launchPreparingBody: 'ローカルの Caramel Board サーバーを起動しています。',
     launchTimeout:
       '起動に時間がかかっています。バックグラウンドで準備が続いている可能性があるため、しばらくしてから URL を開いてみてください。',
     launchedTitle: 'Caramel Board が起動しました',
@@ -388,6 +418,20 @@ const wizardCopy = {
     storageRootAdjustedInfo: (path: string) => `アセットフォルダを自動で補正しました: ${path}`,
     storageRootCheckHint:
       '1/assets/、2/thumbnails/、2/files/ などの番号付きフォルダがある階層を選んでください。',
+    databaseSetupTitle: 'データベースを準備',
+    databaseSetupBody:
+      '選択したデータストアを確認し、このアプリで使える状態にしてから次へ進みます。',
+    databaseSetupChecking: 'データベースを確認しています…',
+    databaseSetupReadyTitle: 'データベースは準備済みです',
+    databaseSetupReadyBody: '必要なデータベース更新はありません。',
+    databaseSetupPendingTitle: 'データベース更新が必要です',
+    databaseSetupPendingBody: (count: number) =>
+      count > 0
+        ? `${count} 件のデータベース更新を適用してから続行します。`
+        : 'データベースを初期化してから続行します。',
+    databaseSetupErrorTitle: 'データベース更新を続行できません',
+    databaseSetupUpdate: 'データベースを更新',
+    databaseSetupUpdating: 'データベースを更新しています…',
     sharingTitle: '他の機器からのアクセス',
     sharingBody:
       '同じネットワーク上のスマートフォン・タブレット・別の PC から Caramel Board を開けるようにできます。通常はローカルネットワーク内からのみアクセスできますが、ルーターや環境によってはインターネットからアクセスできる場合があります。インターネットへの直接公開は強く非推奨です。外出先からアクセスしたい場合は Tailscale などの VPN 経由を推奨します。',
@@ -422,7 +466,9 @@ const wizardCopy = {
     useThis: 'これを使う',
     autoTagTitle: '自動タグ',
     autoTagBody:
-      '自動タグを使うと、取り込んだ画像に自動でタグを付け、類似画像検索など画像ベースの検索に活用できます。オープンソースの JoyTag モデルでローカル処理し、画像が外部に送信されたり、AI の学習に使われたりすることはありません。通常の CPU タグ付けに CUDA は不要です。GPU 高速化を使いたい場合に CUDA のセットアップで失敗したら、最新の NVIDIA ドライバーと CUDA Toolkit をインストールしてから再試行してください。',
+      '自動タグを使うと、取り込んだ画像に自動でタグを付け、類似画像検索など画像ベースの検索に活用できます。オープンソースの JoyTag モデルでローカル処理し、画像が外部に送信されたり、AI の学習に使われたりすることはありません。',
+    autoTagCudaNote:
+      'CPU でのタグ付けに CUDA は不要です。GPU 高速化を使いたい場合に CUDA のセットアップで失敗したら、最新の NVIDIA ドライバーと CUDA Toolkit をインストールしてから再試行してください。',
     aboutJoyTag: 'JoyTag について',
     autoTagEnable: '自動タグを使う',
     autoTagEnableHint:
@@ -431,15 +477,25 @@ const wizardCopy = {
     autoTagInstallNow: 'いまインストールする',
     autoTagFetchMetadata: 'モデルサイズを取得中…',
     autoTagConfirmTitle: 'モデルのダウンロード',
-    autoTagConfirmBody: (size: string) =>
-      `約 ${size} のデータをダウンロードします。続けますか? CPU でのタグ付けに CUDA は不要です。GPU 高速化を使いたい場合に CUDA のセットアップで失敗したら、最新の NVIDIA ドライバーと CUDA Toolkit をインストールしてから再試行してください。`,
+    autoTagConfirmBody: (size: string) => `約 ${size} のデータをダウンロードします。続けますか?`,
     autoTagInstallStart: 'インストールを開始',
     autoTagInstalling: '自動タグをインストール中…',
+    autoTagInstallStarting: '自動タグのインストールを開始しています…',
+    autoTagInstallRepository: '自動タグのコードを準備しています…',
+    autoTagInstallModel: 'モデルをダウンロードしています…',
+    autoTagInstallEnvironment: '自動タグの実行環境を準備しています…',
     autoTagInstallDone: '自動タグのインストールが完了しました。',
     autoTagInstallFailed: '自動タグのインストールに失敗しました。',
     autoTagAlreadyReady: '自動タグはすでにインストール済みです。',
+    autoTagStatusReady: 'このコンピュータでモデルと実行環境を利用できます。',
+    autoTagStatusNeedsRuntime:
+      '自動タグの実行環境が見つかりません。Caramel Board を再インストールしてから再試行してください。',
+    autoTagStatusNeedsCode: 'JoyTag のコードを準備する必要があります。',
+    autoTagStatusNeedsModel: 'JoyTag のモデルをダウンロードする必要があります。',
   },
 } as const;
+
+type WizardCopy = (typeof wizardCopy)[WizardLanguage];
 
 interface SetupWizardProps {
   language: WizardLanguage;
@@ -452,6 +508,15 @@ interface SetupWizardProps {
 const JOYTAG_URL = 'https://github.com/fpgaminer/joytag';
 
 const errorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
+const wait = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
+
+const getAutoTagStatusText = (status: AutoTagStatus | null, copy: WizardCopy) => {
+  if (!status) return copy.autoTagSkipHint;
+  if (status.ready) return copy.autoTagStatusReady;
+  if (!status.uvInstalled) return copy.autoTagStatusNeedsRuntime;
+  if (!status.repositoryReady) return copy.autoTagStatusNeedsCode;
+  return copy.autoTagStatusNeedsModel;
+};
 
 const dataStoreHasContents = (inspection: DataStoreInspection | null) =>
   Boolean(
@@ -466,6 +531,30 @@ export function SetupWizard({
   onComplete,
 }: SetupWizardProps) {
   const t = wizardCopy[language];
+  const showAutoTagCudaNote = useMemo(() => !navigator.platform.toLowerCase().includes('mac'), []);
+  const autoTagBody = useMemo(
+    () => (showAutoTagCudaNote ? `${t.autoTagBody} ${t.autoTagCudaNote}` : t.autoTagBody),
+    [showAutoTagCudaNote, t]
+  );
+  const getAutoTagConfirmBody = useCallback(
+    (size: string) =>
+      showAutoTagCudaNote
+        ? `${t.autoTagConfirmBody(size)} ${t.autoTagCudaNote}`
+        : t.autoTagConfirmBody(size),
+    [showAutoTagCudaNote, t]
+  );
+  const autoTagProgressCopy = useMemo<AutoTagProgressCopy>(
+    () => ({
+      starting: t.autoTagInstallStarting,
+      repository: t.autoTagInstallRepository,
+      model: t.autoTagInstallModel,
+      environment: t.autoTagInstallEnvironment,
+      completed: t.autoTagInstallDone,
+      failed: t.autoTagInstallFailed,
+      fallback: t.autoTagInstalling,
+    }),
+    [t]
+  );
   const [step, setStep] = useState<WizardStep>('intro');
   const [mode, setMode] = useState<WizardMode>('new');
   const [useDefault, setUseDefault] = useState(true);
@@ -503,13 +592,18 @@ export function SetupWizard({
   const [autoTagProgress, setAutoTagProgress] = useState<AutoTagInstallProgress | null>(null);
   const [dockerMigrationProgress, setDockerMigrationProgress] =
     useState<DockerMigrationProgress | null>(null);
+  const [standaloneMigrationStatus, setStandaloneMigrationStatus] =
+    useState<StandaloneMigrationStatus | null>(null);
+  const [standaloneMigrationProgress, setStandaloneMigrationProgress] =
+    useState<StandaloneMigrationProgress | null>(null);
+  const [databaseSetupIncluded, setDatabaseSetupIncluded] = useState(false);
   const [launchPhase, setLaunchPhase] = useState<'idle' | 'starting' | 'ready'>('idle');
   const [launchedUrl, setLaunchedUrl] = useState('');
   const [resetDataStoreConfirmOpen, setResetDataStoreConfirmOpen] = useState(false);
 
   const targetPath = useDefault ? defaultDataStoreRoot : customPath;
 
-  const totalSteps = 7;
+  const totalSteps = databaseSetupIncluded ? 8 : 7;
 
   const currentStepIndex = useMemo(() => {
     switch (step) {
@@ -523,20 +617,22 @@ export function SetupWizard({
       case 'migrate-running':
       case 'migrate-complete':
         return 2;
-      case 'sharing-setup':
+      case 'database-setup':
         return 3;
+      case 'sharing-setup':
+        return databaseSetupIncluded ? 4 : 3;
       case 'ffmpeg-setup':
-        return 4;
+        return databaseSetupIncluded ? 5 : 4;
       case 'pdf-setup':
-        return 5;
+        return databaseSetupIncluded ? 6 : 5;
       case 'autotag-setup':
-        return 6;
+        return databaseSetupIncluded ? 7 : 6;
       case 'done':
-        return 7;
+        return databaseSetupIncluded ? 8 : 7;
       default:
         return 1;
     }
-  }, [step]);
+  }, [databaseSetupIncluded, step]);
 
   const inspectTarget = useCallback(async (root: string) => {
     if (!root.trim()) {
@@ -630,6 +726,9 @@ export function SetupWizard({
   const handleSelectMode = useCallback((next: WizardMode) => {
     setError('');
     setMode(next);
+    setStandaloneMigrationStatus(null);
+    setStandaloneMigrationProgress(null);
+    setDatabaseSetupIncluded(false);
     if (next === 'new') {
       setStep('new-location');
       setUseDefault(true);
@@ -667,6 +766,111 @@ export function SetupWizard({
     [language]
   );
 
+  const refreshStandaloneMigrationStatus = useCallback(async (settings: FullSettings) => {
+    const next = await invoke<StandaloneMigrationStatus>('standalone_migration_status', {
+      settings,
+    });
+    setStandaloneMigrationStatus(next);
+    return next;
+  }, []);
+
+  const proceedAfterDataStoreSelected = useCallback(
+    async (settings: FullSettings) => {
+      setStandaloneMigrationStatus(null);
+      setStandaloneMigrationProgress(null);
+      setDatabaseSetupIncluded(true);
+      setStep('database-setup');
+      const status = await refreshStandaloneMigrationStatus(settings);
+      if (status.status === 'ready') {
+        setDatabaseSetupIncluded(false);
+        setStep('sharing-setup');
+      } else {
+        setStep('database-setup');
+      }
+    },
+    [refreshStandaloneMigrationStatus]
+  );
+
+  const refreshStandaloneMigrationProgress = useCallback(async () => {
+    const next = await invoke<StandaloneMigrationProgress>('standalone_migration_progress');
+    setStandaloneMigrationProgress(next);
+    return next;
+  }, []);
+
+  const applyStandaloneMigrationIfNeeded = useCallback(
+    async (settings: FullSettings) => {
+      const status = await refreshStandaloneMigrationStatus(settings);
+      if (status.status === 'ready') return settings;
+      if (status.status === 'history_mismatch') {
+        throw new Error(status.error ?? status.message);
+      }
+
+      let progress = await invoke<StandaloneMigrationProgress>('start_standalone_migration', {
+        settings,
+      });
+      setStandaloneMigrationProgress(progress);
+      while (progress.running) {
+        await wait(800);
+        progress = await refreshStandaloneMigrationProgress();
+      }
+      if (progress.error) {
+        throw new Error(progress.error);
+      }
+
+      const loaded = await invoke<FullSettings>('load_settings');
+      const merged = { ...loaded, language };
+      const nextStatus = await refreshStandaloneMigrationStatus(merged);
+      if (nextStatus.status !== 'ready') {
+        throw new Error(nextStatus.error ?? nextStatus.message);
+      }
+      return merged;
+    },
+    [language, refreshStandaloneMigrationProgress, refreshStandaloneMigrationStatus]
+  );
+
+  const handleBackFromDatabaseSetup = useCallback(() => {
+    setError('');
+    setStandaloneMigrationProgress(null);
+    if (mode === 'new') {
+      setStep('new-location');
+    } else if (mode === 'existing') {
+      setStep('existing-location');
+    } else {
+      setStep('migrate-complete');
+    }
+  }, [mode]);
+
+  const handleRefreshStandaloneMigration = useCallback(async () => {
+    if (!appliedSettings) return;
+    setBusy(true);
+    setError('');
+    try {
+      const status = await refreshStandaloneMigrationStatus(appliedSettings);
+      if (status.status === 'ready') {
+        setStep('sharing-setup');
+      }
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }, [appliedSettings, refreshStandaloneMigrationStatus]);
+
+  const handleApplyStandaloneMigration = useCallback(async () => {
+    if (!appliedSettings) return;
+    setBusy(true);
+    setError('');
+    try {
+      const merged = await applyStandaloneMigrationIfNeeded(appliedSettings);
+      setAppliedSettings(merged);
+      setStep('sharing-setup');
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }, [appliedSettings, applyStandaloneMigrationIfNeeded]);
+
   const handleConfirmNew = useCallback(
     async (resetExisting = false) => {
       if (!targetPath.trim()) return;
@@ -684,6 +888,7 @@ export function SetupWizard({
           carryExistingData: false,
         });
         setAppliedSettings(applied as FullSettings);
+        setDatabaseSetupIncluded(false);
         setStep('sharing-setup');
       } catch (err) {
         setError(errorMessage(err));
@@ -704,13 +909,13 @@ export function SetupWizard({
         carryExistingData: false,
       });
       setAppliedSettings(applied as FullSettings);
-      setStep('sharing-setup');
+      await proceedAfterDataStoreSelected(applied as FullSettings);
     } catch (err) {
       setError(errorMessage(err));
     } finally {
       setBusy(false);
     }
-  }, [existingPath, handleApplyDataStore]);
+  }, [existingPath, handleApplyDataStore, proceedAfterDataStoreSelected]);
 
   const handleClearMigrationTarget = useCallback(async () => {
     if (!targetPath.trim()) return;
@@ -805,6 +1010,25 @@ export function SetupWizard({
     language,
     t.migrateRunningTitle,
   ]);
+
+  const handleProceedFromMigrateComplete = useCallback(async () => {
+    if (!appliedSettings) return;
+    setBusy(true);
+    setError('');
+    try {
+      const loaded = await invoke<FullSettings>('load_settings');
+      const merged = { ...loaded, language };
+      setAppliedSettings(merged);
+      setDatabaseSetupIncluded(false);
+      setStandaloneMigrationStatus(null);
+      setStandaloneMigrationProgress(null);
+      setStep('sharing-setup');
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }, [appliedSettings, language]);
 
   const completeWizard = useCallback(async () => {
     const completed = await invoke<FullSettings>('complete_setup');
@@ -1285,7 +1509,7 @@ export function SetupWizard({
           </div>
         ) : null}
         {inspectionHint}
-        <div className="wizard-actions between">
+        <div className="wizard-actions between wizard-step-footer">
           <button type="button" onClick={() => setStep('intro')} disabled={busy}>
             {t.back}
           </button>
@@ -1333,7 +1557,7 @@ export function SetupWizard({
             <span>{existingPath}</span>
           </div>
         ) : null}
-        <div className="wizard-actions between">
+        <div className="wizard-actions between wizard-step-footer">
           <button type="button" onClick={() => setStep('intro')} disabled={busy}>
             {t.back}
           </button>
@@ -1412,7 +1636,7 @@ export function SetupWizard({
             />
           </label>
         </details>
-        <div className="wizard-actions between">
+        <div className="wizard-actions between wizard-step-footer">
           <button type="button" onClick={() => setStep('intro')} disabled={busy}>
             {t.back}
           </button>
@@ -1462,7 +1686,7 @@ export function SetupWizard({
           <span>{detection.databaseUrl}</span>
         </div>
       ) : null}
-      <div className="wizard-actions between">
+      <div className="wizard-actions between wizard-step-footer">
         <button type="button" onClick={() => setStep('migrate-location')} disabled={busy}>
           {t.back}
         </button>
@@ -1521,11 +1745,11 @@ export function SetupWizard({
           <span>{sourceStorageRoot}</span>
         </div>
       ) : null}
-      <div className="wizard-actions" style={{ justifyContent: 'flex-end' }}>
+      <div className="wizard-actions wizard-step-footer" style={{ justifyContent: 'flex-end' }}>
         <button
           type="button"
           className="primary-button"
-          onClick={() => setStep('sharing-setup')}
+          onClick={() => void handleProceedFromMigrateComplete()}
           disabled={busy}
         >
           <ArrowRight size={15} />
@@ -1534,6 +1758,126 @@ export function SetupWizard({
       </div>
     </>
   );
+
+  const renderDatabaseSetup = () => {
+    const status = standaloneMigrationStatus;
+    const progress = standaloneMigrationProgress;
+    const statusClass =
+      status?.status === 'ready'
+        ? 'migration-status ready'
+        : status?.status === 'history_mismatch'
+          ? 'migration-status missing'
+          : 'migration-status waiting';
+    const pendingCount = status?.pending.length ?? 0;
+    const title =
+      status?.status === 'ready'
+        ? t.databaseSetupReadyTitle
+        : status?.status === 'history_mismatch'
+          ? t.databaseSetupErrorTitle
+          : t.databaseSetupPendingTitle;
+    const description =
+      status?.status === 'ready'
+        ? t.databaseSetupReadyBody
+        : status?.status === 'history_mismatch'
+          ? (status.error ?? status.message)
+          : t.databaseSetupPendingBody(pendingCount);
+    const canApply = status?.status === 'pending' && !progress?.running && !busy;
+    const canContinue = status?.status === 'ready' && !progress?.running && !busy;
+
+    return (
+      <>
+        <div className="wizard-heading">
+          <h1>{t.databaseSetupTitle}</h1>
+          <p>{t.databaseSetupBody}</p>
+        </div>
+
+        {status ? (
+          <div className={statusClass}>
+            <div className="migration-status-icon">
+              {status.status === 'ready' ? <CheckCircle2 size={20} /> : <AlertCircle size={20} />}
+            </div>
+            <div className="migration-status-body">
+              <h3>{title}</h3>
+              <p>{description}</p>
+              {status.currentVersion || status.latestVersion ? (
+                <span className="migration-storage">
+                  {status.currentVersion ?? '-'} / {status.latestVersion ?? '-'}
+                </span>
+              ) : null}
+              {status.dbPath ? <span className="migration-storage">{status.dbPath}</span> : null}
+            </div>
+          </div>
+        ) : (
+          <div className="wizard-progress-card spinner">
+            <span>{t.databaseSetupChecking}</span>
+          </div>
+        )}
+
+        {progress?.running || progress?.completed || progress?.error ? (
+          <div
+            className={
+              progress.error
+                ? 'install-progress-card error'
+                : progress.completed
+                  ? 'install-progress-card complete'
+                  : 'install-progress-card'
+            }
+          >
+            <div className="install-progress-heading">
+              <Database size={16} />
+              <strong>{progress.running ? t.databaseSetupUpdating : progress.message}</strong>
+            </div>
+            {progress.running ? <p>{progress.message}</p> : null}
+            <div className="progress-track">
+              <div
+                className="progress-fill"
+                style={{ width: `${Math.round(progress.percent)}%` }}
+              />
+            </div>
+            <span className="muted">{Math.round(progress.percent)}%</span>
+            {progress.backupPath ? <p className="muted">{progress.backupPath}</p> : null}
+          </div>
+        ) : null}
+
+        <div className="wizard-actions between wizard-step-footer">
+          <button type="button" onClick={handleBackFromDatabaseSetup} disabled={busy}>
+            {t.back}
+          </button>
+          <span style={{ display: 'flex', gap: 8 }}>
+            <button
+              type="button"
+              onClick={() => void handleRefreshStandaloneMigration()}
+              disabled={busy}
+            >
+              <RefreshCcw size={15} />
+              {t.retry}
+            </button>
+            {canContinue ? (
+              <button
+                type="button"
+                className="primary-button"
+                onClick={() => setStep('sharing-setup')}
+                disabled={!canContinue}
+              >
+                <ArrowRight size={15} />
+                {t.next}
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="primary-button"
+                onClick={() => void handleApplyStandaloneMigration()}
+                disabled={!canApply}
+              >
+                <Database size={15} />
+                {t.databaseSetupUpdate}
+              </button>
+            )}
+          </span>
+        </div>
+      </>
+    );
+  };
 
   const renderSharingSetup = () => (
     <>
@@ -1590,7 +1934,7 @@ export function SetupWizard({
         </>
       ) : null}
 
-      <div className="wizard-actions between">
+      <div className="wizard-actions between wizard-step-footer">
         <button type="button" onClick={() => setStep('ffmpeg-setup')} disabled={busy}>
           {t.skipForNow}
         </button>
@@ -1668,7 +2012,7 @@ export function SetupWizard({
             {t.mediaInstallGuide}
           </button>
         </div>
-        <div className="wizard-actions between">
+        <div className="wizard-actions between wizard-step-footer">
           <button type="button" onClick={handleSkipFfmpeg} disabled={busy}>
             {t.skipForNow}
           </button>
@@ -1747,7 +2091,7 @@ export function SetupWizard({
             {t.pdfInstallGuide}
           </button>
         </div>
-        <div className="wizard-actions between">
+        <div className="wizard-actions between wizard-step-footer">
           <button type="button" onClick={handleSkipPdfRasterizer} disabled={busy}>
             {t.skipForNow}
           </button>
@@ -1769,12 +2113,21 @@ export function SetupWizard({
     const alreadyReady = autoTagStatus?.ready ?? false;
     const phase = autoTagPhase;
     const progressPercent = autoTagProgress ? Math.round(autoTagProgress.percent) : 0;
+    const statusText = getAutoTagStatusText(autoTagStatus, t);
+    const progressText =
+      phase === 'done'
+        ? t.autoTagInstallDone
+        : phase === 'failed'
+          ? t.autoTagInstallFailed
+          : autoTagProgress
+            ? getAutoTagProgressText(autoTagProgress, autoTagProgressCopy)
+            : t.autoTagInstalling;
 
     return (
       <>
         <div className="wizard-heading">
           <h1>{t.autoTagTitle}</h1>
-          <p>{t.autoTagBody}</p>
+          <p>{autoTagBody}</p>
           <button
             type="button"
             className="link-button"
@@ -1789,12 +2142,12 @@ export function SetupWizard({
         {alreadyReady ? (
           <div className="wizard-path-card">
             <strong>{t.autoTagAlreadyReady}</strong>
-            <span>{autoTagStatus?.message ?? ''}</span>
+            <span>{statusText}</span>
           </div>
         ) : phase === 'idle' ? (
           <div className="wizard-path-card">
             <strong>{t.autoTagEnableHint}</strong>
-            <span>{autoTagStatus?.message ?? ''}</span>
+            <span>{statusText}</span>
           </div>
         ) : null}
 
@@ -1807,19 +2160,13 @@ export function SetupWizard({
         {phase === 'confirm' && autoTagMetadata ? (
           <div className="wizard-path-card">
             <strong>{t.autoTagConfirmTitle}</strong>
-            <span>{t.autoTagConfirmBody(autoTagMetadata.downloadSize)}</span>
+            <span>{getAutoTagConfirmBody(autoTagMetadata.downloadSize)}</span>
           </div>
         ) : null}
 
         {phase === 'progress' || phase === 'done' || phase === 'failed' ? (
           <div className="wizard-progress-card">
-            <span>
-              {phase === 'done'
-                ? t.autoTagInstallDone
-                : phase === 'failed'
-                  ? (autoTagProgress?.message ?? t.autoTagInstallFailed)
-                  : (autoTagProgress?.message ?? t.autoTagInstalling)}
-            </span>
+            <span>{progressText}</span>
             <div className="progress-track">
               <div className="progress-fill" style={{ width: `${progressPercent}%` }} />
             </div>
@@ -1827,7 +2174,7 @@ export function SetupWizard({
           </div>
         ) : null}
 
-        <div className="wizard-actions between">
+        <div className="wizard-actions between wizard-step-footer">
           {phase === 'progress' ? (
             <button type="button" onClick={handleSkipAutoTag} disabled={busy}>
               {t.skipForNow}
@@ -1919,7 +2266,7 @@ export function SetupWizard({
           <div className="wizard-path-card">
             <strong>{launchedUrl}</strong>
           </div>
-          <div className="wizard-actions between">
+          <div className="wizard-actions between wizard-step-footer">
             <button type="button" onClick={() => void handleFinish()} disabled={busy}>
               {t.goToSettings}
             </button>
@@ -1950,7 +2297,7 @@ export function SetupWizard({
         <div className="wizard-path-card warn">
           <strong>{t.launchNetworkNote}</strong>
         </div>
-        <div className="wizard-actions between">
+        <div className="wizard-actions between wizard-step-footer">
           <button type="button" onClick={() => void handleFinish()} disabled={busy}>
             {t.launchLater}
           </button>
@@ -1984,6 +2331,7 @@ export function SetupWizard({
           {step === 'migrate-confirm' ? renderMigrateConfirm() : null}
           {step === 'migrate-running' ? renderMigrateRunning() : null}
           {step === 'migrate-complete' ? renderMigrateComplete() : null}
+          {step === 'database-setup' ? renderDatabaseSetup() : null}
           {step === 'sharing-setup' ? renderSharingSetup() : null}
           {step === 'ffmpeg-setup' ? renderFfmpegSetup() : null}
           {step === 'pdf-setup' ? renderPdfSetup() : null}

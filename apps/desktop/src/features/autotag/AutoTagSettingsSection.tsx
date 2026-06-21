@@ -1,6 +1,7 @@
 import { AlertCircle, CheckCircle2, Download, Folder, RefreshCcw, Sparkles } from 'lucide-react';
 import type { ChangeEvent } from 'react';
 import type { AppSettings, AutoTagInstallProgress, AutoTagStatus } from '../../app/types';
+import { type AutoTagProgressCopy, getAutoTagProgressText } from './progressText';
 
 export interface AutoTagSettingsCopy {
   title: string;
@@ -20,6 +21,7 @@ export interface AutoTagSettingsCopy {
   chooseCodeFolder: string;
   chooseModelFolder: string;
   port: string;
+  progress: AutoTagProgressCopy;
 }
 
 interface AutoTagSettingsSectionProps {
@@ -131,7 +133,7 @@ export function AutoTagSettingsSection({
               {installProgress.completed ? copy.installCompleted : copy.installInProgress}
             </strong>
           </div>
-          <p>{installProgress.message}</p>
+          <p>{getAutoTagProgressText(installProgress, copy.progress)}</p>
           <div className="progress-track">
             <div
               className="progress-fill"

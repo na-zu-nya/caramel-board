@@ -5,6 +5,7 @@ import type {
   AutoTagInstallProgress,
   AutoTagInstallStep,
 } from '../../app/types';
+import { type AutoTagProgressCopy, getAutoTagProgressText } from './progressText';
 
 export interface AutoTagInstallCopy {
   introTitle: string;
@@ -21,6 +22,7 @@ export interface AutoTagInstallCopy {
   continue: string;
   cancel: string;
   close: string;
+  progress: AutoTagProgressCopy;
 }
 
 interface AutoTagInstallDialogProps {
@@ -133,7 +135,7 @@ export function AutoTagInstallDialog({
               <h2>{copy.inProgress}</h2>
             </div>
             <div className="modal-copy">
-              <p>{progress.message}</p>
+              <p>{getAutoTagProgressText(progress, copy.progress)}</p>
               <div className="progress-track">
                 <div
                   className="progress-fill"

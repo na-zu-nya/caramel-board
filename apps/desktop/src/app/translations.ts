@@ -84,18 +84,24 @@ export const translations = {
     autoTagInstallIntroTitle: 'Install AutoTag model',
     autoTagInstallIntroLead: 'AutoTag uses the open-source JoyTag model.',
     autoTagInstallIntroDetail:
-      'This feature uses a pre-trained model to generate tags from images. CUDA is not required for normal CPU tagging. If you want GPU acceleration and CUDA setup fails, install the latest NVIDIA driver and CUDA Toolkit, then try again.',
+      'This feature uses a pre-trained model to generate tags from images.',
+    autoTagCudaNote:
+      'CUDA is not required for normal CPU tagging. If you want GPU acceleration and CUDA setup fails, install the latest NVIDIA driver and CUDA Toolkit, then try again.',
     autoTagInstallIntroLocal:
       'All processing runs locally. Images are not transferred outside this computer.',
     autoTagInstallIntroTraining: 'Images used with this feature are not used for training.',
     autoTagInstallReference: 'Reference',
     autoTagMetadataLoading: 'Fetching model metadata...',
     autoTagDownloadConfirmTitle: 'Download model data',
-    autoTagDownloadConfirm: (size: string) =>
-      `${size} of data will be downloaded. Continue? CUDA is not required for CPU tagging. If you want GPU acceleration and CUDA setup fails, install the latest NVIDIA driver and CUDA Toolkit, then try again.`,
+    autoTagDownloadConfirm: (size: string) => `${size} of data will be downloaded. Continue?`,
     autoTagDownloadStarted: 'AutoTag installation started in the background.',
     autoTagInstallCompleted: 'AutoTag installation completed. AutoTag was enabled.',
     autoTagInstallInProgress: 'Installing AutoTag...',
+    autoTagInstallStarting: 'Starting AutoTag installation...',
+    autoTagInstallRepository: 'Preparing AutoTag code...',
+    autoTagInstallModel: 'Downloading model data...',
+    autoTagInstallEnvironment: 'Preparing AutoTag runtime...',
+    autoTagInstallFailed: 'AutoTag installation failed.',
     autoTagBackgroundContinue: 'Continue in background',
     continue: 'Continue',
     cancel: 'Cancel',
@@ -165,6 +171,7 @@ export const translations = {
       `${count} database update(s) must be applied before Caramel Board can start.`,
     databaseUpdateErrorDescription: 'Review the error and restore from backup if needed.',
     databaseUpdateCheck: 'Check database',
+    databaseUpdateReview: 'Review details',
     databaseUpdateApply: 'Update database',
     databaseUpdateModalTitle: 'Database update required',
     databaseUpdateModalBody:
@@ -308,18 +315,24 @@ export const translations = {
     autoTagInstallIntroTitle: '自動タグモデルのインストール',
     autoTagInstallIntroLead: '自動タグにはオープンソースのJoyTagを使用します。',
     autoTagInstallIntroDetail:
-      'この機能により、事前に学習されたモデルを使用し、画像のタグを生成します。通常の CPU タグ付けに CUDA は不要です。GPU 高速化を使いたい場合に CUDA のセットアップで失敗したら、最新の NVIDIA ドライバーと CUDA Toolkit をインストールしてから再試行してください。',
+      'この機能により、事前に学習されたモデルを使用し、画像のタグを生成します。',
+    autoTagCudaNote:
+      'CPU でのタグ付けに CUDA は不要です。GPU 高速化を使いたい場合に CUDA のセットアップで失敗したら、最新の NVIDIA ドライバーと CUDA Toolkit をインストールしてから再試行してください。',
     autoTagInstallIntroLocal:
       '動作は全てローカルで完結し、画像が外部に転送されることはありません。',
     autoTagInstallIntroTraining: 'この機能で使用された画像が学習されることはありません。',
     autoTagInstallReference: '詳細',
     autoTagMetadataLoading: 'メタデータを取得中...',
     autoTagDownloadConfirmTitle: 'モデルのダウンロード',
-    autoTagDownloadConfirm: (size: string) =>
-      `${size} のデータをダウンロードします。続けますか？ CPU でのタグ付けに CUDA は不要です。GPU 高速化を使いたい場合に CUDA のセットアップで失敗したら、最新の NVIDIA ドライバーと CUDA Toolkit をインストールしてから再試行してください。`,
+    autoTagDownloadConfirm: (size: string) => `${size} のデータをダウンロードします。続けますか？`,
     autoTagDownloadStarted: '自動タグのインストールをバックグラウンドで開始しました。',
     autoTagInstallCompleted: '自動タグのインストールが完了しました。自動タグを有効にしました。',
     autoTagInstallInProgress: '自動タグをインストールしています...',
+    autoTagInstallStarting: '自動タグのインストールを開始しています...',
+    autoTagInstallRepository: '自動タグのコードを準備しています...',
+    autoTagInstallModel: 'モデルをダウンロードしています...',
+    autoTagInstallEnvironment: '自動タグの実行環境を準備しています...',
+    autoTagInstallFailed: '自動タグのインストールに失敗しました。',
     autoTagBackgroundContinue: 'バックグラウンドで続ける',
     continue: '続ける',
     cancel: 'キャンセル',
@@ -391,6 +404,7 @@ export const translations = {
     databaseUpdateErrorDescription:
       'エラー内容を確認し、必要であればバックアップから復旧してください。',
     databaseUpdateCheck: 'DBを確認',
+    databaseUpdateReview: '詳細を確認',
     databaseUpdateApply: 'DBを更新',
     databaseUpdateModalTitle: 'データベース更新が必要です',
     databaseUpdateModalBody:

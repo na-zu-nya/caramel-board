@@ -16,7 +16,12 @@ import { apiClient } from '@/lib/api-client';
 import { useT } from '@/lib/i18n';
 import { getSelectedMediaGridStackIds } from '@/lib/media-grid-selection';
 import { cn } from '@/lib/utils';
-import { currentFilterAtom, infoSidebarOpenAtom, selectedItemIdAtom } from '@/stores/ui';
+import {
+  currentFilterAtom,
+  infoSidebarOpenAtom,
+  selectedItemIdAtom,
+  selectionModeAtom,
+} from '@/stores/ui';
 import { genListToken, saveViewContext } from '@/stores/view-context';
 import type { MediaGridItem, StackFilter, StackPaginatedResponse } from '@/types';
 
@@ -47,7 +52,7 @@ function SimilarStacksRoute() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [limit] = useState(50);
-  const selectionMode = false;
+  const [selectionMode, setSelectionMode] = useAtom(selectionModeAtom);
   const [_currentFilter, setCurrentFilter] = useAtom(currentFilterAtom);
   const [infoSidebarOpen, setInfoSidebarOpen] = useAtom(infoSidebarOpenAtom);
   const [selectedItemId, setSelectedItemId] = useAtom(selectedItemIdAtom);
@@ -65,10 +70,6 @@ function SimilarStacksRoute() {
     clearSelection,
     exitSelectionMode,
   } = useSelectionMode(selectionMode);
-
-  useEffect(() => {
-    exitSelectionMode();
-  }, [exitSelectionMode]);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['similar-stacks', datasetId, stackId, limit],
@@ -150,7 +151,7 @@ function SimilarStacksRoute() {
   useHeaderActions({
     showShuffle: true,
     showFilter: false,
-    showSelection: false,
+    showSelection: true,
     onShuffle: handleShuffle,
   });
 
@@ -168,8 +169,17 @@ function SimilarStacksRoute() {
         return;
       }
 
-      if (event?.shiftKey && selectionMode) {
+      if (event?.shiftKey) {
         event.preventDefault();
+        if (!selectionMode) {
+          setSelectionMode(true);
+          clearSelection();
+          toggleItemSelection(item.id);
+          if (idx >= 0) lastClickedIndexRef.current = idx;
+          return;
+        }
+
+        setSelectionMode(true);
         const last = lastClickedIndexRef.current ?? idx;
         if (last >= 0 && idx >= 0) {
           const step = last <= idx ? 1 : -1;
@@ -203,6 +213,9 @@ function SimilarStacksRoute() {
     },
     [
       items,
+      selectionMode,
+      setSelectionMode,
+      clearSelection,
       toggleItemSelection,
       selectItemRange,
       infoSidebarOpen,
@@ -213,7 +226,9 @@ function SimilarStacksRoute() {
 
   const handleToggleSelection = useCallback(
     (itemId: string | number) => {
-      if (!selectionMode) return;
+      if (!selectionMode) {
+        setSelectionMode(true);
+      }
       toggleItemSelection(itemId);
 
       const idx = items.findIndex((item) => item?.id === itemId);
@@ -221,7 +236,7 @@ function SimilarStacksRoute() {
         lastClickedIndexRef.current = idx;
       }
     },
-    [items, toggleItemSelection]
+    [items, selectionMode, setSelectionMode, toggleItemSelection]
   );
 
   // Favorite toggle
@@ -290,9 +305,9 @@ function SimilarStacksRoute() {
   const applyEditUpdates = useCallback(
     async (updates: EditUpdates) => {
       if (selectedItems.size === 0) return;
-      const stackIds = Array.from(selectedItems).map((id) =>
-        typeof id === 'string' ? Number.parseInt(id as string, 10) : (id as number)
-      );
+      const stackIds = selectedStackIdsInOrder;
+      if (stackIds.length === 0) return;
+
       try {
         if (updates.addTags && updates.addTags.length > 0) {
           await apiClient.bulkAddTags(stackIds, updates.addTags);
@@ -310,7 +325,7 @@ function SimilarStacksRoute() {
         console.error('Error applying bulk updates:', error);
       }
     },
-    [selectedItems, clearSelection, exitSelectionMode, refetch]
+    [selectedItems.size, selectedStackIdsInOrder, clearSelection, exitSelectionMode, refetch]
   );
 
   const refreshThumbnails = useCallback(async (stackIds: (string | number)[]) => {
@@ -320,7 +335,9 @@ function SimilarStacksRoute() {
 
   const handleRefreshThumbnails = useCallback(async () => {
     if (selectedItems.size === 0) return;
-    const stackIds = Array.from(selectedItems);
+    const stackIds = selectedStackIdsInOrder;
+    if (stackIds.length === 0) return;
+
     try {
       await refreshThumbnails(stackIds);
       exitSelectionMode();
@@ -328,7 +345,7 @@ function SimilarStacksRoute() {
     } catch (error) {
       console.error('Error refreshing thumbnails:', error);
     }
-  }, [selectedItems, refreshThumbnails, exitSelectionMode, refetch]);
+  }, [selectedItems.size, selectedStackIdsInOrder, refreshThumbnails, exitSelectionMode, refetch]);
 
   const removeStacks = useCallback(async (stackIds: (string | number)[]) => {
     if (stackIds.length === 0) return;
@@ -337,7 +354,9 @@ function SimilarStacksRoute() {
 
   const handleRemoveStacks = useCallback(async () => {
     if (selectedItems.size === 0) return;
-    const stackIds = Array.from(selectedItems);
+    const stackIds = selectedStackIdsInOrder;
+    if (stackIds.length === 0) return;
+
     try {
       await removeStacks(stackIds);
       exitSelectionMode();
@@ -345,14 +364,13 @@ function SimilarStacksRoute() {
     } catch (error) {
       console.error('Error removing stacks:', error);
     }
-  }, [selectedItems, removeStacks, exitSelectionMode, refetch]);
+  }, [selectedItems.size, selectedStackIdsInOrder, removeStacks, exitSelectionMode, refetch]);
 
   const handleOptimizePreviews = useCallback(async () => {
     if (selectedItems.size === 0) return;
 
-    const stackIds = Array.from(selectedItems).map((id) =>
-      typeof id === 'string' ? Number.parseInt(id, 10) : id
-    );
+    const stackIds = selectedStackIdsInOrder;
+    if (stackIds.length === 0) return;
 
     try {
       for (const id of stackIds) {
@@ -365,7 +383,7 @@ function SimilarStacksRoute() {
       console.error('Error optimizing video previews:', error);
       alert(t.grid.optimizeVideoFailed);
     }
-  }, [selectedItems, datasetId, exitSelectionMode, refetch, t]);
+  }, [selectedItems.size, selectedStackIdsInOrder, datasetId, exitSelectionMode, refetch, t]);
 
   const handleMergeStacks = useCallback(async () => {
     if (selectedStackIdsInOrder.length < 2) return;
