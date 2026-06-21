@@ -61,6 +61,7 @@ function GeneralSettings() {
         configured: data.configured,
         keyPreview: data.keyPreview,
         createdAt: data.createdAt,
+        apiKey: data.apiKey,
       };
       setGeneratedApiKey(data.apiKey);
       setClipperFeedback(null);
@@ -77,6 +78,7 @@ function GeneralSettings() {
         configured: data.configured,
         keyPreview: data.keyPreview,
         createdAt: data.createdAt,
+        apiKey: data.apiKey,
       });
     },
   });
@@ -123,6 +125,13 @@ function GeneralSettings() {
     setClipperFeedback(copied ? t.settings.extensionKeyCopied : t.settings.extensionKeyCopyFailed);
   }, [generatedApiKey, t]);
 
+  const handleCopyStoredApiKey = useCallback(async () => {
+    const apiKey = clipperApiKeyQuery.data?.apiKey;
+    if (!apiKey) return;
+    const copied = await copyTextToClipboard(apiKey);
+    setClipperFeedback(copied ? t.settings.extensionKeyCopied : t.settings.extensionKeyCopyFailed);
+  }, [clipperApiKeyQuery.data?.apiKey, t]);
+
   const extensionIntegrationCopy = useMemo(
     () => ({
       title: t.settings.extensionIntegrationTitle,
@@ -146,7 +155,9 @@ function GeneralSettings() {
       <div className="container mx-auto max-w-3xl px-4 py-8 pt-24">
         <div className="mb-8">
           <h1 className="text-3xl font-bold tracking-tight">{t.settings.generalTitle}</h1>
-          <p className="mt-1 text-sm text-gray-500">{t.settings.generalDescription}</p>
+          {t.settings.generalDescription ? (
+            <p className="mt-1 text-sm text-gray-500">{t.settings.generalDescription}</p>
+          ) : null}
         </div>
 
         <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
@@ -159,7 +170,9 @@ function GeneralSettings() {
                 <h2 className="text-base font-semibold text-gray-900">
                   {t.settings.languageTitle}
                 </h2>
-                <p className="mt-1 text-sm text-gray-500">{t.settings.languageDescription}</p>
+                {t.settings.languageDescription ? (
+                  <p className="mt-1 text-sm text-gray-500">{t.settings.languageDescription}</p>
+                ) : null}
               </div>
             </div>
           </div>
@@ -190,10 +203,6 @@ function GeneralSettings() {
                 );
               })}
             </RadioGroup>
-
-            <p className="mt-4 text-xs text-gray-500">
-              {t.settings.languageCurrent}: {language === 'ja' ? '日本語' : 'English'}
-            </p>
           </div>
         </section>
 
@@ -209,6 +218,7 @@ function GeneralSettings() {
             onIssueKey={handleIssueClipperApiKey}
             onRevokeKey={handleRevokeClipperApiKey}
             onCopyGeneratedKey={handleCopyGeneratedApiKey}
+            onCopyStoredKey={handleCopyStoredApiKey}
           />
         </div>
       </div>

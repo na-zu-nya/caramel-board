@@ -8,6 +8,7 @@ export interface ClipperApiKeyState {
   configured: boolean;
   keyPreview: string | null;
   createdAt: string | null;
+  apiKey: string | null;
 }
 
 interface StoredClipperApiKey {
@@ -63,12 +64,22 @@ const safeEquals = (left: string, right: string) => {
   return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer);
 };
 
+const decodeStoredApiKey = (storedKey: StoredClipperApiKey): string | null => {
+  try {
+    return decodeApiKey(storedKey.apiKeyEncoded);
+  } catch (error) {
+    console.warn('Failed to decode Clipper API key settings', error);
+    return null;
+  }
+};
+
 export const getClipperApiKeyState = (): ClipperApiKeyState => {
   const storedKey = readStoredKey();
   return {
     configured: Boolean(storedKey),
     keyPreview: storedKey?.keyPreview ?? null,
     createdAt: storedKey?.createdAt ?? null,
+    apiKey: storedKey ? decodeStoredApiKey(storedKey) : null,
   };
 };
 

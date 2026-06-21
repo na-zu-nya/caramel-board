@@ -132,8 +132,8 @@ export function StackTile({
   const body = (
     <div
       className={cn(
-        'group relative aspect-square overflow-hidden border border-gray-200 bg-gray-100 cursor-pointer',
-        cornerRadius === 'rounded' ? 'rounded-lg' : 'rounded-none',
+        'group relative aspect-square overflow-hidden bg-gray-100 cursor-pointer',
+        cornerRadius === 'rounded' ? 'rounded-lg border border-gray-200' : 'rounded-none',
         isInfoSelected && 'ring-2 ring-primary ring-inset',
         isNativePointerActive && 'scale-95 opacity-50',
         className
@@ -149,7 +149,7 @@ export function StackTile({
         <img
           src={resolvedThumbnailUrl ?? undefined}
           alt={title || t.common.untitled}
-          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+          className="w-full h-full object-cover"
           loading="lazy"
           data-stack-drag-preview="true"
           onError={(e) => {
@@ -164,6 +164,7 @@ export function StackTile({
           {t.viewerControls.noImage}
         </div>
       )}
+      <div className="pointer-events-none absolute inset-0 z-[1] bg-white opacity-0 transition-opacity duration-150 group-hover:opacity-10" />
       {isNativeDragReady && resolvedNativeImageDragUrl ? (
         <img
           src={resolvedNativeImageDragUrl}

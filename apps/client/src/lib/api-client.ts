@@ -34,6 +34,7 @@ export type ClipperApiKeyState = {
   configured: boolean;
   keyPreview: string | null;
   createdAt: string | null;
+  apiKey: string | null;
 };
 
 export type IssuedClipperApiKey = ClipperApiKeyState & {

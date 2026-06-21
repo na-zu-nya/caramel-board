@@ -53,6 +53,9 @@ const HUE_CATEGORIES: { id: HueCategory; name: string; color: string }[] = [
   { id: 'violet', name: '紫', color: '#BB66FF' },
 ];
 
+const FILTER_CHOICE_BUTTON_CLASS =
+  'px-1.5 py-3 rounded-md text-[11px] font-medium leading-none whitespace-nowrap transition-colors';
+
 interface FilterPanelProps {
   currentFilter: StackFilter;
   currentSort?: { field: string; order: 'asc' | 'desc' };
@@ -387,7 +390,7 @@ export default function FilterPanel({
                   type="button"
                   onClick={() => updateFilter({ isFavorite: undefined }, true)}
                   className={cn(
-                    'px-4 py-3 rounded-md text-sm font-medium transition-colors',
+                    FILTER_CHOICE_BUTTON_CLASS,
                     localFilter.isFavorite === undefined
                       ? 'bg-primary text-primary-foreground hover:bg-primary/90'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -399,7 +402,7 @@ export default function FilterPanel({
                   type="button"
                   onClick={() => updateFilter({ isFavorite: true }, true)}
                   className={cn(
-                    'px-4 py-3 rounded-md text-sm font-medium transition-colors',
+                    FILTER_CHOICE_BUTTON_CLASS,
                     localFilter.isFavorite === true
                       ? 'bg-primary text-primary-foreground hover:bg-primary/90'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -411,7 +414,7 @@ export default function FilterPanel({
                   type="button"
                   onClick={() => updateFilter({ isFavorite: false }, true)}
                   className={cn(
-                    'px-4 py-3 rounded-md text-sm font-medium transition-colors',
+                    FILTER_CHOICE_BUTTON_CLASS,
                     localFilter.isFavorite === false
                       ? 'bg-primary text-primary-foreground hover:bg-primary/90'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -433,7 +436,7 @@ export default function FilterPanel({
                   type="button"
                   onClick={() => updateFilter({ isLiked: undefined }, true)}
                   className={cn(
-                    'px-4 py-3 rounded-md text-sm font-medium transition-colors',
+                    FILTER_CHOICE_BUTTON_CLASS,
                     localFilter.isLiked === undefined
                       ? 'bg-primary text-primary-foreground hover:bg-primary/90'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -445,7 +448,7 @@ export default function FilterPanel({
                   type="button"
                   onClick={() => updateFilter({ isLiked: true }, true)}
                   className={cn(
-                    'px-4 py-3 rounded-md text-sm font-medium transition-colors',
+                    FILTER_CHOICE_BUTTON_CLASS,
                     localFilter.isLiked === true
                       ? 'bg-primary text-primary-foreground hover:bg-primary/90'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -457,7 +460,7 @@ export default function FilterPanel({
                   type="button"
                   onClick={() => updateFilter({ isLiked: false }, true)}
                   className={cn(
-                    'px-4 py-3 rounded-md text-sm font-medium transition-colors',
+                    FILTER_CHOICE_BUTTON_CLASS,
                     localFilter.isLiked === false
                       ? 'bg-primary text-primary-foreground hover:bg-primary/90'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -547,7 +550,6 @@ export default function FilterPanel({
                   )}
                 </div>
               </div>
-              <p className="text-xs text-gray-500">{t.filter.tagHint}</p>
             </div>
 
             {/* Authors */}
@@ -630,7 +632,6 @@ export default function FilterPanel({
                   </div>
                 )}
               </div>
-              <p className="text-xs text-gray-500">{t.filter.authorHint}</p>
             </div>
 
             {/* Color Filter */}
@@ -642,7 +643,6 @@ export default function FilterPanel({
 
               {/* Color Categories */}
               <div className="space-y-2">
-                <div className="text-xs font-medium text-gray-600">{t.filter.color}</div>
                 <div className="flex gap-2 justify-between">
                   {HUE_CATEGORIES.map((hue) => {
                     const isSelected =

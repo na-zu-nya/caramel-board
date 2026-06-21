@@ -29,6 +29,7 @@ export interface ExtensionIntegrationSectionProps {
   onIssueKey: () => void;
   onRevokeKey: () => void;
   onCopyGeneratedKey: () => void;
+  onCopyStoredKey: () => void;
 }
 
 export function ExtensionIntegrationSection({
@@ -42,9 +43,11 @@ export function ExtensionIntegrationSection({
   onIssueKey,
   onRevokeKey,
   onCopyGeneratedKey,
+  onCopyStoredKey,
 }: ExtensionIntegrationSectionProps) {
   const configured = Boolean(state?.configured);
   const busy = loading || issuing || revoking;
+  const canCopyStoredKey = Boolean(state?.apiKey && !generatedApiKey);
 
   return (
     <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
@@ -55,7 +58,9 @@ export function ExtensionIntegrationSection({
           </div>
           <div className="min-w-0">
             <h2 className="text-base font-semibold text-gray-900">{copy.title}</h2>
-            <p className="mt-1 text-sm text-gray-500">{copy.description}</p>
+            {copy.description ? (
+              <p className="mt-1 text-sm text-gray-500">{copy.description}</p>
+            ) : null}
           </div>
         </div>
       </div>
@@ -71,8 +76,23 @@ export function ExtensionIntegrationSection({
             {configured ? copy.configured : copy.notConfigured}
           </span>
           {state?.keyPreview ? (
-            <span className="font-mono text-xs text-gray-500">
-              {copy.keyPreview}: {state.keyPreview}
+            <span className="inline-flex items-center gap-2">
+              <span className="font-mono text-xs text-gray-500">
+                {copy.keyPreview}: {state.keyPreview}
+              </span>
+              {canCopyStoredKey ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={onCopyStoredKey}
+                  disabled={busy}
+                  className="h-7 px-2 text-xs"
+                >
+                  <Copy className="mr-1.5 h-3.5 w-3.5" />
+                  {copy.copyKey}
+                </Button>
+              ) : null}
             </span>
           ) : null}
           {state?.createdAt ? (

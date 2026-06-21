@@ -24,6 +24,7 @@ const meta: Meta<typeof ExtensionIntegrationSection> = {
       configured: true,
       keyPreview: 'cb_clip_a1b2c3d4...',
       createdAt: '2026-06-20T00:00:00.000Z',
+      apiKey: 'cb_clip_a1b2c3d4StoredKeyForClipperOptions',
     },
     generatedApiKey: null,
     loading: false,
@@ -34,6 +35,7 @@ const meta: Meta<typeof ExtensionIntegrationSection> = {
     onIssueKey: () => {},
     onRevokeKey: () => {},
     onCopyGeneratedKey: () => {},
+    onCopyStoredKey: () => {},
   },
 };
 
@@ -55,6 +57,7 @@ export const NotConfigured: Story = {
       configured: false,
       keyPreview: null,
       createdAt: null,
+      apiKey: null,
     },
   },
 };

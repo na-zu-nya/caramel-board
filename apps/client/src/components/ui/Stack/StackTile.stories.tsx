@@ -129,3 +129,13 @@ export const NonRounded: Story = {
     },
   },
 };
+
+export const HoverStable: Story = {
+  args: {
+    thumbnailUrl: 'https://picsum.photos/id/64/320/320',
+    title: 'Hover Stable Stack',
+    pageCount: 5,
+    favorited: false,
+    likeCount: 1,
+  },
+};
