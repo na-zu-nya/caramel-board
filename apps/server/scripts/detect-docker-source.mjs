@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import dotenv from 'dotenv';
 
 const require = createRequire(import.meta.url);
@@ -24,6 +24,8 @@ const getArgValue = (name) => {
 };
 
 const resolveUserPath = (value) => (path.isAbsolute(value) ? value : path.join(repoRoot, value));
+
+const importFilePath = (filePath) => import(pathToFileURL(filePath).href);
 
 const unique = (values) => [...new Set(values.filter((value) => value?.trim()))];
 
@@ -172,10 +174,10 @@ const detectStorageRoot = () => {
 
 const loadPrisma = async () => {
   try {
-    return await import(path.join(serverRoot, 'node_modules/@prisma/client/index.js'));
+    return await importFilePath(path.join(serverRoot, 'node_modules/@prisma/client/index.js'));
   } catch {
     const resolved = require.resolve('@prisma/client');
-    return await import(resolved);
+    return await importFilePath(resolved);
   }
 };
 

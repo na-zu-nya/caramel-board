@@ -4,7 +4,7 @@ import crypto from 'node:crypto';
 import fs, { createReadStream, createWriteStream, promises as fsp } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import dotenv from 'dotenv';
 
 const require = createRequire(import.meta.url);
@@ -13,6 +13,8 @@ const __dirname = path.dirname(__filename);
 const serverRoot = path.resolve(__dirname, '..');
 const repoRoot = path.resolve(serverRoot, '..', '..');
 
+const importFilePath = (filePath) => import(pathToFileURL(filePath).href);
+
 dotenv.config({ path: path.join(repoRoot, '.env') });
 dotenv.config({ path: path.join(serverRoot, '.env'), override: false });
 
@@ -20,11 +22,11 @@ let prismaModule;
 let prismaSource = '';
 try {
   prismaSource = path.join(serverRoot, 'node_modules/@prisma/client/index.js');
-  prismaModule = await import(prismaSource);
+  prismaModule = await importFilePath(prismaSource);
 } catch (localError) {
   try {
     prismaSource = require.resolve('@prisma/client');
-    prismaModule = await import(prismaSource);
+    prismaModule = await importFilePath(prismaSource);
   } catch (primaryError) {
     console.error('[standalone-export] @prisma/client を読み込めませんでした');
     console.error(`local: ${localError?.message ?? localError}`);

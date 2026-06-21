@@ -1,6 +1,6 @@
 {
   "name": "caramel-board",
-  "version": "1.0.9",
+  "version": "1.0.10-beta",
   "private": true,
   "license": "SEE LICENSE IN LICENSE",
   "packageManager": "npm@10.9.2",
