@@ -61,12 +61,76 @@ fn cleanup_and_exit(app: &AppHandle) {
     app.exit(0);
 }
 
+#[cfg(target_os = "windows")]
+struct StrictSingleInstanceMutex(isize);
+
+#[cfg(target_os = "windows")]
+fn encode_windows_wide(value: impl AsRef<std::ffi::OsStr>) -> Vec<u16> {
+    use std::os::windows::prelude::OsStrExt;
+
+    value
+        .as_ref()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect()
+}
+
+fn strict_single_instance_plugin<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
+    let builder = tauri::plugin::Builder::new("strict-single-instance");
+
+    #[cfg(target_os = "windows")]
+    {
+        use windows_sys::Win32::{
+            Foundation::{CloseHandle, GetLastError, ERROR_ALREADY_EXISTS},
+            System::Threading::{CreateMutexW, ReleaseMutex},
+        };
+
+        return builder
+            .setup(|app, _api| {
+                let mutex_name =
+                    encode_windows_wide(format!("{}-strict-sim", app.config().identifier));
+                let hmutex = unsafe { CreateMutexW(std::ptr::null(), 1, mutex_name.as_ptr()) };
+                if hmutex.is_null() {
+                    return Ok(());
+                }
+
+                if unsafe { GetLastError() } == ERROR_ALREADY_EXISTS {
+                    unsafe {
+                        CloseHandle(hmutex);
+                    }
+                    app.cleanup_before_exit();
+                    std::process::exit(0);
+                }
+
+                app.manage(StrictSingleInstanceMutex(hmutex as isize));
+                Ok(())
+            })
+            .on_event(|app, event| {
+                if let tauri::RunEvent::Exit = event {
+                    if let Some(hmutex) = app.try_state::<StrictSingleInstanceMutex>() {
+                        unsafe {
+                            ReleaseMutex(hmutex.0 as _);
+                            CloseHandle(hmutex.0 as _);
+                        }
+                    }
+                }
+            })
+            .build();
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        builder.build()
+    }
+}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
             show_settings_window(app);
             refresh_tray_menu(app);
         }))
+        .plugin(strict_single_instance_plugin())
         .plugin(tauri_plugin_autostart::init(
             MacosLauncher::LaunchAgent,
             Some(vec!["--background"]),
