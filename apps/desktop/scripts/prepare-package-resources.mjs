@@ -20,6 +20,7 @@ const uvRuntimeResource = path.join(runtimeResource, 'uv');
 const serverRoot = path.join(repoRoot, 'apps/server');
 const clientRoot = path.join(repoRoot, 'apps/client');
 const rootPackageJson = JSON.parse(fs.readFileSync(path.join(repoRoot, 'package.json'), 'utf8'));
+const rootPackageLock = JSON.parse(fs.readFileSync(path.join(repoRoot, 'package-lock.json'), 'utf8'));
 const nodeMajor = Number(process.env.CARAMEL_NODE_MAJOR || 24);
 
 const npmCommand = () => (process.platform === 'win32' ? 'npm.cmd' : 'npm');
@@ -143,15 +144,33 @@ const extractZipWithPowershell = (archivePath, destination) => {
   ]);
 };
 
+const nodeExecutableName = () => (process.platform === 'win32' ? 'node.exe' : 'node');
+
+const findNodeExecutable = (root) => {
+  const executableName = nodeExecutableName();
+  const candidates =
+    process.platform === 'win32'
+      ? [path.join(root, executableName), path.join(root, 'bin', executableName)]
+      : [path.join(root, 'bin', executableName), path.join(root, executableName)];
+  return candidates.find((candidate) => fs.existsSync(candidate));
+};
+
+const installNodeExecutable = (sourceRoot) => {
+  const executable = findNodeExecutable(sourceRoot);
+  if (!executable) {
+    throw new Error(`Node archive did not include ${nodeExecutableName()}`);
+  }
+  const target = path.join(nodeRuntimeResource, nodeExecutableName());
+  fs.copyFileSync(executable, target);
+  fs.chmodSync(target, 0o755);
+};
+
 const installNodeRuntime = async () => {
   ensureEmptyDir(nodeRuntimeResource);
 
   if (process.env.CARAMEL_NODE_SOURCE === 'local') {
     const localNode = process.execPath;
-    const target = path.join(
-      nodeRuntimeResource,
-      process.platform === 'win32' ? 'node.exe' : 'node'
-    );
+    const target = path.join(nodeRuntimeResource, nodeExecutableName());
     fs.copyFileSync(localNode, target);
     fs.chmodSync(target, 0o755);
     console.log(`Copied local Node runtime: ${localNode}`);
@@ -181,7 +200,7 @@ const installNodeRuntime = async () => {
     throw new Error(`Node archive did not extract to ${extracted}`);
   }
 
-  fs.cpSync(extracted, nodeRuntimeResource, { recursive: true, force: true });
+  installNodeExecutable(extracted);
   console.log(`Installed Node runtime ${version} for ${platform}-${arch}`);
 };
 
@@ -239,14 +258,143 @@ const writeRuntimeServerPackageJson = () => {
     version: rootPackageJson.version,
     type: 'module',
     dependencies: raw.dependencies,
-    devDependencies: {
-      prisma: raw.dependencies.prisma,
-    },
   };
   fs.writeFileSync(
     path.join(serverResource, 'package.json'),
     `${JSON.stringify(packageJson, null, 2)}\n`
   );
+};
+
+const rootDependencyPackagePath = (packageName) => path.posix.join('node_modules', packageName);
+
+const platformMatches = (constraints, currentValue) => {
+  if (!Array.isArray(constraints)) return true;
+  const excluded = constraints.some((constraint) => constraint === `!${currentValue}`);
+  if (excluded) return false;
+
+  const included = constraints.filter((constraint) => !constraint.startsWith('!'));
+  return included.length === 0 || included.includes(currentValue);
+};
+
+const packageSupportsCurrentPlatform = (packageEntry) => {
+  return (
+    platformMatches(packageEntry.os, process.platform) &&
+    platformMatches(packageEntry.cpu, process.arch)
+  );
+};
+
+const resolveDependencyPackagePath = (fromPackagePath, dependencyName) => {
+  let current = fromPackagePath;
+  const candidates = [];
+
+  while (current && current !== '.') {
+    candidates.push(path.posix.join(current, 'node_modules', dependencyName));
+    current = path.posix.dirname(current);
+  }
+  candidates.push(rootDependencyPackagePath(dependencyName));
+
+  return candidates.find((candidate) => rootPackageLock.packages[candidate]);
+};
+
+const copyLockedPackage = (packagePath) => {
+  const source = path.join(repoRoot, packagePath);
+  if (!fs.existsSync(source)) {
+    throw new Error(`Installed package was not found: ${packagePath}`);
+  }
+  const target = path.join(serverResource, packagePath);
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.cpSync(source, target, {
+    recursive: true,
+    force: true,
+    verbatimSymlinks: true,
+  });
+};
+
+const copyRuntimeDependencyClosure = (packagePath, copiedPackagePaths) => {
+  if (copiedPackagePaths.has(packagePath)) return;
+
+  const packageEntry = rootPackageLock.packages[packagePath];
+  if (!packageEntry) {
+    throw new Error(`Package lock entry was not found: ${packagePath}`);
+  }
+  if (!packageSupportsCurrentPlatform(packageEntry)) return;
+
+  copyLockedPackage(packagePath);
+  copiedPackagePaths.add(packagePath);
+
+  for (const dependencyName of Object.keys(packageEntry.dependencies ?? {})) {
+    const resolvedPackagePath = resolveDependencyPackagePath(packagePath, dependencyName);
+    if (!resolvedPackagePath) {
+      throw new Error(`Dependency lock entry was not found: ${packagePath} -> ${dependencyName}`);
+    }
+    copyRuntimeDependencyClosure(resolvedPackagePath, copiedPackagePaths);
+  }
+
+  for (const dependencyName of Object.keys(packageEntry.optionalDependencies ?? {})) {
+    const resolvedPackagePath = resolveDependencyPackagePath(packagePath, dependencyName);
+    if (resolvedPackagePath) {
+      copyRuntimeDependencyClosure(resolvedPackagePath, copiedPackagePaths);
+    }
+  }
+};
+
+const installServerRuntimeDependencies = () => {
+  const raw = JSON.parse(fs.readFileSync(path.join(serverRoot, 'package.json'), 'utf8'));
+  const copiedPackagePaths = new Set();
+  fs.mkdirSync(path.join(serverResource, 'node_modules'), { recursive: true });
+
+  for (const dependencyName of Object.keys(raw.dependencies ?? {})) {
+    copyRuntimeDependencyClosure(rootDependencyPackagePath(dependencyName), copiedPackagePaths);
+  }
+  console.log(`Copied ${copiedPackagePaths.size} runtime packages from root node_modules`);
+};
+
+const generateServerPrismaClient = () => {
+  run(
+    packageBin(repoRoot, 'prisma'),
+    ['generate', '--schema', path.join(serverRoot, 'prisma/schema.prisma')],
+    {
+      cwd: repoRoot,
+      env: {
+        ...process.env,
+        PRISMA_GENERATE_SKIP_AUTOINSTALL: '1',
+      },
+    }
+  );
+};
+
+const installGeneratedPrismaClient = () => {
+  const source = path.join(repoRoot, 'node_modules/.prisma/client');
+  if (!fs.existsSync(source)) {
+    throw new Error(`Generated Prisma client was not found: ${source}`);
+  }
+
+  const target = path.join(serverResource, 'node_modules/.prisma/client');
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.cpSync(source, target, { recursive: true, force: true });
+};
+
+const removeIfExists = (target) => {
+  fs.rmSync(target, { recursive: true, force: true });
+};
+
+const removeFilesByExtension = (root, extensions) => {
+  if (!fs.existsSync(root)) return;
+  for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+    const entryPath = path.join(root, entry.name);
+    if (entry.isDirectory()) {
+      removeFilesByExtension(entryPath, extensions);
+    } else if (extensions.some((extension) => entry.name.endsWith(extension))) {
+      fs.rmSync(entryPath, { force: true });
+    }
+  }
+};
+
+const pruneServerRuntime = () => {
+  const nodeModules = path.join(serverResource, 'node_modules');
+  removeIfExists(path.join(nodeModules, '.bin'));
+  removeIfExists(path.join(nodeModules, '@prisma/client/generator-build'));
+  removeFilesByExtension(nodeModules, ['.map', '.d.ts', '.d.mts']);
 };
 
 const prepareServerRuntime = () => {
@@ -266,12 +414,10 @@ const prepareServerRuntime = () => {
   });
   writeRuntimeServerPackageJson();
 
-  run(npmCommand(), ['install', '--omit=dev', '--package-lock=false'], { cwd: serverResource });
-  run(
-    packageBin(serverResource, 'prisma'),
-    ['generate', '--schema', path.join(serverResource, 'prisma/schema.prisma')],
-    { cwd: serverResource }
-  );
+  installServerRuntimeDependencies();
+  generateServerPrismaClient();
+  installGeneratedPrismaClient();
+  pruneServerRuntime();
 };
 
 const prepareClientRuntime = () => {
