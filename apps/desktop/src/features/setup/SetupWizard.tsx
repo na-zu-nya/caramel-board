@@ -887,7 +887,8 @@ export function SetupWizard({
           setupCompleted: false,
           carryExistingData: false,
         });
-        setAppliedSettings(applied as FullSettings);
+        const prepared = await applyStandaloneMigrationIfNeeded(applied as FullSettings);
+        setAppliedSettings(prepared);
         setDatabaseSetupIncluded(false);
         setStep('sharing-setup');
       } catch (err) {
@@ -896,7 +897,7 @@ export function SetupWizard({
         setBusy(false);
       }
     },
-    [targetPath, inspectTarget, inspection, handleApplyDataStore]
+    [targetPath, inspectTarget, inspection, handleApplyDataStore, applyStandaloneMigrationIfNeeded]
   );
 
   const handleConfirmExisting = useCallback(async () => {

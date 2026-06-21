@@ -45,6 +45,9 @@ export function StandaloneMigrationPanel({
   onRefresh,
   onOpenDialog,
 }: StandaloneMigrationPanelProps) {
+  const showProgress = Boolean(progress && (progress.running || progress.error));
+  const progressTitle = progress?.error ? copy.errorTitle : copy.inProgress;
+
   return (
     <div className="settings-group">
       <div className="group-heading">
@@ -86,7 +89,7 @@ export function StandaloneMigrationPanel({
         </button>
       </div>
 
-      {progress?.running || progress?.completed || progress?.error ? (
+      {showProgress && progress ? (
         <div
           className={
             progress.error
@@ -98,7 +101,7 @@ export function StandaloneMigrationPanel({
         >
           <div className="install-progress-heading">
             <Database size={16} />
-            <strong>{copy.inProgress}</strong>
+            <strong>{progressTitle}</strong>
           </div>
           <p>{progress.message}</p>
           <div className="progress-track">
