@@ -27,6 +27,18 @@ export const Basic: Story = {
       // Storybook用のダミー動作
       console.log('remove stack');
     },
+    collectionMenu: {
+      collections: [
+        { id: 1, name: 'Reference' },
+        { id: 2, name: 'Moodboard' },
+      ],
+      onCreateCollection: () => {
+        console.log('create collection from stack');
+      },
+      onAddToCollection: (collectionId) => {
+        console.log('add stack to collection', collectionId);
+      },
+    },
   },
 };
 
@@ -55,6 +67,51 @@ export const AsLink: Story = {
       onDragEnd: () => {
         console.log('drag end');
       },
+    },
+  },
+};
+
+export const SelectedBatch: Story = {
+  args: {
+    thumbnailUrl: 'https://picsum.photos/id/42/320/320',
+    title: 'Selected Stack',
+    pageCount: 6,
+    favorited: false,
+    likeCount: 0,
+    isSelectionMode: true,
+    isSelected: true,
+    selectedActionCount: 3,
+    onDownload: () => {
+      console.log('download stack originals');
+    },
+    onDownloadSelected: () => {
+      console.log('download selected stack originals');
+    },
+    onBulkEditSelected: () => {
+      console.log('bulk edit selected stacks');
+    },
+    onMergeSelected: () => {
+      console.log('merge selected stacks');
+    },
+    onRemoveSelectedStacks: () => {
+      console.log('remove selected stacks');
+    },
+    onToggleSelection: () => {
+      console.log('toggle stack selection');
+    },
+  },
+};
+
+export const NonRounded: Story = {
+  args: {
+    cornerRadius: 'none',
+    thumbnailUrl: 'https://picsum.photos/id/54/320/320',
+    title: 'Immediate List Stack',
+    pageCount: 4,
+    favorited: true,
+    likeCount: 2,
+    onDownload: () => {
+      console.log('download non-rounded stack originals');
     },
   },
 };

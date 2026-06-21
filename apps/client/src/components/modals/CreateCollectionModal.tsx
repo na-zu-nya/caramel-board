@@ -15,13 +15,14 @@ import {
 import { apiClient } from '@/lib/api-client';
 import { useT } from '@/lib/i18n';
 import { currentDatasetAtom } from '@/stores/ui';
-import type { CollectionFolder, CollectionType } from '@/types';
+import type { Collection, CollectionFolder, CollectionType } from '@/types';
 
 interface CreateCollectionModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSuccess?: () => void;
+  onSuccess?: (collection: Collection) => void | Promise<void>;
   type?: CollectionType;
+  lockType?: boolean;
 }
 
 export function CreateCollectionModal({
@@ -29,6 +30,7 @@ export function CreateCollectionModal({
   onOpenChange,
   onSuccess,
   type,
+  lockType = false,
 }: CreateCollectionModalProps) {
   const t = useT();
   const params = useParams({ strict: false });
@@ -114,9 +116,9 @@ export function CreateCollectionModal({
         payload.filterConfig = {};
       }
 
-      await apiClient.createCollection(payload);
+      const collection = await apiClient.createCollection(payload);
 
-      onSuccess?.();
+      await onSuccess?.(collection);
       onOpenChange(false);
 
       // Reset form
@@ -180,26 +182,28 @@ export function CreateCollectionModal({
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="collection-type" className="text-gray-700">
-              {t.collection.type}
-            </Label>
-            <Select
-              value={collectionType}
-              onValueChange={(value: CollectionType) => setCollectionType(value)}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="MANUAL">{t.collection.collection}</SelectItem>
-                <SelectItem value="SMART">{t.collection.smartCollection}</SelectItem>
-              </SelectContent>
-            </Select>
-            {collectionType === 'SMART' && (
-              <p className="text-sm text-muted-foreground">{t.collection.smartDescription}</p>
-            )}
-          </div>
+          {!lockType ? (
+            <div className="space-y-2">
+              <Label htmlFor="collection-type" className="text-gray-700">
+                {t.collection.type}
+              </Label>
+              <Select
+                value={collectionType}
+                onValueChange={(value: CollectionType) => setCollectionType(value)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="MANUAL">{t.collection.collection}</SelectItem>
+                  <SelectItem value="SMART">{t.collection.smartCollection}</SelectItem>
+                </SelectContent>
+              </Select>
+              {collectionType === 'SMART' && (
+                <p className="text-sm text-muted-foreground">{t.collection.smartDescription}</p>
+              )}
+            </div>
+          ) : null}
 
           <div className="space-y-2">
             <Label htmlFor="collection-folder" className="text-gray-700">

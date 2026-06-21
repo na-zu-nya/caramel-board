@@ -1,27 +1,13 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import {
-  Book,
-  Bookmark,
-  Check,
-  Download,
-  GalleryVerticalEnd,
-  GitMerge,
-  Heart,
-  Info,
-  NotebookText,
-  Star,
-  Trash2,
-} from 'lucide-react';
+import { Book, Bookmark, Check, Heart, Star } from 'lucide-react';
 import { useCallback, useState } from 'react';
+import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
 import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuSeparator,
-  ContextMenuTrigger,
-} from '@/components/ui/context-menu';
+  type StackContextMenuCollection,
+  StackContextMenuContent,
+} from '@/components/ui/Stack/StackContextMenuContent';
 import { useDrag } from '@/contexts/DragContext';
 import { useScratch } from '@/hooks/useScratch';
 import { apiClient } from '@/lib/api-client';
@@ -60,7 +46,16 @@ interface StackGridItemProps {
   onToggleFavorite: (item: MediaGridItem, event: React.MouseEvent) => void;
   selectedItems?: Set<string | number>;
   selectedStackIdsInOrder?: number[];
+  onBulkEditSelected?: () => void | Promise<void>;
   onMergeStacks?: () => void | Promise<void>;
+  onRemoveSelectedStacks?: (stackIds: Array<string | number>) => void | Promise<void>;
+  collectionMenuCollections?: readonly StackContextMenuCollection[];
+  isCollectionMenuLoading?: boolean;
+  onAddStacksToCollection?: (
+    collectionId: number,
+    stackIds: Array<string | number>
+  ) => void | Promise<void>;
+  onCreateCollectionWithStacks?: (stackIds: Array<string | number>) => void | Promise<void>;
   allowRemoveFromCollection?: boolean;
   onRemoveFromCollection?: (id: string | number) => void | Promise<void>;
   allowRemoveFromScratch?: boolean;
@@ -79,7 +74,13 @@ export function StackGridItem({
   onToggleFavorite,
   selectedItems,
   selectedStackIdsInOrder,
+  onBulkEditSelected,
   onMergeStacks,
+  onRemoveSelectedStacks,
+  collectionMenuCollections,
+  isCollectionMenuLoading = false,
+  onAddStacksToCollection,
+  onCreateCollectionWithStacks,
   allowRemoveFromCollection = false,
   onRemoveFromCollection,
   allowRemoveFromScratch = false,
@@ -124,10 +125,11 @@ export function StackGridItem({
   const setNavigationState = useSetAtom(navigationStateAtom);
   const selectedInfoId = useAtomValue(selectedItemIdAtom);
   const queryClient = useQueryClient();
+  const isSelectionContext =
+    isSelectionMode && !!selectedItems?.has(item.id) && (selectedItems?.size ?? 0) > 0;
   const canMergeSelectedStacks =
-    isSelectionMode &&
+    isSelectionContext &&
     (selectedStackIdsInOrder?.length ?? 0) >= 2 &&
-    !!selectedItems?.has(item.id) &&
     typeof onMergeStacks === 'function';
   const returnTo = getCurrentReturnTo();
   const stackLinkSearch = {
@@ -137,18 +139,32 @@ export function StackGridItem({
     ...(item.mediaType ? { mediaType: item.mediaType } : {}),
     ...(returnTo ? { returnTo } : {}),
   };
-  const getDownloadStackIds = useCallback((): Array<string | number> => {
-    if (isSelectionMode && selectedItems?.has(item.id)) {
+  const getContextActionStackIds = useCallback((): Array<string | number> => {
+    if (isSelectionContext && selectedItems) {
       if (selectedStackIdsInOrder && selectedStackIdsInOrder.length > 0) {
         return selectedStackIdsInOrder;
       }
       return Array.from(selectedItems);
     }
     return [getStackId()];
-  }, [getStackId, isSelectionMode, item.id, selectedItems, selectedStackIdsInOrder]);
+  }, [getStackId, isSelectionContext, selectedItems, selectedStackIdsInOrder]);
   const handleDownloadOriginals = useCallback(() => {
-    downloadStackOriginals(datasetId, getDownloadStackIds());
-  }, [datasetId, getDownloadStackIds]);
+    downloadStackOriginals(datasetId, getContextActionStackIds());
+  }, [datasetId, getContextActionStackIds]);
+  const handleBulkEditSelected = useCallback(async () => {
+    await onBulkEditSelected?.();
+  }, [onBulkEditSelected]);
+  const handleRemoveSelectedStacks = useCallback(async () => {
+    const stackIds = getContextActionStackIds();
+    if (stackIds.length === 0) return;
+    const confirmed = window.confirm(t.grid.deleteStacksConfirm(stackIds.length));
+    if (!confirmed) return;
+    await onRemoveSelectedStacks?.(stackIds);
+  }, [getContextActionStackIds, onRemoveSelectedStacks, t]);
+  const handleInfo = useCallback(() => {
+    setSelectedItemId(item.id);
+    setInfoOpen(true);
+  }, [item.id, setInfoOpen, setSelectedItemId]);
   const saveNavigationPosition = useCallback(() => {
     setNavigationState({
       scrollPosition: window.scrollY,
@@ -171,6 +187,66 @@ export function StackGridItem({
           : undefined,
     });
   }, [datasetId, favoriteKind, getStackId, item.favoritePage, navigate, saveNavigationPosition]);
+  const handleFindSimilar = useCallback(async () => {
+    const ds = datasetId || '1';
+    const stackId = getStackId();
+    const id = typeof stackId === 'string' ? Number.parseInt(stackId, 10) : stackId;
+    await navigate({
+      to: '/library/$datasetId/stacks/$stackId/similar',
+      params: { datasetId: ds, stackId: String(id) },
+    });
+  }, [datasetId, getStackId, navigate]);
+  const handleAddToScratch = useCallback(async () => {
+    try {
+      const sc = await ensureScratch();
+      const stackId = typeof item.id === 'string' ? Number.parseInt(item.id, 10) : item.id;
+      await apiClient.addStackToCollection(sc.id, stackId);
+      await queryClient.invalidateQueries({ queryKey: ['stacks'] });
+      await queryClient.invalidateQueries({ queryKey: ['library-counts', datasetId] });
+      await queryClient.refetchQueries({ queryKey: ['library-counts', datasetId] });
+    } catch (e) {
+      console.error('Failed to add to Scratch', e);
+    }
+  }, [datasetId, ensureScratch, item.id, queryClient]);
+  const handleAddToCollection = useCallback(
+    async (collectionId: number) => {
+      await onAddStacksToCollection?.(collectionId, getContextActionStackIds());
+    },
+    [getContextActionStackIds, onAddStacksToCollection]
+  );
+  const handleCreateCollectionWithStacks = useCallback(async () => {
+    await onCreateCollectionWithStacks?.(getContextActionStackIds());
+  }, [getContextActionStackIds, onCreateCollectionWithStacks]);
+  const collectionMenu =
+    onAddStacksToCollection && onCreateCollectionWithStacks
+      ? {
+          collections: collectionMenuCollections ?? [],
+          isLoading: isCollectionMenuLoading,
+          onCreateCollection: handleCreateCollectionWithStacks,
+          onAddToCollection: handleAddToCollection,
+        }
+      : undefined;
+  const handleMergeSelected = useCallback(async () => {
+    if (!selectedStackIdsInOrder || typeof onMergeStacks !== 'function') return;
+    const [targetId, ...sourceIds] = selectedStackIdsInOrder;
+    const confirmed = window.confirm(t.grid.mergeSelectedConfirm(targetId, sourceIds.length));
+    if (!confirmed) return;
+    await onMergeStacks();
+  }, [onMergeStacks, selectedStackIdsInOrder, t]);
+  const handleRemoveFromCollectionItem = useCallback(async () => {
+    try {
+      await onRemoveFromCollection?.(item.id);
+    } catch (e) {
+      console.error('Failed to remove from collection', e);
+    }
+  }, [item.id, onRemoveFromCollection]);
+  const handleRemoveFromScratchItem = useCallback(async () => {
+    try {
+      await onRemoveFromScratch?.(item.id);
+    } catch (e) {
+      console.error('Failed to remove from scratch', e);
+    }
+  }, [item.id, onRemoveFromScratch]);
   const enableNativeImageDrag = useCallback(() => {
     if (isSelectionMode) return;
     if (sourceImageUrl) {
@@ -234,6 +310,13 @@ export function StackGridItem({
     t,
     toNumber,
   ]);
+
+  const canRemoveSelectedStacks =
+    isSelectionContext && typeof onRemoveSelectedStacks === 'function';
+  const handleContextRemove = canRemoveSelectedStacks
+    ? handleRemoveSelectedStacks
+    : handleRemoveStack;
+  const contextActionCount = getContextActionStackIds().length;
 
   return (
     <ContextMenu>
@@ -522,110 +605,23 @@ export function StackGridItem({
           )}
         </Link>
       </ContextMenuTrigger>
-      <ContextMenuContent className="w-48">
-        {/* Open */}
-        <ContextMenuItem onClick={handleContextOpen}>{t.contextMenu.open}</ContextMenuItem>
-        <ContextMenuItem onClick={handleDownloadOriginals}>
-          <Download className="w-4 h-4 mr-2" />
-          {t.contextMenu.download}
-        </ContextMenuItem>
-        <ContextMenuSeparator />
-
-        {/* Info + non-destructive actions */}
-        <ContextMenuItem
-          onClick={() => {
-            setSelectedItemId(item.id);
-            setInfoOpen(true);
-          }}
-        >
-          <Info className="w-4 h-4 mr-2" />
-          {t.contextMenu.info}
-        </ContextMenuItem>
-        <ContextMenuItem
-          onClick={async () => {
-            const ds = datasetId || '1';
-            const stackId = getStackId();
-            const id = typeof stackId === 'string' ? Number.parseInt(stackId, 10) : stackId;
-            await navigate({
-              to: '/library/$datasetId/stacks/$stackId/similar',
-              params: { datasetId: ds, stackId: String(id) },
-            });
-          }}
-        >
-          <GalleryVerticalEnd className="w-4 h-4 mr-2" />
-          {t.contextMenu.findSimilar}
-        </ContextMenuItem>
-        <ContextMenuItem
-          onClick={async () => {
-            try {
-              const sc = await ensureScratch();
-              const stackId =
-                typeof item.id === 'string' ? Number.parseInt(item.id, 10) : (item.id as number);
-              await apiClient.addStackToCollection(sc.id, stackId);
-              await queryClient.invalidateQueries({ queryKey: ['stacks'] });
-              await queryClient.invalidateQueries({ queryKey: ['library-counts', datasetId] });
-              await queryClient.refetchQueries({ queryKey: ['library-counts', datasetId] });
-            } catch (e) {
-              console.error('Failed to add to Scratch', e);
-            }
-          }}
-        >
-          <NotebookText className="w-4 h-4 mr-2" />
-          {t.contextMenu.addToScratch}
-        </ContextMenuItem>
-        {canMergeSelectedStacks && (
-          <ContextMenuItem
-            onClick={async () => {
-              if (!selectedStackIdsInOrder || typeof onMergeStacks !== 'function') return;
-              const [targetId, ...sourceIds] = selectedStackIdsInOrder;
-              const confirmed = window.confirm(
-                t.grid.mergeSelectedConfirm(targetId, sourceIds.length)
-              );
-              if (!confirmed) return;
-              await onMergeStacks();
-            }}
-          >
-            <GitMerge className="w-4 h-4 mr-2" />
-            {t.grid.mergeStacks}
-          </ContextMenuItem>
-        )}
-        {(allowRemoveFromCollection || allowRemoveFromScratch) && <ContextMenuSeparator />}
-        {allowRemoveFromCollection && (
-          <ContextMenuItem
-            onClick={async () => {
-              try {
-                await onRemoveFromCollection?.(item.id);
-              } catch (e) {
-                console.error('Failed to remove from collection', e);
-              }
-            }}
-            className="text-red-600 focus:text-red-700"
-          >
-            <Trash2 className="w-4 h-4 mr-2" />
-            {t.contextMenu.removeFromCollection}
-          </ContextMenuItem>
-        )}
-        {allowRemoveFromScratch && (
-          <ContextMenuItem
-            onClick={async () => {
-              try {
-                await onRemoveFromScratch?.(item.id);
-              } catch (e) {
-                console.error('Failed to remove from scratch', e);
-              }
-            }}
-            className="text-red-600 focus:text-red-700"
-          >
-            <Trash2 className="w-4 h-4 mr-2" />
-            {t.contextMenu.removeFromScratch}
-          </ContextMenuItem>
-        )}
-        <ContextMenuSeparator />
-        <ContextMenuItem className="text-red-600 focus:text-red-700" onClick={handleRemoveStack}>
-          <Trash2 className="w-4 h-4 mr-2" />
-          {t.info.removeStack}
-        </ContextMenuItem>
-      </ContextMenuContent>
+      <StackContextMenuContent
+        isSelectionContext={isSelectionContext}
+        selectedActionCount={contextActionCount}
+        onOpen={handleContextOpen}
+        onBulkEditSelected={isSelectionContext ? handleBulkEditSelected : undefined}
+        onDownload={handleDownloadOriginals}
+        onInfo={handleInfo}
+        onFindSimilar={handleFindSimilar}
+        onAddToScratch={handleAddToScratch}
+        collectionMenu={collectionMenu}
+        onMergeSelected={canMergeSelectedStacks ? handleMergeSelected : undefined}
+        onRemoveFromCollection={
+          allowRemoveFromCollection ? handleRemoveFromCollectionItem : undefined
+        }
+        onRemoveFromScratch={allowRemoveFromScratch ? handleRemoveFromScratchItem : undefined}
+        onRemoveStack={handleContextRemove}
+      />
     </ContextMenu>
   );
 }

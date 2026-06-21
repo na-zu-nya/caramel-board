@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useAtomValue, useSetAtom } from 'jotai';
-import { GitMerge, Info, Loader2, Pencil } from 'lucide-react';
+import { Info, Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { StackGridItem } from '@/components/grid/StackGridItem.tsx';
@@ -11,6 +11,7 @@ import { HeaderIconButton } from '@/components/ui/Header/HeaderIconButton';
 import { SelectionActionBar } from '@/components/ui/selection-action-bar';
 import { useStackGrid } from '@/hooks/features/useStackGrid';
 import { useSparseInfiniteScroll } from '@/hooks/useSparseInfiniteScroll';
+import { useStackCollectionMenu } from '@/hooks/useStackCollectionMenu';
 import { apiClient } from '@/lib/api-client';
 import {
   type FolderGroup,
@@ -23,6 +24,7 @@ import {
 import { useT } from '@/lib/i18n';
 import { getSelectedMediaGridStackIds } from '@/lib/media-grid-selection';
 import { applyScrollbarCompensation, removeScrollbarCompensation } from '@/lib/scrollbar-utils';
+import { createStackSelectionActions } from '@/lib/stack-selection-actions';
 import { cn } from '@/lib/utils';
 import { reorderModeAtom, selectionModeAtom } from '@/stores/ui';
 import {
@@ -74,6 +76,13 @@ export default function SparseStackGrid({
   const setUploadDefaults = useSetAtom(uploadDefaultsAtom);
   const addNotification = useSetAtom(addUploadNotificationAtom);
   const uploadNotifications = useAtomValue(uploadNotificationsAtom);
+  const {
+    collections: collectionMenuCollections,
+    isLoadingCollections: isCollectionMenuLoading,
+    addStackIdsToCollection,
+    openCreateCollectionForStackIds,
+    createCollectionModal,
+  } = useStackCollectionMenu(datasetId);
 
   const [folderQueue, setFolderQueue] = useState<FolderImportRequest[]>([]);
   const [activeFolder, setActiveFolder] = useState<FolderImportRequest | null>(null);
@@ -409,6 +418,34 @@ export default function SparseStackGrid({
     t,
   ]);
 
+  const selectionActions = useMemo(
+    () =>
+      createStackSelectionActions({
+        selectedCount: selectedItems.size,
+        copy: {
+          bulkEdit: t.grid.bulkEdit,
+          downloadSelected: t.contextMenu.downloadSelected,
+          mergeStacks: t.grid.mergeStacks,
+          refreshThumbnails: t.grid.refreshThumbnails,
+          optimizeVideo: t.grid.optimizeVideo,
+          deleteStacks: t.grid.deleteStacks,
+          deleteStacksConfirm: t.grid.deleteStacksConfirm,
+        },
+        bulkEdit: { onSelect: () => setIsEditPanelOpen((prev) => !prev) },
+        mergeStacks:
+          selectedStackIdsInOrder.length >= 2
+            ? {
+                onSelect: handleMergeStacks,
+                confirmMessage: t.grid.mergeSelectedConfirm(
+                  selectedStackIdsInOrder[0],
+                  selectedStackIdsInOrder.length - 1
+                ),
+              }
+            : undefined,
+      }),
+    [handleMergeStacks, selectedItems.size, selectedStackIdsInOrder, setIsEditPanelOpen, t]
+  );
+
   // Handle scroll-based loading
   const handleScroll = useCallback(() => {
     const container = containerRef.current;
@@ -683,6 +720,10 @@ export default function SparseStackGrid({
                   selectedItems={selectedItems}
                   selectedStackIdsInOrder={selectedStackIdsInOrder}
                   onMergeStacks={handleMergeStacks}
+                  collectionMenuCollections={collectionMenuCollections}
+                  isCollectionMenuLoading={isCollectionMenuLoading}
+                  onAddStacksToCollection={addStackIdsToCollection}
+                  onCreateCollectionWithStacks={openCreateCollectionForStackIds}
                   onReorder={() => {}} // Not implemented in sparse mode
                 />
               </div>
@@ -722,36 +763,15 @@ export default function SparseStackGrid({
         />
       )}
 
+      {createCollectionModal}
+
       {/* Selection Action Bar */}
       {isSelectionMode && selectedItems.size > 0 && (
         <SelectionActionBar
           selectedCount={selectedItems.size}
           onClearSelection={handleDeselectAll}
           onExitSelectionMode={() => setSelectionMode(false)}
-          actions={[
-            {
-              label: t.grid.bulkEdit,
-              value: 'bulk-edit',
-              onSelect: () => setIsEditPanelOpen((prev) => !prev),
-              icon: <Pencil size={12} />,
-              group: 'primary',
-            },
-            ...(selectedStackIdsInOrder.length >= 2
-              ? [
-                  {
-                    label: t.grid.mergeStacks,
-                    value: 'merge-stacks',
-                    onSelect: handleMergeStacks,
-                    icon: <GitMerge size={12} />,
-                    confirmMessage: t.grid.mergeSelectedConfirm(
-                      selectedStackIdsInOrder[0],
-                      selectedStackIdsInOrder.length - 1
-                    ),
-                    group: 'primary' as const,
-                  },
-                ]
-              : []),
-          ]}
+          actions={selectionActions}
         />
       )}
 

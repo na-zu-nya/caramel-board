@@ -35,6 +35,16 @@ const meta: Meta<typeof StackGridItem> = {
     onToggleFavorite: () => {
       console.log('toggle favorite');
     },
+    collectionMenuCollections: [
+      { id: 1, name: 'Reference', icon: 'folder' },
+      { id: 2, name: 'Moodboard', icon: 'folder' },
+    ],
+    onAddStacksToCollection: async (collectionId, stackIds) => {
+      console.log('add stacks to collection', collectionId, stackIds);
+    },
+    onCreateCollectionWithStacks: async (stackIds) => {
+      console.log('create collection with stacks', stackIds);
+    },
   },
 };
 
@@ -72,10 +82,16 @@ export const SelectionMode: Story = {
   args: {
     isSelectionMode: true,
     isSelected: true,
-    selectedItems: new Set([sampleItem.id]),
+    selectedItems: new Set([sampleItem.id, 43]),
     selectedStackIdsInOrder: [Number(sampleItem.id), 43],
+    onBulkEditSelected: async () => {
+      console.log('bulk edit selected stacks');
+    },
     onMergeStacks: async () => {
       console.log('merge selected stacks');
+    },
+    onRemoveSelectedStacks: async (stackIds) => {
+      console.log('remove selected stacks', stackIds);
     },
   },
   render: (args) => <StackGridItemStory {...args} />,

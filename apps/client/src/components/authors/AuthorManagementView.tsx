@@ -8,11 +8,11 @@ import {
   Trash2,
   UserRound,
 } from 'lucide-react';
-import type { ChangeEvent } from 'react';
+import type { ChangeEvent, ReactElement } from 'react';
 import { useCallback, useState } from 'react';
 import { AuthorLinkQuickAdd } from '@/components/authors/AuthorLinkQuickAdd';
 import { authorLinkStyles } from '@/components/authors/authorLinkStyles';
-import TagStackGrid from '@/components/TagStackGrid';
+import { StackTileGrid } from '@/components/StackTileGrid';
 import { Button } from '@/components/ui/button';
 import { SmallSearchField } from '@/components/ui/Controls';
 import { Input } from '@/components/ui/input';
@@ -55,11 +55,15 @@ interface AuthorManagementViewProps {
   authors?: Author[] | null;
   selectedAuthor: Author | null;
   selectedAuthorId: number | null;
+  datasetId?: string | number;
   searchQuery: string;
   draftName: string;
   authorStacks?: MediaGridItem[] | null;
   authorStacksTotal?: number;
   selectedMergeIds?: ReadonlySet<number> | null;
+  stackSelectionMode?: boolean;
+  selectedStackIds?: ReadonlySet<string | number>;
+  selectedStackActionCount?: number;
   loading: boolean;
   authorStacksLoading: boolean;
   authorStacksLoadingMore: boolean;
@@ -76,6 +80,15 @@ interface AuthorManagementViewProps {
   onUpdateAuthorLink: (linkId: AuthorLink['id'], input: { url: string }) => void;
   onRemoveAuthorLink: (linkId: AuthorLink['id']) => void;
   onLoadMoreAuthorStacks: () => void;
+  onEnterStackSelectionMode?: (stackId: string | number) => void;
+  onToggleStackSelection?: (stackId: string | number) => void;
+  onSelectStackRange?: (stackIds: Array<string | number>) => void;
+  onBulkEditSelectedStacks?: () => void;
+  onDownloadSelectedStacks?: () => void;
+  onRemoveSelectedStacks?: () => void;
+  getStackLinkElement?: (stack: MediaGridItem) => ReactElement;
+  onOpenStack?: (stack: MediaGridItem) => void | Promise<void>;
+  onDownloadStack?: (stack: MediaGridItem) => void;
   onSave: () => void;
   onMerge: () => void;
 }
@@ -92,11 +105,15 @@ export function AuthorManagementView({
   authors,
   selectedAuthor,
   selectedAuthorId,
+  datasetId,
   searchQuery,
   draftName,
   authorStacks,
   authorStacksTotal,
   selectedMergeIds,
+  stackSelectionMode = false,
+  selectedStackIds,
+  selectedStackActionCount = 0,
   loading,
   authorStacksLoading,
   authorStacksLoadingMore,
@@ -113,6 +130,15 @@ export function AuthorManagementView({
   onUpdateAuthorLink,
   onRemoveAuthorLink,
   onLoadMoreAuthorStacks,
+  onEnterStackSelectionMode,
+  onToggleStackSelection,
+  onSelectStackRange,
+  onBulkEditSelectedStacks,
+  onDownloadSelectedStacks,
+  onRemoveSelectedStacks,
+  getStackLinkElement,
+  onOpenStack,
+  onDownloadStack,
   onSave,
   onMerge,
 }: AuthorManagementViewProps) {
@@ -376,7 +402,25 @@ export function AuthorManagementView({
                 </div>
               ) : (
                 <>
-                  <TagStackGrid items={safeAuthorStacks} isLoading={authorStacksLoadingMore} />
+                  <StackTileGrid
+                    items={safeAuthorStacks}
+                    datasetId={datasetId}
+                    gridClassName="grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4"
+                    cornerRadius="rounded"
+                    isLoading={authorStacksLoadingMore}
+                    isSelectionMode={stackSelectionMode}
+                    selectedItems={selectedStackIds}
+                    selectedActionCount={selectedStackActionCount}
+                    getLinkElement={getStackLinkElement}
+                    onEnterSelectionMode={onEnterStackSelectionMode}
+                    onToggleSelection={onToggleStackSelection}
+                    onSelectRange={onSelectStackRange}
+                    onOpenItem={onOpenStack}
+                    onDownloadItem={onDownloadStack}
+                    onBulkEditSelected={onBulkEditSelectedStacks}
+                    onDownloadSelected={onDownloadSelectedStacks}
+                    onRemoveSelectedStacks={onRemoveSelectedStacks}
+                  />
                   {authorStacksHasMore && !authorStacksLoadingMore ? (
                     <div className="flex justify-center pt-2">
                       <Button

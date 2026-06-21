@@ -3,11 +3,11 @@ import { createFileRoute, Link, useLocation, useNavigate } from '@tanstack/react
 import { useAtom } from 'jotai';
 import {
   ArrowRight,
+  Check,
   Edit2,
   Filter,
   Info,
   Loader2,
-  Pencil,
   Plus,
   SquarePen,
   Tag,
@@ -20,19 +20,20 @@ import BulkEditPanel, { type EditUpdates } from '@/components/BulkEditPanel';
 import FilterPanel from '@/components/FilterPanel';
 import InfoSidebar from '@/components/InfoSidebar';
 import AutoTagMappingModal from '@/components/modals/AutoTagMappingModal';
+import { StackTileGrid } from '@/components/StackTileGrid';
 import { AutoTagDisplay } from '@/components/ui/autotag-display';
 import { Button } from '@/components/ui/button';
 import { SmallSearchField, SmallSelect } from '@/components/ui/Controls';
 import { HeaderIconButton } from '@/components/ui/Header/HeaderIconButton';
 import { JoyTagStatus } from '@/components/ui/JoyTagStatus';
-import { StackTile } from '@/components/ui/Stack';
 import { SelectItem } from '@/components/ui/select';
 import { SelectionActionBar } from '@/components/ui/selection-action-bar';
 import { useStackTile } from '@/hooks/useStackTile';
 import { useKeyboardShortcuts } from '@/hooks/utils/useKeyboardShortcut';
 import { apiClient } from '@/lib/api-client';
+import { downloadStackOriginals } from '@/lib/download-originals';
 import { useT } from '@/lib/i18n';
-import { getSourceImageFilename, getSourceImageUrl } from '@/lib/stack-drag-data';
+import { createStackSelectionActions } from '@/lib/stack-selection-actions';
 import { cn } from '@/lib/utils';
 import {
   currentFilterAtom,
@@ -123,11 +124,9 @@ function AutoTagConfigPage() {
     'count-desc'
   );
   const [infoSidebarOpen, setInfoSidebarOpen] = useAtom(infoSidebarOpenAtom);
-  const [, setSelectionMode] = useAtom(selectionModeAtom);
-  const selectionMode = false;
+  const [selectionMode, setSelectionMode] = useAtom(selectionModeAtom);
   const [selectedItems, setSelectedItems] = useState<Set<string | number>>(new Set());
   const [isEditPanelOpen, setIsEditPanelOpen] = useState(false);
-  const lastClickedIndexRef = useRef<number | null>(null);
   const debounceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [filterOpen, setFilterOpen] = useAtom(filterOpenAtom);
   const [_currentFilter, setCurrentFilter] = useAtom(currentFilterAtom);
@@ -441,6 +440,13 @@ function AutoTagConfigPage() {
         })),
     [allStacks, selectedItems]
   );
+  const selectedStackIds = useMemo(
+    () =>
+      Array.from(selectedItems)
+        .map((id) => toNumericId(id))
+        .filter((id): id is number => id !== null),
+    [selectedItems]
+  );
 
   // Restore selectedAutoTag from URL when navigation changes
   useEffect(() => {
@@ -555,6 +561,18 @@ function AutoTagConfigPage() {
     setIsEditPanelOpen(false);
   }, [clearSelection, setSelectionMode]);
 
+  const handleToggleSelectionMode = useCallback(() => {
+    if (selectionMode) {
+      exitSelectionMode();
+      return;
+    }
+
+    if (infoSidebarOpen) {
+      setInfoSidebarOpen(false);
+    }
+    setSelectionMode(true);
+  }, [exitSelectionMode, infoSidebarOpen, selectionMode, setInfoSidebarOpen, setSelectionMode]);
+
   useEffect(() => {
     exitSelectionMode();
   }, [exitSelectionMode]);
@@ -573,71 +591,109 @@ function AutoTagConfigPage() {
     setIsEditPanelOpen(false);
   }, []);
 
-  const handleTileClick = useCallback(
-    (stack: AutoTagStack, event: MouseEvent<HTMLDivElement>) => {
-      const stackIndex = allStacks.findIndex((candidate) => candidate?.id === stack.id);
+  const closeInfoSidebarBeforeSelection = useCallback(() => {
+    if (infoSidebarOpen) {
+      setInfoSidebarOpen(false);
+    }
+  }, [infoSidebarOpen, setInfoSidebarOpen]);
 
-      const recordLastClicked = () => {
-        if (stackIndex >= 0) {
-          lastClickedIndexRef.current = stackIndex;
-        }
-      };
-
-      if (event.metaKey || event.ctrlKey) {
-        recordLastClicked();
-        return;
-      }
-      if (event.altKey) {
-        recordLastClicked();
-        return;
-      }
-
-      if (event.shiftKey && selectionMode) {
-        event.preventDefault();
-        const lastIndex = lastClickedIndexRef.current ?? stackIndex;
-        if (lastIndex !== null && stackIndex >= 0 && lastIndex >= 0) {
-          const [start, end] =
-            lastIndex < stackIndex ? [lastIndex, stackIndex] : [stackIndex, lastIndex];
-          setSelectedItems((prev) => {
-            const next = new Set(prev);
-            for (let i = start; i <= end; i++) {
-              const candidate = allStacks[i];
-              if (candidate) {
-                next.add(candidate.id);
-              }
-            }
-            return next;
-          });
-        } else {
-          handleItemSelect(stack.id);
-        }
-        recordLastClicked();
-        return;
-      }
-
-      if (selectionMode) {
-        event.preventDefault();
-        handleItemSelect(stack.id);
-        recordLastClicked();
-        return;
-      }
-
-      if (infoSidebarOpen) {
-        event.preventDefault();
-        onInfo(stack.id);
-        recordLastClicked();
-      }
+  const enterSelectionModeWithItem = useCallback(
+    (itemId: string | number) => {
+      setSelectionMode(true);
+      setSelectedItems(new Set([itemId]));
     },
-    [allStacks, infoSidebarOpen, handleItemSelect, onInfo]
+    [setSelectionMode]
+  );
+
+  const selectItemRange = useCallback((itemIds: Array<string | number>) => {
+    setSelectedItems((prev) => {
+      const next = new Set(prev);
+      for (const itemId of itemIds) {
+        next.add(itemId);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleTileDefaultClick = useCallback(
+    (stack: AutoTagStack, event: MouseEvent<HTMLDivElement>) => {
+      if (!infoSidebarOpen) return;
+      event.preventDefault();
+      onInfo(stack.id);
+    },
+    [infoSidebarOpen, onInfo]
+  );
+
+  const getStackLinkElement = useCallback(
+    (stack: AutoTagStack) => (
+      <Link
+        to="/library/$datasetId/stacks/$stackId"
+        params={{ datasetId, stackId: String(stack.id) }}
+      />
+    ),
+    [datasetId]
+  );
+
+  const handleOpenStack = useCallback(
+    async (stack: AutoTagStack) => {
+      await onOpen(stack.id);
+    },
+    [onOpen]
+  );
+
+  const handleInfoStack = useCallback(
+    (stack: AutoTagStack) => {
+      onInfo(stack.id);
+    },
+    [onInfo]
+  );
+
+  const handleFindSimilarStack = useCallback(
+    async (stack: AutoTagStack) => {
+      await onFindSimilar(stack.id);
+    },
+    [onFindSimilar]
+  );
+
+  const handleAddToScratchStack = useCallback(
+    async (stack: AutoTagStack) => {
+      await onAddToScratch(stack.id);
+    },
+    [onAddToScratch]
+  );
+
+  const handleDownloadStack = useCallback(
+    (stack: AutoTagStack) => {
+      onDownload(stack.id);
+    },
+    [onDownload]
+  );
+
+  const handleToggleFavoriteStack = useCallback(
+    async (stack: AutoTagStack, favorited: boolean) => {
+      await onToggleFavorite(stack.id, favorited);
+    },
+    [onToggleFavorite]
+  );
+
+  const handleLikeStack = useCallback(
+    async (stack: AutoTagStack) => {
+      await onLike(stack.id);
+    },
+    [onLike]
+  );
+
+  const getStackDragHandlers = useCallback(
+    (stack: AutoTagStack, sourceImageUrl: string | null, sourceImageFilename: string | undefined) =>
+      dragProps(stack.id, sourceImageUrl, sourceImageFilename),
+    [dragProps]
   );
 
   const applyEditUpdates = useCallback(
     async (updates: EditUpdates) => {
       if (selectedItems.size === 0) return;
 
-      const stackIds = Array.from(selectedItems)
-        .map((id) => toNumericId(id))
-        .filter((id): id is number => id !== null);
+      const stackIds = selectedStackIds;
 
       if (stackIds.length === 0) return;
 
@@ -663,7 +719,74 @@ function AutoTagConfigPage() {
         console.error('Error applying bulk updates:', error);
       }
     },
-    [selectedItems, queryClient, datasetId, selectedAutoTag, exitSelectionMode, localFilter]
+    [
+      selectedItems.size,
+      selectedStackIds,
+      queryClient,
+      datasetId,
+      selectedAutoTag,
+      exitSelectionMode,
+      localFilter,
+    ]
+  );
+
+  const handleDownloadSelectedStacks = useCallback(() => {
+    if (selectedStackIds.length === 0) return;
+    downloadStackOriginals(datasetId, selectedStackIds);
+  }, [datasetId, selectedStackIds]);
+
+  const handleRemoveSelectedStacks = useCallback(async () => {
+    if (selectedStackIds.length === 0) return;
+
+    try {
+      await apiClient.bulkRemoveStacks(selectedStackIds);
+      await Promise.allSettled([
+        queryClient.invalidateQueries({
+          queryKey: ['autotag-stacks', datasetId, selectedAutoTag, localFilter],
+        }),
+        queryClient.invalidateQueries({ queryKey: ['stacks'] }),
+        queryClient.invalidateQueries({ queryKey: ['library-counts', datasetId] }),
+        queryClient.invalidateQueries({ queryKey: ['dataset-overview', datasetId] }),
+      ]);
+      exitSelectionMode();
+    } catch (error) {
+      console.error('Error removing selected auto-tag stacks:', error);
+      alert(t.grid.deleteStacksFailed);
+    }
+  }, [
+    datasetId,
+    exitSelectionMode,
+    localFilter,
+    queryClient,
+    selectedAutoTag,
+    selectedStackIds,
+    t,
+  ]);
+
+  const selectionActions = useMemo(
+    () =>
+      createStackSelectionActions({
+        selectedCount: selectedItems.size,
+        copy: {
+          bulkEdit: t.grid.bulkEdit,
+          downloadSelected: t.contextMenu.downloadSelected,
+          mergeStacks: t.grid.mergeStacks,
+          refreshThumbnails: t.grid.refreshThumbnails,
+          optimizeVideo: t.grid.optimizeVideo,
+          deleteStacks: t.grid.deleteStacks,
+          deleteStacksConfirm: t.grid.deleteStacksConfirm,
+        },
+        bulkEdit: { onSelect: toggleEditPanel },
+        downloadSelected: { onSelect: handleDownloadSelectedStacks },
+        deleteStacks: { onSelect: handleRemoveSelectedStacks },
+      }),
+    [
+      handleDownloadSelectedStacks,
+      handleRemoveSelectedStacks,
+      selectedItems.size,
+      t,
+      toggleEditPanel,
+    ]
   );
 
   // Handle filter change
@@ -933,66 +1056,32 @@ function AutoTagConfigPage() {
                 </div>
               ) : (
                 <>
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                    {allStacks.map((stack) => {
-                      const thumbnail = stack.thumbnail ?? stack.thumbnailUrl ?? '/no-image.png';
-                      const sourceImageUrl = getSourceImageUrl(stack, thumbnail);
-                      const sourceImageFilename = sourceImageUrl
-                        ? getSourceImageFilename(stack, sourceImageUrl, `stack-${stack.id}`)
-                        : undefined;
-                      const likeCount = Number(stack.likeCount ?? stack.liked ?? 0);
-                      const pageCount =
-                        stack.assetCount ?? stack._count?.assets ?? stack.assetsCount ?? 0;
-                      const favorited = Boolean(stack.favorited ?? stack.isFavorite);
-
-                      if (infoSidebarOpen) {
-                        return (
-                          <StackTile
-                            key={stack.id}
-                            thumbnailUrl={thumbnail}
-                            nativeImageDragUrl={sourceImageUrl}
-                            pageCount={pageCount}
-                            favorited={favorited}
-                            likeCount={likeCount}
-                            onClick={(event) => handleTileClick(stack, event)}
-                            onInfo={() => onInfo(stack.id)}
-                            onFindSimilar={() => onFindSimilar(stack.id)}
-                            onAddToScratch={() => onAddToScratch(stack.id)}
-                            onDownload={() => onDownload(stack.id)}
-                            onToggleFavorite={() => onToggleFavorite(stack.id, favorited)}
-                            onLike={() => onLike(stack.id)}
-                            dragHandlers={dragProps(stack.id, sourceImageUrl, sourceImageFilename)}
-                          />
-                        );
-                      }
-
-                      return (
-                        <StackTile
-                          key={stack.id}
-                          thumbnailUrl={thumbnail}
-                          nativeImageDragUrl={sourceImageUrl}
-                          pageCount={pageCount}
-                          favorited={favorited}
-                          likeCount={likeCount}
-                          onClick={(event) => handleTileClick(stack, event)}
-                          onOpen={() => onOpen(stack.id)}
-                          onInfo={() => onInfo(stack.id)}
-                          onFindSimilar={() => onFindSimilar(stack.id)}
-                          onAddToScratch={() => onAddToScratch(stack.id)}
-                          onDownload={() => onDownload(stack.id)}
-                          onToggleFavorite={() => onToggleFavorite(stack.id, favorited)}
-                          onLike={() => onLike(stack.id)}
-                          dragHandlers={dragProps(stack.id, sourceImageUrl, sourceImageFilename)}
-                          asChild
-                        >
-                          <Link
-                            to="/library/$datasetId/stacks/$stackId"
-                            params={{ datasetId, stackId: String(stack.id) }}
-                          />
-                        </StackTile>
-                      );
-                    })}
-                  </div>
+                  <StackTileGrid
+                    items={allStacks}
+                    datasetId={datasetId}
+                    gridClassName="grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"
+                    cornerRadius="rounded"
+                    isSelectionMode={selectionMode}
+                    selectedItems={selectedItems}
+                    selectedActionCount={selectedItems.size}
+                    getLinkElement={infoSidebarOpen ? undefined : getStackLinkElement}
+                    onClickItem={handleTileDefaultClick}
+                    onBeforeEnterSelectionMode={closeInfoSidebarBeforeSelection}
+                    onEnterSelectionMode={enterSelectionModeWithItem}
+                    onToggleSelection={handleItemSelect}
+                    onSelectRange={selectItemRange}
+                    onOpenItem={handleOpenStack}
+                    onInfoItem={handleInfoStack}
+                    onFindSimilarItem={handleFindSimilarStack}
+                    onAddToScratchItem={handleAddToScratchStack}
+                    onDownloadItem={handleDownloadStack}
+                    onDownloadSelected={handleDownloadSelectedStacks}
+                    onBulkEditSelected={toggleEditPanel}
+                    onRemoveSelectedStacks={handleRemoveSelectedStacks}
+                    onToggleFavoriteItem={handleToggleFavoriteStack}
+                    onLikeItem={handleLikeStack}
+                    getDragHandlers={getStackDragHandlers}
+                  />
 
                   {/* Loading indicator */}
                   {isFetchingNextPage && (
@@ -1101,19 +1190,7 @@ function AutoTagConfigPage() {
           selectedCount={selectedItems.size}
           onClearSelection={clearSelection}
           onExitSelectionMode={exitSelectionMode}
-          actions={
-            selectedItems.size > 0
-              ? [
-                  {
-                    label: t.grid.bulkEdit,
-                    value: 'bulk-edit',
-                    onSelect: toggleEditPanel,
-                    icon: <Pencil size={12} />,
-                    group: 'primary',
-                  },
-                ]
-              : []
-          }
+          actions={selectionActions}
         />
       )}
 
@@ -1135,6 +1212,14 @@ function AutoTagConfigPage() {
             }
           >
             <Filter size={18} />
+          </HeaderIconButton>
+
+          <HeaderIconButton
+            onClick={handleToggleSelectionMode}
+            isActive={selectionMode}
+            aria-label={selectionMode ? t.header.exitSelectionMode : t.header.enterSelectionMode}
+          >
+            <Check size={18} />
           </HeaderIconButton>
 
           {/* Info button - only show when not in selection mode */}
@@ -1207,8 +1292,8 @@ function getStackAuthor(author: Stack['author']): string | undefined {
 }
 
 function toNumericId(value: string | number): number | null {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return value;
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
   }
 
   const parsed = Number.parseInt(value, 10);

@@ -1,26 +1,24 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, Link, useLocation, useNavigate } from '@tanstack/react-router';
 import { useAtom } from 'jotai';
-import {
-  Clapperboard,
-  Edit2,
-  GitMerge,
-  Info,
-  Loader2,
-  Pencil,
-  RefreshCw,
-  Tag,
-  Trash2,
-  X,
-} from 'lucide-react';
+import { Edit2, GitMerge, Info, Loader2, Tag, Trash2, X } from 'lucide-react';
 import MersenneTwister from 'mersenne-twister';
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  type MouseEvent,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 // moved React hooks import above; see lazy import note
 import { createPortal } from 'react-dom';
 import type { EditUpdates } from '@/components/BulkEditPanel';
 import BulkEditPanel from '@/components/BulkEditPanel';
 import FilterPanel from '@/components/FilterPanel';
 import InfoSidebar from '@/components/InfoSidebar';
+import { StackTileGrid } from '@/components/StackTileGrid';
 import { Button } from '@/components/ui/button';
 import { SmallSearchField, SmallSelect } from '@/components/ui/Controls';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -35,7 +33,6 @@ import {
 import { HeaderIconButton } from '@/components/ui/Header/HeaderIconButton';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { StackTile } from '@/components/ui/Stack';
 import {
   Select,
   SelectContent,
@@ -47,8 +44,9 @@ import { SelectionActionBar } from '@/components/ui/selection-action-bar';
 import { useHeaderActions } from '@/hooks/useHeaderActions';
 import { useStackTile } from '@/hooks/useStackTile';
 import { apiClient } from '@/lib/api-client';
+import { downloadStackOriginals } from '@/lib/download-originals';
 import { useT } from '@/lib/i18n';
-import { getSourceImageFilename, getSourceImageUrl } from '@/lib/stack-drag-data';
+import { createStackSelectionActions } from '@/lib/stack-selection-actions';
 import { cn } from '@/lib/utils';
 import {
   currentFilterAtom,
@@ -208,7 +206,8 @@ function TagsPage() {
   const location = useLocation();
   const tagSearch = Route.useSearch();
   const { datasetId } = Route.useParams();
-  const actions = useStackTile(datasetId);
+  const { onOpen, onFindSimilar, onAddToScratch, onDownload, onToggleFavorite, onLike, dragProps } =
+    useStackTile(datasetId);
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTag, setSelectedTag] = useState<TagItem | null>(null);
@@ -223,13 +222,11 @@ function TagsPage() {
   );
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const loadMoreTriggerRef = useRef<HTMLDivElement>(null);
-  const lastClickedIndexRef = useRef<number | null>(null);
 
   // Info panel and selection mode states
   const [infoSidebarOpen, setInfoSidebarOpen] = useAtom(infoSidebarOpenAtom);
-  const [, setSelectedItemId] = useAtom(selectedItemIdAtom);
-  const [, setSelectionMode] = useAtom(selectionModeAtom);
-  const selectionMode = false;
+  const [selectedItemId, setSelectedItemId] = useAtom(selectedItemIdAtom);
+  const [selectionMode, setSelectionMode] = useAtom(selectionModeAtom);
   const [currentFilter, setCurrentFilter] = useAtom(currentFilterAtom);
   const routeFilterScopeKey = useMemo(() => `tags:${datasetId}`, [datasetId]);
   const [filterScopeKey, setFilterScopeKey] = useState<string | null>(null);
@@ -395,6 +392,10 @@ function TagsPage() {
     () => allStacks.filter((stack) => selectedStackItems.has(stack.id)).map(toBulkEditItem),
     [allStacks, selectedStackItems]
   );
+  const selectedStackIds = useMemo(
+    () => allStacks.filter((stack) => selectedStackItems.has(stack.id)).map((stack) => stack.id),
+    [allStacks, selectedStackItems]
+  );
 
   // Shuffle: when a tag is selected, pick a random stack from that tag's full set
   const mtRef = useRef<MersenneTwister | null>(null);
@@ -456,7 +457,7 @@ function TagsPage() {
   useHeaderActions({
     showShuffle: true,
     showFilter: true,
-    showSelection: false,
+    showSelection: true,
     onShuffle: handleShuffle,
   });
 
@@ -648,46 +649,40 @@ function TagsPage() {
     } catch {}
   }, [tagSearch.tagId, tagsData]);
 
-  // Click handler with Cmd/Ctrl and Shift support
-  const _handleStackClick = useCallback(
-    (stack: StackItem, event: React.MouseEvent) => {
-      const idx = (allStacks || []).findIndex((s) => s?.id === stack.id);
+  const closeInfoSidebarBeforeSelection = useCallback(() => {
+    if (infoSidebarOpen) {
+      setInfoSidebarOpen(false);
+    }
+  }, [infoSidebarOpen, setInfoSidebarOpen]);
 
-      if (event.metaKey || event.ctrlKey) {
-        if (idx >= 0) lastClickedIndexRef.current = idx;
-        return;
-      }
-      if (event.altKey) {
-        if (idx >= 0) lastClickedIndexRef.current = idx;
-        return;
-      }
+  const enterSelectionModeWithStack = useCallback(
+    (stackId: string | number) => {
+      setSelectionMode(true);
+      setSelectedStackItems(new Set([stackId]));
+    },
+    [setSelectionMode]
+  );
 
-      if (event.shiftKey && selectionMode) {
+  const selectStackRange = useCallback((stackIds: Array<string | number>) => {
+    setSelectedStackItems((current) => {
+      const next = new Set(current);
+      for (const stackId of stackIds) {
+        next.add(stackId);
+      }
+      return next;
+    });
+  }, []);
+
+  const openStackFromTile = useCallback(
+    (stack: StackItem, event: MouseEvent<HTMLDivElement>) => {
+      if (infoSidebarOpen) {
         event.preventDefault();
-        const last = lastClickedIndexRef.current ?? idx;
-        if (last >= 0 && idx >= 0) {
-          const [start, end] = last < idx ? [last, idx] : [idx, last];
-          const next = new Set(selectedStackItems);
-          for (let i = start; i <= end; i++) {
-            const it = allStacks[i];
-            if (it) next.add(it.id);
-          }
-          setSelectedStackItems(next);
-        } else {
-          handleStackItemSelect(stack.id);
-        }
-        if (idx >= 0) lastClickedIndexRef.current = idx;
+        setSelectedItemId(stack.id);
+        setInfoSidebarOpen(true);
         return;
       }
 
-      if (selectionMode) {
-        event.preventDefault();
-        handleStackItemSelect(stack.id);
-        if (idx >= 0) lastClickedIndexRef.current = idx;
-        return;
-      }
-
-      // Normal navigation: build ids from loaded stacks (right→left)
+      event.preventDefault();
       const loadedIdsLtr = (allStacks || []).map((s) => toNumericId(s.id));
       const ids = loadedIdsLtr.slice().reverse();
       const clickedId = toNumericId(stack.id);
@@ -718,7 +713,81 @@ function TagsPage() {
         search: { page: 0, mediaType, listToken: token },
       });
     },
-    [allStacks, datasetId, selectedTag, selectedStackItems, handleStackItemSelect, navigate]
+    [
+      allStacks,
+      datasetId,
+      infoSidebarOpen,
+      navigate,
+      selectedTag,
+      setInfoSidebarOpen,
+      setSelectedItemId,
+    ]
+  );
+
+  const getStackLinkElement = useCallback(
+    (stack: StackItem) => (
+      <Link
+        to="/library/$datasetId/stacks/$stackId"
+        params={{ datasetId, stackId: String(stack.id) }}
+      />
+    ),
+    [datasetId]
+  );
+
+  const handleOpenStack = useCallback(
+    async (stack: StackItem) => {
+      await onOpen(stack.id);
+    },
+    [onOpen]
+  );
+
+  const handleInfoStack = useCallback(
+    (stack: StackItem) => {
+      setSelectedItemId(stack.id);
+      setInfoSidebarOpen(true);
+    },
+    [setInfoSidebarOpen, setSelectedItemId]
+  );
+
+  const handleFindSimilarStack = useCallback(
+    async (stack: StackItem) => {
+      await onFindSimilar(stack.id);
+    },
+    [onFindSimilar]
+  );
+
+  const handleAddToScratchStack = useCallback(
+    async (stack: StackItem) => {
+      await onAddToScratch(stack.id);
+    },
+    [onAddToScratch]
+  );
+
+  const handleDownloadStack = useCallback(
+    (stack: StackItem) => {
+      onDownload(stack.id);
+    },
+    [onDownload]
+  );
+
+  const handleToggleFavoriteStack = useCallback(
+    async (stack: StackItem, favorited: boolean) => {
+      await onToggleFavorite(stack.id, favorited);
+    },
+    [onToggleFavorite]
+  );
+
+  const handleLikeStack = useCallback(
+    async (stack: StackItem) => {
+      await onLike(stack.id);
+    },
+    [onLike]
+  );
+
+  const getStackDragHandlers = useCallback(
+    (stack: StackItem, sourceImageUrl: string | null, sourceImageFilename: string | undefined) =>
+      dragProps(stack.id, sourceImageUrl, sourceImageFilename),
+    [dragProps]
   );
 
   const clearStackSelection = useCallback(() => {
@@ -828,6 +897,11 @@ function TagsPage() {
     }
   }, [selectedStackItems, removeStacks, exitSelectionMode]);
 
+  const handleDownloadSelectedStacks = useCallback(() => {
+    if (selectedStackIds.length === 0) return;
+    downloadStackOriginals(datasetId, selectedStackIds);
+  }, [datasetId, selectedStackIds]);
+
   const handleOptimizePreviews = useCallback(async () => {
     if (selectedStackItems.size === 0) return;
 
@@ -847,6 +921,36 @@ function TagsPage() {
       alert(t.grid.optimizeVideoFailed);
     }
   }, [selectedStackItems, datasetId, exitSelectionMode, queryClient, selectedTag, t]);
+
+  const selectionActions = useMemo(
+    () =>
+      createStackSelectionActions({
+        selectedCount: selectedStackItems.size,
+        copy: {
+          bulkEdit: t.grid.bulkEdit,
+          downloadSelected: t.contextMenu.downloadSelected,
+          mergeStacks: t.grid.mergeStacks,
+          refreshThumbnails: t.grid.refreshThumbnails,
+          optimizeVideo: t.grid.optimizeVideo,
+          deleteStacks: t.grid.deleteStacks,
+          deleteStacksConfirm: t.grid.deleteStacksConfirm,
+        },
+        bulkEdit: { onSelect: toggleEditPanel },
+        downloadSelected: { onSelect: handleDownloadSelectedStacks },
+        refreshThumbnails: { onSelect: handleRefreshThumbnails },
+        optimizeVideo: { onSelect: handleOptimizePreviews },
+        deleteStacks: { onSelect: handleRemoveStacks },
+      }),
+    [
+      handleDownloadSelectedStacks,
+      handleOptimizePreviews,
+      handleRefreshThumbnails,
+      handleRemoveStacks,
+      selectedStackItems.size,
+      t,
+      toggleEditPanel,
+    ]
+  );
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -876,7 +980,14 @@ function TagsPage() {
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [infoSidebarOpen, setInfoSidebarOpen, exitSelectionMode, isEditPanelOpen, closeEditPanel]);
+  }, [
+    infoSidebarOpen,
+    setInfoSidebarOpen,
+    exitSelectionMode,
+    isEditPanelOpen,
+    closeEditPanel,
+    selectionMode,
+  ]);
 
   // This page uses its own layout
   return (
@@ -1060,77 +1171,33 @@ function TagsPage() {
                       </div>
                     }
                   >
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 list-stable">
-                      {allStacks.map((stack) => {
-                        const thumb = stack.thumbnail || stack.thumbnailUrl || '/no-image.png';
-                        const sourceImageUrl = getSourceImageUrl(stack, thumb);
-                        const sourceImageFilename = sourceImageUrl
-                          ? getSourceImageFilename(stack, sourceImageUrl, `stack-${stack.id}`)
-                          : undefined;
-                        const likeCount = Number(stack.likeCount ?? stack.liked ?? 0);
-                        const pageCount = stack.assetCount || stack.assetsCount || 0;
-                        const isFav = stack.favorited || stack.isFavorite || false;
-                        const {
-                          onOpen,
-                          onFindSimilar,
-                          onAddToScratch,
-                          onDownload,
-                          onToggleFavorite,
-                          onLike,
-                          dragProps,
-                        } = actions;
-                        return infoSidebarOpen ? (
-                          <StackTile
-                            key={stack.id}
-                            thumbnailUrl={thumb}
-                            nativeImageDragUrl={sourceImageUrl}
-                            pageCount={pageCount}
-                            favorited={isFav}
-                            likeCount={likeCount}
-                            onClick={() => {
-                              setSelectedItemId(stack.id);
-                              setInfoSidebarOpen(true);
-                            }}
-                            onInfo={() => {
-                              setSelectedItemId(stack.id);
-                              setInfoSidebarOpen(true);
-                            }}
-                            onFindSimilar={() => onFindSimilar(stack.id)}
-                            onAddToScratch={() => onAddToScratch(stack.id)}
-                            onDownload={() => onDownload(stack.id)}
-                            onToggleFavorite={() => onToggleFavorite(stack.id, isFav)}
-                            onLike={() => onLike(stack.id)}
-                            dragHandlers={dragProps(stack.id, sourceImageUrl, sourceImageFilename)}
-                          />
-                        ) : (
-                          <StackTile
-                            key={stack.id}
-                            thumbnailUrl={thumb}
-                            nativeImageDragUrl={sourceImageUrl}
-                            pageCount={pageCount}
-                            favorited={isFav}
-                            likeCount={likeCount}
-                            onOpen={() => onOpen(stack.id)}
-                            onInfo={() => {
-                              setSelectedItemId(stack.id);
-                              setInfoSidebarOpen(true);
-                            }}
-                            onFindSimilar={() => onFindSimilar(stack.id)}
-                            onAddToScratch={() => onAddToScratch(stack.id)}
-                            onDownload={() => onDownload(stack.id)}
-                            onToggleFavorite={() => onToggleFavorite(stack.id, isFav)}
-                            onLike={() => onLike(stack.id)}
-                            dragHandlers={dragProps(stack.id, sourceImageUrl, sourceImageFilename)}
-                            asChild
-                          >
-                            <Link
-                              to="/library/$datasetId/stacks/$stackId"
-                              params={{ datasetId, stackId: String(stack.id) }}
-                            />
-                          </StackTile>
-                        );
-                      })}
-                    </div>
+                    <StackTileGrid
+                      items={allStacks}
+                      datasetId={datasetId}
+                      gridClassName="grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 list-stable"
+                      cornerRadius="rounded"
+                      isSelectionMode={selectionMode}
+                      selectedItems={selectedStackItems}
+                      selectedInfoItemId={selectedItemId}
+                      selectedActionCount={selectedStackItems.size}
+                      getLinkElement={infoSidebarOpen ? undefined : getStackLinkElement}
+                      onClickItem={openStackFromTile}
+                      onBeforeEnterSelectionMode={closeInfoSidebarBeforeSelection}
+                      onEnterSelectionMode={enterSelectionModeWithStack}
+                      onToggleSelection={handleStackItemSelect}
+                      onSelectRange={selectStackRange}
+                      onOpenItem={handleOpenStack}
+                      onInfoItem={handleInfoStack}
+                      onFindSimilarItem={handleFindSimilarStack}
+                      onAddToScratchItem={handleAddToScratchStack}
+                      onDownloadItem={handleDownloadStack}
+                      onDownloadSelected={handleDownloadSelectedStacks}
+                      onBulkEditSelected={toggleEditPanel}
+                      onRemoveSelectedStacks={handleRemoveStacks}
+                      onToggleFavoriteItem={handleToggleFavoriteStack}
+                      onLikeItem={handleLikeStack}
+                      getDragHandlers={getStackDragHandlers}
+                    />
                   </Suspense>
 
                   {/* Loading indicator */}
@@ -1178,39 +1245,7 @@ function TagsPage() {
           selectedCount={selectedStackItems.size}
           onClearSelection={clearStackSelection}
           onExitSelectionMode={exitSelectionMode}
-          actions={
-            selectedStackItems.size > 0
-              ? [
-                  {
-                    label: t.grid.bulkEdit,
-                    value: 'bulk-edit',
-                    onSelect: toggleEditPanel,
-                    icon: <Pencil size={12} />,
-                    group: 'primary',
-                  },
-                  {
-                    label: t.grid.refreshThumbnails,
-                    value: 'refresh-thumbnails',
-                    onSelect: handleRefreshThumbnails,
-                    icon: <RefreshCw size={12} />,
-                  },
-                  {
-                    label: t.grid.optimizeVideo,
-                    value: 'optimize-video',
-                    onSelect: handleOptimizePreviews,
-                    icon: <Clapperboard size={12} />,
-                  },
-                  {
-                    label: t.grid.deleteStacks,
-                    value: 'delete-stacks',
-                    onSelect: handleRemoveStacks,
-                    icon: <Trash2 size={12} />,
-                    confirmMessage: `選択した${selectedStackItems.size}件のスタックを削除します。元に戻せません。`,
-                    destructive: true,
-                  },
-                ]
-              : []
-          }
+          actions={selectionActions}
         />
       )}
 

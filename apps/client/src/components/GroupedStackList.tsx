@@ -6,6 +6,7 @@ import { useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { MonthSectionHeader } from '@/components/ui/MonthSectionHeader';
 import { StackTile } from '@/components/ui/Stack';
+import { useStackCollectionMenu } from '@/hooks/useStackCollectionMenu';
 import { useStackTile } from '@/hooks/useStackTile';
 import { useLanguage, useT } from '@/lib/i18n';
 import { applyScrollbarCompensation, removeScrollbarCompensation } from '@/lib/scrollbar-utils';
@@ -100,6 +101,13 @@ export function GroupedStackList({
     onRemoveStack,
     dragProps,
   } = useStackTile(datasetId);
+  const {
+    collections: collectionMenuCollections,
+    isLoadingCollections: isCollectionMenuLoading,
+    addStackIdsToCollection,
+    openCreateCollectionForStackIds,
+    createCollectionModal,
+  } = useStackCollectionMenu(datasetId);
 
   return (
     <div className="w-full p-4 space-y-8 list-stable">
@@ -163,6 +171,13 @@ export function GroupedStackList({
                           ...(isAssetLike ? { page: likePage - 1 } : {}),
                           mediaType: stack.mediaType,
                         };
+                        const collectionMenu = {
+                          collections: collectionMenuCollections,
+                          isLoading: isCollectionMenuLoading,
+                          onCreateCollection: () => openCreateCollectionForStackIds([stack.id]),
+                          onAddToCollection: (collectionId: number) =>
+                            addStackIdsToCollection(collectionId, [stack.id]),
+                        };
                         return (
                           <div key={item.id} className={`${itemWidth} relative`}>
                             <StackTile
@@ -175,6 +190,7 @@ export function GroupedStackList({
                               onInfo={() => onInfo(stack.id)}
                               onFindSimilar={() => onFindSimilar(stack.id)}
                               onAddToScratch={() => onAddToScratch(stack.id)}
+                              collectionMenu={collectionMenu}
                               onDownload={() => onDownload(stack.id)}
                               onToggleFavorite={() => onToggleFavorite(stack.id, isFav)}
                               onLike={() => onLike(stack.id)}
@@ -235,6 +251,7 @@ export function GroupedStackList({
           )}
         </div>
       )}
+      {createCollectionModal}
     </div>
   );
 }
