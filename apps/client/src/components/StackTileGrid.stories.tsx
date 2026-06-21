@@ -37,13 +37,78 @@ type Story = StoryObj<typeof StackTileGrid>;
 function SelectableStackTileGrid({ cornerRadius }: { cornerRadius: 'rounded' | 'none' }) {
   const queryClient = useMemo(() => {
     const client = new QueryClient();
-    client.setQueryData(
-      ['stack-context-collections', '1', 'manual'],
-      [
-        { id: 1, name: 'Reference', icon: 'folder' },
-        { id: 2, name: 'Moodboard', icon: 'folder' },
-      ]
-    );
+    client.setQueryData(['collection-folders', '1'], {
+      folders: [
+        {
+          id: 10,
+          name: 'Projects',
+          icon: '📁',
+          dataSetId: 1,
+          parentId: undefined,
+          order: 0,
+          createdAt: '',
+          updatedAt: '',
+          children: [
+            {
+              id: 11,
+              name: 'Nested',
+              icon: '📁',
+              dataSetId: 1,
+              parentId: 10,
+              order: 0,
+              createdAt: '',
+              updatedAt: '',
+              children: [],
+              collections: [
+                {
+                  id: 1,
+                  name: 'Reference',
+                  icon: 'BookText',
+                  type: 'MANUAL',
+                  dataSetId: 1,
+                  createdAt: '',
+                  updatedAt: '',
+                },
+              ],
+            },
+          ],
+          collections: [
+            {
+              id: 2,
+              name: 'Moodboard',
+              icon: 'Star',
+              type: 'MANUAL',
+              dataSetId: 1,
+              createdAt: '',
+              updatedAt: '',
+            },
+          ],
+        },
+        {
+          id: 12,
+          name: 'Empty Folder',
+          icon: '📁',
+          dataSetId: 1,
+          parentId: undefined,
+          order: 1,
+          createdAt: '',
+          updatedAt: '',
+          children: [],
+          collections: [],
+        },
+      ],
+      rootCollections: [
+        {
+          id: 3,
+          name: 'Root Collection',
+          icon: 'Bookmark',
+          type: 'MANUAL',
+          dataSetId: 1,
+          createdAt: '',
+          updatedAt: '',
+        },
+      ],
+    });
     return client;
   }, []);
   const router = useMemo(

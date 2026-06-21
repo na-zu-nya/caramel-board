@@ -1,8 +1,10 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo, useState } from 'react';
 import { CreateCollectionModal } from '@/components/modals/CreateCollectionModal';
+import type { StackContextMenuCollection } from '@/components/ui/Stack/StackContextMenuContent';
+import { isScratchCollection } from '@/hooks/useScratch';
 import { apiClient } from '@/lib/api-client';
-import type { Collection } from '@/types';
+import type { Collection, CollectionFolder } from '@/types';
 
 type StackCollectionMenuStackId = string | number;
 
@@ -26,6 +28,44 @@ function toDatasetNumber(datasetId: string | number): number | null {
   return Number.isFinite(numericId) && numericId > 0 ? numericId : null;
 }
 
+function isCollectionAddTarget(collection: Collection): boolean {
+  return collection.type === 'MANUAL' && !isScratchCollection(collection);
+}
+
+function toCollectionMenuItem(collection: Collection): StackContextMenuCollection {
+  return {
+    kind: 'collection',
+    id: collection.id,
+    name: collection.name,
+    icon: collection.icon,
+  };
+}
+
+function toFolderMenuItems(folders: readonly CollectionFolder[]): StackContextMenuCollection[] {
+  return folders.map((folder) => ({
+    kind: 'folder',
+    id: folder.id,
+    name: folder.name,
+    children: [
+      ...toFolderMenuItems(folder.children ?? []),
+      ...(folder.collections ?? []).filter(isCollectionAddTarget).map(toCollectionMenuItem),
+    ],
+  }));
+}
+
+function toCollectionMenuItems({
+  folders,
+  rootCollections,
+}: {
+  folders: CollectionFolder[];
+  rootCollections: Collection[];
+}): StackContextMenuCollection[] {
+  return [
+    ...toFolderMenuItems(folders),
+    ...rootCollections.filter(isCollectionAddTarget).map(toCollectionMenuItem),
+  ];
+}
+
 export function useStackCollectionMenu(datasetId: string | number) {
   const queryClient = useQueryClient();
   const datasetNumber = toDatasetNumber(datasetId);
@@ -33,25 +73,21 @@ export function useStackCollectionMenu(datasetId: string | number) {
   const [pendingStackIds, setPendingStackIds] = useState<number[]>([]);
 
   const collectionsQuery = useQuery({
-    queryKey: ['stack-context-collections', String(datasetId), 'manual'],
+    queryKey: ['collection-folders', String(datasetId)],
     queryFn: async () => {
-      if (datasetNumber === null) return [];
-      const response = await apiClient.getCollections({
+      if (datasetNumber === null) return { folders: [], rootCollections: [] };
+      return apiClient.getCollectionFolderTree({
         dataSetId: datasetNumber,
-        type: 'MANUAL',
-        limit: 1000,
+        includeCollections: true,
       });
-      return response.collections;
     },
     enabled: datasetNumber !== null,
+    select: toCollectionMenuItems,
     staleTime: 60_000,
   });
 
   const invalidateCollectionState = useCallback(async () => {
     await Promise.allSettled([
-      queryClient.invalidateQueries({
-        queryKey: ['stack-context-collections', String(datasetId), 'manual'],
-      }),
       queryClient.invalidateQueries({ queryKey: ['collection-folders'] }),
       queryClient.invalidateQueries({ queryKey: ['collection-folders', String(datasetId)] }),
       queryClient.invalidateQueries({ queryKey: ['collection'] }),

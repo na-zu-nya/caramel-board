@@ -101,12 +101,14 @@ export function CreateCollectionModal({
     try {
       const payload: {
         name: string;
+        icon: string;
         type: CollectionType;
         dataSetId: number;
         folderId?: number;
         filterConfig?: Record<string, unknown>;
       } = {
         name: name.trim(),
+        icon: collectionType === 'SMART' ? 'Settings' : 'BookText',
         type: collectionType,
         dataSetId: Number.parseInt(datasetId, 10),
         folderId: selectedFolderId,

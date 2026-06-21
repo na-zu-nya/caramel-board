@@ -29,8 +29,22 @@ export const Basic: Story = {
     },
     collectionMenu: {
       collections: [
-        { id: 1, name: 'Reference' },
-        { id: 2, name: 'Moodboard' },
+        {
+          kind: 'folder',
+          id: 10,
+          name: 'Projects',
+          children: [
+            { kind: 'collection', id: 1, name: 'Reference', icon: 'BookText' },
+            { kind: 'collection', id: 2, name: 'Moodboard', icon: 'Star' },
+          ],
+        },
+        {
+          kind: 'folder',
+          id: 11,
+          name: 'Empty Folder',
+          children: [],
+        },
+        { kind: 'collection', id: 3, name: 'Root Collection', icon: 'Bookmark' },
       ],
       onCreateCollection: () => {
         console.log('create collection from stack');

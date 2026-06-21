@@ -1,3 +1,5 @@
+import type { LucideIcon } from 'lucide-react';
+import * as LucideIcons from 'lucide-react';
 import {
   Download,
   ExternalLink,
@@ -22,11 +24,19 @@ import {
 } from '@/components/ui/context-menu';
 import { useT } from '@/lib/i18n';
 
-export interface StackContextMenuCollection {
-  id: number;
-  name: string;
-  icon?: string;
-}
+export type StackContextMenuCollection =
+  | {
+      kind: 'collection';
+      id: number;
+      name: string;
+      icon?: string;
+    }
+  | {
+      kind: 'folder';
+      id: number;
+      name: string;
+      children: readonly StackContextMenuCollection[];
+    };
 
 export interface StackContextCollectionMenuProps {
   collections: readonly StackContextMenuCollection[];
@@ -50,6 +60,97 @@ interface StackContextMenuContentProps {
   onRemoveFromCollection?: () => void | Promise<void>;
   onRemoveFromScratch?: () => void | Promise<void>;
   onRemoveStack?: () => void | Promise<void>;
+}
+
+const DEFAULT_COLLECTION_ICON = 'BookText';
+const FOLDER_ICON_VALUES = new Set(['folder', '📁', '📂']);
+
+function normalizeCollectionIcon(icon?: string): string {
+  const trimmedIcon = icon?.trim();
+  if (!trimmedIcon || FOLDER_ICON_VALUES.has(trimmedIcon.toLowerCase())) {
+    return DEFAULT_COLLECTION_ICON;
+  }
+  return trimmedIcon;
+}
+
+function toPascalIconName(icon: string): string {
+  return icon
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
+    .join('');
+}
+
+function resolveLucideIcon(icon: string): LucideIcon | null {
+  const candidates = [icon, toPascalIconName(icon)];
+
+  for (const candidate of candidates) {
+    /* biome-ignore lint/performance/noDynamicNamespaceImportAccess: collection icons are user-configured Lucide names */
+    const IconComponent = LucideIcons[candidate as keyof typeof LucideIcons] as
+      | LucideIcon
+      | undefined;
+    if (IconComponent) return IconComponent;
+  }
+
+  return null;
+}
+
+function CollectionMenuIcon({ icon }: { icon?: string }) {
+  const normalizedIcon = normalizeCollectionIcon(icon);
+  const IconComponent = resolveLucideIcon(normalizedIcon);
+
+  if (IconComponent) {
+    return <IconComponent className="w-4 h-4 mr-2 shrink-0" />;
+  }
+
+  return (
+    <span className="mr-2 flex h-4 w-4 shrink-0 items-center justify-center text-[13px] leading-none">
+      {normalizedIcon}
+    </span>
+  );
+}
+
+function CollectionMenuItems({
+  items,
+  onAddToCollection,
+}: {
+  items: readonly StackContextMenuCollection[];
+  onAddToCollection: (collectionId: number) => void | Promise<void>;
+}) {
+  return items.map((item) => {
+    if (item.kind === 'folder') {
+      if (item.children.length === 0) {
+        return (
+          <ContextMenuItem key={`folder-${item.id}`} disabled>
+            <Folder className="w-4 h-4 mr-2 shrink-0" />
+            <span className="truncate">{item.name}</span>
+          </ContextMenuItem>
+        );
+      }
+
+      return (
+        <ContextMenuSub key={`folder-${item.id}`}>
+          <ContextMenuSubTrigger className="text-gray-500 focus:text-gray-700">
+            <Folder className="w-4 h-4 mr-2 shrink-0 text-gray-400" />
+            <span className="min-w-0 truncate">{item.name}</span>
+          </ContextMenuSubTrigger>
+          <ContextMenuSubContent className="w-56">
+            <CollectionMenuItems items={item.children} onAddToCollection={onAddToCollection} />
+          </ContextMenuSubContent>
+        </ContextMenuSub>
+      );
+    }
+
+    return (
+      <ContextMenuItem
+        key={`collection-${item.id}`}
+        onClick={() => void onAddToCollection(item.id)}
+      >
+        <CollectionMenuIcon icon={item.icon} />
+        <span className="truncate">{item.name}</span>
+      </ContextMenuItem>
+    );
+  });
 }
 
 export function StackContextMenuContent({
@@ -141,15 +242,10 @@ export function StackContextMenuContent({
             ) : collectionMenu.collections.length === 0 ? (
               <ContextMenuItem disabled>{t.contextMenu.noCollectionsAvailable}</ContextMenuItem>
             ) : (
-              collectionMenu.collections.map((collection) => (
-                <ContextMenuItem
-                  key={collection.id}
-                  onClick={() => void collectionMenu.onAddToCollection(collection.id)}
-                >
-                  <Folder className="w-4 h-4 mr-2" />
-                  <span className="truncate">{collection.name}</span>
-                </ContextMenuItem>
-              ))
+              <CollectionMenuItems
+                items={collectionMenu.collections}
+                onAddToCollection={collectionMenu.onAddToCollection}
+              />
             )}
           </ContextMenuSubContent>
         </ContextMenuSub>

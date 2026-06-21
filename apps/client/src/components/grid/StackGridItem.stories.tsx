@@ -36,8 +36,16 @@ const meta: Meta<typeof StackGridItem> = {
       console.log('toggle favorite');
     },
     collectionMenuCollections: [
-      { id: 1, name: 'Reference', icon: 'folder' },
-      { id: 2, name: 'Moodboard', icon: 'folder' },
+      {
+        kind: 'folder',
+        id: 10,
+        name: 'Projects',
+        children: [
+          { kind: 'collection', id: 1, name: 'Reference', icon: 'BookText' },
+          { kind: 'collection', id: 2, name: 'Moodboard', icon: 'Star' },
+        ],
+      },
+      { kind: 'collection', id: 3, name: 'Root Collection', icon: 'Bookmark' },
     ],
     onAddStacksToCollection: async (collectionId, stackIds) => {
       console.log('add stacks to collection', collectionId, stackIds);

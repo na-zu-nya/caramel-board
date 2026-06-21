@@ -79,13 +79,42 @@ function AuthorManagementViewStory({
 }) {
   const queryClient = useMemo(() => {
     const client = new QueryClient();
-    client.setQueryData(
-      ['stack-context-collections', '1', 'manual'],
-      [
-        { id: 1, name: 'Reference', icon: 'folder' },
-        { id: 2, name: 'Saved Set', icon: 'folder' },
-      ]
-    );
+    client.setQueryData(['collection-folders', '1'], {
+      folders: [
+        {
+          id: 10,
+          name: 'Author References',
+          icon: '📁',
+          dataSetId: 1,
+          parentId: undefined,
+          order: 0,
+          createdAt: '',
+          updatedAt: '',
+          children: [],
+          collections: [
+            {
+              id: 1,
+              name: 'Reference',
+              icon: 'BookText',
+              type: 'MANUAL',
+              dataSetId: 1,
+              createdAt: '',
+              updatedAt: '',
+            },
+            {
+              id: 2,
+              name: 'Saved Set',
+              icon: 'Star',
+              type: 'MANUAL',
+              dataSetId: 1,
+              createdAt: '',
+              updatedAt: '',
+            },
+          ],
+        },
+      ],
+      rootCollections: [],
+    });
     return client;
   }, []);
   const router = useMemo(
