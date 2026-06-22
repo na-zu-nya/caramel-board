@@ -18,7 +18,7 @@ export class AutoTagClient {
   constructor(baseURL: string = process.env.JOYTAG_SERVER_URL || 'http://localhost:5001') {
     this.client = axios.create({
       baseURL,
-      timeout: 30000,
+      timeout: Number(process.env.JOYTAG_REQUEST_TIMEOUT_MS || 300000),
     });
   }
 

@@ -114,6 +114,7 @@ export interface Asset {
   file: string; // Full file path
   originalName?: string;
   url?: string; // Alternative to file
+  fileType?: string;
   thumbnail?: string; // Thumbnail path
   thumbnailUrl?: string; // Alternative to thumbnail
   preview?: string | null; // プレイバック用プレビュー
@@ -139,10 +140,24 @@ export interface VideoMarker {
 }
 
 // Author types
+export interface AuthorLink {
+  id: number;
+  authorId: number;
+  provider: 'pixiv' | 'x' | 'fanbox' | 'youtube' | 'niconico' | 'custom' | string | null;
+  label: string;
+  url: string;
+  externalId: string | null;
+  sortOrder: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface Author {
   id: string | number;
   name: string;
   count?: number;
+  stackCount?: number;
+  links?: AuthorLink[];
 }
 
 // Tag types

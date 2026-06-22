@@ -1,3 +1,4 @@
+import { useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
 export interface JoyTagStatusProps {
@@ -13,14 +14,15 @@ export const JoyTagStatus = ({
   message,
   className,
 }: JoyTagStatusProps) => {
-  const label = status === 'running' ? 'Running' : 'Not Available';
+  const t = useT();
+  const label = status === 'running' ? t.autoTagPage.running : t.autoTagPage.notAvailable;
   const statusClass = status === 'running' ? 'text-green-600' : 'text-red-500';
 
   return (
     <div className={cn('flex items-center gap-2 text-sm', className)}>
-      <span className="font-medium text-muted-foreground">JoyTag Server:</span>
+      <span className="font-medium text-muted-foreground">{t.autoTagPage.joyTagServer}</span>
       {isLoading ? (
-        <span className="text-muted-foreground animate-pulse">Checking...</span>
+        <span className="text-muted-foreground animate-pulse">{t.autoTagPage.checking}</span>
       ) : (
         <span className={statusClass}>{label}</span>
       )}

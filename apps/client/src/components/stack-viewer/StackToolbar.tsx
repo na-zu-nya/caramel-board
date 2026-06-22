@@ -1,4 +1,5 @@
 import { Bookmark, Heart, Layers, Star } from 'lucide-react';
+import { useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import type { Stack } from '@/types';
 
@@ -25,6 +26,7 @@ export default function StackToolbar({
   onLikeToggle,
   onListModeToggle,
 }: StackToolbarProps) {
+  const t = useT();
   const canBookmarkPage = stack.assets.length > 1 || stack.assetCount > 1 || stack.assetsCount > 1;
 
   return (
@@ -42,7 +44,11 @@ export default function StackToolbar({
             ? 'bg-yellow-500 text-white'
             : 'bg-black/40 text-white hover:bg-black/60 hover:text-primary'
         )}
-        aria-label={stack.favorited ? 'Remove stack from favorites' : 'Add stack to favorites'}
+        aria-label={
+          stack.favorited
+            ? t.viewerControls.removeStackFromFavorites
+            : t.viewerControls.addStackToFavorites
+        }
       >
         <Star size={20} className={stack.favorited ? 'fill-current' : ''} />
       </button>
@@ -57,7 +63,9 @@ export default function StackToolbar({
               : 'bg-black/40 text-white hover:bg-black/60 hover:text-sky-300'
           )}
           aria-label={
-            isCurrentAssetFavorited ? 'Remove current page bookmark' : 'Bookmark current page'
+            isCurrentAssetFavorited
+              ? t.viewerControls.removePageBookmark
+              : t.viewerControls.bookmarkPage
           }
         >
           <Bookmark size={20} className={isCurrentAssetFavorited ? 'fill-current' : ''} />
@@ -72,7 +80,7 @@ export default function StackToolbar({
             ? 'bg-like text-white'
             : 'bg-black/40 text-white hover:bg-black/60 hover:text-primary'
         )}
-        aria-label={(stack.liked ?? 0) > 0 ? 'Unlike' : 'Like'}
+        aria-label={(stack.liked ?? 0) > 0 ? t.viewerControls.unlike : t.viewerControls.like}
       >
         <Heart size={20} className={(stack.liked ?? 0) > 0 ? 'fill-current' : ''} />
         {(stack.liked ?? 0) > 0 && <span className="text-sm">{stack.liked}</span>}
@@ -86,7 +94,7 @@ export default function StackToolbar({
             ? 'bg-blue-500 text-white'
             : 'bg-black/40 text-white hover:bg-black/60 hover:text-primary'
         )}
-        aria-label={isListMode ? 'Exit list mode' : 'Enter list mode'}
+        aria-label={isListMode ? t.viewerControls.exitListMode : t.viewerControls.enterListMode}
       >
         <Layers size={20} />
       </button>

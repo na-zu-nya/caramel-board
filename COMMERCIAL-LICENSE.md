@@ -1,8 +1,21 @@
-# CaramelBoard Commercial License (SaaS Exception)
+# Commercial and Distribution Permission
 
-CaramelBoard is licensed under the Elastic License 2.0 (ELv2). Operating CaramelBoard as a hosted/managed service for
-third parties (SaaS) is not permitted under ELv2 without a separate commercial agreement.
+Caramel Board is distributed under the Caramel Board Source Available License
+1.0. Personal use, internal organizational use, source review, modification, and
+internal builds are allowed under that license.
 
-If you wish to provide CaramelBoard as a service to others, please contact us to discuss a commercial license.
+A separate written agreement is required if you want to:
 
-Contact: nazunya [at] colorful-harmony.net
+- distribute a built desktop application, installer, app bundle, container
+  image, or packaged server/client bundle to a third party;
+- sell, rent, lease, sublicense, bundle, or otherwise provide Caramel Board to a
+  third party;
+- offer Caramel Board or a substantially similar derivative as a hosted service,
+  managed service, SaaS product, marketplace item, client deliverable, or agency
+  deliverable;
+- distribute a rebranded version of Caramel Board or use Caramel Board branding
+  beyond truthful attribution in a development fork.
+
+For permission or commercial licensing discussions, contact:
+
+nazunya [at] colorful-harmony.net

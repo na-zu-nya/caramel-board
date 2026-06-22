@@ -31,6 +31,19 @@ const resolveDataDirectory = () => {
 };
 
 const getDataDirectory = () => resolveDataDirectory();
+const STORAGE_ROOT_SEGMENT = 'library';
+
+const resolveStoragePath = (key: string): string => {
+  const root = getDataDirectory();
+  const safeKey = key.startsWith('/') ? key.slice(1) : key;
+  if (
+    path.basename(root) === STORAGE_ROOT_SEGMENT &&
+    safeKey.startsWith(`${STORAGE_ROOT_SEGMENT}/`)
+  ) {
+    return path.join(root, safeKey.replace(/^library\//, ''));
+  }
+  return path.join(root, safeKey);
+};
 
 const copyFilePortableSync = (sourcePath: string, targetPath: string) => {
   const sourceFd = fs.openSync(sourcePath, 'r');
@@ -207,11 +220,7 @@ export class DataStorage {
   }
 
   static getPath(key: string): string {
-    // Normalize to avoid absolute keys discarding storageDir
-    const safeKey = key.startsWith('/') ? key.slice(1) : key;
-    console.log('Storage.getPath:key:', safeKey);
-    console.log('Storage.getPath:dataDir:', getDataDirectory());
-    return path.join(getDataDirectory(), safeKey);
+    return resolveStoragePath(key);
   }
 
   static async getHash(key: string, dataSetId?: number): Promise<string> {

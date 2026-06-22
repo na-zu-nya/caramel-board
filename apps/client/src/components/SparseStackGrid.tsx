@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useAtomValue, useSetAtom } from 'jotai';
-import { GitMerge, Info, Loader2, Pencil } from 'lucide-react';
+import { Info, Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { StackGridItem } from '@/components/grid/StackGridItem.tsx';
@@ -11,6 +11,7 @@ import { HeaderIconButton } from '@/components/ui/Header/HeaderIconButton';
 import { SelectionActionBar } from '@/components/ui/selection-action-bar';
 import { useStackGrid } from '@/hooks/features/useStackGrid';
 import { useSparseInfiniteScroll } from '@/hooks/useSparseInfiniteScroll';
+import { useStackCollectionMenu } from '@/hooks/useStackCollectionMenu';
 import { apiClient } from '@/lib/api-client';
 import {
   type FolderGroup,
@@ -20,7 +21,10 @@ import {
   uploadFolderAsCollection,
   uploadFolderAsSingleStack,
 } from '@/lib/folder-import';
+import { useT } from '@/lib/i18n';
+import { getSelectedMediaGridStackIds } from '@/lib/media-grid-selection';
 import { applyScrollbarCompensation, removeScrollbarCompensation } from '@/lib/scrollbar-utils';
+import { createStackSelectionActions } from '@/lib/stack-selection-actions';
 import { cn } from '@/lib/utils';
 import { reorderModeAtom, selectionModeAtom } from '@/stores/ui';
 import {
@@ -64,6 +68,7 @@ export default function SparseStackGrid({
   onItemClick,
   className,
 }: SparseStackGridProps) {
+  const t = useT();
   const queryClient = useQueryClient();
   const setSelectionMode = useSetAtom(selectionModeAtom);
   const reorderMode = useAtomValue(reorderModeAtom);
@@ -71,6 +76,13 @@ export default function SparseStackGrid({
   const setUploadDefaults = useSetAtom(uploadDefaultsAtom);
   const addNotification = useSetAtom(addUploadNotificationAtom);
   const uploadNotifications = useAtomValue(uploadNotificationsAtom);
+  const {
+    collections: collectionMenuCollections,
+    isLoadingCollections: isCollectionMenuLoading,
+    addStackIdsToCollection,
+    openCreateCollectionForStackIds,
+    createCollectionModal,
+  } = useStackCollectionMenu(datasetId);
 
   const [folderQueue, setFolderQueue] = useState<FolderImportRequest[]>([]);
   const [activeFolder, setActiveFolder] = useState<FolderImportRequest | null>(null);
@@ -169,7 +181,7 @@ export default function SparseStackGrid({
       if (!defaults) {
         addNotification({
           type: 'error',
-          message: 'Unable to resolve upload defaults for this folder.',
+          message: t.upload.unableToResolveFolderDefaults,
         });
         finalizeFolderProcessing();
         return;
@@ -190,12 +202,12 @@ export default function SparseStackGrid({
           addFilesToQueue({ files: activeFolder.files, type: 'new-stack' });
           addNotification({
             type: 'success',
-            message: `Queued ${activeFolder.files.length} file(s) from “${activeFolder.name}” for upload.`,
+            message: t.upload.queuedFiles(activeFolder.files.length, activeFolder.name),
           });
         } else if (mode === 'single-stack') {
           addNotification({
             type: 'info',
-            message: `Merging “${activeFolder.name}” into a single stack…`,
+            message: t.upload.mergingFolder(activeFolder.name),
           });
           const { stackId, assetIds } = await uploadFolderAsSingleStack(
             activeFolder.files,
@@ -204,7 +216,11 @@ export default function SparseStackGrid({
           await refreshAfterManualUpload();
           addNotification({
             type: 'success',
-            message: `Created stack #${stackId} from “${activeFolder.name}” with ${assetIds.length + 1} file(s).`,
+            message: t.upload.createdStackFromFolder(
+              stackId,
+              activeFolder.name,
+              assetIds.length + 1
+            ),
           });
         } else if (mode === 'create-collection') {
           const cleanDefaults: FolderUploadDefaults = {
@@ -214,7 +230,7 @@ export default function SparseStackGrid({
           const targetName = options.collectionName?.trim() || activeFolder.name;
           addNotification({
             type: 'info',
-            message: `Creating collection “${targetName}” from “${activeFolder.name}”…`,
+            message: t.upload.creatingCollectionFromFolder(targetName, activeFolder.name),
           });
           const { collectionId: createdCollectionId, stackIds } = await uploadFolderAsCollection(
             activeFolder.files,
@@ -224,12 +240,16 @@ export default function SparseStackGrid({
           await refreshAfterManualUpload();
           addNotification({
             type: 'success',
-            message: `Collection “${targetName}” (ID: ${createdCollectionId}) now contains ${stackIds.length} created stack(s).`,
+            message: t.upload.collectionCreatedFromFolder(
+              targetName,
+              createdCollectionId,
+              stackIds.length
+            ),
           });
         }
       } catch (error) {
         console.error('Folder import flow failed (sparse grid)', error);
-        const message = error instanceof Error ? error.message : 'Folder import failed.';
+        const message = error instanceof Error ? error.message : t.grid.folderImportFailed;
         addNotification({ type: 'error', message });
       } finally {
         finalizeFolderProcessing();
@@ -242,6 +262,7 @@ export default function SparseStackGrid({
       finalizeFolderProcessing,
       refreshAfterManualUpload,
       setUploadDefaults,
+      t,
     ]
   );
 
@@ -249,11 +270,11 @@ export default function SparseStackGrid({
     if (activeFolder) {
       addNotification({
         type: 'info',
-        message: `Cancelled import for “${activeFolder.name}”.`,
+        message: t.upload.cancelledFolderImport(activeFolder.name),
       });
     }
     finalizeFolderProcessing();
-  }, [activeFolder, addNotification, finalizeFolderProcessing]);
+  }, [activeFolder, addNotification, finalizeFolderProcessing, t]);
 
   const {
     containerRef,
@@ -275,6 +296,7 @@ export default function SparseStackGrid({
     selectItemRange,
     handleToggleFavorite,
     handleDeselectAll,
+    clearSelection,
     applyEditUpdates,
     closeEditPanel,
     exitSelectionMode,
@@ -288,6 +310,14 @@ export default function SparseStackGrid({
     onItemClick,
     onRefreshAll: refreshAll,
   });
+
+  const selectedBulkEditItems = useMemo(
+    () =>
+      Array.from(selectedItems)
+        .map((id) => sparseItems.find((item) => item?.id === id))
+        .filter((item): item is MediaGridItem => item !== undefined),
+    [selectedItems, sparseItems]
+  );
 
   // Cmd/Ctrl/Alt + Click はリンクのネイティブ動作へ委譲し、Shift + Click は範囲選択する
   const lastClickedIndexRef = useRef<number | null>(null);
@@ -308,6 +338,14 @@ export default function SparseStackGrid({
 
       if (e?.shiftKey) {
         e.preventDefault();
+        if (!isSelectionMode) {
+          setSelectionMode(true);
+          clearSelection();
+          handleToggleSelection(id);
+          lastClickedIndexRef.current = idx >= 0 ? idx : lastClickedIndexRef.current;
+          return;
+        }
+
         setSelectionMode(true);
         const last = lastClickedIndexRef.current ?? idx;
         if (last >= 0 && idx >= 0) {
@@ -330,24 +368,19 @@ export default function SparseStackGrid({
     },
     [
       sparseItems,
+      isSelectionMode,
       setSelectionMode,
       handleToggleSelection,
       selectItemRange,
+      clearSelection,
       handleItemClick,
       onItemClick,
     ]
   );
 
   const selectedStackIdsInOrder = useMemo(() => {
-    const stackIds: number[] = [];
-    for (const selectedId of selectedItemOrder) {
-      const stackId = typeof selectedId === 'string' ? Number.parseInt(selectedId, 10) : selectedId;
-      if (Number.isFinite(stackId)) {
-        stackIds.push(stackId);
-      }
-    }
-    return stackIds;
-  }, [selectedItemOrder]);
+    return getSelectedMediaGridStackIds(selectedItemOrder, sparseItems);
+  }, [selectedItemOrder, sparseItems]);
 
   const handleMergeStacks = useCallback(async () => {
     if (selectedStackIdsInOrder.length < 2) return;
@@ -360,7 +393,7 @@ export default function SparseStackGrid({
       exitSelectionMode();
       addNotification({
         type: 'success',
-        message: `選択順の先頭スタック #${targetId} に ${sourceIds.length} 件をマージしました`,
+        message: t.grid.mergeSelectedSuccess(targetId, sourceIds.length),
       });
       await refreshAll();
       void Promise.allSettled([
@@ -372,7 +405,7 @@ export default function SparseStackGrid({
       ]);
     } catch (error) {
       console.error('❌ Failed to merge stacks:', error);
-      addNotification({ type: 'error', message: 'スタックのマージに失敗しました' });
+      addNotification({ type: 'error', message: t.grid.mergeSelectedFailed });
     }
   }, [
     addNotification,
@@ -382,7 +415,36 @@ export default function SparseStackGrid({
     queryClient,
     refreshAll,
     selectedStackIdsInOrder,
+    t,
   ]);
+
+  const selectionActions = useMemo(
+    () =>
+      createStackSelectionActions({
+        selectedCount: selectedItems.size,
+        copy: {
+          bulkEdit: t.grid.bulkEdit,
+          downloadSelected: t.contextMenu.downloadSelected,
+          mergeStacks: t.grid.mergeStacks,
+          refreshThumbnails: t.grid.refreshThumbnails,
+          optimizeVideo: t.grid.optimizeVideo,
+          deleteStacks: t.grid.deleteStacks,
+          deleteStacksConfirm: t.grid.deleteStacksConfirm,
+        },
+        bulkEdit: { onSelect: () => setIsEditPanelOpen((prev) => !prev) },
+        mergeStacks:
+          selectedStackIdsInOrder.length >= 2
+            ? {
+                onSelect: handleMergeStacks,
+                confirmMessage: t.grid.mergeSelectedConfirm(
+                  selectedStackIdsInOrder[0],
+                  selectedStackIdsInOrder.length - 1
+                ),
+              }
+            : undefined,
+      }),
+    [handleMergeStacks, selectedItems.size, selectedStackIdsInOrder, setIsEditPanelOpen, t]
+  );
 
   // Handle scroll-based loading
   const handleScroll = useCallback(() => {
@@ -459,7 +521,7 @@ export default function SparseStackGrid({
       if (!files?.length) return;
       const defaults = computeUploadDefaults();
       if (!defaults) {
-        addNotification({ type: 'error', message: 'データセットが特定できませんでした' });
+        addNotification({ type: 'error', message: t.grid.datasetNotFound });
         return;
       }
 
@@ -486,7 +548,7 @@ export default function SparseStackGrid({
         setFolderQueue((prev) => [...prev, ...requests]);
       }
     },
-    [addFilesToQueue, addNotification, computeUploadDefaults, setUploadDefaults]
+    [addFilesToQueue, addNotification, computeUploadDefaults, setUploadDefaults, t]
   );
 
   const handleUrlDrop = useCallback(
@@ -495,18 +557,13 @@ export default function SparseStackGrid({
 
       const datasetNumericId = dataset?.id ? Number(dataset.id) : Number(datasetId);
       if (Number.isNaN(datasetNumericId)) {
-        addNotification({ type: 'error', message: 'データセットが特定できませんでした' });
+        addNotification({ type: 'error', message: t.grid.datasetNotFound });
         return;
       }
 
       const collectionMatch = window.location.pathname.match(/(?:collections|scratch)\/(\d+)/);
       const collectionId = collectionMatch ? Number.parseInt(collectionMatch[1], 10) : undefined;
       const targetMediaType = collectionId ? 'image' : mediaType || undefined;
-
-      addNotification({
-        type: 'info',
-        message: `${urls.length}件のURLをダウンロード中です`,
-      });
 
       try {
         const { results } = await apiClient.importAssetsFromUrls({
@@ -528,14 +585,14 @@ export default function SparseStackGrid({
         if (successes.length > 0) {
           addNotification({
             type: 'success',
-            message: `${successes.length}件のURLからアップロードしました`,
+            message: t.grid.urlUploaded(successes.length),
           });
         }
 
         if (duplicates.length > 0) {
           addNotification({
             type: 'info',
-            message: `${duplicates.length}件のURLは既に取り込み済みのためスキップしました`,
+            message: t.grid.urlDuplicatesSkipped(duplicates.length),
           });
         }
 
@@ -549,24 +606,23 @@ export default function SparseStackGrid({
             type: 'error',
             message:
               failures.length === results.length
-                ? 'URLのアップロードに失敗しました'
-                : `${failures.length}件のURLでエラーが発生しました${summary ? `: ${summary}` : ''}`,
+                ? t.grid.urlUploadFailed
+                : t.grid.urlUploadPartialFailed(failures.length, summary),
           });
 
           if (protectedFailures.length > 0) {
             addNotification({
               type: 'info',
-              message:
-                '保護された画像は直接ドロップできません。一度保存してから再度ドロップしてください。',
+              message: t.grid.protectedImageDropHint,
             });
           }
         }
       } catch (error) {
         console.error('Failed to import URLs for sparse grid', error);
-        addNotification({ type: 'error', message: 'URLのアップロードに失敗しました' });
+        addNotification({ type: 'error', message: t.grid.urlUploadFailed });
       }
     },
-    [dataset?.id, datasetId, mediaType, addNotification]
+    [dataset?.id, datasetId, mediaType, addNotification, t]
   );
 
   // Loading state
@@ -575,7 +631,7 @@ export default function SparseStackGrid({
       <div className="flex items-center justify-center h-64">
         <div className="flex items-center gap-2 text-gray-500">
           <Loader2 className="h-5 w-5 animate-spin" />
-          <span>Loading...</span>
+          <span>{t.common.loading}</span>
         </div>
       </div>
     );
@@ -587,10 +643,10 @@ export default function SparseStackGrid({
       <div className="flex flex-col items-center justify-center h-64 text-center">
         <div className="text-6xl mb-4">{emptyState?.icon || '📸'}</div>
         <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
-          {emptyState?.title || 'No items found'}
+          {emptyState?.title || t.grid.noStacksFound}
         </h3>
         <p className="text-gray-500 dark:text-gray-400 max-w-sm">
-          {emptyState?.description || 'Try adjusting your filters or upload some content.'}
+          {emptyState?.description || t.emptyState.uploadImagesDescription}
         </p>
       </div>
     );
@@ -664,6 +720,10 @@ export default function SparseStackGrid({
                   selectedItems={selectedItems}
                   selectedStackIdsInOrder={selectedStackIdsInOrder}
                   onMergeStacks={handleMergeStacks}
+                  collectionMenuCollections={collectionMenuCollections}
+                  isCollectionMenuLoading={isCollectionMenuLoading}
+                  onAddStacksToCollection={addStackIdsToCollection}
+                  onCreateCollectionWithStacks={openCreateCollectionForStackIds}
                   onReorder={() => {}} // Not implemented in sparse mode
                 />
               </div>
@@ -703,40 +763,22 @@ export default function SparseStackGrid({
         />
       )}
 
+      {createCollectionModal}
+
       {/* Selection Action Bar */}
       {isSelectionMode && selectedItems.size > 0 && (
         <SelectionActionBar
           selectedCount={selectedItems.size}
           onClearSelection={handleDeselectAll}
           onExitSelectionMode={() => setSelectionMode(false)}
-          actions={[
-            {
-              label: 'Bulk Edit',
-              value: 'bulk-edit',
-              onSelect: () => setIsEditPanelOpen((prev) => !prev),
-              icon: <Pencil size={12} />,
-              group: 'primary',
-            },
-            ...(selectedStackIdsInOrder.length >= 2
-              ? [
-                  {
-                    label: 'Merge Stacks',
-                    value: 'merge-stacks',
-                    onSelect: handleMergeStacks,
-                    icon: <GitMerge size={12} />,
-                    confirmMessage: `選択順の先頭スタック #${selectedStackIdsInOrder[0]} に残り ${selectedStackIdsInOrder.length - 1} 件をマージします。実行しますか？`,
-                    group: 'primary' as const,
-                  },
-                ]
-              : []),
-          ]}
+          actions={selectionActions}
         />
       )}
 
       {/* Info Sidebar Toggle */}
       <HeaderIconButton
         icon={Info}
-        label="Toggle Info Sidebar"
+        label={infoSidebarOpen ? t.viewer.closeInfo : t.viewer.openInfo}
         onClick={() => setInfoSidebarOpen(!infoSidebarOpen)}
         className={cn(
           'fixed top-4 right-4 z-50 transition-colors',
@@ -759,11 +801,10 @@ export default function SparseStackGrid({
         createPortal(
           <BulkEditPanel
             isOpen={isEditPanelOpen}
-            selectedItems={Array.from(selectedItems)
-              .map((id) => sparseItems.find((item) => item?.id === id))
-              .filter((item): item is MediaGridItem => item !== undefined)}
+            selectedItems={selectedItems}
             onClose={closeEditPanel}
-            onApplyUpdates={applyEditUpdates}
+            onSave={applyEditUpdates}
+            items={selectedBulkEditItems}
           />,
           document.body
         )}

@@ -15,6 +15,7 @@ import {
 import { getHash } from '../../../utils/functions';
 import { generateMediaPreview, shouldGeneratePreview } from '../../../utils/generateMediaPreview';
 import { generateThumbnail } from '../../../utils/generateThumbnail';
+import { appendPdfOriginalMeta, isPdfFileInput, preparePdfImport } from '../../../utils/pdfImport';
 import { formatStacksThumbnails } from '../../../utils/thumbnailPath';
 import type { createColorSearchService } from './color-search-service';
 import type { ColorFilter as SearchColorFilter } from './search-service';
@@ -37,6 +38,20 @@ type AutoTagAggregateEntry = {
   tag?: string;
   score?: number;
 };
+
+interface AuthorLinkRow {
+  id: number;
+  authorId: number;
+  provider: string | null;
+  label: string;
+  url: string;
+  externalId: string | null;
+  sortOrder: number;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+}
+
+const toIso = (value: Date | string) => (value instanceof Date ? value.toISOString() : value);
 
 const extractAutoTagEntries = (
   value: Prisma.JsonValue | null | undefined
@@ -133,6 +148,36 @@ export const createStackService = (deps: {
   dataSetId: number;
 }) => {
   const { prisma, colorSearch, dataSetId } = deps;
+
+  const getAuthorLinks = async (authorId: number | null | undefined) => {
+    if (!authorId) return [];
+    const rows = await prisma.$queryRaw<AuthorLinkRow[]>`
+      SELECT
+        "id",
+        "authorId",
+        "provider",
+        "label",
+        "url",
+        "externalId",
+        "sortOrder",
+        "createdAt",
+        "updatedAt"
+      FROM "AuthorLink"
+      WHERE "authorId" = ${authorId}
+      ORDER BY "sortOrder" ASC, "id" ASC
+    `;
+    return rows.map((link) => ({
+      id: link.id,
+      authorId: link.authorId,
+      provider: link.provider,
+      label: link.label,
+      url: link.url,
+      externalId: link.externalId,
+      sortOrder: link.sortOrder,
+      createdAt: toIso(link.createdAt),
+      updatedAt: toIso(link.updatedAt),
+    }));
+  };
 
   async function annotateFavorites<T extends { id: number }>(
     stacks: T[]
@@ -705,9 +750,16 @@ export const createStackService = (deps: {
 
     const thumbnailSource = normalizedAssetsList[0]?.thumbnail || stack.thumbnail || '';
     const thumbnail = toPublicAssetPath(thumbnailSource, stack.dataSetId);
+    const authorWithLinks = stack.author
+      ? {
+          ...stack.author,
+          links: await getAuthorLinks(stack.author.id),
+        }
+      : stack.author;
 
     const transformedStack = {
       ...stack,
+      author: authorWithLinks,
       ...(tags
         ? {
             tags: stack.tags.map((relation) => relation?.tag.title),
@@ -735,6 +787,48 @@ export const createStackService = (deps: {
   }
 
   async function createWithFile(data: CreateStackWithFileData) {
+    if (await isPdfFileInput(data.file)) {
+      const preparedPdf = await preparePdfImport(data.file, dataSetId);
+      let stackId: number | null = null;
+
+      try {
+        const stack = await prisma.stack.create({
+          data: {
+            name: data.name,
+            mediaType: data.mediaType ?? 'image',
+            thumbnail: '',
+            meta: appendPdfOriginalMeta({}, preparedPdf.original) as Prisma.InputJsonObject,
+            dataSetId,
+          },
+        });
+        stackId = stack.id;
+
+        for (const page of preparedPdf.pages) {
+          await AssetModel.createWithFile(page.path, page.originalname, stack.id, dataSetId, {
+            allowDuplicate: true,
+            storageHash: page.storageHash,
+            meta: {
+              sourcePdfHash: preparedPdf.original.hash,
+              sourcePdfImportId: preparedPdf.original.importId,
+              sourcePdfPage: page.pageNumber,
+              rasterDpi: preparedPdf.original.rasterDpi,
+            },
+          });
+        }
+
+        return getById(stack.id, { assets: true });
+      } catch (error) {
+        if (stackId !== null) {
+          try {
+            await prisma.stack.delete({ where: { id: stackId } });
+          } catch {}
+        }
+        throw error;
+      } finally {
+        preparedPdf.cleanup();
+      }
+    }
+
     // 1) 事前に重複を検知（空スタック生成を防ぐ）
     const hash = await getHash(data.file.path);
     const existing = await prisma.asset.findFirst({

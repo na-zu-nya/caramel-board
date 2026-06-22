@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "default_locale": "ja",
+  "name": "__MSG_extensionName__",
+  "version": "1.0.10",
+  "version_name": "1.0.10-beta",
+  "description": "__MSG_extensionDescription__",
+  "permissions": ["contextMenus", "scripting", "storage"],
+  "host_permissions": ["http://*/*", "https://*/*"],
+  "icons": {
+    "16": "assets/icon.png",
+    "48": "assets/icon.png",
+    "128": "assets/icon.png"
+  },
+  "background": {
+    "service_worker": "src/background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "__MSG_extensionActionTitle__",
+    "default_icon": "assets/icon.png"
+  },
+  "options_page": "src/options.html"
+}

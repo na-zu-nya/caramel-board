@@ -16,6 +16,25 @@ export interface FolderUploadDefaults {
   collectionId?: number;
 }
 
+export type FolderImportProgressPhase =
+  | 'preparing'
+  | 'uploading'
+  | 'creating-collection'
+  | 'linking-collection'
+  | 'completed';
+
+export interface FolderImportProgress {
+  phase: FolderImportProgressPhase;
+  processedFiles: number;
+  totalFiles: number;
+  failedFiles: number;
+  currentFileName?: string;
+}
+
+export interface FolderImportProgressOptions {
+  onProgress?: (progress: FolderImportProgress) => void;
+}
+
 const ROOT_KEY = '__root__';
 
 function generateGroupId(name: string): string {
@@ -85,7 +104,8 @@ export function sortFilesByRelativePath(files: File[]): File[] {
 
 export async function uploadFolderAsSingleStack(
   files: File[],
-  defaults: FolderUploadDefaults
+  defaults: FolderUploadDefaults,
+  options: FolderImportProgressOptions = {}
 ): Promise<{ stackId: number; assetIds: number[] }> {
   const sortedFiles = sortFilesByRelativePath(files);
   const [primary, ...rest] = sortedFiles;
@@ -93,6 +113,21 @@ export async function uploadFolderAsSingleStack(
   if (!primary) {
     throw new Error('フォルダにファイルが含まれていません。');
   }
+
+  options.onProgress?.({
+    phase: 'preparing',
+    processedFiles: 0,
+    totalFiles: sortedFiles.length,
+    failedFiles: 0,
+  });
+
+  options.onProgress?.({
+    phase: 'uploading',
+    processedFiles: 0,
+    totalFiles: sortedFiles.length,
+    failedFiles: 0,
+    currentFileName: primary.name,
+  });
 
   const stack = await apiClient.createStackWithFile(primary, {
     name: primary.name,
@@ -105,15 +140,46 @@ export async function uploadFolderAsSingleStack(
 
   const createdStackId = Number(stack.id);
   const assetIds: number[] = [];
+  let processedFiles = 1;
+
+  options.onProgress?.({
+    phase: 'uploading',
+    processedFiles,
+    totalFiles: sortedFiles.length,
+    failedFiles: 0,
+    currentFileName: primary.name,
+  });
 
   const sequential = async () => {
     for (const file of rest) {
+      options.onProgress?.({
+        phase: 'uploading',
+        processedFiles,
+        totalFiles: sortedFiles.length,
+        failedFiles: 0,
+        currentFileName: file.name,
+      });
       const asset = await apiClient.addAssetToStack(createdStackId, file);
       assetIds.push(Number(asset.id));
+      processedFiles += 1;
+      options.onProgress?.({
+        phase: 'uploading',
+        processedFiles,
+        totalFiles: sortedFiles.length,
+        failedFiles: 0,
+        currentFileName: file.name,
+      });
     }
   };
 
   await sequential();
+
+  options.onProgress?.({
+    phase: 'completed',
+    processedFiles,
+    totalFiles: sortedFiles.length,
+    failedFiles: 0,
+  });
 
   return { stackId: createdStackId, assetIds };
 }
@@ -121,7 +187,8 @@ export async function uploadFolderAsSingleStack(
 export async function uploadFolderAsCollection(
   files: File[],
   defaults: FolderUploadDefaults,
-  collectionName: string
+  collectionName: string,
+  options: FolderImportProgressOptions = {}
 ): Promise<{ collectionId: number; stackIds: number[] }> {
   if (!collectionName.trim()) {
     throw new Error('コレクション名を入力してください');
@@ -135,12 +202,28 @@ export async function uploadFolderAsCollection(
   const concurrentLimit = 3;
   const stackIds: number[] = [];
   const errors: Error[] = [];
+  let processedFiles = 0;
+  let failedFiles = 0;
+
+  options.onProgress?.({
+    phase: 'preparing',
+    processedFiles,
+    totalFiles: sortedFiles.length,
+    failedFiles,
+  });
 
   for (let i = 0; i < sortedFiles.length; i += concurrentLimit) {
     const chunk = sortedFiles.slice(i, i + concurrentLimit);
     await Promise.all(
       chunk.map(async (file) => {
         try {
+          options.onProgress?.({
+            phase: 'uploading',
+            processedFiles,
+            totalFiles: sortedFiles.length,
+            failedFiles,
+            currentFileName: file.name,
+          });
           const stack = await apiClient.createStackWithFile(file, {
             name: file.name,
             datasetId: String(defaults.datasetId),
@@ -151,11 +234,21 @@ export async function uploadFolderAsCollection(
           stackIds.push(Number(stack.id));
         } catch (error) {
           console.error('Failed to create stack from file', file.name, error);
+          failedFiles += 1;
           if (error instanceof Error) {
             errors.push(error);
           } else {
             errors.push(new Error('スタックの作成に失敗しました'));
           }
+        } finally {
+          processedFiles += 1;
+          options.onProgress?.({
+            phase: 'uploading',
+            processedFiles,
+            totalFiles: sortedFiles.length,
+            failedFiles,
+            currentFileName: file.name,
+          });
         }
       })
     );
@@ -165,6 +258,13 @@ export async function uploadFolderAsCollection(
     throw errors[0] || new Error('スタックを作成できませんでした');
   }
 
+  options.onProgress?.({
+    phase: 'creating-collection',
+    processedFiles,
+    totalFiles: sortedFiles.length,
+    failedFiles,
+  });
+
   const newCollection = await apiClient.createCollection({
     name: collectionName.trim(),
     type: 'MANUAL',
@@ -172,7 +272,21 @@ export async function uploadFolderAsCollection(
     icon: 'Folder',
   });
 
+  options.onProgress?.({
+    phase: 'linking-collection',
+    processedFiles,
+    totalFiles: sortedFiles.length,
+    failedFiles,
+  });
+
   await apiClient.bulkAddStacksToCollection(newCollection.id, stackIds);
+
+  options.onProgress?.({
+    phase: 'completed',
+    processedFiles,
+    totalFiles: sortedFiles.length,
+    failedFiles,
+  });
 
   return { collectionId: Number(newCollection.id), stackIds };
 }

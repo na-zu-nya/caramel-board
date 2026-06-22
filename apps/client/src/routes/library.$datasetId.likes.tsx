@@ -7,6 +7,7 @@ import InfoSidebar from '@/components/InfoSidebar';
 import { YearPagination } from '@/components/YearPagination';
 import { useHeaderActions } from '@/hooks/useHeaderActions';
 import { apiClient } from '@/lib/api-client';
+import { useT } from '@/lib/i18n';
 import { navigationStateAtom } from '@/stores/navigation';
 import { currentFilterAtom } from '@/stores/ui';
 
@@ -15,6 +16,7 @@ export const Route = createFileRoute('/library/$datasetId/likes')({
 });
 
 function LikesPage() {
+  const t = useT();
   const { datasetId } = Route.useParams();
   const [, setCurrentFilter] = useAtom(currentFilterAtom);
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
@@ -143,13 +145,15 @@ function LikesPage() {
       <div className="flex-1">
         {isLoading && Object.keys(accumulatedData).length === 0 ? (
           <div className="flex items-center justify-center h-full">
-            <div className="text-gray-500">Loading...</div>
+            <div className="text-gray-500">{t.common.loading}</div>
           </div>
         ) : Object.keys(accumulatedData).length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center p-8">
             <div className="text-6xl mb-4">❤️</div>
-            <h2 className="text-xl font-semibold mb-2">No liked items in {currentYear}</h2>
-            <p className="text-gray-500">Like items to see them here.</p>
+            <h2 className="text-xl font-semibold mb-2">
+              {t.emptyState.noLikedItemsIn} {currentYear}
+            </h2>
+            <p className="text-gray-500">{t.emptyState.likesDescription}</p>
           </div>
         ) : (
           <GroupedLikesList

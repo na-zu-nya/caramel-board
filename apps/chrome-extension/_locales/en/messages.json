@@ -1,0 +1,179 @@
+{
+  "addFailure": {
+    "message": "Failed to add the item"
+  },
+  "addedToLibraryName": {
+    "message": "Added to \"{libraryName}\""
+  },
+  "addingToCaramelBoard": {
+    "message": "Adding to Caramel Board"
+  },
+  "apiBaseUrlLabel": {
+    "message": "API URL"
+  },
+  "apiDetected": {
+    "message": "Connected to {apiBaseUrl}"
+  },
+  "apiDetectedWithDatasets": {
+    "message": "Connected to {apiBaseUrl}. Loaded {count} libraries"
+  },
+  "apiNotDetected": {
+    "message": "Could not detect a running Caramel Board instance"
+  },
+  "authorizedBadge": {
+    "message": "Authorized"
+  },
+  "authorizeButton": {
+    "message": "Authorize"
+  },
+  "basicAuthPasswordLabel": {
+    "message": "Basic Auth password"
+  },
+  "basicAuthUsernameLabel": {
+    "message": "Basic Auth username"
+  },
+  "clipperApiKeyLabel": {
+    "message": "Clipper integration key"
+  },
+  "clipperApiKeyPlaceholder": {
+    "message": "cb_clip_..."
+  },
+  "clipperKeySaved": {
+    "message": "Saved the Clipper integration key"
+  },
+  "clipperKeySavedSyncFailure": {
+    "message": "Saved the Clipper integration key. Failed to refresh libraries: {message}"
+  },
+  "clipperKeySavedWithDatasets": {
+    "message": "Saved the Clipper integration key. Loaded {count} libraries"
+  },
+  "connectionFailure": {
+    "message": "Connection failed"
+  },
+  "connectionSuccess": {
+    "message": "Connected"
+  },
+  "connectionSuccessSyncFailure": {
+    "message": "Connected. Failed to refresh libraries: {message}"
+  },
+  "connectionSuccessWithDatasets": {
+    "message": "Connected. Loaded {count} libraries"
+  },
+  "connectionTestFailure": {
+    "message": "Could not connect"
+  },
+  "contextMenuAdd": {
+    "message": "Add to Caramel Board"
+  },
+  "contextMenuOpenOptions": {
+    "message": "Open settings"
+  },
+  "contextMenuRefreshLibraries": {
+    "message": "Refresh libraries"
+  },
+  "datasetAuthFailure": {
+    "message": "Authorization failed"
+  },
+  "datasetAuthorized": {
+    "message": "Library authorized"
+  },
+  "datasetsLoaded": {
+    "message": "Loaded {count} libraries"
+  },
+  "detectButton": {
+    "message": "Auto detect"
+  },
+  "directVideoOnly": {
+    "message": "Only direct video URLs can be added"
+  },
+  "duplicateSkipped": {
+    "message": "Skipped as duplicate"
+  },
+  "emptyFile": {
+    "message": "The returned file was empty"
+  },
+  "emptyLibraries": {
+    "message": "No libraries have been loaded"
+  },
+  "extensionActionTitle": {
+    "message": "Caramel Board"
+  },
+  "extensionDescription": {
+    "message": "THIS EXTENSION IS FOR BETA TESTING. Add images and direct video URLs to Caramel Board."
+  },
+  "extensionName": {
+    "message": "Caramel Board Clipper BETA"
+  },
+  "fallbackLibraryName": {
+    "message": "Library {id}"
+  },
+  "fileFetchFailure": {
+    "message": "Failed to fetch the file"
+  },
+  "httpFetchFailure": {
+    "message": "Could not fetch the file (HTTP {status})"
+  },
+  "invalidDatasetsResponse": {
+    "message": "Invalid libraries response"
+  },
+  "librariesHeading": {
+    "message": "Libraries"
+  },
+  "openStackAriaLabel": {
+    "message": "Open stack: {message}"
+  },
+  "openStackTitle": {
+    "message": "Open stack"
+  },
+  "optionsEyebrow": {
+    "message": "Caramel Board"
+  },
+  "optionsHeading": {
+    "message": "Clipper"
+  },
+  "optionsPageTitle": {
+    "message": "Caramel Board Clipper"
+  },
+  "passwordPlaceholder": {
+    "message": "Password"
+  },
+  "saveButton": {
+    "message": "Save"
+  },
+  "saveFailure": {
+    "message": "Failed to save"
+  },
+  "saveSuccess": {
+    "message": "Saved"
+  },
+  "saveSuccessSyncFailure": {
+    "message": "Saved. Failed to refresh libraries: {message}"
+  },
+  "saveSuccessWithDatasets": {
+    "message": "Saved. Loaded {count} libraries"
+  },
+  "streamingUnsupported": {
+    "message": "Streaming video formats are not supported"
+  },
+  "syncLibrariesButton": {
+    "message": "Refresh libraries"
+  },
+  "syncLibrariesFailure": {
+    "message": "Failed to refresh libraries"
+  },
+  "targetUrlMissing": {
+    "message": "Could not get the target URL"
+  },
+  "testConnectionButton": {
+    "message": "Test connection"
+  },
+  "unauthorizedBadge": {
+    "message": "Not authorized"
+  },
+  "urlImportCompleted": {
+    "message": "URL import requested"
+  },
+  "urlImportFailure": {
+    "message": "URL import failed"
+  }
+}

@@ -31,13 +31,21 @@ const detectStorageRoot = () => {
 const storageRoot = detectStorageRoot();
 const legacyFallbackRoot = path.resolve(storageRoot, '..');
 
-export const fileServer = factory.createMiddleware(async (c) => {
-  const rel = c.req.path.replace(/^\/files\//, '');
-  const candidates = [
+const uniquePaths = (values: string[]) => [...new Set(values.filter(Boolean))];
+
+const storageCandidatesFor = (relativePath: string) => {
+  const rel = relativePath.replace(/^\/+/, '');
+  return uniquePaths([
     path.join(storageRoot, rel),
+    rel.startsWith('library/') ? path.join(storageRoot, rel.replace(/^library\//, '')) : '',
     path.join(storageRoot, 'files', rel),
     path.join(legacyFallbackRoot, rel),
-  ];
+  ]);
+};
+
+export const fileServer = factory.createMiddleware(async (c) => {
+  const rel = c.req.path.replace(/^\/files\//, '');
+  const candidates = storageCandidatesFor(rel);
 
   const full = candidates.find((candidate) => {
     try {

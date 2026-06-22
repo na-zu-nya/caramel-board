@@ -1,12 +1,140 @@
-Elastic License 2.0 (ELv2)
+Caramel Board Source Available License 1.0
 
-This repository is licensed under the Elastic License 2.0.
+Copyright (c) nazunya and Caramel Board contributors
 
-You may copy, use, and distribute this software, with the following important limitations (summary — the full license governs):
- - You may not provide the software to third parties as a managed service (SaaS) where you host or manage the software for others.
- - No trademark rights are granted.
- - Provided "AS IS" without warranties or conditions of any kind.
+This license governs the Caramel Board software, source code, documentation,
+assets, build scripts, desktop application packages, installers, and other
+materials in this repository, except for Third-Party Components as defined
+below.
 
-For the complete terms of the Elastic License 2.0, see:
-https://www.elastic.co/licensing/elastic-license
+This is a source-available license. It is not an Open Source license as defined
+by the Open Source Initiative.
 
+1. Definitions
+
+"Software" means Caramel Board and all files provided in this repository,
+including source code, documentation, build scripts, user interface assets,
+icons, logos, application packaging, desktop launchers, server components, and
+client components.
+
+"Built Desktop Application" means any compiled, bundled, packaged, or
+installable desktop version of the Software, including app bundles, installers,
+MSI packages, DMG packages, EXE installers, portable executable packages, and
+packages that include bundled server, client, runtime, or resource files.
+
+"Third Party" means any person or legal entity outside you or your organization.
+If you are an individual, "your organization" means only you. If you are using
+the Software on behalf of a company, studio, school, or other organization, it
+means that organization and its employees or contractors acting for internal
+purposes.
+
+"Internal Use" means use by you or your organization for your own personal,
+business, research, creative, educational, or operational purposes, where the
+Software is not provided to a Third Party as a product, service, hosted service,
+managed service, bundled application, or deliverable.
+
+"Third-Party Components" means dependencies, runtimes, libraries, tools, fonts,
+models, datasets, and other components that are not owned by the Caramel Board
+project and are included with, linked from, documented for, or used by the
+Software.
+
+2. License Grant
+
+Subject to this license, you may:
+
+a. use the Software for Internal Use;
+
+b. copy, read, study, and modify the source code;
+
+c. build the Software for your own Internal Use;
+
+d. install and run Built Desktop Applications for your own Internal Use;
+
+e. create public or private forks of the source code for development, review,
+experimentation, or contribution to the Caramel Board project; and
+
+f. submit issues, patches, and pull requests to the Caramel Board project.
+
+3. Restrictions
+
+You may not, without prior written permission from the Caramel Board maintainer:
+
+a. sell, rent, lease, sublicense, distribute, publish, transfer, provide, or
+otherwise make available any Built Desktop Application to a Third Party;
+
+b. provide the Software, a Built Desktop Application, or a substantially similar
+product to a Third Party as a commercial or non-commercial product, service,
+hosted service, managed service, SaaS offering, bundled application, marketplace
+listing, agency deliverable, or client deliverable;
+
+c. distribute a rebranded version of the Software or a substantially similar
+application derived from the Software;
+
+d. publish release builds, installers, container images, packaged server/client
+bundles, or automated download packages intended for Third-Party use;
+
+e. remove, alter, or obscure copyright notices, license notices, attribution
+notices, or source-available notices in the Software;
+
+f. use the Caramel Board name, logo, icon, favicon, product identity, or other
+branding in a way that suggests endorsement, official status, or affiliation
+without written permission; or
+
+g. use the Software to violate applicable law or the rights of others.
+
+4. Forks and Contributions
+
+Public forks are permitted for development, review, experimentation, and
+contribution. A public fork must not be used to distribute release builds,
+installers, app bundles, container images, hosted services, or substantially
+similar products to Third Parties.
+
+By submitting a contribution to the Caramel Board project, you grant the
+project maintainer and downstream recipients a perpetual, worldwide,
+non-exclusive, royalty-free license to use, reproduce, modify, prepare
+derivative works of, display, perform, distribute, sublicense, and otherwise
+exploit your contribution as part of the Software under this license or a later
+license chosen by the project maintainer. You represent that you have the right
+to submit the contribution.
+
+5. Trademarks and Branding
+
+This license does not grant any trademark rights or rights to use the Caramel
+Board name, logos, icons, favicon, visual identity, or other branding, except as
+necessary for truthful attribution in development forks.
+
+6. Third-Party Components
+
+Third-Party Components are licensed under their own license terms. This license
+does not limit rights you may have under those third-party licenses. You are
+responsible for complying with the licenses of Third-Party Components,
+including any notice, attribution, source availability, or redistribution
+requirements.
+
+7. Commercial and Distribution Permission
+
+If you want to distribute a Built Desktop Application, provide the Software to
+Third Parties, sell or bundle the Software, offer it as a hosted or managed
+service, or use Caramel Board branding beyond the permissions in this license,
+you need a separate written agreement from the project maintainer.
+
+8. Termination
+
+If you violate this license, your rights under this license terminate
+automatically. The project maintainer may reinstate your rights by written
+permission.
+
+9. No Warranty
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT. YOU USE THE SOFTWARE AT
+YOUR OWN RISK.
+
+10. Limitation of Liability
+
+TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE AUTHORS, COPYRIGHT HOLDERS,
+MAINTAINERS, AND CONTRIBUTORS WILL NOT BE LIABLE FOR ANY CLAIM, DAMAGES, OR
+OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING
+FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+IN THE SOFTWARE.

@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { SideMenuGroup, SideMenuMessage } from '@/components/ui/SideMenu';
 import { apiClient } from '@/lib/api-client';
+import { useT } from '@/lib/i18n';
 
 export function CollectionsSection({
   datasetId,
@@ -24,6 +25,7 @@ export function CollectionsSection({
   onCollectionCreated,
   onCollectionChanged,
 }: CollectionsSectionProps) {
+  const t = useT();
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [createModalType, setCreateModalType] = useState<'MANUAL' | 'SMART'>('MANUAL');
   const [createFolderModalOpen, setCreateFolderModalOpen] = useState(false);
@@ -51,7 +53,7 @@ export function CollectionsSection({
           <button
             type="button"
             className="p-0.5 hover:bg-gray-100 rounded transition-colors"
-            aria-label="Create collection"
+            aria-label={t.sidebar.createCollection}
           >
             <BookText size={16} className="text-gray-600" />
           </button>
@@ -63,7 +65,7 @@ export function CollectionsSection({
               setCreateModalOpen(true);
             }}
           >
-            Create Collection
+            {t.sidebar.createCollection}
           </DropdownMenuItem>
           <DropdownMenuItem
             onClick={() => {
@@ -71,7 +73,7 @@ export function CollectionsSection({
               setCreateModalOpen(true);
             }}
           >
-            Create Smart Collection
+            {t.sidebar.createSmartCollection}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -79,7 +81,7 @@ export function CollectionsSection({
       <button
         type="button"
         className="p-0.5 hover:bg-gray-100 rounded transition-colors"
-        aria-label="Create folder"
+        aria-label={t.sidebar.createFolder}
         onClick={() => setCreateFolderModalOpen(true)}
       >
         <FolderPlus size={16} className="text-gray-600" />
@@ -90,18 +92,19 @@ export function CollectionsSection({
   return (
     <>
       <SideMenuGroup
-        label="Collections"
+        label={t.sidebar.collections}
         collapsed={isCollapsed}
         onToggle={onToggle}
         action={actions}
       >
         <nav className="space-y-0.5">
           {loadingCollections ? (
-            <SideMenuMessage>Loading...</SideMenuMessage>
+            <SideMenuMessage>{t.sidebar.collectionsLoading}</SideMenuMessage>
           ) : folders.length === 0 && rootCollections.length === 0 ? (
-            <SideMenuMessage>No Collections or Folders</SideMenuMessage>
+            <SideMenuMessage>{t.sidebar.noCollectionsOrFolders}</SideMenuMessage>
           ) : (
             <FolderTreeView
+              datasetId={datasetId}
               folders={folders}
               rootCollections={rootCollections}
               isPinned={isPinned}

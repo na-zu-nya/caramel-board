@@ -4,6 +4,9 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { getAutoTagClient } from '../lib/AutoTagClient';
 import { prisma } from '../shared/di';
+import { ensureDatasetAuthorizedForCurrentStore } from '../standalone/auth';
+import { StandaloneAutoTagRepository } from '../standalone/auto-tag-repository';
+import { isStandaloneSqliteEnabled } from '../standalone/sqlite';
 
 export const autoTagsRoute = new Hono();
 
@@ -182,10 +185,7 @@ async function getAutoTagStatisticsFromAggregate(
 
 // Authorization middleware helper per request (datasetId from params or query)
 async function ensureAuth(c: Context, datasetId: number): Promise<Response | null> {
-  const { ensureDatasetAuthorized } = await import('../utils/dataset-protection');
-  const resp = await ensureDatasetAuthorized(c, datasetId);
-  if (resp) return resp;
-  return null;
+  return ensureDatasetAuthorizedForCurrentStore(c, datasetId);
 }
 
 // Optimized strict counts for a specific set of keys (exact match) from AutoTagPrediction
@@ -281,6 +281,20 @@ autoTagsRoute.get(
         console.log(`Cache hit for AutoTag statistics (dataset: ${datasetId})`);
         return c.json({ ...cachedResult, cached: true });
       }
+
+      if (isStandaloneSqliteEnabled()) {
+        const result = new StandaloneAutoTagRepository().getStatistics({
+          datasetId,
+          threshold,
+          limit,
+          searchQuery: q,
+          source,
+          includeTotal,
+        });
+        setCachedData(cacheKey, result);
+        return c.json(result);
+      }
+
       // ソース選択: クエリ優先、未指定の場合は環境変数/デフォルト
       const envPrefersRaw = process.env.AUTOTAG_USE_RAW_SQL !== 'false';
       const useRawSQL = source === 'raw' || (source !== 'aggregate' && envPrefersRaw);
@@ -392,6 +406,16 @@ autoTagsRoute.get(
         });
       }
 
+      if (isStandaloneSqliteEnabled()) {
+        const rows = new StandaloneAutoTagRepository().getStrictCountsForKeys(
+          datasetId,
+          threshold,
+          keys
+        );
+        setCachedData(cacheKey, rows);
+        return c.json({ datasetId, threshold, keys, tags: rows, method: 'sql-keys' });
+      }
+
       const rows = await getStrictCountsForKeys(datasetId, threshold, keys);
 
       setCachedData(cacheKey, rows);
@@ -434,6 +458,9 @@ autoTagsRoute.get(
     try {
       const auth = await ensureAuth(c, datasetId);
       if (auth) return auth;
+      if (isStandaloneSqliteEnabled()) {
+        return c.json(new StandaloneAutoTagRepository().getMappings(datasetId, limit, offset));
+      }
       const [mappings, total] = await Promise.all([
         prisma.autoTagMapping.findMany({
           where: { dataSetId: datasetId },
@@ -486,6 +513,20 @@ autoTagsRoute.post(
     const { autoTagKey, tagId, displayName, description, isActive } = c.req.valid('json');
 
     try {
+      if (isStandaloneSqliteEnabled()) {
+        const result = new StandaloneAutoTagRepository().upsertMapping(datasetId, {
+          autoTagKey,
+          tagId,
+          displayName,
+          description,
+          isActive,
+        });
+        if (result.conflict) {
+          return c.json({ error: 'This tag is already assigned to another AutoTag mapping' }, 400);
+        }
+        return c.json(result.mapping);
+      }
+
       // If linking to a user Tag, ensure the tag is not already assigned to another AutoTag mapping
       if (tagId) {
         const existing = await prisma.autoTagMapping.findFirst({
@@ -556,6 +597,21 @@ autoTagsRoute.put(
     const updateData = c.req.valid('json');
 
     try {
+      if (isStandaloneSqliteEnabled()) {
+        const result = new StandaloneAutoTagRepository().updateMapping(
+          datasetId,
+          mappingId,
+          updateData
+        );
+        if (!result) {
+          return c.json({ error: 'Mapping not found in this dataset' }, 404);
+        }
+        if (result.conflict) {
+          return c.json({ error: 'This tag is already assigned to another AutoTag mapping' }, 400);
+        }
+        return c.json(result.mapping);
+      }
+
       // First verify the mapping belongs to this dataset
       const existingMapping = await prisma.autoTagMapping.findUnique({
         where: { id: mappingId },
@@ -615,6 +671,14 @@ autoTagsRoute.delete(
     const { datasetId, mappingId } = c.req.valid('param');
 
     try {
+      if (isStandaloneSqliteEnabled()) {
+        const ok = new StandaloneAutoTagRepository().deleteMapping(datasetId, mappingId);
+        if (!ok) {
+          return c.json({ error: 'Mapping not found in this dataset' }, 404);
+        }
+        return c.json({ success: true });
+      }
+
       // First verify the mapping belongs to this dataset
       const existingMapping = await prisma.autoTagMapping.findUnique({
         where: { id: mappingId },

@@ -44,6 +44,12 @@ export const buildPreviewKey = (dataSetId: number, hash: string, options?: Previ
   return `${STORAGE_ROOT}/${dataSetId}/preview/${prefix}/${normalizeHash(hash)}${suffix}.${ext}`;
 };
 
+export const buildOriginalKey = (dataSetId: number, hash: string, ext: string) => {
+  const prefix = hashPrefix(hash);
+  const extension = sanitizeExtension(ext);
+  return `${STORAGE_ROOT}/${dataSetId}/originals/${prefix}/${normalizeHash(hash)}.${extension}`;
+};
+
 export const splitHashForDirectory = (hash: string) => ({
   prefix: hashPrefix(hash),
   remainder: hashRemainder(hash),

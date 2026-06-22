@@ -40,6 +40,8 @@ Thumbs.db
 .turbo/
 .cache/
 .parcel-cache/
+__pycache__/
+*.pyc
 
 # Logs
 npm-debug.log*
@@ -57,14 +59,14 @@ pids
 # Application specific
 data/
 apps/server/static/**/*
+apps/client/storybook-static/
 lib/JoyTagTool/venv/
 lib/JoyTagTool/__pycache__/
 lib/JoyTagTool/*.pyc
 # Fully ignore legacy JoyTag in-repo directory going forward
 lib/JoyTagTool/**
 notes/**/*
-scripts/local/*
-!scripts/local/.gitkeep
+scripts/local/
 
 # External, unmanaged dependencies
 externals/
@@ -73,6 +75,7 @@ externals/
 # Backup files
 backups/*.sql.gz
 backups/*.sql
+exports/
 
 # Test coverage
 coverage/

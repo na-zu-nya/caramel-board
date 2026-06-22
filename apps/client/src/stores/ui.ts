@@ -85,6 +85,7 @@ export const infoSidebarOpenAtom = atom(
 
 // Currently selected item for info sidebar
 export const selectedItemIdAtom = atom<string | number | null>(null);
+export const selectedInfoAssetIdAtom = atom<string | number | null>(null);
 
 // Grid configuration
 export const minColumnsAtom = atom(5);

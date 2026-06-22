@@ -10,13 +10,11 @@ import {
   TagStackSchema,
 } from '../schemas/index.js';
 import { usePrisma } from '../shared/di';
+import { ensureDatasetAuthorizedForCurrentStore } from '../standalone/auth';
+import { StandaloneMetadataRepository } from '../standalone/metadata-repository';
+import { isStandaloneSqliteEnabled } from '../standalone/sqlite';
 
 export const tagsRoute = new Hono();
-
-const ensureAuthorized = async (c: Context, dataSetId: number) => {
-  const { ensureDatasetAuthorized } = await import('../utils/dataset-protection');
-  return ensureDatasetAuthorized(c, dataSetId);
-};
 
 function getDataSetIdFromQuery(c: Context): number {
   const ds = c.req.query('datasetId') || c.req.query('dataSetId') || '1';
@@ -34,10 +32,22 @@ tagsRoute.get('/', zValidator('query', PaginationSchema), async (c) => {
   try {
     const { limit, offset } = c.req.valid('query');
     const dataSetId = getDataSetIdFromQuery(c);
-    const auth = await ensureAuthorized(c, dataSetId);
+    const auth = await ensureDatasetAuthorizedForCurrentStore(c, dataSetId);
     if (auth) return auth;
     const orderBy = (c.req.query('orderBy') || 'title') as string;
     const orderDirection = (c.req.query('orderDirection') || 'asc') as string;
+
+    if (isStandaloneSqliteEnabled()) {
+      return c.json(
+        new StandaloneMetadataRepository().getTags({
+          limit,
+          offset,
+          datasetId: dataSetId,
+          orderBy,
+          orderDirection,
+        })
+      );
+    }
 
     const service = makeService(c, dataSetId);
     const result = await service.getAll({ limit, offset, orderBy, orderDirection });
@@ -53,8 +63,11 @@ tagsRoute.get('/management', zValidator('query', ManagementPaginationSchema), as
   try {
     const { limit, offset, dataSetId } = c.req.valid('query');
     const ds = dataSetId ?? getDataSetIdFromQuery(c);
-    const auth = await ensureAuthorized(c, ds);
+    const auth = await ensureDatasetAuthorizedForCurrentStore(c, ds);
     if (auth) return auth;
+    if (isStandaloneSqliteEnabled()) {
+      return c.json(new StandaloneMetadataRepository().getTags({ limit, offset, datasetId: ds }));
+    }
     const service = makeService(c, ds);
     const result = await service.getAll({ limit, offset });
     return c.json(result);
@@ -69,8 +82,11 @@ tagsRoute.get('/search', async (c) => {
   try {
     const key = c.req.query('key') || '';
     const dataSetId = getDataSetIdFromQuery(c);
-    const auth = await ensureAuthorized(c, dataSetId);
+    const auth = await ensureDatasetAuthorizedForCurrentStore(c, dataSetId);
     if (auth) return auth;
+    if (isStandaloneSqliteEnabled()) {
+      return c.json(new StandaloneMetadataRepository().searchTags(key, dataSetId));
+    }
     const service = makeService(c, dataSetId);
     // Return objects to align with client expectations: { id, title }
     const tags = await service.search(key);
@@ -92,8 +108,12 @@ tagsRoute.post('/', zValidator('json', CreateTagSchema), async (c) => {
   try {
     const data = c.req.valid('json');
     const dataSetId = data.dataSetId ?? getDataSetIdFromQuery(c);
-    const auth = await ensureAuthorized(c, dataSetId);
+    const auth = await ensureDatasetAuthorizedForCurrentStore(c, dataSetId);
     if (auth) return auth;
+    if (isStandaloneSqliteEnabled()) {
+      const tag = new StandaloneMetadataRepository().createTag(dataSetId, data.title);
+      return c.json(tag, 201);
+    }
     const service = makeService(c, dataSetId);
     const tag = await service.create({ title: data.title });
     return c.json(tag, 201);
@@ -108,8 +128,13 @@ tagsRoute.post('/tag-stack', zValidator('json', TagStackSchema), async (c) => {
   try {
     const { stackId, tagIds } = c.req.valid('json');
     const dataSetId = getDataSetIdFromQuery(c);
-    const auth = await ensureAuthorized(c, dataSetId);
+    const auth = await ensureDatasetAuthorizedForCurrentStore(c, dataSetId);
     if (auth) return auth;
+    if (isStandaloneSqliteEnabled()) {
+      const ok = new StandaloneMetadataRepository().tagStack(stackId, dataSetId, tagIds);
+      if (!ok) return c.json({ error: 'Stack not found in this dataset' }, 404);
+      return c.json({ success: true });
+    }
     const service = makeService(c, dataSetId);
     await service.tagStack(stackId, tagIds);
     return c.json({ success: true });
@@ -130,8 +155,13 @@ tagsRoute.put('/:id/rename', zValidator('param', IdParamSchema), async (c) => {
     }
 
     const dataSetId = getDataSetIdFromQuery(c);
-    const auth = await ensureAuthorized(c, dataSetId);
+    const auth = await ensureDatasetAuthorizedForCurrentStore(c, dataSetId);
     if (auth) return auth;
+    if (isStandaloneSqliteEnabled()) {
+      const tag = new StandaloneMetadataRepository().renameTag(id, dataSetId, title);
+      if (!tag) return c.json({ error: 'Tag not found' }, 404);
+      return c.json(tag);
+    }
     const service = makeService(c, dataSetId);
     const tag = await service.rename(id, title);
     return c.json(tag);
@@ -155,8 +185,16 @@ tagsRoute.post('/merge', async (c) => {
     }
 
     const dataSetId = getDataSetIdFromQuery(c);
-    const auth = await ensureAuthorized(c, dataSetId);
+    const auth = await ensureDatasetAuthorizedForCurrentStore(c, dataSetId);
     if (auth) return auth;
+    if (isStandaloneSqliteEnabled()) {
+      const result = new StandaloneMetadataRepository().mergeTags(
+        dataSetId,
+        sourceTagIds,
+        targetTagId
+      );
+      return c.json(result);
+    }
     const service = makeService(c, dataSetId);
     const result = await service.merge(sourceTagIds, targetTagId);
     return c.json(result);
@@ -176,8 +214,13 @@ tagsRoute.get(
       const { id } = c.req.valid('param');
       const { limit, offset } = c.req.valid('query');
       const dataSetId = getDataSetIdFromQuery(c);
-      const auth = await ensureAuthorized(c, dataSetId);
+      const auth = await ensureDatasetAuthorizedForCurrentStore(c, dataSetId);
       if (auth) return auth;
+      if (isStandaloneSqliteEnabled()) {
+        return c.json(
+          new StandaloneMetadataRepository().getStacksByTag(id, dataSetId, { limit, offset })
+        );
+      }
       const service = makeService(c, dataSetId);
       const result = await service.getStacksByTag(id, { limit, offset });
       return c.json(result);
@@ -193,8 +236,13 @@ tagsRoute.delete('/:id', zValidator('param', IdParamSchema), async (c) => {
   try {
     const { id } = c.req.valid('param');
     const dataSetId = getDataSetIdFromQuery(c);
-    const auth = await ensureAuthorized(c, dataSetId);
+    const auth = await ensureDatasetAuthorizedForCurrentStore(c, dataSetId);
     if (auth) return auth;
+    if (isStandaloneSqliteEnabled()) {
+      const ok = new StandaloneMetadataRepository().deleteTag(id, dataSetId);
+      if (!ok) return c.json({ error: 'Tag not found' }, 404);
+      return c.json({ success: true });
+    }
     const service = makeService(c, dataSetId);
     await service.delete(id);
     return c.json({ success: true });

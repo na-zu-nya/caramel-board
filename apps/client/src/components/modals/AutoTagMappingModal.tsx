@@ -15,6 +15,7 @@ import { Label } from '@/components/ui/label';
 import { SuggestInput } from '@/components/ui/suggest-input';
 import { useIMEAwareKeyboard } from '@/hooks/useIMEAwareKeyboard';
 import { apiClient } from '@/lib/api-client';
+import { useT } from '@/lib/i18n';
 
 type NormalizedTag = {
   id: number;
@@ -69,6 +70,7 @@ export default function AutoTagMappingModal({
   existingMapping,
   onSuccess,
 }: AutoTagMappingModalProps) {
+  const t = useT();
   const queryClient = useQueryClient();
   const { createKeyDownHandler } = useIMEAwareKeyboard();
   const autoTagKeyInputId = useId();
@@ -204,26 +206,24 @@ export default function AutoTagMappingModal({
       <DialogContent onKeyDown={handleKeyDown}>
         <DialogHeader>
           <DialogTitle>
-            {existingMapping ? 'Edit AutoTag Mapping' : 'Create AutoTag Mapping'}
+            {existingMapping ? t.autoTagMapping.editTitle : t.autoTagMapping.createTitle}
           </DialogTitle>
-          <DialogDescription>
-            Configure how this AutoTag prediction should be displayed and linked to existing tags.
-          </DialogDescription>
+          <DialogDescription>{t.autoTagMapping.description}</DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">
           <div className="grid gap-2">
-            <Label htmlFor={autoTagKeyInputId}>AutoTag Key</Label>
+            <Label htmlFor={autoTagKeyInputId}>{t.autoTagMapping.key}</Label>
             <Input
               id={autoTagKeyInputId}
               value={formData.autoTagKey}
-              placeholder="e.g., 1girl, blonde hair"
+              placeholder={t.autoTagMapping.keyPlaceholder}
               readOnly
               disabled
               className="font-mono text-sm"
             />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="tagId">Map to Tag</Label>
+            <Label htmlFor="tagId">{t.autoTagMapping.mapToTag}</Label>
             <SuggestInput
               value={tagSearchQuery}
               onChange={(value) => {
@@ -278,19 +278,17 @@ export default function AutoTagMappingModal({
                   setTagSearchLoading(false);
                 }
               }}
-              placeholder="Select existing tag or create new"
+              placeholder={t.autoTagMapping.tagPlaceholder}
               suggestions={tagSuggestions}
               loading={tagSearchLoading}
               autoFocus={!existingMapping}
             />
-            <p className="text-xs text-muted-foreground">
-              Select an existing tag or type to create a new one
-            </p>
+            <p className="text-xs text-muted-foreground">{t.autoTagMapping.tagHelp}</p>
           </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={handleCancel}>
-            Cancel
+            {t.common.cancel}
           </Button>
           <Button
             onClick={handleSave}
@@ -299,7 +297,7 @@ export default function AutoTagMappingModal({
             }
           >
             {saveMappingMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {existingMapping ? 'Update' : 'Create'} Mapping
+            {existingMapping ? t.common.update : t.common.create} {t.autoTagMapping.mapping}
           </Button>
         </DialogFooter>
       </DialogContent>

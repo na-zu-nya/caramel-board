@@ -14,11 +14,11 @@ export interface NavigationPinHandlers {
     id?: number,
     mediaType?: MediaType
   ) => boolean;
-  onPinCollection: (collection: { id: number }, iconName: string, name: string) => void;
+  onPinCollection: (collection: { id: number; name?: string }, iconName: string) => void;
   onUnpinCollection: (collection: { id: number }) => void;
-  onPinMediaType: (mediaType: MediaType, iconName: string, name: string) => void;
+  onPinMediaType: (mediaType: MediaType, iconName: string) => void;
   onUnpinMediaType: (mediaType: MediaType) => void;
-  onPinOverview: (iconName: string, name: string) => void;
+  onPinOverview: (iconName: string) => void;
   onUnpinOverview: () => void;
 }
 

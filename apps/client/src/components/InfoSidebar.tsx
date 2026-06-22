@@ -12,6 +12,7 @@ import {
   Hash,
   Heart,
   Image,
+  Link as LinkIcon,
   Loader2,
   NotebookText,
   Palette,
@@ -19,9 +20,12 @@ import {
   Star,
   Tag,
   Trash2,
+  UserPen,
   X,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { AuthorLinkQuickAdd } from '@/components/authors/AuthorLinkQuickAdd';
+import { authorLinkStyles } from '@/components/authors/authorLinkStyles';
 import { AutoTagDisplay } from '@/components/ui/autotag-display';
 import { Badge } from '@/components/ui/badge';
 import { ColorPalette } from '@/components/ui/color-ball';
@@ -37,14 +41,17 @@ import { SuggestInput } from '@/components/ui/suggest-input';
 import { useSwipeClose } from '@/hooks/features/useSwipeClose';
 import { useScratch } from '@/hooks/useScratch';
 import { apiClient } from '@/lib/api-client';
+import { getAuthorLinkLabel, MAX_AUTHOR_LINKS } from '@/lib/author-links';
 import { copyText } from '@/lib/clipboard';
 import { downloadStackOriginals } from '@/lib/download-originals';
+import { useT } from '@/lib/i18n';
 import { removeStackFromCache } from '@/lib/stack-cache';
 import { cn, hexForCopy } from '@/lib/utils';
 import {
   currentFilterAtom,
   customColorAtom,
   infoSidebarOpenAtom,
+  selectedInfoAssetIdAtom,
   selectedItemIdAtom,
 } from '@/stores/ui';
 import { addUploadNotificationAtom } from '@/stores/upload';
@@ -54,18 +61,25 @@ interface InfoSidebarProps {
   hideThumbnails?: boolean;
 }
 
-type StackTagValue = string | { name?: string; displayName?: string; title?: string };
+type StackTagValue = string | { name?: string; displayName?: string; title?: string; tag?: string };
 
 const getStackTagName = (tag: StackTagValue) => {
   if (typeof tag === 'string') {
     return tag;
   }
-  return tag.name || tag.displayName || tag.title || '';
+  return tag.name || tag.displayName || tag.title || tag.tag || '';
+};
+
+const isSameEntityId = (left: string | number | undefined, right: string | number | null) => {
+  if (left === undefined || right === null) return false;
+  return String(left) === String(right);
 };
 
 export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps) {
+  const t = useT();
   const [isOpen, setIsOpen] = useAtom(infoSidebarOpenAtom);
   const [selectedItemId, setSelectedItemId] = useAtom(selectedItemIdAtom);
+  const [selectedInfoAssetId, setSelectedInfoAssetId] = useAtom(selectedInfoAssetIdAtom);
   const [, setCustomColor] = useAtom(customColorAtom);
   const [currentFilter, setCurrentFilter] = useAtom(currentFilterAtom);
   const queryClient = useQueryClient();
@@ -112,12 +126,23 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
     enabled: !!selectedItemId && isOpen,
   });
 
+  const selectedAssetIdForLike = useMemo(() => {
+    if (!selectedItem?.assets || selectedInfoAssetId === null) return undefined;
+    return selectedItem.assets.find((asset) => isSameEntityId(asset.id, selectedInfoAssetId))?.id;
+  }, [selectedInfoAssetId, selectedItem?.assets]);
+
+  useEffect(() => {
+    if (selectedInfoAssetId === null || !selectedItem?.assets) return;
+    const hasAsset = selectedItem.assets.some((asset) =>
+      isSameEntityId(asset.id, selectedInfoAssetId)
+    );
+    if (!hasAsset) setSelectedInfoAssetId(null);
+  }, [selectedInfoAssetId, selectedItem?.assets, setSelectedInfoAssetId]);
+
   const handleRemoveStack = useCallback(async () => {
     if (!selectedItem) return;
 
-    const confirmed = window.confirm(
-      `Are you sure you want to remove the stack "${selectedItem.name}"? This action cannot be undone.`
-    );
+    const confirmed = window.confirm(t.info.removeConfirm(selectedItem.name));
     if (!confirmed) return;
 
     const rawId = selectedItem.id;
@@ -144,7 +169,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
       }
     } catch (error) {
       console.error('❌ Failed to remove stack:', error);
-      alert('Failed to remove stack. Please try again.');
+      alert(t.info.removeFailed);
     }
   }, [
     datasetId,
@@ -154,6 +179,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
     selectedItem,
     setIsOpen,
     setSelectedItemId,
+    t,
   ]);
 
   const previewGenerated = Boolean(selectedItem?.assets?.some((asset) => asset.preview));
@@ -180,6 +206,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
   const [authorLoading, setAuthorLoading] = useState(false);
   const [recentTags, setRecentTags] = useState<string[]>([]);
   const [recentAuthors, setRecentAuthors] = useState<string[]>([]);
+  const [authorLinkQuickAddOpen, setAuthorLinkQuickAddOpen] = useState(false);
 
   // Color details state
   const [showColorDetails, setShowColorDetails] = useState(false);
@@ -241,6 +268,13 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
       setAuthorInput('');
     }
   }, [selectedItem]);
+
+  const selectedAuthor = useMemo(() => {
+    if (!selectedItem?.author || typeof selectedItem.author === 'string') return null;
+    return selectedItem.author;
+  }, [selectedItem?.author]);
+
+  const selectedAuthorLinks = selectedAuthor?.links ?? [];
 
   // Mutations for immediate updates
   const addTagMutation = useMutation({
@@ -314,6 +348,28 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
       queryClient.invalidateQueries({ queryKey: ['library-counts', datasetId] });
     },
   });
+
+  const addAuthorLinkMutation = useMutation({
+    mutationFn: async ({ authorId, url }: { authorId: string | number; url: string }) => {
+      return apiClient.addAuthorLink(authorId, { datasetId, url });
+    },
+    onSuccess: () => {
+      setAuthorLinkQuickAddOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['stack', datasetId, selectedItemId] });
+      queryClient.invalidateQueries({ queryKey: ['stacks'], refetchType: 'all' });
+      queryClient.invalidateQueries({ queryKey: ['authors', datasetId] });
+      queryClient.invalidateQueries({ queryKey: ['authors', datasetId, 'management'] });
+      addNotification({ type: 'success', message: t.info.authorLinkAdded });
+    },
+    onError: () => {
+      addNotification({ type: 'error', message: t.info.authorLinkAddFailed });
+    },
+  });
+
+  const canAddAuthorLink =
+    !!selectedAuthor &&
+    selectedAuthorLinks.length < MAX_AUTHOR_LINKS &&
+    !addAuthorLinkMutation.isPending;
 
   const toggleFavoriteMutation = useMutation({
     mutationFn: async ({ stackId, favorited }: { stackId: number; favorited: boolean }) => {
@@ -394,9 +450,9 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
   const _handleCopyTag = async (tag: string) => {
     const ok = await copyText(tag);
     if (ok) {
-      addNotification({ type: 'success', message: `Copied tag: ${tag}` });
+      addNotification({ type: 'success', message: t.info.copiedTag(tag) });
     } else {
-      addNotification({ type: 'error', message: 'Failed to copy (try HTTPS or use ⌘/Ctrl+C)' });
+      addNotification({ type: 'error', message: t.info.failedToCopyWithHint });
     }
   };
 
@@ -406,23 +462,100 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
     }
   };
 
-  const handleAuthorChange = (author: string) => {
-    if (selectedItem) {
+  const handleAuthorChange = useCallback(
+    (author: string) => {
+      const nextAuthor = author.trim();
+      setAuthorInput(nextAuthor);
+      setAuthorEditing(false);
+      setAuthorSuggestions([]);
+
+      if (!selectedItem) return;
+
       // Get current author name
       const currentAuthorName =
         typeof selectedItem.author === 'string'
           ? selectedItem.author
           : (selectedItem.author as Author)?.name || '';
 
-      if (author !== currentAuthorName) {
-        updateAuthorMutation.mutate({ stackId: Number(selectedItem.id), author });
+      if (nextAuthor !== currentAuthorName) {
+        updateAuthorMutation.mutate({ stackId: Number(selectedItem.id), author: nextAuthor });
         // Add to recent authors
-        if (author) {
-          setRecentAuthors((prev) => [author, ...prev.filter((a) => a !== author)].slice(0, 10));
+        if (nextAuthor) {
+          setRecentAuthors((prev) =>
+            [nextAuthor, ...prev.filter((a) => a !== nextAuthor)].slice(0, 10)
+          );
         }
       }
+    },
+    [selectedItem, updateAuthorMutation]
+  );
+
+  const handleAuthorSuggestionSelect = useCallback(
+    (author: string) => {
+      handleAuthorChange(author);
+    },
+    [handleAuthorChange]
+  );
+
+  const handleAuthorSearch = useCallback(
+    async (query: string) => {
+      setAuthorLoading(true);
+      try {
+        const results = await apiClient.searchAuthors(query, datasetId);
+        const suggestions = results
+          .map((author) => (typeof author === 'string' ? author : author.name))
+          .filter((name): name is string => name !== undefined && name !== null);
+        setAuthorSuggestions(suggestions);
+      } catch (error) {
+        console.error('Error searching authors:', error);
+        setAuthorSuggestions([]);
+      } finally {
+        setAuthorLoading(false);
+      }
+    },
+    [datasetId]
+  );
+
+  const handleStartAuthorEditing = useCallback(() => {
+    if (selectedItem) {
+      const current =
+        typeof selectedItem.author === 'string'
+          ? selectedItem.author
+          : (selectedItem.author as Author)?.name || '';
+      setAuthorInput(current);
+      setAuthorEditing(true);
     }
-  };
+  }, [selectedItem]);
+
+  const handleCancelAuthorEditing = useCallback(() => {
+    const current =
+      typeof selectedItem?.author === 'string'
+        ? selectedItem.author
+        : (selectedItem?.author as Author | undefined)?.name || '';
+    setAuthorInput(current);
+    setAuthorEditing(false);
+    setAuthorSuggestions([]);
+  }, [selectedItem?.author]);
+
+  const handleOpenAuthorManagement = useCallback(() => {
+    if (!selectedAuthor) return;
+    void navigate({
+      to: '/library/$datasetId/authors',
+      params: { datasetId },
+      search: { authorId: String(selectedAuthor.id) },
+    });
+  }, [datasetId, navigate, selectedAuthor]);
+
+  const handleAddAuthorLink = useCallback(
+    (input: { url: string }) => {
+      if (!selectedAuthor) return;
+      addAuthorLinkMutation.mutate({
+        authorId: selectedAuthor.id,
+        url: input.url,
+      });
+    },
+    [addAuthorLinkMutation, selectedAuthor]
+  );
 
   const handleToggleFavorite = () => {
     if (selectedItem) {
@@ -441,25 +574,29 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
   };
 
   const likeMutation = useMutation({
-    mutationFn: async ({ stackId }: { stackId: number }) => {
-      const response = await fetch(`/api/v1/stacks/${stackId}/like`, {
-        method: 'POST',
-      });
-      if (!response.ok) throw new Error('Failed to like');
-      return response.json();
+    mutationFn: async ({ stackId, assetId }: { stackId: number; assetId?: string | number }) => {
+      if (assetId !== undefined) {
+        return apiClient.likeAsset(assetId);
+      }
+      return apiClient.likeStack(stackId);
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['stack'] });
       queryClient.invalidateQueries({ queryKey: ['stack', datasetId, selectedItemId] });
       queryClient.invalidateQueries({ queryKey: ['stacks'] });
       queryClient.invalidateQueries({ queryKey: ['library-counts', datasetId] });
+      queryClient.invalidateQueries({ queryKey: ['likes', 'yearly'] });
     },
   });
 
-  const handleLike = () => {
+  const handleLike = useCallback(() => {
     if (selectedItem) {
-      likeMutation.mutate({ stackId: Number(selectedItem.id) });
+      likeMutation.mutate({
+        stackId: Number(selectedItem.id),
+        assetId: selectedAssetIdForLike,
+      });
     }
-  };
+  }, [likeMutation, selectedAssetIdForLike, selectedItem]);
 
   const updateColorsMutation = useMutation({
     mutationFn: async ({ stackId }: { stackId: number }) => {
@@ -511,7 +648,10 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
     mutationFn: async ({ stackId }: { stackId: number }) => {
       const thumbnailResult = await apiClient.refreshThumbnail(stackId);
       const colorResult = await apiClient.updateStackColors(stackId);
-      const autoTagResult = await apiClient.aggregateStackTags(stackId, { threshold: 0.4 });
+      const autoTagResult = await apiClient.refreshStackAutoTags(stackId, {
+        threshold: 0.4,
+        forceRegenerate: true,
+      });
 
       return {
         thumbnailResult,
@@ -581,9 +721,9 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
     const copied = hexForCopy(color.hex);
     copyText(copied).then((ok) => {
       if (ok) {
-        addNotification({ type: 'success', message: `Copied ${copied} to clipboard` });
+        addNotification({ type: 'success', message: t.common.copiedToClipboard(copied) });
       } else {
-        addNotification({ type: 'error', message: 'Failed to copy to clipboard' });
+        addNotification({ type: 'error', message: t.common.failedToCopy });
       }
     });
   };
@@ -610,7 +750,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
         <div className="h-full flex items-center justify-center text-gray-400">
           <div className="text-center">
             <Image size={48} className="mx-auto mb-4 opacity-50" />
-            <p>Select an item to view details</p>
+            <p>{t.info.selectItem}</p>
           </div>
         </div>
       ) : isLoading ? (
@@ -702,75 +842,94 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
                 <Image size={16} />
-                Media Type
+                {t.info.mediaType}
               </div>
               <Select value={selectedItem.mediaType || ''} onValueChange={handleMediaTypeChange}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select media type" />
+                  <SelectValue placeholder={t.info.selectMediaType} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="image">Image</SelectItem>
-                  <SelectItem value="comic">Comic</SelectItem>
-                  <SelectItem value="video">Video</SelectItem>
+                  <SelectItem value="image">{t.info.image}</SelectItem>
+                  <SelectItem value="comic">{t.info.comic}</SelectItem>
+                  <SelectItem value="video">{t.info.video}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             {/* Author */}
-            <div className="space-y-2">
-              <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                <Calendar size={16} />
-                Author
-              </label>
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                  <Calendar size={16} />
+                  {t.info.author}
+                </label>
+                {selectedAuthor && (
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 text-[11px] leading-4 text-gray-500 transition-colors hover:text-gray-700"
+                    onClick={handleOpenAuthorManagement}
+                  >
+                    <UserPen size={12} />
+                    {t.info.editAuthor}
+                  </button>
+                )}
+              </div>
               {!authorEditing ? (
                 <button
                   type="button"
-                  className="px-3 py-2 w-full text-left border border-transparent rounded-md hover:bg-gray-50"
-                  onClick={() => {
-                    const current =
-                      (typeof selectedItem.author === 'string'
-                        ? selectedItem.author
-                        : (selectedItem.author as Author)?.name) || '';
-                    setAuthorInput(current);
-                    setAuthorEditing(true);
-                  }}
+                  className="w-full rounded px-3 py-1 text-left text-sm leading-5 text-gray-900 transition-colors hover:bg-gray-50"
+                  onClick={handleStartAuthorEditing}
                 >
-                  <span className="text-gray-900">
-                    {(typeof selectedItem.author === 'string'
-                      ? selectedItem.author
-                      : (selectedItem.author as Author)?.name) || '—'}
-                  </span>
+                  {(typeof selectedItem.author === 'string'
+                    ? selectedItem.author
+                    : (selectedItem.author as Author)?.name) || '—'}
                 </button>
               ) : (
                 <SuggestInput
                   value={authorInput}
                   onChange={setAuthorInput}
-                  onSelect={handleAuthorChange}
-                  onSearch={async (query) => {
-                    setAuthorLoading(true);
-                    try {
-                      const results = await apiClient.searchAuthors(query, datasetId);
-                      const suggestions = results
-                        .map((author) => (typeof author === 'string' ? author : author.name))
-                        .filter((name): name is string => name !== undefined && name !== null);
-                      setAuthorSuggestions(suggestions);
-                    } catch (error) {
-                      console.error('Error searching authors:', error);
-                      setAuthorSuggestions([]);
-                    } finally {
-                      setAuthorLoading(false);
-                    }
-                  }}
-                  placeholder="Type author and Enter"
+                  onSelect={handleAuthorSuggestionSelect}
+                  onSearch={handleAuthorSearch}
+                  onCancel={handleCancelAuthorEditing}
+                  placeholder={t.info.typeAuthorEnter}
                   suggestions={authorSuggestions}
                   loading={authorLoading}
                   autoFocus
                 />
               )}
+              {!authorEditing && selectedAuthor && (
+                <div className="flex flex-wrap items-center gap-1 px-3">
+                  {selectedAuthorLinks.map((link) => (
+                    <a
+                      key={link.id}
+                      href={link.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className={cn(authorLinkStyles.pillBase, authorLinkStyles.pillCompact)}
+                      title={link.url}
+                    >
+                      <LinkIcon size={10} className={authorLinkStyles.icon} />
+                      <span className="truncate">{getAuthorLinkLabel(link)}</span>
+                    </a>
+                  ))}
+                  {canAddAuthorLink && (
+                    <AuthorLinkQuickAdd
+                      open={authorLinkQuickAddOpen}
+                      addLabel={t.info.addAuthorLink}
+                      urlLabel={t.info.authorLinkUrl}
+                      urlPlaceholder={t.info.authorLinkUrlPlaceholder}
+                      submitLabel={t.common.add}
+                      submitting={addAuthorLinkMutation.isPending}
+                      onOpenChange={setAuthorLinkQuickAddOpen}
+                      onSubmit={handleAddAuthorLink}
+                    />
+                  )}
+                </div>
+              )}
               {/* Recent Authors */}
               {recentAuthors.length > 0 && (
                 <div className="mt-2">
-                  <p className="text-xs text-gray-500 mb-1">Recent authors:</p>
+                  <p className="text-xs text-gray-500 mb-1">{t.info.recentAuthors}</p>
                   <div className="flex flex-wrap gap-1">
                     {recentAuthors.map((author) => (
                       <button
@@ -794,7 +953,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
             <div className="space-y-2">
               <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
                 <Tag size={16} />
-                Tags
+                {t.info.tags}
               </label>
               <div className="space-y-2">
                 <SuggestInput
@@ -816,15 +975,15 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
                       setTagLoading(false);
                     }
                   }}
-                  placeholder="Add tag"
+                  placeholder={t.info.addTag}
                   suggestions={tagSuggestions}
                   loading={tagLoading}
                 />
                 {selectedItem.tags && selectedItem.tags.length > 0 && (
                   <div className="flex flex-wrap gap-2">
                     {selectedItem.tags.map((tag, index) => {
-                      const tagName =
-                        typeof tag === 'string' ? tag : tag.name || tag.displayName || String(tag);
+                      const tagName = getStackTagName(tag);
+                      if (!tagName) return null;
                       return (
                         <Badge
                           key={typeof tag === 'string' ? tag : `tag-${index}`}
@@ -858,7 +1017,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
               {/* Recent Tags */}
               {recentTags.length > 0 && (
                 <div className="mt-2">
-                  <p className="text-xs text-gray-500 mb-1">Recent tags:</p>
+                  <p className="text-xs text-gray-500 mb-1">{t.info.recentTags}</p>
                   <div className="flex flex-wrap gap-1">
                     {recentTags.map((tag) => (
                       <button
@@ -875,7 +1034,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
               )}
               {suggestedTags.length > 0 && (
                 <div className="mt-2">
-                  <p className="text-xs text-gray-500 mb-1">Suggested tags:</p>
+                  <p className="text-xs text-gray-500 mb-1">{t.info.suggestedTags}</p>
                   <div className="flex flex-wrap gap-1">
                     {suggestedTags.map((tag) => (
                       <button
@@ -918,7 +1077,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
               <div className="flex items-center justify-between text-sm font-medium text-gray-700">
                 <div className="flex items-center gap-2">
                   <Palette size={16} />
-                  Dominant Colors
+                  {t.info.dominantColors}
                 </div>
                 {selectedItem.dominantColors && selectedItem.dominantColors.length > 0 && (
                   <button
@@ -926,7 +1085,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
                     onClick={() => setShowColorDetails(!showColorDetails)}
                     className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 transition-colors"
                   >
-                    Detail
+                    {t.info.detail}
                     {showColorDetails ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
                   </button>
                 )}
@@ -963,16 +1122,16 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
                                   if (ok) {
                                     addNotification({
                                       type: 'success',
-                                      message: `Copied ${copied} to clipboard`,
+                                      message: t.common.copiedToClipboard(copied),
                                     });
                                   } else {
                                     addNotification({
                                       type: 'error',
-                                      message: 'Failed to copy to clipboard',
+                                      message: t.common.failedToCopy,
                                     });
                                   }
                                 }}
-                                title="Copy hex"
+                                title={t.info.copyHex}
                               >
                                 <Copy size={12} />
                                 <span>{color.hex}</span>
@@ -987,7 +1146,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
                               <Progress
                                 value={color.lightness}
                                 max={100}
-                                label="Brightness"
+                                label={t.info.brightness}
                                 size="sm"
                                 color="primary"
                                 className="text-gray-400"
@@ -995,7 +1154,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
                               <Progress
                                 value={color.saturation}
                                 max={100}
-                                label="Saturation"
+                                label={t.info.saturation}
                                 size="sm"
                                 color="gray"
                                 className="text-gray-400"
@@ -1014,29 +1173,29 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
                 <Hash size={16} />
-                Stats
+                {t.info.stats}
               </div>
               <div className="space-y-1 text-sm text-gray-600">
                 <div className="flex justify-between">
-                  <span>Assets</span>
+                  <span>{t.info.assets}</span>
                   <span className="font-medium">{selectedItem.assetCount || 0}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Likes</span>
+                  <span>{t.info.likes}</span>
                   <span className="font-medium">{selectedItem.liked || 0}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Optimized</span>
+                  <span>{t.info.optimized}</span>
                   <span className="font-medium">
                     {previewGenerated ? (
-                      <span className="text-green-600">Yes</span>
+                      <span className="text-green-600">{t.info.yes}</span>
                     ) : (
-                      <span className="text-gray-400">No</span>
+                      <span className="text-gray-400">{t.info.no}</span>
                     )}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Created</span>
+                  <span>{t.info.created}</span>
                   <span className="font-medium">
                     {new Date(selectedItem.createdAt).toLocaleDateString()}
                   </span>
@@ -1050,7 +1209,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
             {/* Header with toggle button */}
             <div className="p-4 pb-2">
               <div className="w-full flex items-center justify-between text-sm font-medium text-gray-700">
-                <span>Actions</span>
+                <span>{t.info.actions}</span>
               </div>
             </div>
 
@@ -1086,7 +1245,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
                   disabled={!selectedItem}
                 >
                   <Download size={16} />
-                  Download All
+                  {t.info.downloadAll}
                 </button>
                 <button
                   type="button"
@@ -1107,7 +1266,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
                   disabled={!selectedItem}
                 >
                   <NotebookText size={16} />
-                  Add to Scratch
+                  {t.info.addToScratch}
                 </button>
                 {previewEligible && (
                   <button
@@ -1127,7 +1286,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
                     ) : (
                       <Clapperboard size={16} />
                     )}
-                    Optimize Video
+                    {t.info.optimizeVideo}
                   </button>
                 )}
                 <button
@@ -1143,7 +1302,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
                   ) : (
                     <RefreshCw size={16} />
                   )}
-                  Refresh
+                  {t.info.refresh}
                 </button>
                 <button
                   type="button"
@@ -1152,7 +1311,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
                   disabled={!selectedItem}
                 >
                   <Trash2 size={16} />
-                  Remove Stack
+                  {t.info.removeStack}
                 </button>
               </div>
             </div>

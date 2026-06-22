@@ -6,6 +6,7 @@ import StackGrid from '@/components/StackGrid';
 import { useDataset } from '@/hooks/useDatasets';
 import { useHeaderActions } from '@/hooks/useHeaderActions';
 import { useRangeBasedQuery } from '@/hooks/useRangeBasedQuery';
+import { useT } from '@/lib/i18n';
 import { navigationStateAtom } from '@/stores/navigation';
 import { currentFilterAtom } from '@/stores/ui';
 import { genListToken, saveViewContext } from '@/stores/view-context';
@@ -16,6 +17,7 @@ export const Route = createFileRoute('/library/$datasetId/author/$authorName')({
 });
 
 function AuthorDetailPage() {
+  const t = useT();
   const { datasetId, authorName } = Route.useParams();
   const { data: dataset } = useDataset(datasetId);
   const navigate = useNavigate();
@@ -195,8 +197,8 @@ function AuthorDetailPage() {
         onRefreshAll={refreshAll}
         emptyState={{
           icon: '👤',
-          title: `No items by "${decodedAuthorName}"`,
-          description: 'No stacks found for this author.',
+          title: t.emptyState.noAuthorItems(decodedAuthorName),
+          description: t.emptyState.authorDescription,
         }}
       />
       <FilterPanel

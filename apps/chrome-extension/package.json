@@ -1,0 +1,11 @@
+{
+  "name": "@caramelboard/chrome-extension",
+  "version": "1.0.10-beta",
+  "private": true,
+  "license": "SEE LICENSE IN ../../LICENSE",
+  "type": "module",
+  "scripts": {
+    "lint": "biome check .",
+    "format": "biome check --write ."
+  }
+}

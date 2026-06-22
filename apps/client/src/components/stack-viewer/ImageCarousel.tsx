@@ -12,6 +12,7 @@ import {
 import { createPortal } from 'react-dom';
 import VideoSeekBar from '@/components/ui/SeekBar/VideoSeekBar';
 import { VideoTransportControls } from '@/components/ui/VideoTransportControls';
+import { useVideoPausedSeekFrameFlush } from '@/hooks/features/useVideoPausedSeekFrameFlush';
 import { isVideoAsset } from '@/lib/media';
 import { cn } from '@/lib/utils';
 import {
@@ -107,17 +108,6 @@ interface VideoState {
   volume: number;
 }
 
-interface VideoFrameMetadata {
-  mediaTime: number;
-}
-
-interface VideoFrameCallbackVideoElement extends HTMLVideoElement {
-  requestVideoFrameCallback?: (
-    callback: (now: number, metadata: VideoFrameMetadata) => void
-  ) => number;
-  cancelVideoFrameCallback?: (handle: number) => void;
-}
-
 type DragImageStyle = CSSProperties & {
   WebkitUserDrag?: 'none' | 'auto' | 'element';
 };
@@ -148,6 +138,15 @@ const canvasToPngBlob = (canvas: HTMLCanvasElement) =>
   new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
 
 const VIDEO_SHUTTLE_RATE = 1.5;
+
+const getFiniteVideoDuration = (video: HTMLVideoElement, fallback: number) =>
+  Number.isFinite(video.duration) ? video.duration : fallback;
+
+const getFiniteVideoCurrentTime = (video: HTMLVideoElement, fallback: number) =>
+  Number.isFinite(video.currentTime) ? video.currentTime : fallback;
+
+const clampVideoTime = (time: number, duration: number) =>
+  Math.min(Math.max(Number.isFinite(time) ? time : 0, 0), Math.max(0, duration || 0));
 
 const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
   (
@@ -188,9 +187,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
     const shuttleAnimationFrameRef = useRef<number | null>(null);
     const shuttleLastTimestampRef = useRef<number | null>(null);
     const shuttleRestoreMutedRef = useRef<boolean | null>(null);
-    const displayedVideoTimeRef = useRef(0);
     const frameStepTargetTimeRef = useRef<number | null>(null);
-    const videoFrameCallbackIdRef = useRef<number | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const backgroundRef = containerRef; // Use container as background ref
     const currentAssetRef = useRef<HTMLDivElement>(null);
@@ -225,6 +222,37 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
       }
       return asset.file || asset.url || null;
     }, []);
+
+    const clearResumeAfterSeekTimer = useCallback(() => {
+      if (resumeAfterSeekTimerRef.current) {
+        clearTimeout(resumeAfterSeekTimerRef.current);
+        resumeAfterSeekTimerRef.current = null;
+      }
+    }, []);
+
+    const handlePausedSeekFrameFlushed = useCallback(
+      (video: HTMLVideoElement, targetTime: number) => {
+        setVideoState((prev) => ({
+          ...prev,
+          currentTime: getFiniteVideoCurrentTime(video, targetTime),
+          duration: getFiniteVideoDuration(video, prev.duration),
+          isPlaying: false,
+          muted: video.muted,
+          volume: video.volume,
+        }));
+      },
+      []
+    );
+
+    const {
+      cancelPausedSeekFrameFlush,
+      getPausedSeekFrameFlushRestore,
+      isPausedSeekFrameFlushActive,
+      schedulePausedSeekFrameFlush,
+    } = useVideoPausedSeekFrameFlush({
+      currentVideoRef,
+      onFlushComplete: handlePausedSeekFrameFlushed,
+    });
 
     // Direct DOM update function for high performance
     const updateDOMTransforms = useCallback(
@@ -278,29 +306,37 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
     );
 
     // Handle video play/pause toggle (mute stateは変更しない)
-    const handleVideoToggle = useCallback((video: HTMLVideoElement, _assetFile: string) => {
-      // デバッグログ
-      console.log('Video toggled:', {
-        paused: video.paused,
-        muted: video.muted,
-        src: video.src,
-      });
-      // mute自動変更は行わない（UIのスピーカーボタンで操作）
+    const handleVideoToggle = useCallback(
+      (video: HTMLVideoElement, _assetFile: string) => {
+        const shouldPlay = video.paused || isPausedSeekFrameFlushActive();
+        cancelPausedSeekFrameFlush({ keepPlayback: true });
+        clearResumeAfterSeekTimer();
+        frameStepTargetTimeRef.current = null;
+        pendingSeekTimeRef.current = null;
+        // デバッグログ
+        console.log('Video toggled:', {
+          paused: video.paused,
+          muted: video.muted,
+          src: video.src,
+        });
+        // mute自動変更は行わない（UIのスピーカーボタンで操作）
 
-      if (video.paused) {
-        video
-          .play()
-          .then(() => {
-            console.log('Video playing');
-          })
-          .catch((err) => {
-            console.error('Video play failed:', err);
-          });
-      } else {
-        video.pause();
-        console.log('Video paused');
-      }
-    }, []);
+        if (shouldPlay) {
+          video
+            .play()
+            .then(() => {
+              console.log('Video playing');
+            })
+            .catch((err) => {
+              console.error('Video play failed:', err);
+            });
+        } else {
+          video.pause();
+          console.log('Video paused');
+        }
+      },
+      [cancelPausedSeekFrameFlush, clearResumeAfterSeekTimer, isPausedSeekFrameFlushActive]
+    );
 
     const stopVideoShuttle = useCallback(() => {
       const hadActiveShuttle =
@@ -323,7 +359,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
       video.pause();
       setVideoState((prev) => ({
         ...prev,
-        currentTime: Number.isFinite(video.currentTime) ? video.currentTime : prev.currentTime,
+        currentTime: getFiniteVideoCurrentTime(video, prev.currentTime),
         isPlaying: false,
         muted: video.muted,
       }));
@@ -332,10 +368,16 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
     const handleVideoShuttleStart = useCallback(
       (direction: -1 | 1) => {
         stopVideoShuttle();
+        cancelPausedSeekFrameFlush();
 
         const video = currentVideoRef.current;
         if (!video) return;
 
+        clearResumeAfterSeekTimer();
+        frameStepTargetTimeRef.current = null;
+        pendingSeekTimeRef.current = null;
+        isScrubbingRef.current = false;
+        setIsScrubbing(false);
         shuttleRestoreMutedRef.current = video.muted;
         video.muted = true;
         video.pause();
@@ -350,11 +392,10 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
           const lastTimestamp = shuttleLastTimestampRef.current ?? timestamp;
           shuttleLastTimestampRef.current = timestamp;
           const elapsedSeconds = Math.max(0, (timestamp - lastTimestamp) / 1000);
-          const duration = Number.isFinite(video.duration) ? video.duration : videoState.duration;
-          const maxTime = Math.max(0, duration || 0);
-          const nextTime = Math.min(
-            Math.max((video.currentTime || 0) + direction * elapsedSeconds * VIDEO_SHUTTLE_RATE, 0),
-            maxTime
+          const duration = getFiniteVideoDuration(video, videoState.duration);
+          const nextTime = clampVideoTime(
+            getFiniteVideoCurrentTime(video, 0) + direction * elapsedSeconds * VIDEO_SHUTTLE_RATE,
+            duration
           );
 
           if (Number.isFinite(nextTime)) {
@@ -372,7 +413,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
 
         shuttleAnimationFrameRef.current = requestAnimationFrame(step);
       },
-      [stopVideoShuttle, videoState.duration]
+      [cancelPausedSeekFrameFlush, clearResumeAfterSeekTimer, stopVideoShuttle, videoState.duration]
     );
 
     const handleVideoStepFrame = useCallback(
@@ -382,20 +423,16 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
         const video = currentVideoRef.current;
         if (!video) return;
 
-        const duration = Number.isFinite(video.duration) ? video.duration : videoState.duration;
+        clearResumeAfterSeekTimer();
+        pendingSeekTimeRef.current = null;
+        isScrubbingRef.current = false;
+        setIsScrubbing(false);
+
+        const duration = getFiniteVideoDuration(video, videoState.duration);
         const frameStep = 1 / (fps || 30);
-        const currentTime = Number.isFinite(video.currentTime)
-          ? video.currentTime
-          : videoState.currentTime;
-        const displayedTime = displayedVideoTimeRef.current;
-        const displayedTimeIsUsable =
-          Number.isFinite(displayedTime) && Math.abs(displayedTime - currentTime) <= frameStep * 4;
-        const baseTime =
-          frameStepTargetTimeRef.current ?? (displayedTimeIsUsable ? displayedTime : currentTime);
-        const nextTime = Math.min(
-          Math.max(baseTime + direction * frameStep, 0),
-          Math.max(0, duration || 0)
-        );
+        const currentTime = getFiniteVideoCurrentTime(video, videoState.currentTime);
+        const baseTime = frameStepTargetTimeRef.current ?? currentTime;
+        const nextTime = clampVideoTime(baseTime + direction * frameStep, duration);
 
         video.pause();
         frameStepTargetTimeRef.current = nextTime;
@@ -406,8 +443,16 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
           duration: Number.isFinite(duration) ? duration : prev.duration,
           isPlaying: false,
         }));
+        schedulePausedSeekFrameFlush(video, nextTime);
       },
-      [fps, stopVideoShuttle, videoState.currentTime, videoState.duration]
+      [
+        clearResumeAfterSeekTimer,
+        fps,
+        schedulePausedSeekFrameFlush,
+        stopVideoShuttle,
+        videoState.currentTime,
+        videoState.duration,
+      ]
     );
 
     const handleTransportPlay = useCallback(() => {
@@ -478,14 +523,18 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
         playVideo: () => {
           const v = currentVideoRef.current;
           if (!v) return;
+          cancelPausedSeekFrameFlush({ keepPlayback: true });
           if (v.paused) void v.play().catch(() => {});
         },
         seekBySeconds: (delta: number, preservePlaying: boolean = true) => {
           const v = currentVideoRef.current;
           if (!v) return;
+          clearResumeAfterSeekTimer();
+          frameStepTargetTimeRef.current = null;
+          pendingSeekTimeRef.current = null;
           const wasPlaying = !v.paused;
-          const dur = Number.isFinite(v.duration) ? v.duration : 0;
-          const nt = Math.min(Math.max((v.currentTime || 0) + delta, 0), Math.max(0, dur));
+          const dur = getFiniteVideoDuration(v, 0);
+          const nt = clampVideoTime(getFiniteVideoCurrentTime(v, 0) + delta, dur);
           v.currentTime = nt;
           // UIの即時反映
           setVideoState((prev) => ({ ...prev, currentTime: nt, duration: dur }));
@@ -493,19 +542,24 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
             if (wasPlaying) void v.play().catch(() => {});
             else v.pause();
           }
+          if (v.paused) schedulePausedSeekFrameFlush(v, nt);
         },
         seekTo: (time: number, preservePlaying: boolean = true) => {
           const v = currentVideoRef.current;
           if (!v) return;
+          clearResumeAfterSeekTimer();
+          frameStepTargetTimeRef.current = null;
+          pendingSeekTimeRef.current = null;
           const wasPlaying = !v.paused;
-          const dur = Number.isFinite(v.duration) ? v.duration : 0;
-          const nt = Math.min(Math.max(time, 0), Math.max(0, dur));
+          const dur = getFiniteVideoDuration(v, 0);
+          const nt = clampVideoTime(time, dur);
           v.currentTime = nt;
           setVideoState((prev) => ({ ...prev, currentTime: nt, duration: dur }));
           if (preservePlaying) {
             if (wasPlaying) void v.play().catch(() => {});
             else v.pause();
           }
+          if (v.paused) schedulePausedSeekFrameFlush(v, nt);
         },
         stepFrame: (n: number) => {
           handleVideoStepFrame(n < 0 ? -1 : 1);
@@ -513,6 +567,9 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
         seekToStart: (preservePlaying: boolean = true) => {
           const v = currentVideoRef.current;
           if (!v) return;
+          clearResumeAfterSeekTimer();
+          frameStepTargetTimeRef.current = null;
+          pendingSeekTimeRef.current = null;
           const wasPlaying = !v.paused;
           v.currentTime = 0;
           setVideoState((prev) => ({ ...prev, currentTime: 0 }));
@@ -520,12 +577,16 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
             if (wasPlaying) void v.play().catch(() => {});
             else v.pause();
           }
+          if (v.paused) schedulePausedSeekFrameFlush(v, 0);
         },
         seekToEnd: (preservePlaying: boolean = true) => {
           const v = currentVideoRef.current;
           if (!v) return;
+          clearResumeAfterSeekTimer();
+          frameStepTargetTimeRef.current = null;
+          pendingSeekTimeRef.current = null;
           const wasPlaying = !v.paused;
-          const dur = Number.isFinite(v.duration) ? v.duration : 0;
+          const dur = getFiniteVideoDuration(v, 0);
           const frameStep = 1 / (fps || 30);
           const endTime = Math.max(0, dur - frameStep);
           v.currentTime = endTime;
@@ -534,6 +595,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
             if (wasPlaying) void v.play().catch(() => {});
             else v.pause();
           }
+          if (v.paused) schedulePausedSeekFrameFlush(v, endTime);
         },
         getCurrentTime: () => {
           const v = currentVideoRef.current;
@@ -541,7 +603,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
         },
         getIsPlaying: () => {
           const v = currentVideoRef.current;
-          return v ? !v.paused : !!videoState.isPlaying;
+          return v ? !v.paused && !isPausedSeekFrameFlushActive() : !!videoState.isPlaying;
         },
         downloadCurrentVideoFrame: async () => {
           const v = currentVideoRef.current;
@@ -578,13 +640,17 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
           }
         },
         requestRestorePlayback: (payload) => {
+          cancelPausedSeekFrameFlush();
+          clearResumeAfterSeekTimer();
+          frameStepTargetTimeRef.current = null;
+          pendingSeekTimeRef.current = null;
           pendingRestoreRef.current = payload ?? { ...lastPlaybackRef.current };
           const v = currentVideoRef.current;
           if (v && v.readyState >= 1) {
             // メタデータがあれば即適用（pendingは残し、後続の予期せぬ再レンダにも対応）
-            const dur = Number.isFinite(v.duration) ? v.duration : 0;
+            const dur = getFiniteVideoDuration(v, 0);
             const pl = pendingRestoreRef.current!;
-            const clamped = Math.min(Math.max(pl.time, 0), Math.max(0, dur));
+            const clamped = clampVideoTime(pl.time, dur);
             v.currentTime = clamped;
             setVideoState((prev) => ({
               ...prev,
@@ -594,18 +660,25 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
               volume: v.volume,
             }));
             if (pl.wasPlaying) void v.play().catch(() => {});
-            else v.pause();
+            else {
+              v.pause();
+              schedulePausedSeekFrameFlush(v, clamped);
+            }
           }
         },
       }),
       [
         updateDOMTransforms,
+        cancelPausedSeekFrameFlush,
+        clearResumeAfterSeekTimer,
         fps,
         backgroundRef.current,
         currentAsset?.file,
         currentAsset,
         handleVideoToggle,
         handleVideoStepFrame,
+        isPausedSeekFrameFlushActive,
+        schedulePausedSeekFrameFlush,
         videoState.currentTime,
         videoState.isPlaying,
       ]
@@ -761,58 +834,67 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
       const loop = () => {
         const v = currentVideoRef.current;
         if (v) {
-          const dur = Number.isFinite(v.duration) ? v.duration : 0;
+          const dur = getFiniteVideoDuration(v, 0);
           const pendingSeekTime = pendingSeekTimeRef.current;
+          const frameStepTargetTime = frameStepTargetTimeRef.current;
+          const pausedSeekFlushRestore = getPausedSeekFrameFlushRestore();
+          const isPausedSeekFlush = isPausedSeekFrameFlushActive();
+          const isPlaying = !v.paused && !isPausedSeekFlush;
+          const muted =
+            isPausedSeekFlush && pausedSeekFlushRestore ? pausedSeekFlushRestore.muted : v.muted;
+          const volume =
+            isPausedSeekFlush && pausedSeekFlushRestore ? pausedSeekFlushRestore.volume : v.volume;
           const ct =
             isScrubbingRef.current && pendingSeekTime !== null
               ? pendingSeekTime
-              : Number.isFinite(v.currentTime)
-                ? v.currentTime
-                : 0;
+              : frameStepTargetTime !== null && v.paused
+                ? frameStepTargetTime
+                : getFiniteVideoCurrentTime(v, 0);
           setVideoState((prev) => {
             if (
               prev.currentTime === ct &&
               prev.duration === dur &&
-              prev.isPlaying === !v.paused &&
-              prev.muted === v.muted &&
-              prev.volume === v.volume
+              prev.isPlaying === isPlaying &&
+              prev.muted === muted &&
+              prev.volume === volume
             )
               return prev;
             return {
               ...prev,
               currentTime: ct,
               duration: dur,
-              isPlaying: !v.paused,
-              muted: v.muted,
-              volume: v.volume,
+              isPlaying,
+              muted,
+              volume,
             };
           });
           lastPlaybackRef.current = {
-            time: isScrubbingRef.current ? ct : v.currentTime || 0,
-            wasPlaying: isScrubbingRef.current ? wasPlayingBeforeScrubRef.current : !v.paused,
+            time:
+              isScrubbingRef.current || frameStepTargetTime !== null
+                ? ct
+                : getFiniteVideoCurrentTime(v, 0),
+            wasPlaying: isScrubbingRef.current ? wasPlayingBeforeScrubRef.current : isPlaying,
           };
-          const frameCallbackVideo = v as VideoFrameCallbackVideoElement;
-          if (typeof frameCallbackVideo.requestVideoFrameCallback !== 'function') {
-            displayedVideoTimeRef.current = ct;
-          }
         }
         rafId = requestAnimationFrame(loop);
       };
       rafId = requestAnimationFrame(loop);
       return () => cancelAnimationFrame(rafId);
-    }, []);
+    }, [getPausedSeekFrameFlushRestore, isPausedSeekFrameFlushActive]);
 
     const _tryApplyRestore = useCallback(() => {
       const payload = pendingRestoreRef.current;
       const v = currentVideoRef.current;
       if (!payload || !v) return false;
       if (v.readyState < 1) return false; // HAVE_METADATA 未満
-      const dur = Number.isFinite(v.duration)
-        ? v.duration
-        : Number.isFinite(videoState.duration)
-          ? videoState.duration
-          : 0;
-      const clamped = Math.min(Math.max(payload.time, 0), Math.max(0, dur));
+      cancelPausedSeekFrameFlush();
+      frameStepTargetTimeRef.current = null;
+      pendingSeekTimeRef.current = null;
+      const dur = getFiniteVideoDuration(
+        v,
+        Number.isFinite(videoState.duration) ? videoState.duration : 0
+      );
+      const clamped = clampVideoTime(payload.time, dur);
       v.currentTime = clamped;
       setVideoState((prev) => ({
         ...prev,
@@ -822,10 +904,13 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
         volume: v.volume,
       }));
       if (payload.wasPlaying) void v.play().catch(() => {});
-      else v.pause();
+      else {
+        v.pause();
+        schedulePausedSeekFrameFlush(v, clamped);
+      }
       pendingRestoreRef.current = null;
       return true;
-    }, [videoState.duration]);
+    }, [cancelPausedSeekFrameFlush, schedulePausedSeekFrameFlush, videoState.duration]);
 
     // 追加のrAF起動管理は不要（常時1本のループで更新）
 
@@ -846,18 +931,25 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
       (seekTime: number) => {
         const video = currentVideoRef.current;
         if (video) {
-          const duration = Number.isFinite(video.duration) ? video.duration : videoState.duration;
-          const clamped = Math.min(Math.max(seekTime, 0), Math.max(0, duration || 0));
-          pendingSeekTimeRef.current = clamped;
+          const duration = getFiniteVideoDuration(video, videoState.duration);
+          const clamped = clampVideoTime(seekTime, duration);
+          if (!isScrubbingRef.current) {
+            clearResumeAfterSeekTimer();
+          }
+          frameStepTargetTimeRef.current = null;
+          pendingSeekTimeRef.current = isScrubbingRef.current ? clamped : null;
           video.currentTime = clamped;
           setVideoState((prev) => ({
             ...prev,
             currentTime: clamped,
             duration: Number.isFinite(duration) ? duration : prev.duration,
           }));
+          if (!isScrubbingRef.current && video.paused) {
+            schedulePausedSeekFrameFlush(video, clamped);
+          }
         }
       },
-      [videoState.duration]
+      [clearResumeAfterSeekTimer, schedulePausedSeekFrameFlush, videoState.duration]
     );
 
     const handleSeek = useCallback(
@@ -870,6 +962,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
     const handleScrubStart = useCallback(() => {
       const video = currentVideoRef.current;
       if (!video) return;
+      cancelPausedSeekFrameFlush();
       if (resumeAfterSeekTimerRef.current) {
         clearTimeout(resumeAfterSeekTimerRef.current);
         resumeAfterSeekTimerRef.current = null;
@@ -879,7 +972,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
       pendingSeekTimeRef.current = Number.isFinite(video.currentTime) ? video.currentTime : 0;
       if (!video.paused) video.pause();
       setIsScrubbing(true);
-    }, []);
+    }, [cancelPausedSeekFrameFlush]);
 
     const handleScrubEnd = useCallback(
       (time: number) => {
@@ -900,6 +993,8 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
           setIsScrubbing(false);
           if (shouldResume) {
             void video.play().catch(() => {});
+          } else {
+            schedulePausedSeekFrameFlush(video, time);
           }
         };
 
@@ -922,7 +1017,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
         video.addEventListener('seeked', finish);
         resumeAfterSeekTimerRef.current = setTimeout(finish, 180);
       },
-      [seekVideoTo]
+      [schedulePausedSeekFrameFlush, seekVideoTo]
     );
 
     useEffect(() => {
@@ -933,8 +1028,9 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
         if (shuttleAnimationFrameRef.current !== null) {
           cancelAnimationFrame(shuttleAnimationFrameRef.current);
         }
+        cancelPausedSeekFrameFlush();
       };
-    }, []);
+    }, [cancelPausedSeekFrameFlush]);
 
     // Calculate initial styles (transforms will be handled by direct DOM manipulation)
     const getImageStyle = (position: 'current' | 'next' | 'prev') => {
@@ -961,6 +1057,9 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
     };
 
     const releaseOwnedVideo = useCallback(() => {
+      cancelPausedSeekFrameFlush();
+      frameStepTargetTimeRef.current = null;
+      pendingSeekTimeRef.current = null;
       const video = ownedVideoRef.current;
       if (video?.parentElement) {
         try {
@@ -970,7 +1069,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
       ownedVideoRef.current = null;
       currentVideoRef.current = null;
       currentVideoSrcRef.current = null;
-    }, []);
+    }, [cancelPausedSeekFrameFlush]);
 
     // Keep a stable ref callback for hosting the current video element
     const setCurrentVideoHost = useCallback((el: HTMLDivElement | null) => {
@@ -1138,8 +1237,10 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
         // 可能なら直ちに再生状態を復元（pending → last の順で優先）
         const payload = pendingRestoreRef.current ?? lastPlaybackRef.current;
         if (payload) {
-          const dur = Number.isFinite(v.duration) ? v.duration : 0;
-          const clamped = Math.min(Math.max(payload.time || 0, 0), Math.max(0, dur));
+          frameStepTargetTimeRef.current = null;
+          pendingSeekTimeRef.current = null;
+          const dur = getFiniteVideoDuration(v, 0);
+          const clamped = clampVideoTime(payload.time || 0, dur);
           if (Number.isFinite(clamped)) {
             v.currentTime = clamped;
             setVideoState((prev) => ({
@@ -1152,7 +1253,10 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
             }));
           }
           if (payload.wasPlaying) void v.play().catch(() => {});
-          else v.pause();
+          else {
+            v.pause();
+            schedulePausedSeekFrameFlush(v, clamped);
+          }
           // pending は使い切り
           pendingRestoreRef.current = null;
         }
@@ -1175,8 +1279,10 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
         // pending restore 優先
         const payload = pendingRestoreRef.current;
         if (payload && v.readyState >= 1) {
-          const dur = Number.isFinite(v.duration) ? v.duration : 0;
-          const clamped = Math.min(Math.max(payload.time, 0), Math.max(0, dur));
+          frameStepTargetTimeRef.current = null;
+          pendingSeekTimeRef.current = null;
+          const dur = getFiniteVideoDuration(v, 0);
+          const clamped = clampVideoTime(payload.time, dur);
           v.currentTime = clamped;
           setVideoState((prev) => ({
             ...prev,
@@ -1186,14 +1292,19 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
             volume: v.volume,
           }));
           if (payload.wasPlaying) void v.play().catch(() => {});
-          else v.pause();
+          else {
+            v.pause();
+            schedulePausedSeekFrameFlush(v, clamped);
+          }
           pendingRestoreRef.current = null;
         } else {
           // pending が無い場合は、直近の再生状態に合わせる（初回の自動再生は別エフェクトで実行）
           const last = lastPlaybackRef.current;
           if (last) {
-            const dur = Number.isFinite(v.duration) ? v.duration : 0;
-            const clamped = Math.min(Math.max(last.time || 0, 0), Math.max(0, dur));
+            frameStepTargetTimeRef.current = null;
+            pendingSeekTimeRef.current = null;
+            const dur = getFiniteVideoDuration(v, 0);
+            const clamped = clampVideoTime(last.time || 0, dur);
             if (Number.isFinite(clamped)) {
               v.currentTime = clamped;
               setVideoState((prev) => ({
@@ -1204,48 +1315,65 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
               }));
             }
             if (last.wasPlaying) void v.play().catch(() => {});
-            else v.pause();
+            else {
+              v.pause();
+              schedulePausedSeekFrameFlush(v, clamped);
+            }
           }
         }
       };
       const onDurationChange = () => {
         setVideoState((prev) => ({
           ...prev,
-          duration: Number.isFinite(v.duration) ? v.duration : prev.duration,
+          duration: getFiniteVideoDuration(v, prev.duration),
           volume: v.volume,
         }));
       };
       const onLoadedData = () => {
+        const frameStepTargetTime = frameStepTargetTimeRef.current;
         setVideoState((prev) => ({
           ...prev,
-          duration: Number.isFinite(v.duration) ? v.duration : prev.duration,
-          currentTime: Number.isFinite(v.currentTime) ? v.currentTime : prev.currentTime,
+          duration: getFiniteVideoDuration(v, prev.duration),
+          currentTime:
+            frameStepTargetTime !== null && v.paused
+              ? frameStepTargetTime
+              : getFiniteVideoCurrentTime(v, prev.currentTime),
           volume: v.volume,
         }));
       };
       const onSeeked = () => {
         const pendingSeekTime = pendingSeekTimeRef.current;
-        frameStepTargetTimeRef.current = null;
+        const frameStepTargetTime = frameStepTargetTimeRef.current;
+        if (!isScrubbingRef.current) {
+          pendingSeekTimeRef.current = null;
+        }
         setVideoState((prev) => ({
           ...prev,
           currentTime:
             isScrubbingRef.current && pendingSeekTime !== null
               ? pendingSeekTime
-              : Number.isFinite(v.currentTime)
-                ? v.currentTime
-                : prev.currentTime,
+              : frameStepTargetTime !== null
+                ? frameStepTargetTime
+                : getFiniteVideoCurrentTime(v, prev.currentTime),
         }));
       };
       const onPlay = () => {
         frameStepTargetTimeRef.current = null;
-        setVideoState((prev) => ({ ...prev, isPlaying: true, muted: v.muted, volume: v.volume }));
+        pendingSeekTimeRef.current = null;
+        const restore = getPausedSeekFrameFlushRestore();
+        setVideoState((prev) => ({
+          ...prev,
+          isPlaying: !isPausedSeekFrameFlushActive(),
+          muted: restore ? restore.muted : v.muted,
+          volume: restore ? restore.volume : v.volume,
+        }));
       };
       const onPause = () =>
         setVideoState((prev) => ({
           ...prev,
           isPlaying: false,
-          muted: v.muted,
-          volume: v.volume,
+          muted: getPausedSeekFrameFlushRestore()?.muted ?? v.muted,
+          volume: getPausedSeekFrameFlushRestore()?.volume ?? v.volume,
         }));
       const onClick = (e: MouseEvent) => {
         e.stopPropagation();
@@ -1265,15 +1393,6 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
       v.addEventListener('pause', onPause);
       v.addEventListener('click', onClick);
       v.addEventListener('touchend', onTouchEnd);
-
-      const frameCallbackVideo = v as VideoFrameCallbackVideoElement;
-      const watchVideoFrame = (_now: number, metadata: VideoFrameMetadata) => {
-        displayedVideoTimeRef.current = metadata.mediaTime;
-        videoFrameCallbackIdRef.current =
-          frameCallbackVideo.requestVideoFrameCallback?.(watchVideoFrame) ?? null;
-      };
-      videoFrameCallbackIdRef.current =
-        frameCallbackVideo.requestVideoFrameCallback?.(watchVideoFrame) ?? null;
 
       // 古い要素を除去して差し替え
       if (ownedVideoRef.current && ownedVideoRef.current.parentElement === host) {
@@ -1295,13 +1414,6 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
         v.removeEventListener('pause', onPause);
         v.removeEventListener('click', onClick);
         v.removeEventListener('touchend', onTouchEnd);
-        if (
-          videoFrameCallbackIdRef.current !== null &&
-          typeof frameCallbackVideo.cancelVideoFrameCallback === 'function'
-        ) {
-          frameCallbackVideo.cancelVideoFrameCallback(videoFrameCallbackIdRef.current);
-          videoFrameCallbackIdRef.current = null;
-        }
       };
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [
@@ -1310,6 +1422,9 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
       handleVideoLoadedMetadata,
       handleVideoToggle,
       releaseOwnedVideo,
+      getPausedSeekFrameFlushRestore,
+      isPausedSeekFrameFlushActive,
+      schedulePausedSeekFrameFlush,
       stopVideoShuttle,
     ]);
 

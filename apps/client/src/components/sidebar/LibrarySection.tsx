@@ -25,6 +25,7 @@ import { DroppableSideMenuItem } from '@/components/ui/DroppableSideMenuItem';
 import { SideMenuGroup, SideMenuListItem } from '@/components/ui/SideMenu';
 import { useScratch } from '@/hooks/useScratch';
 import { apiClient } from '@/lib/api-client';
+import { useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
 export function LibrarySection({
@@ -37,6 +38,7 @@ export function LibrarySection({
   onPinOverview,
   onUnpinOverview,
 }: LibrarySectionProps) {
+  const t = useT();
   const queryClient = useQueryClient();
   const { scratch, ensureScratch } = useScratch(datasetId);
   const navigate = useNavigate();
@@ -182,16 +184,16 @@ export function LibrarySection({
   };
 
   return (
-    <SideMenuGroup label="Library" collapsed={isCollapsed} onToggle={onToggle}>
+    <SideMenuGroup label={t.sidebar.libraryNav} collapsed={isCollapsed} onToggle={onToggle}>
       <nav className="space-y-0.5">
         <SideMenuListItem
           asChild
           icon={Home}
-          label="Overview"
+          label={t.sidebar.overviewNav}
           enableContextMenu
           pinnable
           pinned={isPinned('OVERVIEW')}
-          onPin={() => onPinOverview?.('Home', 'Overview')}
+          onPin={() => onPinOverview?.('Home')}
           onUnpin={onUnpinOverview}
         >
           <Link
@@ -205,7 +207,7 @@ export function LibrarySection({
         <DroppableSideMenuItem
           asChild
           icon={Star}
-          label="Favorites"
+          label={t.sidebar.favorites}
           count={counts?.favorites}
           onStacksDrop={handleFavoriteDrop}
         >
@@ -216,7 +218,7 @@ export function LibrarySection({
           />
         </DroppableSideMenuItem>
 
-        <SideMenuListItem asChild icon={Heart} label="Likes" count={counts?.likes}>
+        <SideMenuListItem asChild icon={Heart} label={t.sidebar.likes} count={counts?.likes}>
           <Link
             to="/library/$datasetId/likes"
             params={{ datasetId }}
@@ -235,7 +237,7 @@ export function LibrarySection({
               });
             }}
             icon={NotebookText}
-            label="Scratch"
+            label={t.sidebar.scratch}
             count={counts?.scratch}
             onStacksDrop={handleScratchDrop}
             acceptDrop
@@ -246,13 +248,13 @@ export function LibrarySection({
         <DroppableSideMenuItem
           asChild
           icon={Image}
-          label="Images"
+          label={t.sidebar.images}
           count={counts?.image}
           onStacksDrop={(stackIds) => handleMediaTypeDrop(stackIds, 'image')}
           enableContextMenu
           pinnable
-          pinned={isPinned('MEDIA_TYPE', undefined as any, 'image')}
-          onPin={() => onPinMediaType?.('image', 'Image', 'Images')}
+          pinned={isPinned('MEDIA_TYPE', undefined, 'image')}
+          onPin={() => onPinMediaType?.('image', 'Image')}
           onUnpin={() => onUnpinMediaType?.('image')}
         >
           <Link
@@ -265,13 +267,13 @@ export function LibrarySection({
         <DroppableSideMenuItem
           asChild
           icon={BookOpen}
-          label="Comics"
+          label={t.sidebar.comics}
           count={counts?.comic}
           onStacksDrop={(stackIds) => handleMediaTypeDrop(stackIds, 'comic')}
           enableContextMenu
           pinnable
-          pinned={isPinned('MEDIA_TYPE', undefined as any, 'comic')}
-          onPin={() => onPinMediaType?.('comic', 'BookOpen', 'Comics')}
+          pinned={isPinned('MEDIA_TYPE', undefined, 'comic')}
+          onPin={() => onPinMediaType?.('comic', 'BookOpen')}
           onUnpin={() => onUnpinMediaType?.('comic')}
         >
           <Link
@@ -284,13 +286,13 @@ export function LibrarySection({
         <DroppableSideMenuItem
           asChild
           icon={Film}
-          label="Videos"
+          label={t.sidebar.videos}
           count={counts?.video}
           onStacksDrop={(stackIds) => handleMediaTypeDrop(stackIds, 'video')}
           enableContextMenu
           pinnable
-          pinned={isPinned('MEDIA_TYPE', undefined as any, 'video')}
-          onPin={() => onPinMediaType?.('video', 'Film', 'Videos')}
+          pinned={isPinned('MEDIA_TYPE', undefined, 'video')}
+          onPin={() => onPinMediaType?.('video', 'Film')}
           onUnpin={() => onUnpinMediaType?.('video')}
         >
           <Link
@@ -305,7 +307,7 @@ export function LibrarySection({
             (
               <span className="flex items-center gap-1.5">
                 <Tag size={15} />
-                <span>Tags</span>
+                <span>{t.sidebar.tagsNav}</span>
               </span>
             ) as any
           }
@@ -331,7 +333,7 @@ export function LibrarySection({
             (
               <span className="flex items-center gap-1.5">
                 <Tag size={15} />
-                <span>AutoTags</span>
+                <span>{t.sidebar.autoTagsNav}</span>
               </span>
             ) as any
           }
@@ -357,7 +359,7 @@ export function LibrarySection({
             (
               <span className="flex items-center gap-1.5">
                 <User size={15} />
-                <span>Authors</span>
+                <span>{t.sidebar.authors}</span>
               </span>
             ) as any
           }

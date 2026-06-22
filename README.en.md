@@ -1,167 +1,106 @@
-# CaramelBoard 🍬🤎
+# Caramel Board
 
-[Japanese version is here → README.md](./README.md)
+<img src="./docs/assets/intro.jpg" alt="Caramel Board screenshot"/>
 
-CaramelBoard is a private web application for collecting and organizing local assets such as images and videos. It runs on your own PC, and you can browse the catalog comfortably from the host machine or any other device on the same LAN—desktop browsers, phones, or tablets.
+[Japanese version is here -> README.md](./README.md)
 
-This app is being developed gradually by [nazunya](https://x.com/na_zu_nya) as a personal project. The vibe is very much VibeCoding; the goal is to refine it little by little.
+Caramel Board is a local-first private app for collecting reference images, assets, illustrations, comics, and videos into one place, then browsing them comfortably from PCs, phones, and tablets on your LAN.
 
-The **main** branch hosts the stable releases, while **dev** carries newer features. The dev branch ships updates faster but may contain bugs, so use it at your own risk!
+It is an application for people who enjoy creative work, from creators organizing references to fans browsing illustrations and comics.
 
-#### Key features
+This app is developed gradually by [nazunya](https://x.com/na_zu_nya) as a personal project. If you like it, following on X or supporting through [fanbox](https://na-zu-nya.fanbox.cc/) would be greatly appreciated.
 
-- Bulk import and organize lots of assets via drag & drop
-- Pleasant viewing experience for images, comics (multi-page), and videos
-- Fully local processing with no external transmission for private management
-- Powerful search and slicing across multiple libraries with tags, creator metadata, color extraction, optional auto-tagging, and favorites
+## Features
 
-#### Setup difficulty (rough guide)
+### Easy Drag-And-Drop Import And A Comfortable Viewer
 
-- **Web developers:** ★★・・・ (relatively easy)
-- **Power users comfortable with PCs:** ★★★・・ (somewhat challenging)
+- Drop files into a list to keep collecting assets quickly.
+- Images, multi-image works such as comics and books, PDFs, videos, and GIFs are supported.
+  - When an item is open in the viewer, dropping additional files adds them as pages. Reordering, sorting, and partial deletion are supported.
+  - Video/GIF encoding and automatic PDF splitting require separately installed OSS libraries.
+- Gesture-based viewing
+  - Swipe or click the edge of the viewer to move between images and pages.
+  - Scroll or pinch to zoom in and out.
+  - Swipe down to close the image and return to the list.
+- Small analysis tools
+  - Quick paint with the pen tool
+  - Color picking with the picker
 
-*Setup and operation require the command line—expect a bit of a learning curve!*
+### Fully Local-First
 
-## Before you start
+- Imported images are stored on your PC and are never sent to external services.
+- Private or sensitive images can be managed locally.
 
-#### License, usage scope, and warranty
+### Use From Phones, Tablets, And Other PCs Over LAN
 
-This software is distributed under the [**Elastic License 2.0 (ELv2)**](https://www.elastic.co/licensing/elastic-license).
+- With local network access enabled, you can open Caramel Board from browsers on devices in your home network.
+- Basic authentication and per-library password settings provide simple protection.
+- For access from outside your home, use a VPN app such as Tailscale.
 
-- Both individuals and companies can use it **within their own homes or offices (commercial use included)**.
-- You **may not offer it as a hosted or managed service for third parties** (SaaS is not allowed). Contact us for a separate agreement if you need that use case.
-- The software is provided **as-is**, without any express or implied warranties.
+### Rich Organization And Search
 
-Because there is no built-in access control, exposing the app directly to the public internet is extremely risky. Keep the deployment within environments you can manage.
+- Organize and slice your data by libraries, tags, authors, collections, bookmarks, favorites, scratches, and more.
+- Search by tags, AutoTags, and author names. Similar-color search and similar-image/similar-collection search are also available. Similar-image features require AutoTag.
 
-#### For anyone cautious about AI
+### AutoTag Feature (Optional Setup)
 
-**About the auto-tagging feature**
+- Enabling AutoTag lets Caramel Board automatically tag imported images, search by those tags, and find similar images.
+- It can tag character attributes, hair style and color, clothing, accessories, visual descriptions, situations, some well-known characters and series names, and NSFW tags.
+- AutoTag can be left disabled, and setup can be skipped. This feature uses a trained open source model and analyzes images locally on your PC. Images are not sent externally and are not used for training. If you are uncomfortable with model-based analysis itself, you can leave it unconfigured.
 
-Auto-tagging analyzes registered assets with a pre-trained model to generate descriptive tags automatically. Enabling it lets you use those tags for search, smart collections, and finding similar images.
+## Getting Started
 
-- It is **disabled by default**. Opt in during setup if you want to use it.
-- Enabling the feature downloads **locally run inference libraries distributed by third parties**. Review the training data and licenses for those libraries at your own responsibility.
-- The feature inspects registered images locally **only to estimate tags**. It does **not** generate new content, perform additional training, or send data outside your machine.
-- If you have concerns, leave auto-tagging disabled and rely on manual tagging.
+For desktop use, download the app from the releases page.
 
-**About development**
+- Desktop (Windows/macOS): [GitHub Releases](https://github.com/na-zu-nya/caramel-board/releases)
 
-This software is built with the assistance of common AI coding tools.
+The CLI / Docker edition is frozen at the `release/v1.0.8` checkpoint and is no longer maintained on mainline. Use the Desktop edition for normal use.
 
-## Setup guide
+- CLI / Docker freeze notes: [CLI / Docker setup](./docs/cli-installation.md)
+- Migration from the old Docker setup to Desktop: [Standalone migration notes](./docs/standalone-migration.md)
 
-### Windows / macOS
+### Optional Setup Guides
 
-- Windows: [docs/installation-windows.md](./docs/installation-windows.md)
-- macOS: [docs/installation-macos.md](./docs/installation-macos.md)
+These guides cover setup for importing videos, GIFs, and PDFs.
 
-Refer to those platform-specific guides for detailed steps.
+- Windows: [Desktop external tools - Windows](./docs/desktop-tools-windows.md)
+- macOS: [Desktop external tools - macOS](./docs/desktop-tools-macos.md)
 
-### Linux quick start
+### Recommended Requirements
 
-#### Requirements
+Caramel Board app:
 
-- Docker Engine with the docker compose plugin
-- Git
-- Python 3 (3.10 or newer recommended)
+- OS: Windows 11+ / macOS 26+
+- Memory: 8 GB or more
+- Storage:
+  - Application: 1 GB
+  - Additional storage is required for your saved data.
 
-> `huggingface-hub` is required for the optional auto-tagging feature, so ensure pip is available.
+Client app:
 
-#### Clone the repository
+- Latest versions of major browsers are recommended.
+- Tested browsers: Safari / Chrome
 
-```bash
-git clone https://github.com/na-zu-nya/caramel-board.git caramel-board
-cd caramel-board
-```
+## Project Information
 
-#### Initial setup
+- Contribution: [CONTRIBUTING.md](./CONTRIBUTING.md)
+- License: [LICENSE](./LICENSE)
+- Third Party Notices: [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md)
 
-```bash
-chmod +x setup.sh serve.sh scripts/*.sh
-python3 -m pip install --upgrade pip
-python3 -m pip install huggingface-hub
-./setup.sh
-```
+### License
 
-- Installing `pip` upgrades and `huggingface-hub` ahead of time ensures the setup script can use the required libraries
-- During `./setup.sh`, follow the prompts to choose storage locations and optional features
+This software is distributed under the [Caramel Board Source Available License 1.0](./LICENSE). The source code is available, but this is not an Open Source license as defined by the Open Source Initiative.
 
-#### Start and stop the app
+- Individuals and companies may use it at home or inside their own organization, including internal commercial use.
+- You may read, modify, and build the source code for your own personal or internal organizational use.
+- GitHub forks, Issues, and Pull Requests are allowed for development, review, and contribution.
+- You may not sell, redistribute, provide, rebrand, or otherwise make available built desktop applications, installers, or substantially similar applications or services to third parties.
+- The software is provided as-is, without any express or implied warranties.
 
-```bash
-# production mode
-./serve.sh prod
+Do not expose the app directly to the public internet without appropriate access control. Use it within devices and networks you can manage.
 
-# development mode
-./serve.sh dev
+### Contribution
 
-# stop the services
-./serve.sh stop
-```
+Bugs and feature requests are accepted through Issues. Pull Requests are currently focused on approved maintainers and contributors who have discussed the change beforehand.
 
-Once the services are up, open `http://localhost:6766` or `http://<host-ip>:6766` in your browser.
-
-#### Update
-
-```bash
-./serve.sh update
-```
-
-This command pulls the latest changes, rebuilds the container image, and restarts as needed.
-
-## Backup
-
-### Database backup
-
-```bash
-./serve.sh backup
-```
-
-The backup file is written to `backups/caramel-board-db-YYYYMMDD-HHMMSS.sql`.
-Pass a path if you want to choose the output location.
-
-```bash
-./serve.sh backup backups/my-backup.sql
-./serve.sh backup backups/my-backup.sql.gz
-```
-
-You can also run the same backup with `npm run db:backup`.
-
-`./serve.sh update` automatically creates
-`backups/pre-update-db-YYYYMMDD-HHMMSS.sql` before applying updates.
-
-### Storage locations (assets and database)
-
-- Recommended defaults:
-  - Images and videos (`/app/data` inside the container): `./data/assets`
-  - PostgreSQL data: `./data/postgres`
-- Override paths by providing a `docker-compose.local.yml`; `./serve.sh` loads it automatically when present.
-
-Example (using the recommended defaults):
-
-```yaml
-services:
-  app:
-    environment:
-      - FILES_STORAGE=/app/data
-    volumes:
-      - ./data/assets:/app/data
-  postgres:
-    volumes:
-      - ./data/postgres:/var/lib/postgresql/data
-```
-
-If you encounter permission errors, adjust ownership or permissions on the host directories.
-
-## Troubleshooting
-
-- Port 6766 is already in use → change the `ports` setting in `docker-compose.yml`, then rerun `./serve.sh`
-- PostgreSQL port 5432 is already occupied during development → adjust the `ports` section in `docker-compose.dev.yml`
-- Cannot connect to JoyTag → check with `curl http://localhost:5001/health` and verify `JOYTAG_SERVER_URL`
-- Storage permission errors → fix ownership/permissions on the host directories
-
-## License / Contributions / For developers
-
-- Please report bugs or feature requests via Issues (a template is in preparation)
-- Pull requests are currently limited to approved maintainers, though this may open up in the future
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for details.

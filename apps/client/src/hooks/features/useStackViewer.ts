@@ -3,7 +3,7 @@ import { useLocation, useSearch } from '@tanstack/react-router';
 import { useSetAtom } from 'jotai';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiClient } from '@/lib/api-client';
-import { infoSidebarOpenAtom, selectedItemIdAtom } from '@/stores/ui';
+import { infoSidebarOpenAtom, selectedInfoAssetIdAtom, selectedItemIdAtom } from '@/stores/ui';
 import type { Stack } from '@/types';
 
 interface UseStackViewerOptions {
@@ -33,10 +33,15 @@ export function useStackViewer({
   const [currentPage, setCurrentPage] = useState(Number(searchParams.page) || 0);
   const [isListMode, setIsListMode] = useState(false);
   const setSelectedItemId = useSetAtom(selectedItemIdAtom);
+  const setSelectedInfoAssetId = useSetAtom(selectedInfoAssetIdAtom);
   const setIsInfoSidebarOpen = useSetAtom(infoSidebarOpenAtom);
   const queryClient = useQueryClient();
   const location = useLocation();
   const previousLocationRef = useRef(location);
+
+  useEffect(() => {
+    return () => setSelectedInfoAssetId(null);
+  }, [setSelectedInfoAssetId]);
 
   // Fetch stack data
   const {
@@ -67,12 +72,13 @@ export function useStackViewer({
     if (wasInViewer && !isInViewer) {
       console.log('[StackViewer] Leaving viewer route → cleanup');
       setSelectedItemId(null);
+      setSelectedInfoAssetId(null);
       setIsInfoSidebarOpen(false);
     }
 
     // Update the previous location ref
     previousLocationRef.current = location;
-  }, [location, setSelectedItemId, setIsInfoSidebarOpen]);
+  }, [location, setSelectedInfoAssetId, setSelectedItemId, setIsInfoSidebarOpen]);
 
   // When stackId or search param page changes within the same route, reset current page accordingly
   useEffect(() => {
@@ -87,6 +93,10 @@ export function useStackViewer({
       setCurrentPage(0);
     }
   }, [stack, currentPage]);
+
+  useEffect(() => {
+    setSelectedInfoAssetId(stack?.assets?.[currentPage]?.id ?? null);
+  }, [currentPage, setSelectedInfoAssetId, stack?.assets]);
 
   // Stack favorite toggle
   const handleFavoriteToggle = useCallback(async () => {

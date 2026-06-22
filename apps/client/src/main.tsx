@@ -2,12 +2,25 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createRouter, RouterProvider } from '@tanstack/react-router';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import reportWebVitals from './reportWebVitals';
 // Import the generated route tree
+import { initializeLanguagePreference } from './lib/language';
+import { installThumbnailBlurConsoleCommand } from './lib/thumbnail-blur';
 import { routeTree } from './routeTree.gen';
 import '@fontsource/tilt-warp/400.css';
 import '@fontsource/murecho/500.css';
 import './styles.css';
+
+const applyInitialLanguage = () => {
+  initializeLanguagePreference({
+    storage: window.localStorage,
+    document,
+    defaultLanguage: window.__CARAMEL_DEFAULT_LANGUAGE__,
+    navigatorLanguage: navigator.language,
+  });
+};
+
+applyInitialLanguage();
+installThumbnailBlurConsoleCommand(window);
 
 // Create a QueryClient instance
 const queryClient = new QueryClient();
@@ -43,8 +56,3 @@ if (rootElement && !rootElement.innerHTML) {
     </StrictMode>
   );
 }
-
-// If you want to start measuring performance in your app, pass a function
-// to log results (for example: reportWebVitals(console.log))
-// or send to an analytics endpoint. Learn more: https://bit.ly/CRA-vitals
-reportWebVitals();

@@ -32,6 +32,7 @@ code {
     "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
   --font-display: "Tilt Warp", "Murecho", var(--font-sans);
   --font-display-ja: "Murecho", "Tilt Warp", var(--font-sans);
+  --caramel-thumbnail-blur-radius: 10px;
   --font-weight-semibold: 500;
   --font-weight-bold: 500;
   --font-weight-bold-display: 700;
@@ -240,6 +241,15 @@ code {
   .animate-slide-in-right {
     animation: slide-in-right 0.3s ease-out;
   }
+
+  .caramel-thumbnail-blur-target {
+    transform-origin: center;
+  }
+
+  .caramel-thumbnail-blur-active .caramel-thumbnail-blur-target {
+    filter: blur(var(--caramel-thumbnail-blur-radius));
+    transform: scale(1.08);
+  }
 }
 
 /* Primary color utilities - Direct CSS variable usage */
@@ -447,3 +457,61 @@ code {
   }
 }
 */
+
+/* --- セットアップ/オンボーディング(キャラメル) --- */
+@keyframes setup-blob-float {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(0, -18px, 0) scale(1.05);
+  }
+}
+
+@keyframes setup-bob {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-1.5deg);
+  }
+  50% {
+    transform: translateY(-5px) rotate(1.5deg);
+  }
+}
+
+@keyframes setup-pop-in {
+  0% {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.setup-blob {
+  animation: setup-blob-float 9s ease-in-out infinite;
+}
+
+.setup-bob {
+  animation: setup-bob 3.4s ease-in-out infinite;
+}
+
+.setup-pop-in {
+  animation: setup-pop-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes setup-swipe-nudge {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(14px);
+  }
+}
+
+.setup-swipe-arrow {
+  animation: setup-swipe-nudge 1s ease-in-out infinite;
+}

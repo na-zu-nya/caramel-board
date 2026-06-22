@@ -3,6 +3,7 @@ import { activitiesRoute } from './routes/activities';
 import { assetsLiteRoute } from './routes/assets-lite';
 import { authorsRoute } from './routes/authors';
 import { autoTagsRoute } from './routes/autoTags';
+import { clipperRoute } from './routes/clipper';
 import { collectionFoldersRoute } from './routes/collectionFolders';
 import { collectionsRoute } from './routes/collections';
 import { colorsRoute } from './routes/colors';
@@ -39,6 +40,7 @@ export const apiRoutes = new Hono()
   .route('/authors', authorsRoute)
   .route('/activities', activitiesRoute)
   .route('/navigation-pins', navigationPinsRouter)
+  .route('/clipper', clipperRoute)
   .route('/upload', uploadRoute)
   // Auto-Tag endpoints (mappings, statistics, CRUD)
   .route('/auto-tags', autoTagsRoute);

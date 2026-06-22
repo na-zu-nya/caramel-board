@@ -1,5 +1,6 @@
 import { Search, X } from 'lucide-react';
 import type { InputHTMLAttributes } from 'react';
+import { useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
 export interface SmallSearchFieldProps
@@ -12,9 +13,10 @@ export function SmallSearchField({
   value,
   onValueChange,
   className,
-  placeholder = 'Search...',
+  placeholder,
   ...rest
 }: SmallSearchFieldProps) {
+  const t = useT();
   return (
     <div className={cn('relative', className)}>
       <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
@@ -31,7 +33,7 @@ export function SmallSearchField({
             e.stopPropagation();
           }
         }}
-        placeholder={placeholder}
+        placeholder={placeholder ?? t.common.searchPlaceholder}
         className={cn(
           'pl-8 h-8 text-sm w-full rounded-md border border-input bg-background ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50'
         )}
@@ -41,7 +43,7 @@ export function SmallSearchField({
           type="button"
           className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-gray-100"
           onClick={() => onValueChange('')}
-          aria-label="Clear search"
+          aria-label={t.common.clearSearch}
         >
           <X className="h-3.5 w-3.5 text-gray-500" />
         </button>

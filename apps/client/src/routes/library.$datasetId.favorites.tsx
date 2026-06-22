@@ -8,6 +8,7 @@ import StackGrid from '@/components/StackGrid';
 import { useDataset } from '@/hooks/useDatasets';
 import { useHeaderActions } from '@/hooks/useHeaderActions';
 import { apiClient } from '@/lib/api-client';
+import { useT } from '@/lib/i18n';
 import { navigationStateAtom } from '@/stores/navigation';
 import { currentFilterAtom } from '@/stores/ui';
 import { genListToken, saveViewContext } from '@/stores/view-context';
@@ -17,7 +18,37 @@ export const Route = createFileRoute('/library/$datasetId/favorites')({
   component: FavoritesPage,
 });
 
+const FAVORITES_PAGE_SIZE = 500;
+
+async function fetchAllFavoriteItems(datasetId: string) {
+  const stacks: MediaGridItem[] = [];
+  let offset = 0;
+  let total = 0;
+
+  while (true) {
+    const page = await apiClient.getFavoriteItems({
+      datasetId,
+      limit: FAVORITES_PAGE_SIZE,
+      offset,
+    });
+    total = page.total;
+    stacks.push(...page.stacks);
+
+    if (page.stacks.length === 0 || stacks.length >= total) {
+      return {
+        stacks,
+        total,
+        limit: FAVORITES_PAGE_SIZE,
+        offset: 0,
+      };
+    }
+
+    offset += page.stacks.length;
+  }
+}
+
 function FavoritesPage() {
+  const t = useT();
   const { datasetId } = Route.useParams();
   const { data: dataset } = useDataset(datasetId);
   const navigate = useNavigate();
@@ -50,7 +81,7 @@ function FavoritesPage() {
     refetch,
   } = useQuery({
     queryKey: ['favorite-items', datasetId],
-    queryFn: () => apiClient.getFavoriteItems({ datasetId, limit: 500, offset: 0 }),
+    queryFn: () => fetchAllFavoriteItems(datasetId),
   });
 
   const stableLoadedItems = useMemo(() => {
@@ -270,8 +301,8 @@ function FavoritesPage() {
         onRefreshAll={refreshAll}
         emptyState={{
           icon: '⭐',
-          title: 'No favorite items yet',
-          description: 'Mark items as favorites to see them here.',
+          title: t.emptyState.noFavorites,
+          description: t.emptyState.favoritesDescription,
         }}
       />
       <FilterPanel

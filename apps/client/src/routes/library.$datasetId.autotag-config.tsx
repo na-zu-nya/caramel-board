@@ -8,7 +8,6 @@ import {
   Filter,
   Info,
   Loader2,
-  Pencil,
   Plus,
   SquarePen,
   Tag,
@@ -21,18 +20,20 @@ import BulkEditPanel, { type EditUpdates } from '@/components/BulkEditPanel';
 import FilterPanel from '@/components/FilterPanel';
 import InfoSidebar from '@/components/InfoSidebar';
 import AutoTagMappingModal from '@/components/modals/AutoTagMappingModal';
+import { StackTileGrid } from '@/components/StackTileGrid';
 import { AutoTagDisplay } from '@/components/ui/autotag-display';
 import { Button } from '@/components/ui/button';
 import { SmallSearchField, SmallSelect } from '@/components/ui/Controls';
 import { HeaderIconButton } from '@/components/ui/Header/HeaderIconButton';
 import { JoyTagStatus } from '@/components/ui/JoyTagStatus';
-import { StackTile } from '@/components/ui/Stack';
 import { SelectItem } from '@/components/ui/select';
 import { SelectionActionBar } from '@/components/ui/selection-action-bar';
-import { useKeyboardShortcuts } from '@/hooks/features/useKeyboardShortcuts';
 import { useStackTile } from '@/hooks/useStackTile';
+import { useKeyboardShortcuts } from '@/hooks/utils/useKeyboardShortcut';
 import { apiClient } from '@/lib/api-client';
-import { getSourceImageFilename, getSourceImageUrl } from '@/lib/stack-drag-data';
+import { downloadStackOriginals } from '@/lib/download-originals';
+import { useT } from '@/lib/i18n';
+import { createStackSelectionActions } from '@/lib/stack-selection-actions';
 import { cn } from '@/lib/utils';
 import {
   currentFilterAtom,
@@ -98,6 +99,7 @@ interface AutoTagStackPage {
 }
 
 function AutoTagConfigPage() {
+  const t = useT();
   const { datasetId } = Route.useParams();
   const location = useLocation();
   const navigate = useNavigate();
@@ -125,7 +127,6 @@ function AutoTagConfigPage() {
   const [selectionMode, setSelectionMode] = useAtom(selectionModeAtom);
   const [selectedItems, setSelectedItems] = useState<Set<string | number>>(new Set());
   const [isEditPanelOpen, setIsEditPanelOpen] = useState(false);
-  const lastClickedIndexRef = useRef<number | null>(null);
   const debounceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [filterOpen, setFilterOpen] = useAtom(filterOpenAtom);
   const [_currentFilter, setCurrentFilter] = useAtom(currentFilterAtom);
@@ -196,7 +197,7 @@ function AutoTagConfigPage() {
     if (payload?.status === 'ok') {
       return {
         status: 'running' as const,
-        message: payload.device ? `Device: ${payload.device}` : undefined,
+        message: payload.device ? t.autoTagPage.device(payload.device) : undefined,
       };
     }
 
@@ -207,7 +208,7 @@ function AutoTagConfigPage() {
       status: 'not-available' as const,
       message: fallbackMessage,
     };
-  }, [joyTagHealth]);
+  }, [joyTagHealth, t]);
 
   const joyTagStatusLoading = joyTagHealthLoading || joyTagHealthFetching;
 
@@ -439,6 +440,13 @@ function AutoTagConfigPage() {
         })),
     [allStacks, selectedItems]
   );
+  const selectedStackIds = useMemo(
+    () =>
+      Array.from(selectedItems)
+        .map((id) => toNumericId(id))
+        .filter((id): id is number => id !== null),
+    [selectedItems]
+  );
 
   // Restore selectedAutoTag from URL when navigation changes
   useEffect(() => {
@@ -453,9 +461,12 @@ function AutoTagConfigPage() {
     } catch {}
   }, [location.search]);
 
-  // Handle infinite scroll (observe page scroll via viewport)
+  // Handle infinite scroll within the asset list pane
   useEffect(() => {
+    if (!selectedAutoTag) return;
+
     const el = loadMoreTriggerRef.current;
+    const root = scrollContainerRef.current;
     if (!el) return;
 
     const observer = new IntersectionObserver(
@@ -468,12 +479,12 @@ function AutoTagConfigPage() {
           }
         }
       },
-      { root: null, rootMargin: '400px 0px', threshold: 0.01 }
+      { root, rootMargin: '400px 0px', threshold: 0.01 }
     );
 
     observer.observe(el);
     return () => observer.disconnect();
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage, selectedAutoTag]);
 
   // Delete mapping mutation
   const deleteMappingMutation = useMutation({
@@ -503,7 +514,7 @@ function AutoTagConfigPage() {
   };
 
   const handleDeleteMapping = (mappingId: number) => {
-    if (confirm('Are you sure you want to delete this mapping?')) {
+    if (confirm(t.autoTagPage.deleteMappingConfirm)) {
       deleteMappingMutation.mutate(mappingId);
     }
   };
@@ -550,6 +561,22 @@ function AutoTagConfigPage() {
     setIsEditPanelOpen(false);
   }, [clearSelection, setSelectionMode]);
 
+  const handleToggleSelectionMode = useCallback(() => {
+    if (selectionMode) {
+      exitSelectionMode();
+      return;
+    }
+
+    if (infoSidebarOpen) {
+      setInfoSidebarOpen(false);
+    }
+    setSelectionMode(true);
+  }, [exitSelectionMode, infoSidebarOpen, selectionMode, setInfoSidebarOpen, setSelectionMode]);
+
+  useEffect(() => {
+    exitSelectionMode();
+  }, [exitSelectionMode]);
+
   // Edit panel handlers
   const toggleEditPanel = useCallback(() => {
     if (selectedItems.size === 0) return;
@@ -564,75 +591,109 @@ function AutoTagConfigPage() {
     setIsEditPanelOpen(false);
   }, []);
 
-  const handleTileClick = useCallback(
-    (stack: AutoTagStack, event: MouseEvent<HTMLDivElement>) => {
-      const stackIndex = allStacks.findIndex((candidate) => candidate?.id === stack.id);
+  const closeInfoSidebarBeforeSelection = useCallback(() => {
+    if (infoSidebarOpen) {
+      setInfoSidebarOpen(false);
+    }
+  }, [infoSidebarOpen, setInfoSidebarOpen]);
 
-      const recordLastClicked = () => {
-        if (stackIndex >= 0) {
-          lastClickedIndexRef.current = stackIndex;
-        }
-      };
-
-      if (event.metaKey || event.ctrlKey) {
-        recordLastClicked();
-        return;
-      }
-      if (event.altKey) {
-        recordLastClicked();
-        return;
-      }
-
-      if (event.shiftKey) {
-        event.preventDefault();
-        if (!selectionMode) {
-          setSelectionMode(true);
-        }
-
-        const lastIndex = lastClickedIndexRef.current ?? stackIndex;
-        if (lastIndex !== null && stackIndex >= 0 && lastIndex >= 0) {
-          const [start, end] =
-            lastIndex < stackIndex ? [lastIndex, stackIndex] : [stackIndex, lastIndex];
-          setSelectedItems((prev) => {
-            const next = new Set(prev);
-            for (let i = start; i <= end; i++) {
-              const candidate = allStacks[i];
-              if (candidate) {
-                next.add(candidate.id);
-              }
-            }
-            return next;
-          });
-        } else {
-          handleItemSelect(stack.id);
-        }
-        recordLastClicked();
-        return;
-      }
-
-      if (selectionMode) {
-        event.preventDefault();
-        handleItemSelect(stack.id);
-        recordLastClicked();
-        return;
-      }
-
-      if (infoSidebarOpen) {
-        event.preventDefault();
-        onInfo(stack.id);
-        recordLastClicked();
-      }
+  const enterSelectionModeWithItem = useCallback(
+    (itemId: string | number) => {
+      setSelectionMode(true);
+      setSelectedItems(new Set([itemId]));
     },
-    [allStacks, selectionMode, infoSidebarOpen, setSelectionMode, handleItemSelect, onInfo]
+    [setSelectionMode]
+  );
+
+  const selectItemRange = useCallback((itemIds: Array<string | number>) => {
+    setSelectedItems((prev) => {
+      const next = new Set(prev);
+      for (const itemId of itemIds) {
+        next.add(itemId);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleTileDefaultClick = useCallback(
+    (stack: AutoTagStack, event: MouseEvent<HTMLDivElement>) => {
+      if (!infoSidebarOpen) return;
+      event.preventDefault();
+      onInfo(stack.id);
+    },
+    [infoSidebarOpen, onInfo]
+  );
+
+  const getStackLinkElement = useCallback(
+    (stack: AutoTagStack) => (
+      <Link
+        to="/library/$datasetId/stacks/$stackId"
+        params={{ datasetId, stackId: String(stack.id) }}
+      />
+    ),
+    [datasetId]
+  );
+
+  const handleOpenStack = useCallback(
+    async (stack: AutoTagStack) => {
+      await onOpen(stack.id);
+    },
+    [onOpen]
+  );
+
+  const handleInfoStack = useCallback(
+    (stack: AutoTagStack) => {
+      onInfo(stack.id);
+    },
+    [onInfo]
+  );
+
+  const handleFindSimilarStack = useCallback(
+    async (stack: AutoTagStack) => {
+      await onFindSimilar(stack.id);
+    },
+    [onFindSimilar]
+  );
+
+  const handleAddToScratchStack = useCallback(
+    async (stack: AutoTagStack) => {
+      await onAddToScratch(stack.id);
+    },
+    [onAddToScratch]
+  );
+
+  const handleDownloadStack = useCallback(
+    (stack: AutoTagStack) => {
+      onDownload(stack.id);
+    },
+    [onDownload]
+  );
+
+  const handleToggleFavoriteStack = useCallback(
+    async (stack: AutoTagStack, favorited: boolean) => {
+      await onToggleFavorite(stack.id, favorited);
+    },
+    [onToggleFavorite]
+  );
+
+  const handleLikeStack = useCallback(
+    async (stack: AutoTagStack) => {
+      await onLike(stack.id);
+    },
+    [onLike]
+  );
+
+  const getStackDragHandlers = useCallback(
+    (stack: AutoTagStack, sourceImageUrl: string | null, sourceImageFilename: string | undefined) =>
+      dragProps(stack.id, sourceImageUrl, sourceImageFilename),
+    [dragProps]
   );
 
   const applyEditUpdates = useCallback(
     async (updates: EditUpdates) => {
       if (selectedItems.size === 0) return;
 
-      const stackIds = Array.from(selectedItems)
-        .map((id) => toNumericId(id))
-        .filter((id): id is number => id !== null);
+      const stackIds = selectedStackIds;
 
       if (stackIds.length === 0) return;
 
@@ -658,7 +719,74 @@ function AutoTagConfigPage() {
         console.error('Error applying bulk updates:', error);
       }
     },
-    [selectedItems, queryClient, datasetId, selectedAutoTag, exitSelectionMode, localFilter]
+    [
+      selectedItems.size,
+      selectedStackIds,
+      queryClient,
+      datasetId,
+      selectedAutoTag,
+      exitSelectionMode,
+      localFilter,
+    ]
+  );
+
+  const handleDownloadSelectedStacks = useCallback(() => {
+    if (selectedStackIds.length === 0) return;
+    downloadStackOriginals(datasetId, selectedStackIds);
+  }, [datasetId, selectedStackIds]);
+
+  const handleRemoveSelectedStacks = useCallback(async () => {
+    if (selectedStackIds.length === 0) return;
+
+    try {
+      await apiClient.bulkRemoveStacks(selectedStackIds);
+      await Promise.allSettled([
+        queryClient.invalidateQueries({
+          queryKey: ['autotag-stacks', datasetId, selectedAutoTag, localFilter],
+        }),
+        queryClient.invalidateQueries({ queryKey: ['stacks'] }),
+        queryClient.invalidateQueries({ queryKey: ['library-counts', datasetId] }),
+        queryClient.invalidateQueries({ queryKey: ['dataset-overview', datasetId] }),
+      ]);
+      exitSelectionMode();
+    } catch (error) {
+      console.error('Error removing selected auto-tag stacks:', error);
+      alert(t.grid.deleteStacksFailed);
+    }
+  }, [
+    datasetId,
+    exitSelectionMode,
+    localFilter,
+    queryClient,
+    selectedAutoTag,
+    selectedStackIds,
+    t,
+  ]);
+
+  const selectionActions = useMemo(
+    () =>
+      createStackSelectionActions({
+        selectedCount: selectedItems.size,
+        copy: {
+          bulkEdit: t.grid.bulkEdit,
+          downloadSelected: t.contextMenu.downloadSelected,
+          mergeStacks: t.grid.mergeStacks,
+          refreshThumbnails: t.grid.refreshThumbnails,
+          optimizeVideo: t.grid.optimizeVideo,
+          deleteStacks: t.grid.deleteStacks,
+          deleteStacksConfirm: t.grid.deleteStacksConfirm,
+        },
+        bulkEdit: { onSelect: toggleEditPanel },
+        downloadSelected: { onSelect: handleDownloadSelectedStacks },
+        deleteStacks: { onSelect: handleRemoveSelectedStacks },
+      }),
+    [
+      handleDownloadSelectedStacks,
+      handleRemoveSelectedStacks,
+      selectedItems.size,
+      t,
+      toggleEditPanel,
+    ]
   );
 
   // Handle filter change
@@ -672,30 +800,16 @@ function AutoTagConfigPage() {
 
   // Keyboard shortcuts
   useKeyboardShortcuts({
-    r: () => {
-      if (!selectionMode) {
-        setInfoSidebarOpen(false);
-        setSelectionMode(true);
-      } else {
+    i: () => {
+      if (!infoSidebarOpen && selectionMode) {
         exitSelectionMode();
       }
-    },
-    i: () => {
-      if (!infoSidebarOpen) {
-        if (selectionMode) {
-          exitSelectionMode();
-        }
-      }
+
       setInfoSidebarOpen(!infoSidebarOpen);
     },
     f: () => {
       if (!selectionMode) {
         setFilterOpen(!filterOpen);
-      }
-    },
-    e: () => {
-      if (selectionMode && selectedItems.size > 0) {
-        toggleEditPanel();
       }
     },
     Escape: () => {
@@ -706,141 +820,141 @@ function AutoTagConfigPage() {
   });
 
   return (
-    <div className="flex min-h-[calc(100vh-56px)]">
+    <div className="flex h-[calc(100vh-56px)] overflow-hidden">
       {/* Statistics List */}
-      <div className="w-80 flex-shrink-0">
-        <div className="sticky top-14 h-[calc(100vh-56px)] border-r bg-white">
-          <div className="overflow-y-auto h-full">
-            <div className="p-4 border-b">
-              <div className="space-y-3">
-                <div className="space-y-1">
-                  <h2 className="text-lg font-semibold">AutoTag Statistics</h2>
-                  <JoyTagStatus
-                    status={joyTagStatusComputed.status}
-                    isLoading={joyTagStatusLoading}
-                    message={joyTagStatusComputed.message}
-                  />
-                </div>
-
-                <SmallSearchField
-                  value={searchQuery}
-                  onValueChange={setSearchQuery}
-                  placeholder="Search tags..."
+      <div className="w-80 h-full flex-shrink-0 border-r bg-white">
+        <div className="h-full overflow-y-auto">
+          <div className="p-4 border-b">
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <h2 className="text-lg font-semibold">{t.autoTagPage.statistics}</h2>
+                <JoyTagStatus
+                  status={joyTagStatusComputed.status}
+                  isLoading={joyTagStatusLoading}
+                  message={joyTagStatusComputed.message}
                 />
+              </div>
 
-                <div className="space-y-2">
-                  <SmallSelect
-                    value={sortBy}
-                    onValueChange={(v) => setSortBy(v as typeof sortBy)}
-                    placeholder="Sort by..."
-                  >
-                    <SelectItem value="name-asc">Name (A-Z)</SelectItem>
-                    <SelectItem value="name-desc">Name (Z-A)</SelectItem>
-                    <SelectItem value="count-desc">Prediction Count (High to Low)</SelectItem>
-                    <SelectItem value="count-asc">Prediction Count (Low to High)</SelectItem>
-                  </SmallSelect>
-                </div>
+              <SmallSearchField
+                value={searchQuery}
+                onValueChange={setSearchQuery}
+                placeholder={t.tagPage.searchTags}
+              />
+
+              <div className="space-y-2">
+                <SmallSelect
+                  value={sortBy}
+                  onValueChange={(v) => setSortBy(v as typeof sortBy)}
+                  placeholder={t.tagPage.sortBy}
+                >
+                  <SelectItem value="name-asc">{t.tagPage.nameAsc}</SelectItem>
+                  <SelectItem value="name-desc">{t.tagPage.nameDesc}</SelectItem>
+                  <SelectItem value="count-desc">{t.autoTagPage.predictionCountDesc}</SelectItem>
+                  <SelectItem value="count-asc">{t.autoTagPage.predictionCountAsc}</SelectItem>
+                </SmallSelect>
               </div>
             </div>
+          </div>
 
-            {/* Statistics list */}
-            <div className="p-2">
-              {statisticsError ? (
-                <div className="text-center py-8 text-red-500">
-                  Error loading statistics: {(statisticsError as Error).message}
-                </div>
-              ) : statisticsLoading ? (
-                <div className="text-center py-8 text-muted-foreground">Loading statistics...</div>
-              ) : filteredStatistics.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  {searchQuery ? 'No tags found' : 'No AutoTag data yet'}
-                </div>
-              ) : (
-                <div className="space-y-0.5">
-                  {filteredStatistics.map((stat) => {
-                    const existingMapping = getExistingMapping(stat.autoTagKey);
-                    const isSelected = selectedAutoTag === stat.autoTagKey;
-                    return (
-                      <div
-                        key={stat.autoTagKey}
-                        data-autotag-key={stat.autoTagKey}
-                        ref={(el) => {
-                          if (el) {
-                            listItemRefs.current.set(stat.autoTagKey, el);
-                          } else {
-                            listItemRefs.current.delete(stat.autoTagKey);
-                          }
-                        }}
-                        onClick={() => handleAutoTagClick(stat.autoTagKey)}
-                        className={cn(
-                          'px-2 py-1.5 rounded transition-colors cursor-pointer group',
-                          isSelected
-                            ? 'bg-blue-50 text-blue-700'
-                            : 'hover:bg-accent hover:text-accent-foreground'
-                        )}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm truncate font-medium">
-                                {stat.autoTagKey}
-                              </span>
-                              {existingMapping && (
-                                <div className="flex items-center gap-1">
-                                  <ArrowRight className="h-3 w-3 text-muted-foreground" />
-                                  <span className="text-xs text-blue-600">
-                                    {existingMapping.displayName}
-                                  </span>
-                                </div>
-                              )}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              {strictCounts[stat.autoTagKey] ? (
-                                <>
-                                  {strictCounts[stat.autoTagKey].predictionCount} predictions •{' '}
-                                  {strictCounts[stat.autoTagKey].assetCount} assets
-                                </>
-                              ) : (
-                                <>
-                                  {stat.predictionCount} stacks • ≈{stat.assetCount} assets
-                                </>
-                              )}
-                            </div>
+          {/* Statistics list */}
+          <div className="p-2">
+            {statisticsError ? (
+              <div className="text-center py-8 text-red-500">
+                {t.autoTagPage.errorLoadingStatistics} {(statisticsError as Error).message}
+              </div>
+            ) : statisticsLoading ? (
+              <div className="text-center py-8 text-muted-foreground">
+                {t.autoTagPage.loadingStatistics}
+              </div>
+            ) : filteredStatistics.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                {searchQuery ? t.tagPage.noTagsFound : t.sidebar.noAutoTags}
+              </div>
+            ) : (
+              <div className="space-y-0.5">
+                {filteredStatistics.map((stat) => {
+                  const existingMapping = getExistingMapping(stat.autoTagKey);
+                  const isSelected = selectedAutoTag === stat.autoTagKey;
+                  return (
+                    <div
+                      key={stat.autoTagKey}
+                      data-autotag-key={stat.autoTagKey}
+                      ref={(el) => {
+                        if (el) {
+                          listItemRefs.current.set(stat.autoTagKey, el);
+                        } else {
+                          listItemRefs.current.delete(stat.autoTagKey);
+                        }
+                      }}
+                      onClick={() => handleAutoTagClick(stat.autoTagKey)}
+                      className={cn(
+                        'px-2 py-1.5 rounded transition-colors cursor-pointer group',
+                        isSelected
+                          ? 'bg-blue-50 text-blue-700'
+                          : 'hover:bg-accent hover:text-accent-foreground'
+                      )}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm truncate font-medium">{stat.autoTagKey}</span>
+                            {existingMapping && (
+                              <div className="flex items-center gap-1">
+                                <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                                <span className="text-xs text-blue-600">
+                                  {existingMapping.displayName}
+                                </span>
+                              </div>
+                            )}
                           </div>
-                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            {existingMapping ? (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleEditMapping(existingMapping);
-                                }}
-                                className="h-6 w-6 p-0"
-                              >
-                                <SquarePen className="h-3.5 w-3.5" />
-                              </Button>
+                          <div className="text-xs text-muted-foreground">
+                            {strictCounts[stat.autoTagKey] ? (
+                              <>
+                                {strictCounts[stat.autoTagKey].predictionCount}{' '}
+                                {t.autoTagPage.predictions} -{' '}
+                                {strictCounts[stat.autoTagKey].assetCount} {t.autoTagPage.assets}
+                              </>
                             ) : (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleCreateMapping(stat.autoTagKey);
-                                }}
-                                className="h-6 w-6 p-0"
-                              >
-                                <Plus className="h-3.5 w-3.5" />
-                              </Button>
+                              <>
+                                {stat.predictionCount} {t.autoTagPage.stacksApproxAssets}{' '}
+                                {stat.assetCount} {t.autoTagPage.assets}
+                              </>
                             )}
                           </div>
                         </div>
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {existingMapping ? (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEditMapping(existingMapping);
+                              }}
+                              className="h-6 w-6 p-0"
+                            >
+                              <SquarePen className="h-3.5 w-3.5" />
+                            </Button>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleCreateMapping(stat.autoTagKey);
+                              }}
+                              className="h-6 w-6 p-0"
+                            >
+                              <Plus className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
                       </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -850,7 +964,7 @@ function AutoTagConfigPage() {
         <div
           ref={scrollContainerRef}
           className={cn(
-            'flex-1 bg-gray-50 transition-all duration-300 ease-in-out',
+            'flex-1 min-w-0 h-full overflow-y-auto bg-gray-50 transition-all duration-300 ease-in-out',
             infoSidebarOpen && !selectionMode ? 'mr-80' : 'mr-0',
             isEditPanelOpen && selectionMode ? 'mr-80' : ''
           )}
@@ -888,7 +1002,7 @@ function AutoTagConfigPage() {
                       <div className="flex items-center gap-2">
                         <Tag className="h-4 w-4 text-blue-500 mt-0.5" />
                         <div>
-                          <p className="text-sm text-gray-600">Mapped to:</p>
+                          <p className="text-sm text-gray-600">{t.autoTagPage.mappedTo}</p>
                           <p className="font-medium">{mapping.displayName}</p>
                         </div>
                       </div>
@@ -917,10 +1031,12 @@ function AutoTagConfigPage() {
                   </div>
                 ) : (
                   <div className="mt-3 bg-gray-100 rounded-lg p-3 border border-gray-200 max-w-lg">
-                    <p className="text-sm text-muted-foreground mb-2">No mapping configured</p>
+                    <p className="text-sm text-muted-foreground mb-2">
+                      {t.autoTagPage.noMappingConfigured}
+                    </p>
                     <Button size="sm" onClick={() => handleCreateMapping(selectedAutoTag)}>
                       <Plus className="h-3.5 w-3.5 mr-1" />
-                      Create Mapping
+                      {t.autoTagPage.createMapping}
                     </Button>
                   </div>
                 );
@@ -929,77 +1045,43 @@ function AutoTagConfigPage() {
 
             {/* Stacks with this AutoTag */}
             <div className="mt-6">
-              <h3 className="text-lg font-semibold mb-4">Stacks with this AutoTag</h3>
+              <h3 className="text-lg font-semibold mb-4">{t.autoTagPage.stacksWithThisAutoTag}</h3>
               {stacksLoading ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>
               ) : allStacks.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
-                  No stacks found with this AutoTag
+                  {t.autoTagPage.noStacksWithThisAutoTag}
                 </div>
               ) : (
                 <>
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                    {allStacks.map((stack) => {
-                      const thumbnail = stack.thumbnail ?? stack.thumbnailUrl ?? '/no-image.png';
-                      const sourceImageUrl = getSourceImageUrl(stack, thumbnail);
-                      const sourceImageFilename = sourceImageUrl
-                        ? getSourceImageFilename(stack, sourceImageUrl, `stack-${stack.id}`)
-                        : undefined;
-                      const likeCount = Number(stack.likeCount ?? stack.liked ?? 0);
-                      const pageCount =
-                        stack.assetCount ?? stack._count?.assets ?? stack.assetsCount ?? 0;
-                      const favorited = Boolean(stack.favorited ?? stack.isFavorite);
-
-                      if (infoSidebarOpen) {
-                        return (
-                          <StackTile
-                            key={stack.id}
-                            thumbnailUrl={thumbnail}
-                            nativeImageDragUrl={sourceImageUrl}
-                            pageCount={pageCount}
-                            favorited={favorited}
-                            likeCount={likeCount}
-                            onClick={(event) => handleTileClick(stack, event)}
-                            onInfo={() => onInfo(stack.id)}
-                            onFindSimilar={() => onFindSimilar(stack.id)}
-                            onAddToScratch={() => onAddToScratch(stack.id)}
-                            onDownload={() => onDownload(stack.id)}
-                            onToggleFavorite={() => onToggleFavorite(stack.id, favorited)}
-                            onLike={() => onLike(stack.id)}
-                            dragHandlers={dragProps(stack.id, sourceImageUrl, sourceImageFilename)}
-                          />
-                        );
-                      }
-
-                      return (
-                        <StackTile
-                          key={stack.id}
-                          thumbnailUrl={thumbnail}
-                          nativeImageDragUrl={sourceImageUrl}
-                          pageCount={pageCount}
-                          favorited={favorited}
-                          likeCount={likeCount}
-                          onClick={(event) => handleTileClick(stack, event)}
-                          onOpen={() => onOpen(stack.id)}
-                          onInfo={() => onInfo(stack.id)}
-                          onFindSimilar={() => onFindSimilar(stack.id)}
-                          onAddToScratch={() => onAddToScratch(stack.id)}
-                          onDownload={() => onDownload(stack.id)}
-                          onToggleFavorite={() => onToggleFavorite(stack.id, favorited)}
-                          onLike={() => onLike(stack.id)}
-                          dragHandlers={dragProps(stack.id, sourceImageUrl, sourceImageFilename)}
-                          asChild
-                        >
-                          <Link
-                            to="/library/$datasetId/stacks/$stackId"
-                            params={{ datasetId, stackId: String(stack.id) }}
-                          />
-                        </StackTile>
-                      );
-                    })}
-                  </div>
+                  <StackTileGrid
+                    items={allStacks}
+                    datasetId={datasetId}
+                    gridClassName="grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"
+                    cornerRadius="rounded"
+                    isSelectionMode={selectionMode}
+                    selectedItems={selectedItems}
+                    selectedActionCount={selectedItems.size}
+                    getLinkElement={infoSidebarOpen ? undefined : getStackLinkElement}
+                    onClickItem={handleTileDefaultClick}
+                    onBeforeEnterSelectionMode={closeInfoSidebarBeforeSelection}
+                    onEnterSelectionMode={enterSelectionModeWithItem}
+                    onToggleSelection={handleItemSelect}
+                    onSelectRange={selectItemRange}
+                    onOpenItem={handleOpenStack}
+                    onInfoItem={handleInfoStack}
+                    onFindSimilarItem={handleFindSimilarStack}
+                    onAddToScratchItem={handleAddToScratchStack}
+                    onDownloadItem={handleDownloadStack}
+                    onDownloadSelected={handleDownloadSelectedStacks}
+                    onBulkEditSelected={toggleEditPanel}
+                    onRemoveSelectedStacks={handleRemoveSelectedStacks}
+                    onToggleFavoriteItem={handleToggleFavoriteStack}
+                    onLikeItem={handleLikeStack}
+                    getDragHandlers={getStackDragHandlers}
+                  />
 
                   {/* Loading indicator */}
                   {isFetchingNextPage && (
@@ -1014,7 +1096,7 @@ function AutoTagConfigPage() {
                       ref={loadMoreTriggerRef}
                       className="text-sm text-muted-foreground text-center mt-8"
                     >
-                      Scroll to load more...
+                      {t.common.scrollToLoadMore}
                     </div>
                   )}
                 </>
@@ -1032,7 +1114,7 @@ function AutoTagConfigPage() {
                 return (
                   <div className="mt-8 p-4 bg-white rounded-lg border border-gray-200">
                     <h4 className="text-sm font-semibold mb-2">
-                      AutoTags from: {stackWithAutoTags.name}
+                      {t.autoTagPage.autoTagsFrom} {stackWithAutoTags.name}
                     </h4>
                     <AutoTagDisplay
                       autoTags={stackWithAutoTags.autoTags}
@@ -1053,14 +1135,14 @@ function AutoTagConfigPage() {
       ) : (
         <div
           className={cn(
-            'flex-1 flex items-center justify-center bg-gray-50 transition-all duration-300 ease-in-out',
+            'flex-1 min-w-0 h-full flex items-center justify-center bg-gray-50 transition-all duration-300 ease-in-out',
             infoSidebarOpen && !selectionMode ? 'mr-80' : 'mr-0',
             isEditPanelOpen && selectionMode ? 'mr-80' : ''
           )}
         >
           <div className="text-center">
             <Tag className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-lg text-muted-foreground">Select an AutoTag to view details</p>
+            <p className="text-lg text-muted-foreground">{t.autoTagPage.selectAutoTagPrompt}</p>
           </div>
         </div>
       )}
@@ -1108,19 +1190,7 @@ function AutoTagConfigPage() {
           selectedCount={selectedItems.size}
           onClearSelection={clearSelection}
           onExitSelectionMode={exitSelectionMode}
-          actions={
-            selectedItems.size > 0
-              ? [
-                  {
-                    label: 'Bulk Edit',
-                    value: 'bulk-edit',
-                    onSelect: toggleEditPanel,
-                    icon: <Pencil size={12} />,
-                    group: 'primary',
-                  },
-                ]
-              : []
-          }
+          actions={selectionActions}
         />
       )}
 
@@ -1135,27 +1205,19 @@ function AutoTagConfigPage() {
             className={selectionMode ? 'opacity-50 cursor-not-allowed' : ''}
             aria-label={
               selectionMode
-                ? 'Filter disabled during selection'
+                ? t.header.filterDisabledDuringSelection
                 : filterOpen
-                  ? 'Close filter'
-                  : 'Open filter'
+                  ? t.header.closeFilter
+                  : t.header.openFilter
             }
           >
             <Filter size={18} />
           </HeaderIconButton>
 
-          {/* Selection mode button */}
           <HeaderIconButton
-            onClick={() => {
-              if (!selectionMode) {
-                setInfoSidebarOpen(false); // Close info sidebar when entering selection mode
-                setSelectionMode(true);
-              } else {
-                exitSelectionMode(); // Use exitSelectionMode to properly clean up
-              }
-            }}
+            onClick={handleToggleSelectionMode}
             isActive={selectionMode}
-            aria-label={selectionMode ? 'Exit selection mode' : 'Enter selection mode'}
+            aria-label={selectionMode ? t.header.exitSelectionMode : t.header.enterSelectionMode}
           >
             <Check size={18} />
           </HeaderIconButton>
@@ -1165,7 +1227,7 @@ function AutoTagConfigPage() {
             <HeaderIconButton
               onClick={() => setInfoSidebarOpen(!infoSidebarOpen)}
               isActive={infoSidebarOpen}
-              aria-label={infoSidebarOpen ? 'Close info panel' : 'Open info panel'}
+              aria-label={infoSidebarOpen ? t.viewer.closeInfo : t.viewer.openInfo}
             >
               <Info size={18} />
             </HeaderIconButton>
@@ -1230,8 +1292,8 @@ function getStackAuthor(author: Stack['author']): string | undefined {
 }
 
 function toNumericId(value: string | number): number | null {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return value;
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
   }
 
   const parsed = Number.parseInt(value, 10);

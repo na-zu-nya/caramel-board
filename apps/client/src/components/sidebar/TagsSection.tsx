@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { DroppableSideMenuItem } from '@/components/ui/DroppableSideMenuItem';
 import { SideMenuMessage, SideMenuSearchField } from '@/components/ui/SideMenu';
 import { apiClient } from '@/lib/api-client';
+import { useT } from '@/lib/i18n';
 
 interface TagsSectionProps {
   datasetId: string;
@@ -22,6 +23,7 @@ interface TagItem {
 }
 
 export function TagsSection({ datasetId, autoFocusOnMount = false }: TagsSectionProps) {
+  const t = useT();
   const [limit, setLimit] = useState(20);
   const [query, setQuery] = useState('');
   const queryClient = useQueryClient();
@@ -87,7 +89,7 @@ export function TagsSection({ datasetId, autoFocusOnMount = false }: TagsSection
   };
 
   if (isLoading || !data) {
-    return <SideMenuMessage variant="info">Loading tags...</SideMenuMessage>;
+    return <SideMenuMessage variant="info">{t.sidebar.loadingTags}</SideMenuMessage>;
   }
 
   // Safety net: ensure local alphabetical order by label even if API behavior changes
@@ -108,7 +110,7 @@ export function TagsSection({ datasetId, autoFocusOnMount = false }: TagsSection
       <SideMenuSearchField
         value={query}
         onValueChange={setQuery}
-        placeholder="Filter Tags..."
+        placeholder={t.sidebar.filterTags}
         autoFocusOnMount={autoFocusOnMount}
       />
       {filteredTags.map((tag) => {
@@ -139,7 +141,7 @@ export function TagsSection({ datasetId, autoFocusOnMount = false }: TagsSection
           className="w-full text-left px-2 py-1 text-xs text-blue-600 hover:bg-gray-100 rounded transition-colors"
           style={{ paddingLeft: '2rem' }}
         >
-          Load more...
+          {t.common.loadMoreWithDots}
         </button>
       )}
     </div>

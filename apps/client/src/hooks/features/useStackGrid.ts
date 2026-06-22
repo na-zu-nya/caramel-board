@@ -7,6 +7,7 @@ import {
   readStackGridColumns,
   writeStackGridColumns,
 } from '@/lib/grid-layout-settings';
+import { getSelectedMediaGridStackIds } from '@/lib/media-grid-selection';
 import {
   infoSidebarOpenAtom,
   selectedItemIdAtom,
@@ -550,9 +551,7 @@ export function useStackGrid({
     async (updates: EditUpdates) => {
       if (selectedItems.size === 0) return;
 
-      const stackIds = Array.from(selectedItems)
-        .map((id) => (typeof id === 'string' ? Number.parseInt(id, 10) : id))
-        .filter((id): id is number => Number.isFinite(id));
+      const stackIds = getSelectedMediaGridStackIds(selectedItemOrder, items);
 
       if (stackIds.length === 0) return;
 
@@ -587,7 +586,15 @@ export function useStackGrid({
         console.error('Error applying bulk updates:', error);
       }
     },
-    [selectedItems, clearSelection, exitSelectionMode, onRefreshAll, queryClient]
+    [
+      selectedItems,
+      selectedItemOrder,
+      items,
+      clearSelection,
+      exitSelectionMode,
+      onRefreshAll,
+      queryClient,
+    ]
   );
 
   return {

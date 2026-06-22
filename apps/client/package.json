@@ -1,9 +1,12 @@
 {
   "name": "@caramelboard/client",
   "private": true,
+  "license": "SEE LICENSE IN ../../LICENSE",
   "type": "module",
   "scripts": {
     "dev": "bash ./scripts/dev-with-storybook.sh",
+    "dev:next": "VITE_API_URL=${VITE_API_URL:-http://localhost:9000} vite --port 3000 --host",
+    "dev:standalone": "VITE_API_URL=${VITE_API_URL:-http://127.0.0.1:6777} vite --port 3000 --host",
     "dev:vite": "vite --port 3000 --host",
     "start": "vite --port 3000",
     "build": "vite build",
@@ -68,7 +71,6 @@
     "storybook": "^9.1.5",
     "typescript": "^5.8.3",
     "vite": "^6.1.0",
-    "vitest": "^3.0.5",
-    "web-vitals": "^4.2.4"
+    "vitest": "^3.0.5"
   }
 }

@@ -1,27 +1,24 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, Link, useLocation, useNavigate } from '@tanstack/react-router';
 import { useAtom } from 'jotai';
-import {
-  Check,
-  Clapperboard,
-  Edit2,
-  GitMerge,
-  Info,
-  Loader2,
-  Pencil,
-  RefreshCw,
-  Tag,
-  Trash2,
-  X,
-} from 'lucide-react';
+import { Edit2, GitMerge, Info, Loader2, Tag, Trash2, X } from 'lucide-react';
 import MersenneTwister from 'mersenne-twister';
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  type MouseEvent,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 // moved React hooks import above; see lazy import note
 import { createPortal } from 'react-dom';
 import type { EditUpdates } from '@/components/BulkEditPanel';
 import BulkEditPanel from '@/components/BulkEditPanel';
 import FilterPanel from '@/components/FilterPanel';
 import InfoSidebar from '@/components/InfoSidebar';
+import { StackTileGrid } from '@/components/StackTileGrid';
 import { Button } from '@/components/ui/button';
 import { SmallSearchField, SmallSelect } from '@/components/ui/Controls';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -36,7 +33,6 @@ import {
 import { HeaderIconButton } from '@/components/ui/Header/HeaderIconButton';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { StackTile } from '@/components/ui/Stack';
 import {
   Select,
   SelectContent,
@@ -48,7 +44,9 @@ import { SelectionActionBar } from '@/components/ui/selection-action-bar';
 import { useHeaderActions } from '@/hooks/useHeaderActions';
 import { useStackTile } from '@/hooks/useStackTile';
 import { apiClient } from '@/lib/api-client';
-import { getSourceImageFilename, getSourceImageUrl } from '@/lib/stack-drag-data';
+import { downloadStackOriginals } from '@/lib/download-originals';
+import { useT } from '@/lib/i18n';
+import { createStackSelectionActions } from '@/lib/stack-selection-actions';
 import { cn } from '@/lib/utils';
 import {
   currentFilterAtom,
@@ -57,8 +55,16 @@ import {
   selectionModeAtom,
 } from '@/stores/ui';
 import { genListToken, saveViewContext } from '@/stores/view-context';
+import type { ColorFilter, MediaType, StackFilter } from '@/types';
+
+interface TagsSearch {
+  tagId?: string;
+}
 
 export const Route = createFileRoute('/library/$datasetId/tags')({
+  validateSearch: (search: Record<string, unknown>): TagsSearch => ({
+    tagId: typeof search.tagId === 'string' ? search.tagId : undefined,
+  }),
   component: TagsPage,
 });
 
@@ -83,25 +89,125 @@ interface StackItem {
   thumbnail?: string;
   thumbnailUrl?: string;
   liked?: number;
+  likeCount?: number;
   favorited?: boolean;
-  mediaType?: string;
-  author?: { id: number; name: string };
+  isFavorite?: boolean;
+  mediaType?: MediaType;
+  author?: string | { id: string | number; name: string };
+  tags?: Array<string | { name?: string; title?: string }>;
   assetCount?: number;
+  assetsCount?: number;
   _count?: { assets: number };
 }
 
-interface StacksResponse {
-  stacks: StackItem[];
-  total: number;
+interface BulkEditItem {
+  id: string | number;
+  tags?: string[];
+  author?: string;
+}
+
+interface TagStacksQueryParams {
+  dataSetId: number;
   limit: number;
   offset: number;
+  tag: string[];
+  mediaType?: MediaType;
+  author?: string[];
+  fav?: 0 | 1;
+  liked?: 0 | 1;
+  search?: string;
+  hasNoTags?: boolean;
+  hasNoAuthor?: boolean;
+  hueCategories?: string[];
+  toneSaturation?: number;
+  toneLightness?: number;
+  toneTolerance?: number;
+  similarityThreshold?: number;
+  customColor?: string;
+}
+
+function appendColorFilterParams(params: TagStacksQueryParams, colorFilter?: ColorFilter): void {
+  if (!colorFilter) return;
+  if (colorFilter.hueCategories?.length) params.hueCategories = colorFilter.hueCategories;
+  if (colorFilter.toneSaturation !== undefined) params.toneSaturation = colorFilter.toneSaturation;
+  if (colorFilter.toneLightness !== undefined) params.toneLightness = colorFilter.toneLightness;
+  if (colorFilter.toneTolerance !== undefined) params.toneTolerance = colorFilter.toneTolerance;
+  if (colorFilter.similarityThreshold !== undefined) {
+    params.similarityThreshold = colorFilter.similarityThreshold;
+  }
+  if (colorFilter.customColor) params.customColor = colorFilter.customColor;
+}
+
+function buildTagStacksQuery(params: {
+  datasetId: string;
+  selectedTag: TagItem;
+  filter: StackFilter;
+  limit: number;
+  offset: number;
+}): TagStacksQueryParams {
+  const query: TagStacksQueryParams = {
+    dataSetId: Number(params.datasetId),
+    limit: params.limit,
+    offset: params.offset,
+    tag: [params.selectedTag.title],
+  };
+
+  if (params.filter.mediaType) query.mediaType = params.filter.mediaType;
+  if (params.filter.tags && params.filter.tags.length > 0) {
+    const extras = params.filter.tags.filter((tag) => tag !== params.selectedTag.title);
+    if (extras.length > 0) query.tag = [...query.tag, ...extras];
+  }
+  if (params.filter.authors && params.filter.authors.length > 0) {
+    query.author = params.filter.authors;
+  }
+  if (params.filter.isFavorite === true) query.fav = 1;
+  if (params.filter.isFavorite === false) query.fav = 0;
+  if (params.filter.isLiked === true) query.liked = 1;
+  if (params.filter.isLiked === false) query.liked = 0;
+  if (params.filter.search) query.search = params.filter.search;
+  if (params.filter.hasNoTags !== undefined) query.hasNoTags = params.filter.hasNoTags;
+  if (params.filter.hasNoAuthor !== undefined) query.hasNoAuthor = params.filter.hasNoAuthor;
+  appendColorFilterParams(query, params.filter.colorFilter);
+
+  return query;
+}
+
+function toNumericId(value: string | number): number {
+  return typeof value === 'number' ? value : Number.parseInt(value, 10);
+}
+
+function isMediaType(value: unknown): value is MediaType {
+  return value === 'image' || value === 'comic' || value === 'video';
+}
+
+function getStackTagNames(tags: StackItem['tags']): string[] | undefined {
+  if (!tags) return undefined;
+  const names = tags
+    .map((tag) => (typeof tag === 'string' ? tag : tag.title || tag.name || ''))
+    .filter((tag) => tag.length > 0);
+  return names.length > 0 ? names : undefined;
+}
+
+function getStackAuthorName(author: StackItem['author']): string | undefined {
+  return typeof author === 'string' ? author : author?.name;
+}
+
+function toBulkEditItem(stack: StackItem): BulkEditItem {
+  return {
+    id: stack.id,
+    tags: getStackTagNames(stack.tags),
+    author: getStackAuthorName(stack.author),
+  };
 }
 
 function TagsPage() {
+  const t = useT();
   const navigate = useNavigate();
   const location = useLocation();
+  const tagSearch = Route.useSearch();
   const { datasetId } = Route.useParams();
-  const actions = useStackTile(datasetId);
+  const { onOpen, onFindSimilar, onAddToScratch, onDownload, onToggleFavorite, onLike, dragProps } =
+    useStackTile(datasetId);
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTag, setSelectedTag] = useState<TagItem | null>(null);
@@ -116,13 +222,16 @@ function TagsPage() {
   );
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const loadMoreTriggerRef = useRef<HTMLDivElement>(null);
-  const lastClickedIndexRef = useRef<number | null>(null);
 
   // Info panel and selection mode states
   const [infoSidebarOpen, setInfoSidebarOpen] = useAtom(infoSidebarOpenAtom);
-  const [, setSelectedItemId] = useAtom(selectedItemIdAtom);
+  const [selectedItemId, setSelectedItemId] = useAtom(selectedItemIdAtom);
   const [selectionMode, setSelectionMode] = useAtom(selectionModeAtom);
   const [currentFilter, setCurrentFilter] = useAtom(currentFilterAtom);
+  const routeFilterScopeKey = useMemo(() => `tags:${datasetId}`, [datasetId]);
+  const [filterScopeKey, setFilterScopeKey] = useState<string | null>(null);
+  const tagsPageFilter = useMemo<StackFilter>(() => ({ datasetId }), [datasetId]);
+  const effectiveFilter = filterScopeKey === routeFilterScopeKey ? currentFilter : tagsPageFilter;
   const [selectedStackItems, setSelectedStackItems] = useState<Set<string | number>>(new Set());
   const [isEditPanelOpen, setIsEditPanelOpen] = useState(false);
 
@@ -156,28 +265,31 @@ function TagsPage() {
     refetchOnWindowFocus: false,
   });
 
-  // ルート入場時（このパスに戻ってきた瞬間）にローカル状態をリセット＆再取得
+  const resetTagsPageState = useCallback(() => {
+    setFilterScopeKey(routeFilterScopeKey);
+    setSelectedTag(null);
+    setSelectedTags(new Set());
+    setSearchQuery('');
+    setIsEditPanelOpen(false);
+    setSelectionMode(false);
+    setCurrentFilter(tagsPageFilter);
+    void refetchTags();
+  }, [refetchTags, routeFilterScopeKey, setCurrentFilter, setSelectionMode, tagsPageFilter]);
+
+  // ルート入場時に、他ページから持ち越された mediaType などのフィルタを切り離す
+  useEffect(() => {
+    resetTagsPageState();
+  }, [resetTagsPageState]);
+
+  // このルートが保持されたまま再入場した場合も同じ初期化を行う
   const prevPathRef = useRef(location.pathname);
   useEffect(() => {
     const isTagsPath = location.pathname.includes(`/library/${datasetId}/tags`);
     if (isTagsPath && prevPathRef.current !== location.pathname) {
-      setSelectedTag(null);
-      setSelectedTags(new Set());
-      setSearchQuery('');
-      setIsEditPanelOpen(false);
-      setSelectionMode(false);
-      // フィルタをこのページの初期状態にリセット（データセットのみ）
-      setCurrentFilter({ datasetId });
-      // タグ一覧を確実に更新
-      void refetchTags();
+      resetTagsPageState();
     }
     prevPathRef.current = location.pathname;
-  }, [location.pathname, datasetId, refetchTags, setSelectionMode, setCurrentFilter]);
-
-  // Ensure currentFilter carries dataset context (already reset above on path change)
-  useEffect(() => {
-    setCurrentFilter((prev) => ({ ...(prev || {}), datasetId }));
-  }, [datasetId, setCurrentFilter]);
+  }, [location.pathname, datasetId, resetTagsPageState]);
 
   // Filter and sort tags
   const filteredTags = useMemo(() => {
@@ -212,7 +324,7 @@ function TagsPage() {
 
   // Build a stable filter key to drive refetches (avoid object identity pitfalls)
   const filterKey = useMemo(() => {
-    const f = currentFilter || ({} as any);
+    const f = effectiveFilter;
     const key = {
       mediaType: f.mediaType ?? undefined,
       search: f.search ?? undefined,
@@ -234,7 +346,7 @@ function TagsPage() {
         : undefined,
     };
     return JSON.stringify(key);
-  }, [currentFilter]);
+  }, [effectiveFilter]);
 
   // Fetch stacks for selected tag
   const {
@@ -247,44 +359,22 @@ function TagsPage() {
     queryFn: async ({ pageParam = 0 }) => {
       if (!selectedTag) return { stacks: [], total: 0, limit: 50, offset: 0 };
 
-      // Compose unified filter params honoring currentFilter and including the selected tag
-      const qp: any = {
-        dataSetId: Number(datasetId),
+      // Compose unified filter params honoring the tags page filter and including the selected tag
+      const qp = buildTagStacksQuery({
+        datasetId,
+        selectedTag,
+        filter: effectiveFilter,
         limit: 50,
         offset: pageParam,
-        tag: [selectedTag.title],
-      };
-      if (currentFilter.mediaType) qp.mediaType = currentFilter.mediaType;
-      if (currentFilter.tags && currentFilter.tags.length > 0) {
-        const extras = currentFilter.tags.filter((t) => t !== selectedTag.title);
-        if (extras.length) qp.tag = [...qp.tag, ...extras];
-      }
-      if (currentFilter.authors && currentFilter.authors.length > 0)
-        qp.author = currentFilter.authors;
-      if (currentFilter.isFavorite === true) qp.fav = 1;
-      if (currentFilter.isFavorite === false) qp.fav = 0;
-      if (currentFilter.isLiked === true) qp.liked = 1;
-      if (currentFilter.isLiked === false) qp.liked = 0;
-      if (currentFilter.search) qp.search = currentFilter.search;
-      if (currentFilter.hasNoTags !== undefined) qp.hasNoTags = currentFilter.hasNoTags;
-      if (currentFilter.hasNoAuthor !== undefined) qp.hasNoAuthor = currentFilter.hasNoAuthor;
-      if (currentFilter.colorFilter) {
-        const cf = currentFilter.colorFilter as any;
-        if (cf.hueCategories?.length) qp.hueCategories = cf.hueCategories;
-        if (cf.toneSaturation !== undefined) qp.toneSaturation = cf.toneSaturation;
-        if (cf.toneLightness !== undefined) qp.toneLightness = cf.toneLightness;
-        if (cf.toneTolerance !== undefined) qp.toneTolerance = cf.toneTolerance;
-        if (cf.similarityThreshold !== undefined) qp.similarityThreshold = cf.similarityThreshold;
-        if (cf.customColor) qp.customColor = cf.customColor;
-      }
+      });
 
       const res = await apiClient.getStacksWithFilters(qp);
       return {
-        stacks: res.stacks as any[],
+        stacks: res.stacks,
         total: res.total,
         limit: res.limit,
         offset: res.offset,
-      } as StacksResponse;
+      };
     },
     getNextPageParam: (lastPage) => {
       const nextOffset = lastPage.offset + lastPage.limit;
@@ -297,6 +387,15 @@ function TagsPage() {
   const allStacks = useMemo(() => {
     return stacksData?.pages.flatMap((page) => page.stacks) || [];
   }, [stacksData]);
+
+  const bulkEditItems = useMemo(
+    () => allStacks.filter((stack) => selectedStackItems.has(stack.id)).map(toBulkEditItem),
+    [allStacks, selectedStackItems]
+  );
+  const selectedStackIds = useMemo(
+    () => allStacks.filter((stack) => selectedStackItems.has(stack.id)).map((stack) => stack.id),
+    [allStacks, selectedStackItems]
+  );
 
   // Shuffle: when a tag is selected, pick a random stack from that tag's full set
   const mtRef = useRef<MersenneTwister | null>(null);
@@ -316,57 +415,33 @@ function TagsPage() {
     const pageIndex = Math.floor(targetIndex / PAGE_SIZE);
     const withinPageIndex = targetIndex % PAGE_SIZE;
     // Fetch that page directly with current filters applied
-    const qp: any = {
-      dataSetId: Number(datasetId),
+    const qp = buildTagStacksQuery({
+      datasetId,
+      selectedTag,
+      filter: effectiveFilter,
       limit: PAGE_SIZE,
       offset: pageIndex * PAGE_SIZE,
-      tag: [selectedTag.title],
-    };
-    if (currentFilter.mediaType) qp.mediaType = currentFilter.mediaType;
-    if (currentFilter.tags && currentFilter.tags.length > 0) {
-      const extras = currentFilter.tags.filter((t) => t !== selectedTag.title);
-      if (extras.length) qp.tag = [...qp.tag, ...extras];
-    }
-    if (currentFilter.authors && currentFilter.authors.length > 0)
-      qp.author = currentFilter.authors;
-    if (currentFilter.isFavorite === true) qp.fav = 1;
-    if (currentFilter.isFavorite === false) qp.fav = 0;
-    if (currentFilter.isLiked === true) qp.liked = 1;
-    if (currentFilter.isLiked === false) qp.liked = 0;
-    if (currentFilter.search) qp.search = currentFilter.search;
-    if (currentFilter.hasNoTags !== undefined) qp.hasNoTags = currentFilter.hasNoTags;
-    if (currentFilter.hasNoAuthor !== undefined) qp.hasNoAuthor = currentFilter.hasNoAuthor;
-    if (currentFilter.colorFilter) {
-      const cf = currentFilter.colorFilter as any;
-      if (cf.hueCategories?.length) qp.hueCategories = cf.hueCategories;
-      if (cf.toneSaturation !== undefined) qp.toneSaturation = cf.toneSaturation;
-      if (cf.toneLightness !== undefined) qp.toneLightness = cf.toneLightness;
-      if (cf.toneTolerance !== undefined) qp.toneTolerance = cf.toneTolerance;
-      if (cf.similarityThreshold !== undefined) qp.similarityThreshold = cf.similarityThreshold;
-      if (cf.customColor) qp.customColor = cf.customColor;
-    }
+    });
     const page = await apiClient.getStacksWithFilters(qp);
     const item = page?.stacks?.[withinPageIndex];
     if (!item) return;
-    const ids = (page.stacks || [])
-      .map((s: any) => (typeof s.id === 'string' ? Number.parseInt(s.id, 10) : (s.id as number)))
-      .reverse();
-    const clickedId =
-      typeof item.id === 'string' ? Number.parseInt(item.id, 10) : (item.id as number);
+    const ids = (page.stacks || []).map((stack) => toNumericId(stack.id)).reverse();
+    const clickedId = toNumericId(item.id);
     const currentIndex = Math.max(
       0,
       ids.findIndex((id: number) => id === clickedId)
     );
+    const selectedTagContextFilter: StackFilter = { tags: [String(selectedTag.id)] };
     const token = genListToken({
       datasetId: String(selectedTag.dataSetId),
       mediaType: item.mediaType,
-      filters: { tags: [String(selectedTag.id)] } as any,
+      filters: selectedTagContextFilter,
     });
     saveViewContext({
       token,
       datasetId: String(selectedTag.dataSetId),
       mediaType: item.mediaType,
-      filters: { tags: [String(selectedTag.id)] } as any,
+      filters: selectedTagContextFilter,
       ids,
       currentIndex,
       createdAt: Date.now(),
@@ -377,21 +452,7 @@ function TagsPage() {
       search: { page: 0, mediaType: item.mediaType, listToken: token },
       replace: true,
     });
-  }, [
-    selectedTag,
-    stacksData,
-    navigate,
-    currentFilter.authors,
-    currentFilter.colorFilter,
-    currentFilter.hasNoAuthor,
-    currentFilter.hasNoTags,
-    currentFilter.isFavorite,
-    currentFilter.isLiked,
-    currentFilter.mediaType,
-    currentFilter.search,
-    currentFilter.tags,
-    datasetId,
-  ]);
+  }, [selectedTag, stacksData, navigate, effectiveFilter, datasetId]);
 
   useHeaderActions({
     showShuffle: true,
@@ -400,9 +461,14 @@ function TagsPage() {
     onShuffle: handleShuffle,
   });
 
-  // Handle infinite scroll (observe page scroll via viewport)
+  const selectedTagId = selectedTag?.id;
+
+  // Handle infinite scroll within the asset list pane
   useEffect(() => {
+    if (selectedTagId == null) return;
+
     const el = loadMoreTriggerRef.current;
+    const root = scrollContainerRef.current;
     if (!el) return;
 
     const observer = new IntersectionObserver(
@@ -415,12 +481,12 @@ function TagsPage() {
           }
         }
       },
-      { root: null, rootMargin: '400px 0px', threshold: 0.01 }
+      { root, rootMargin: '400px 0px', threshold: 0.01 }
     );
 
     observer.observe(el);
     return () => observer.disconnect();
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage, selectedTagId]);
 
   // Mutations
   const renameMutation = useMutation({
@@ -467,19 +533,32 @@ function TagsPage() {
     },
   });
 
-  const handleTagClick = (tag: TagItem) => {
-    // Always show stacks when clicking a tag
-    setSelectedTag(tag);
-    try {
-      const sp = new URLSearchParams(location.search);
-      sp.set('tagId', String(tag.id));
-      navigate({
-        to: '/library/$datasetId/tags',
-        params: { datasetId },
-        search: () => Object.fromEntries(sp.entries()) as any,
-      });
-    } catch {}
-  };
+  const handleTagClick = useCallback(
+    (tag: TagItem) => {
+      if (filterScopeKey !== routeFilterScopeKey) {
+        setCurrentFilter(tagsPageFilter);
+      }
+      setFilterScopeKey(routeFilterScopeKey);
+      // Always show stacks when clicking a tag
+      setSelectedTag(tag);
+      try {
+        navigate({
+          to: '/library/$datasetId/tags',
+          params: { datasetId },
+          search: { tagId: String(tag.id) },
+        });
+      } catch {}
+    },
+    [datasetId, filterScopeKey, navigate, routeFilterScopeKey, setCurrentFilter, tagsPageFilter]
+  );
+
+  const handleFilterChange = useCallback(
+    (filter: StackFilter) => {
+      setFilterScopeKey(routeFilterScopeKey);
+      setCurrentFilter({ ...filter, datasetId });
+    },
+    [datasetId, routeFilterScopeKey, setCurrentFilter]
+  );
 
   const handleTagSelect = (tag: TagItem, checked: boolean) => {
     const newSelected = new Set(selectedTags);
@@ -560,8 +639,7 @@ function TagsPage() {
   // Restore selected tag from URL when navigating back/forward
   useEffect(() => {
     try {
-      const sp = new URLSearchParams(location.search);
-      const idStr = sp.get('tagId');
+      const idStr = tagSearch.tagId;
       if (idStr && tagsData?.tags) {
         const id = Number(idStr);
         const found = (tagsData.tags || []).find((t) => t.id === id) || null;
@@ -569,70 +647,61 @@ function TagsPage() {
       }
       if (!idStr) setSelectedTag(null);
     } catch {}
-  }, [location.search, tagsData]);
+  }, [tagSearch.tagId, tagsData]);
 
-  // Click handler with Cmd/Ctrl and Shift support
-  const _handleStackClick = useCallback(
-    (stack: StackItem, event: React.MouseEvent) => {
-      const idx = (allStacks || []).findIndex((s) => s?.id === stack.id);
+  const closeInfoSidebarBeforeSelection = useCallback(() => {
+    if (infoSidebarOpen) {
+      setInfoSidebarOpen(false);
+    }
+  }, [infoSidebarOpen, setInfoSidebarOpen]);
 
-      if (event.metaKey || event.ctrlKey) {
-        if (idx >= 0) lastClickedIndexRef.current = idx;
-        return;
+  const enterSelectionModeWithStack = useCallback(
+    (stackId: string | number) => {
+      setSelectionMode(true);
+      setSelectedStackItems(new Set([stackId]));
+    },
+    [setSelectionMode]
+  );
+
+  const selectStackRange = useCallback((stackIds: Array<string | number>) => {
+    setSelectedStackItems((current) => {
+      const next = new Set(current);
+      for (const stackId of stackIds) {
+        next.add(stackId);
       }
-      if (event.altKey) {
-        if (idx >= 0) lastClickedIndexRef.current = idx;
-        return;
-      }
+      return next;
+    });
+  }, []);
 
-      if (event.shiftKey) {
+  const openStackFromTile = useCallback(
+    (stack: StackItem, event: MouseEvent<HTMLDivElement>) => {
+      if (infoSidebarOpen) {
         event.preventDefault();
-        if (!selectionMode) setSelectionMode(true);
-        const last = lastClickedIndexRef.current ?? idx;
-        if (last >= 0 && idx >= 0) {
-          const [start, end] = last < idx ? [last, idx] : [idx, last];
-          const next = new Set(selectedStackItems);
-          for (let i = start; i <= end; i++) {
-            const it = allStacks[i];
-            if (it) next.add(it.id);
-          }
-          setSelectedStackItems(next);
-        } else {
-          handleStackItemSelect(stack.id);
-        }
-        if (idx >= 0) lastClickedIndexRef.current = idx;
+        setSelectedItemId(stack.id);
+        setInfoSidebarOpen(true);
         return;
       }
 
-      if (selectionMode) {
-        event.preventDefault();
-        handleStackItemSelect(stack.id);
-        if (idx >= 0) lastClickedIndexRef.current = idx;
-        return;
-      }
-
-      // Normal navigation: build ids from loaded stacks (right→left)
-      const loadedIdsLtr = (allStacks || []).map((s) =>
-        typeof s.id === 'string' ? Number.parseInt(s.id as string, 10) : (s.id as number)
-      );
+      event.preventDefault();
+      const loadedIdsLtr = (allStacks || []).map((s) => toNumericId(s.id));
       const ids = loadedIdsLtr.slice().reverse();
-      const clickedId =
-        typeof stack.id === 'string'
-          ? Number.parseInt(stack.id as string, 10)
-          : (stack.id as number);
+      const clickedId = toNumericId(stack.id);
       const currentIndex = Math.max(0, ids.indexOf(clickedId));
 
-      const mediaType = (stack as any).mediaType as string | undefined;
+      const mediaType = isMediaType(stack.mediaType) ? stack.mediaType : undefined;
+      const selectedTagContextFilter: StackFilter = selectedTag
+        ? { tags: [String(selectedTag.id)] }
+        : {};
       const token = genListToken({
         datasetId,
         mediaType,
-        filters: { tags: [String(selectedTag?.id)] } as any,
+        filters: selectedTagContextFilter,
       });
       saveViewContext({
         token,
         datasetId,
-        mediaType: mediaType as any,
-        filters: { tags: [String(selectedTag?.id)] } as any,
+        mediaType,
+        filters: selectedTagContextFilter,
         ids,
         currentIndex,
         createdAt: Date.now(),
@@ -645,15 +714,80 @@ function TagsPage() {
       });
     },
     [
-      selectionMode,
       allStacks,
       datasetId,
-      selectedTag,
-      selectedStackItems,
-      handleStackItemSelect,
+      infoSidebarOpen,
       navigate,
-      setSelectionMode,
+      selectedTag,
+      setInfoSidebarOpen,
+      setSelectedItemId,
     ]
+  );
+
+  const getStackLinkElement = useCallback(
+    (stack: StackItem) => (
+      <Link
+        to="/library/$datasetId/stacks/$stackId"
+        params={{ datasetId, stackId: String(stack.id) }}
+      />
+    ),
+    [datasetId]
+  );
+
+  const handleOpenStack = useCallback(
+    async (stack: StackItem) => {
+      await onOpen(stack.id);
+    },
+    [onOpen]
+  );
+
+  const handleInfoStack = useCallback(
+    (stack: StackItem) => {
+      setSelectedItemId(stack.id);
+      setInfoSidebarOpen(true);
+    },
+    [setInfoSidebarOpen, setSelectedItemId]
+  );
+
+  const handleFindSimilarStack = useCallback(
+    async (stack: StackItem) => {
+      await onFindSimilar(stack.id);
+    },
+    [onFindSimilar]
+  );
+
+  const handleAddToScratchStack = useCallback(
+    async (stack: StackItem) => {
+      await onAddToScratch(stack.id);
+    },
+    [onAddToScratch]
+  );
+
+  const handleDownloadStack = useCallback(
+    (stack: StackItem) => {
+      onDownload(stack.id);
+    },
+    [onDownload]
+  );
+
+  const handleToggleFavoriteStack = useCallback(
+    async (stack: StackItem, favorited: boolean) => {
+      await onToggleFavorite(stack.id, favorited);
+    },
+    [onToggleFavorite]
+  );
+
+  const handleLikeStack = useCallback(
+    async (stack: StackItem) => {
+      await onLike(stack.id);
+    },
+    [onLike]
+  );
+
+  const getStackDragHandlers = useCallback(
+    (stack: StackItem, sourceImageUrl: string | null, sourceImageFilename: string | undefined) =>
+      dragProps(stack.id, sourceImageUrl, sourceImageFilename),
+    [dragProps]
   );
 
   const clearStackSelection = useCallback(() => {
@@ -665,6 +799,10 @@ function TagsPage() {
     clearStackSelection();
     setIsEditPanelOpen(false);
   }, [clearStackSelection, setSelectionMode]);
+
+  useEffect(() => {
+    exitSelectionMode();
+  }, [exitSelectionMode]);
 
   // Edit panel handlers
   const toggleEditPanel = useCallback(() => {
@@ -759,6 +897,11 @@ function TagsPage() {
     }
   }, [selectedStackItems, removeStacks, exitSelectionMode]);
 
+  const handleDownloadSelectedStacks = useCallback(() => {
+    if (selectedStackIds.length === 0) return;
+    downloadStackOriginals(datasetId, selectedStackIds);
+  }, [datasetId, selectedStackIds]);
+
   const handleOptimizePreviews = useCallback(async () => {
     if (selectedStackItems.size === 0) return;
 
@@ -775,9 +918,39 @@ function TagsPage() {
       queryClient.invalidateQueries({ queryKey: ['tag-stacks', selectedTag?.id] });
     } catch (error) {
       console.error('Error optimizing video previews:', error);
-      alert('Failed to optimize video previews. Please try again.');
+      alert(t.grid.optimizeVideoFailed);
     }
-  }, [selectedStackItems, datasetId, exitSelectionMode, queryClient, selectedTag]);
+  }, [selectedStackItems, datasetId, exitSelectionMode, queryClient, selectedTag, t]);
+
+  const selectionActions = useMemo(
+    () =>
+      createStackSelectionActions({
+        selectedCount: selectedStackItems.size,
+        copy: {
+          bulkEdit: t.grid.bulkEdit,
+          downloadSelected: t.contextMenu.downloadSelected,
+          mergeStacks: t.grid.mergeStacks,
+          refreshThumbnails: t.grid.refreshThumbnails,
+          optimizeVideo: t.grid.optimizeVideo,
+          deleteStacks: t.grid.deleteStacks,
+          deleteStacksConfirm: t.grid.deleteStacksConfirm,
+        },
+        bulkEdit: { onSelect: toggleEditPanel },
+        downloadSelected: { onSelect: handleDownloadSelectedStacks },
+        refreshThumbnails: { onSelect: handleRefreshThumbnails },
+        optimizeVideo: { onSelect: handleOptimizePreviews },
+        deleteStacks: { onSelect: handleRemoveStacks },
+      }),
+    [
+      handleDownloadSelectedStacks,
+      handleOptimizePreviews,
+      handleRefreshThumbnails,
+      handleRemoveStacks,
+      selectedStackItems.size,
+      t,
+      toggleEditPanel,
+    ]
+  );
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -788,29 +961,12 @@ function TagsPage() {
       }
 
       switch (e.key) {
-        case 'r':
-          e.preventDefault();
-          if (!selectionMode) {
-            setInfoSidebarOpen(false); // Close info sidebar when entering selection mode
-            setSelectionMode(true);
-          } else {
-            exitSelectionMode(); // Use exitSelectionMode to properly clean up
-          }
-          break;
         case 'i':
           e.preventDefault();
-          if (!infoSidebarOpen) {
-            if (selectionMode) {
-              exitSelectionMode(); // Exit selection mode properly when opening info sidebar
-            }
+          if (!infoSidebarOpen && selectionMode) {
+            exitSelectionMode(); // Exit selection mode properly when opening info sidebar
           }
           setInfoSidebarOpen(!infoSidebarOpen);
-          break;
-        case 'e':
-          e.preventDefault();
-          if (selectionMode && selectedStackItems.size > 0) {
-            toggleEditPanel();
-          }
           break;
         case 'Escape':
           if (selectionMode) {
@@ -825,146 +981,141 @@ function TagsPage() {
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [
-    selectionMode,
     infoSidebarOpen,
-    setSelectionMode,
     setInfoSidebarOpen,
     exitSelectionMode,
-    selectedStackItems.size,
-    toggleEditPanel,
     isEditPanelOpen,
     closeEditPanel,
+    selectionMode,
   ]);
 
   // This page uses its own layout
   return (
-    <div className="flex min-h-[calc(100vh-56px)]">
+    <div className="flex h-[calc(100vh-56px)] overflow-hidden">
       {/* Tags List - Always visible */}
-      <div className="w-80 flex-shrink-0">
-        <div className="sticky top-14 h-[calc(100vh-56px)] border-r bg-white">
-          <div className="overflow-y-auto h-full">
-            <div className="p-4 border-b">
-              <h2 className="text-lg font-semibold mb-3">Tags</h2>
+      <div className="w-80 h-full flex-shrink-0 border-r bg-white">
+        <div className="h-full overflow-y-auto">
+          <div className="p-4 border-b">
+            <h2 className="text-lg font-semibold mb-3">{t.sidebar.tags}</h2>
 
-              <div className="space-y-3">
-                <SmallSearchField
-                  value={searchQuery}
-                  onValueChange={setSearchQuery}
-                  placeholder="Search tags..."
-                />
+            <div className="space-y-3">
+              <SmallSearchField
+                value={searchQuery}
+                onValueChange={setSearchQuery}
+                placeholder={t.tagPage.searchTags}
+              />
 
-                <div className="space-y-2">
-                  <SmallSelect
-                    value={sortBy}
-                    onValueChange={(v) => setSortBy(v as typeof sortBy)}
-                    placeholder="Sort by..."
-                  >
-                    <SelectItem value="title-asc">Name (A-Z)</SelectItem>
-                    <SelectItem value="title-desc">Name (Z-A)</SelectItem>
-                    <SelectItem value="count-desc">Stack Count (High to Low)</SelectItem>
-                    <SelectItem value="count-asc">Stack Count (Low to High)</SelectItem>
-                  </SmallSelect>
+              <div className="space-y-2">
+                <SmallSelect
+                  value={sortBy}
+                  onValueChange={(v) => setSortBy(v as typeof sortBy)}
+                  placeholder={t.tagPage.sortBy}
+                >
+                  <SelectItem value="title-asc">{t.tagPage.nameAsc}</SelectItem>
+                  <SelectItem value="title-desc">{t.tagPage.nameDesc}</SelectItem>
+                  <SelectItem value="count-desc">{t.tagPage.stackCountDesc}</SelectItem>
+                  <SelectItem value="count-asc">{t.tagPage.stackCountAsc}</SelectItem>
+                </SmallSelect>
+              </div>
+
+              {/* Action buttons */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">
+                    {selectedTags.size > 0
+                      ? t.tagPage.selectedTags(selectedTags.size)
+                      : t.tagPage.selectTagsPrompt}
+                  </span>
+                  {selectedTags.size > 0 && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 px-2 text-xs"
+                      onClick={() => setSelectedTags(new Set())}
+                    >
+                      {t.contextMenu.clear}
+                    </Button>
+                  )}
                 </div>
 
-                {/* Action buttons */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-muted-foreground">
-                      {selectedTags.size > 0
-                        ? `${selectedTags.size} tags selected`
-                        : 'Select tags to perform actions'}
-                    </span>
-                    {selectedTags.size > 0 && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-6 px-2 text-xs"
-                        onClick={() => setSelectedTags(new Set())}
-                      >
-                        Clear
-                      </Button>
-                    )}
-                  </div>
-
-                  <div className="flex gap-1.5">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={handleRename}
-                      disabled={selectedTags.size > 1 || (selectedTags.size === 0 && !selectedTag)}
-                      className="h-7 px-2 text-xs flex-1"
-                    >
-                      <Edit2 className="h-3 w-3 mr-1" />
-                      Rename
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={handleMerge}
-                      disabled={selectedTags.size < 2}
-                      className="h-7 px-2 text-xs flex-1"
-                    >
-                      <GitMerge className="h-3 w-3 mr-1" />
-                      Merge
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-7 px-2 text-xs text-destructive hover:text-destructive border-destructive/50 hover:border-destructive"
-                      onClick={handleDelete}
-                      disabled={selectedTags.size === 0}
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </div>
+                <div className="flex gap-1.5">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleRename}
+                    disabled={selectedTags.size > 1 || (selectedTags.size === 0 && !selectedTag)}
+                    className="h-7 px-2 text-xs flex-1"
+                  >
+                    <Edit2 className="h-3 w-3 mr-1" />
+                    {t.contextMenu.rename}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleMerge}
+                    disabled={selectedTags.size < 2}
+                    className="h-7 px-2 text-xs flex-1"
+                  >
+                    <GitMerge className="h-3 w-3 mr-1" />
+                    {t.tagPage.mergeTags}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 px-2 text-xs text-destructive hover:text-destructive border-destructive/50 hover:border-destructive"
+                    onClick={handleDelete}
+                    disabled={selectedTags.size === 0}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
                 </div>
               </div>
             </div>
+          </div>
 
-            {/* Tags list */}
-            <div className="p-2">
-              {tagsError ? (
-                <div className="text-center py-8 text-red-500">
-                  Error loading tags: {(tagsError as Error).message}
-                </div>
-              ) : tagsLoading ? (
-                <div className="text-center py-8 text-muted-foreground">Loading tags...</div>
-              ) : filteredTags.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  {searchQuery ? 'No tags found' : 'No tags yet'}
-                </div>
-              ) : (
-                <div className="space-y-0.5">
-                  {filteredTags.map((tag) => (
-                    <div
-                      key={tag.id}
-                      onClick={() => handleTagClick(tag)}
-                      className={cn(
-                        'px-2 py-1.5 rounded transition-colors cursor-pointer group',
-                        selectedTag?.id === tag.id
-                          ? 'bg-blue-50 text-blue-700'
-                          : 'hover:bg-accent hover:text-accent-foreground'
-                      )}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 flex-1 min-w-0">
-                          <Checkbox
-                            checked={selectedTags.has(tag.id)}
-                            onCheckedChange={(checked) => handleTagSelect(tag, checked as boolean)}
-                            onClick={(e) => e.stopPropagation()}
-                            className="h-3 w-3"
-                          />
-                          <span className="text-sm truncate font-medium">{tag.title}</span>
-                        </div>
-                        <span className="text-xs text-muted-foreground ml-2 flex-shrink-0">
-                          {tag.stackCount}
-                        </span>
+          {/* Tags list */}
+          <div className="p-2">
+            {tagsError ? (
+              <div className="text-center py-8 text-red-500">
+                {t.tagPage.errorLoadingTags} {(tagsError as Error).message}
+              </div>
+            ) : tagsLoading ? (
+              <div className="text-center py-8 text-muted-foreground">{t.tagPage.loadingTags}</div>
+            ) : filteredTags.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                {searchQuery ? t.tagPage.noTagsFound : t.tagPage.noTagsYet}
+              </div>
+            ) : (
+              <div className="space-y-0.5">
+                {filteredTags.map((tag) => (
+                  <div
+                    key={tag.id}
+                    onClick={() => handleTagClick(tag)}
+                    className={cn(
+                      'px-2 py-1.5 rounded transition-colors cursor-pointer group',
+                      selectedTag?.id === tag.id
+                        ? 'bg-blue-50 text-blue-700'
+                        : 'hover:bg-accent hover:text-accent-foreground'
+                    )}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <Checkbox
+                          checked={selectedTags.has(tag.id)}
+                          onCheckedChange={(checked) => handleTagSelect(tag, checked as boolean)}
+                          onClick={(e) => e.stopPropagation()}
+                          className="h-3 w-3"
+                        />
+                        <span className="text-sm truncate font-medium">{tag.title}</span>
                       </div>
+                      <span className="text-xs text-muted-foreground ml-2 flex-shrink-0">
+                        {tag.stackCount}
+                      </span>
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -974,7 +1125,7 @@ function TagsPage() {
         <div
           ref={scrollContainerRef}
           className={cn(
-            'flex-1 bg-gray-50 transition-all duration-300 ease-in-out',
+            'flex-1 min-w-0 h-full overflow-y-auto bg-gray-50 transition-all duration-300 ease-in-out',
             !selectionMode && infoSidebarOpen ? 'mr-80' : 'mr-0'
           )}
         >
@@ -988,12 +1139,10 @@ function TagsPage() {
                   onClick={() => {
                     setSelectedTag(null);
                     try {
-                      const sp = new URLSearchParams(location.search);
-                      sp.delete('tagId');
                       navigate({
                         to: '/library/$datasetId/tags',
                         params: { datasetId },
-                        search: () => Object.fromEntries(sp.entries()) as any,
+                        search: {},
                       });
                     } catch {}
                   }}
@@ -1002,105 +1151,53 @@ function TagsPage() {
                 </Button>
               </div>
               <p className="text-muted-foreground mt-1">
-                {stacksData?.pages[0]?.total || 0} stacks
+                {t.tagPage.stackCount(stacksData?.pages[0]?.total || 0)}
               </p>
             </div>
 
             {/* Stacks with this tag */}
             <div className="mt-6">
-              <h3 className="text-lg font-semibold mb-4">Stacks with this tag</h3>
+              <h3 className="text-lg font-semibold mb-4">{t.tagPage.stacksWithThisTag}</h3>
               {allStacks.length === 0 ? (
                 <div className="text-center py-16 text-muted-foreground">
-                  No stacks found with this tag
+                  {t.tagPage.noStacksWithThisTag}
                 </div>
               ) : (
                 <>
                   <Suspense
                     fallback={
-                      <div className="py-8 text-center text-muted-foreground">Loading…</div>
+                      <div className="py-8 text-center text-muted-foreground">
+                        {t.common.loading}
+                      </div>
                     }
                   >
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 list-stable">
-                      {allStacks.map((stack) => {
-                        const thumb =
-                          (stack as any).thumbnail ||
-                          (stack as any).thumbnailUrl ||
-                          '/no-image.png';
-                        const sourceImageUrl = getSourceImageUrl(stack, thumb);
-                        const sourceImageFilename = sourceImageUrl
-                          ? getSourceImageFilename(stack, sourceImageUrl, `stack-${stack.id}`)
-                          : undefined;
-                        const likeCount = Number(
-                          (stack as any).likeCount ?? (stack as any).liked ?? 0
-                        );
-                        const pageCount =
-                          (stack as any).assetCount ||
-                          (stack as any)._count?.assets ||
-                          (stack as any).assetsCount ||
-                          0;
-                        const isFav =
-                          (stack as any).favorited || (stack as any).isFavorite || false;
-                        const {
-                          onOpen,
-                          onFindSimilar,
-                          onAddToScratch,
-                          onDownload,
-                          onToggleFavorite,
-                          onLike,
-                          dragProps,
-                        } = actions;
-                        return infoSidebarOpen ? (
-                          <StackTile
-                            key={stack.id}
-                            thumbnailUrl={thumb}
-                            nativeImageDragUrl={sourceImageUrl}
-                            pageCount={pageCount}
-                            favorited={isFav}
-                            likeCount={likeCount}
-                            onClick={() => {
-                              setSelectedItemId(stack.id);
-                              setInfoSidebarOpen(true);
-                            }}
-                            onInfo={() => {
-                              setSelectedItemId(stack.id);
-                              setInfoSidebarOpen(true);
-                            }}
-                            onFindSimilar={() => onFindSimilar(stack.id)}
-                            onAddToScratch={() => onAddToScratch(stack.id)}
-                            onDownload={() => onDownload(stack.id)}
-                            onToggleFavorite={() => onToggleFavorite(stack.id, isFav)}
-                            onLike={() => onLike(stack.id)}
-                            dragHandlers={dragProps(stack.id, sourceImageUrl, sourceImageFilename)}
-                          />
-                        ) : (
-                          <StackTile
-                            key={stack.id}
-                            thumbnailUrl={thumb}
-                            nativeImageDragUrl={sourceImageUrl}
-                            pageCount={pageCount}
-                            favorited={isFav}
-                            likeCount={likeCount}
-                            onOpen={() => onOpen(stack.id)}
-                            onInfo={() => {
-                              setSelectedItemId(stack.id);
-                              setInfoSidebarOpen(true);
-                            }}
-                            onFindSimilar={() => onFindSimilar(stack.id)}
-                            onAddToScratch={() => onAddToScratch(stack.id)}
-                            onDownload={() => onDownload(stack.id)}
-                            onToggleFavorite={() => onToggleFavorite(stack.id, isFav)}
-                            onLike={() => onLike(stack.id)}
-                            dragHandlers={dragProps(stack.id, sourceImageUrl, sourceImageFilename)}
-                            asChild
-                          >
-                            <Link
-                              to="/library/$datasetId/stacks/$stackId"
-                              params={{ datasetId, stackId: String(stack.id) }}
-                            />
-                          </StackTile>
-                        );
-                      })}
-                    </div>
+                    <StackTileGrid
+                      items={allStacks}
+                      datasetId={datasetId}
+                      gridClassName="grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 list-stable"
+                      cornerRadius="rounded"
+                      isSelectionMode={selectionMode}
+                      selectedItems={selectedStackItems}
+                      selectedInfoItemId={selectedItemId}
+                      selectedActionCount={selectedStackItems.size}
+                      getLinkElement={infoSidebarOpen ? undefined : getStackLinkElement}
+                      onClickItem={openStackFromTile}
+                      onBeforeEnterSelectionMode={closeInfoSidebarBeforeSelection}
+                      onEnterSelectionMode={enterSelectionModeWithStack}
+                      onToggleSelection={handleStackItemSelect}
+                      onSelectRange={selectStackRange}
+                      onOpenItem={handleOpenStack}
+                      onInfoItem={handleInfoStack}
+                      onFindSimilarItem={handleFindSimilarStack}
+                      onAddToScratchItem={handleAddToScratchStack}
+                      onDownloadItem={handleDownloadStack}
+                      onDownloadSelected={handleDownloadSelectedStacks}
+                      onBulkEditSelected={toggleEditPanel}
+                      onRemoveSelectedStacks={handleRemoveStacks}
+                      onToggleFavoriteItem={handleToggleFavoriteStack}
+                      onLikeItem={handleLikeStack}
+                      getDragHandlers={getStackDragHandlers}
+                    />
                   </Suspense>
 
                   {/* Loading indicator */}
@@ -1116,7 +1213,7 @@ function TagsPage() {
                       ref={loadMoreTriggerRef}
                       className="text-sm text-muted-foreground text-center mt-8"
                     >
-                      Scroll to load more...
+                      {t.common.scrollToLoadMore}
                     </div>
                   )}
                 </>
@@ -1127,14 +1224,14 @@ function TagsPage() {
       ) : (
         <div
           className={cn(
-            'flex-1 flex items-center justify-center bg-gray-50 transition-all duration-300 ease-in-out',
+            'flex-1 min-w-0 h-full flex items-center justify-center bg-gray-50 transition-all duration-300 ease-in-out',
             !selectionMode && infoSidebarOpen ? 'mr-80' : 'mr-0',
             isEditPanelOpen && selectionMode ? 'mr-80' : ''
           )}
         >
           <div className="text-center">
             <Tag className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-lg text-muted-foreground">Select a tag to view details</p>
+            <p className="text-lg text-muted-foreground">{t.tagPage.selectTagPrompt}</p>
           </div>
         </div>
       )}
@@ -1148,39 +1245,7 @@ function TagsPage() {
           selectedCount={selectedStackItems.size}
           onClearSelection={clearStackSelection}
           onExitSelectionMode={exitSelectionMode}
-          actions={
-            selectedStackItems.size > 0
-              ? [
-                  {
-                    label: 'Bulk Edit',
-                    value: 'bulk-edit',
-                    onSelect: toggleEditPanel,
-                    icon: <Pencil size={12} />,
-                    group: 'primary',
-                  },
-                  {
-                    label: 'Refresh Thumbnails',
-                    value: 'refresh-thumbnails',
-                    onSelect: handleRefreshThumbnails,
-                    icon: <RefreshCw size={12} />,
-                  },
-                  {
-                    label: 'Optimize Video',
-                    value: 'optimize-video',
-                    onSelect: handleOptimizePreviews,
-                    icon: <Clapperboard size={12} />,
-                  },
-                  {
-                    label: 'Delete Stacks',
-                    value: 'delete-stacks',
-                    onSelect: handleRemoveStacks,
-                    icon: <Trash2 size={12} />,
-                    confirmMessage: `選択した${selectedStackItems.size}件のスタックを削除します。元に戻せません。`,
-                    destructive: true,
-                  },
-                ]
-              : []
-          }
+          actions={selectionActions}
         />
       )}
 
@@ -1192,7 +1257,7 @@ function TagsPage() {
             selectedItems={selectedStackItems}
             onClose={closeEditPanel}
             onSave={applyEditUpdates}
-            items={allStacks.filter((s) => selectedStackItems.has(s.id))}
+            items={bulkEditItems}
           />,
           document.body
         )}
@@ -1200,29 +1265,12 @@ function TagsPage() {
       {/* Portal for header actions */}
       {createPortal(
         <>
-          {/* Selection mode button */}
-          <HeaderIconButton
-            onClick={() => {
-              if (!selectionMode) {
-                setInfoSidebarOpen(false); // Close info sidebar when entering selection mode
-                setIsEditPanelOpen(false); // Close edit panel
-                setSelectionMode(true);
-              } else {
-                exitSelectionMode(); // Use exitSelectionMode to properly clean up
-              }
-            }}
-            isActive={selectionMode}
-            aria-label={selectionMode ? 'Exit selection mode' : 'Enter selection mode'}
-          >
-            <Check size={18} />
-          </HeaderIconButton>
-
           {/* Info button - only show when not in selection mode */}
           {!selectionMode && (
             <HeaderIconButton
               onClick={() => setInfoSidebarOpen(!infoSidebarOpen)}
               isActive={infoSidebarOpen}
-              aria-label={infoSidebarOpen ? 'Close info panel' : 'Open info panel'}
+              aria-label={infoSidebarOpen ? t.viewer.closeInfo : t.viewer.openInfo}
             >
               <Info size={18} />
             </HeaderIconButton>
@@ -1235,26 +1283,26 @@ function TagsPage() {
       <Dialog open={renameDialogOpen} onOpenChange={setRenameDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Rename Tag</DialogTitle>
-            <DialogDescription>Enter a new name for the tag</DialogDescription>
+            <DialogTitle>{t.tagPage.renameTag}</DialogTitle>
+            <DialogDescription>{t.tagPage.renameTagDescription}</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="new-title">New Title</Label>
+              <Label htmlFor="new-title">{t.tagPage.newTitle}</Label>
               <Input
                 id="new-title"
                 value={newTitle}
                 onChange={(e) => setNewTitle(e.target.value)}
-                placeholder="Enter new title"
+                placeholder={t.tagPage.enterNewTitle}
               />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRenameDialogOpen(false)}>
-              Cancel
+              {t.common.cancel}
             </Button>
             <Button onClick={confirmRename} disabled={!newTitle.trim()}>
-              Rename
+              {t.contextMenu.rename}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1264,28 +1312,25 @@ function TagsPage() {
       <Dialog open={mergeDialogOpen} onOpenChange={setMergeDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Merge Tags</DialogTitle>
-            <DialogDescription>
-              Select the tag to merge into. The selected tags will be deleted and their stacks will
-              be reassigned.
-            </DialogDescription>
+            <DialogTitle>{t.tagPage.mergeTags}</DialogTitle>
+            <DialogDescription>{t.tagPage.mergeTagsDescription}</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="merge-target">Target Tag</Label>
+              <Label htmlFor="merge-target">{t.tagPage.targetTag}</Label>
               <Select
                 value={mergeTargetId?.toString() || ''}
                 onValueChange={(value) => setMergeTargetId(Number.parseInt(value, 10))}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select target tag" />
+                  <SelectValue placeholder={t.tagPage.selectTargetTag} />
                 </SelectTrigger>
                 <SelectContent>
                   {Array.from(selectedTags).map((id) => {
                     const tag = filteredTags.find((t) => t.id === id);
                     return tag ? (
                       <SelectItem key={id} value={id.toString()}>
-                        {tag.title} ({tag.stackCount} stacks)
+                        {tag.title} ({t.tagPage.stackCount(tag.stackCount)})
                       </SelectItem>
                     ) : null;
                   })}
@@ -1295,10 +1340,10 @@ function TagsPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setMergeDialogOpen(false)}>
-              Cancel
+              {t.common.cancel}
             </Button>
             <Button onClick={confirmMerge} disabled={!mergeTargetId}>
-              Merge Tags
+              {t.tagPage.mergeTags}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1308,28 +1353,22 @@ function TagsPage() {
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete Tags</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete {selectedTags.size} tag
-              {selectedTags.size > 1 ? 's' : ''}? This action cannot be undone.
-            </DialogDescription>
+            <DialogTitle>{t.tagPage.deleteTags}</DialogTitle>
+            <DialogDescription>{t.tagPage.deleteTagsConfirm(selectedTags.size)}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
-              Cancel
+              {t.common.cancel}
             </Button>
             <Button variant="destructive" onClick={confirmDelete}>
-              Delete
+              {t.common.delete}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Filter panel to apply additional filters to selected tag's stacks */}
-      <FilterPanel
-        currentFilter={currentFilter as any}
-        onFilterChange={(f) => setCurrentFilter({ ...f, datasetId })}
-      />
+      <FilterPanel currentFilter={effectiveFilter} onFilterChange={handleFilterChange} />
     </div>
   );
 }

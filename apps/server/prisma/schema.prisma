@@ -94,9 +94,26 @@ model Author {
   dataSetId Int
   dataSet   DataSet @relation(fields: [dataSetId], references: [id])
   stacks    Stack[]
+  links     AuthorLink[]
 
   @@unique([name, dataSetId])
   @@index([dataSetId])
+}
+
+model AuthorLink {
+  id         Int      @id @default(autoincrement())
+  authorId   Int
+  provider   String?
+  label      String
+  url        String
+  externalId String?
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  author     Author   @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([authorId])
+  @@index([provider, externalId])
 }
 
 model Tag {

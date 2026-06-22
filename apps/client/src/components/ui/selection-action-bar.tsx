@@ -8,6 +8,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useT } from '@/lib/i18n';
 import { selectionModeAtom } from '@/stores/ui';
 
 interface SelectionActionBarProps {
@@ -38,6 +39,7 @@ export function SelectionActionBar({
   showRemoveFromCollection = false,
   actions,
 }: SelectionActionBarProps) {
+  const t = useT();
   const [selectionMode] = useAtom(selectionModeAtom);
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -51,7 +53,9 @@ export function SelectionActionBar({
         {/* Selected count */}
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 bg-blue-500 rounded-full" />
-          <span className="text-sm font-medium text-gray-900">{selectedCount} selected</span>
+          <span className="text-sm font-medium text-gray-900">
+            {t.common.selectedCount(selectedCount)}
+          </span>
         </div>
 
         {/* Actions */}
@@ -64,7 +68,7 @@ export function SelectionActionBar({
                   className="px-3 py-1.5 text-xs text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors flex items-center gap-1"
                   aria-haspopup="menu"
                 >
-                  Action
+                  {t.common.action}
                   <ChevronDown size={12} />
                 </button>
               </DropdownMenuTrigger>
@@ -128,7 +132,7 @@ export function SelectionActionBar({
               className="px-3 py-1.5 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 rounded transition-colors flex items-center gap-1"
             >
               <Trash2 size={12} />
-              Remove
+              {t.common.remove}
             </button>
           )}
 
@@ -138,7 +142,7 @@ export function SelectionActionBar({
             onClick={onClearSelection}
             className="px-3 py-1.5 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors"
           >
-            Clear
+            {t.common.clearSelection}
           </button>
 
           {/* Exit selection mode button */}
@@ -146,7 +150,7 @@ export function SelectionActionBar({
             type="button"
             onClick={onExitSelectionMode}
             className="p-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors"
-            aria-label="Exit selection mode"
+            aria-label={t.grid.exitSelectionMode}
           >
             <X size={16} />
           </button>

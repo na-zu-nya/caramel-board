@@ -37,6 +37,7 @@ import {
 import { SuggestInput } from '@/components/ui/suggest-input';
 import { useSwipeClose } from '@/hooks/features/useSwipeClose';
 import { apiClient } from '@/lib/api-client';
+import { useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { customColorAtom, filterOpenAtom, selectionModeAtom } from '@/stores/ui';
 import type { HueCategory, StackFilter } from '@/types';
@@ -51,6 +52,9 @@ const HUE_CATEGORIES: { id: HueCategory; name: string; color: string }[] = [
   { id: 'blue', name: '青', color: '#6699FF' },
   { id: 'violet', name: '紫', color: '#BB66FF' },
 ];
+
+const FILTER_CHOICE_BUTTON_CLASS =
+  'px-1.5 py-3 rounded-md text-[11px] font-medium leading-none whitespace-nowrap transition-colors';
 
 interface FilterPanelProps {
   currentFilter: StackFilter;
@@ -73,6 +77,7 @@ export default function FilterPanel({
   originalFilterConfig,
   isFilterModified = false,
 }: FilterPanelProps) {
+  const t = useT();
   const [isOpen, setIsOpen] = useAtom(filterOpenAtom);
   const [selectionMode] = useAtom(selectionModeAtom);
   const [customColor, setCustomColor] = useAtom(customColorAtom);
@@ -312,7 +317,7 @@ export default function FilterPanel({
         <div className="flex flex-col h-full">
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900">Filters</h2>
+            <h2 className="text-lg font-semibold text-gray-900">{t.filter.title}</h2>
             <div className="flex items-center gap-2">
               {hasActiveFilters && (
                 <button
@@ -320,14 +325,14 @@ export default function FilterPanel({
                   onClick={clearFilter}
                   className="text-sm text-gray-500 hover:text-gray-700"
                 >
-                  Clear all
+                  {t.filter.clearAll}
                 </button>
               )}
               <button
                 type="button"
                 onClick={() => setIsOpen(false)}
                 className="p-1 hover:bg-gray-100 rounded-md transition-colors"
-                aria-label="Close filter panel"
+                aria-label={t.filter.closeFilter}
               >
                 <X size={20} className="text-gray-600" />
               </button>
@@ -340,7 +345,7 @@ export default function FilterPanel({
             <div className="space-y-2">
               <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
                 <Search size={16} />
-                Search
+                {t.filter.search}
               </label>
               <input
                 type="text"
@@ -369,7 +374,7 @@ export default function FilterPanel({
                     searchIsComposingRef.current = false;
                   }, 0);
                 }}
-                placeholder="Search by name or description"
+                placeholder={t.filter.searchByName}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900 placeholder-gray-400 focus:border-primary focus:ring-1 focus:ring-primary"
               />
             </div>
@@ -378,44 +383,44 @@ export default function FilterPanel({
             <div className="space-y-3">
               <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
                 <Star size={16} />
-                Favorites
+                {t.filter.favorites}
               </label>
               <div className="grid grid-cols-3 gap-2">
                 <button
                   type="button"
                   onClick={() => updateFilter({ isFavorite: undefined }, true)}
                   className={cn(
-                    'px-4 py-3 rounded-md text-sm font-medium transition-colors',
+                    FILTER_CHOICE_BUTTON_CLASS,
                     localFilter.isFavorite === undefined
                       ? 'bg-primary text-primary-foreground hover:bg-primary/90'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   )}
                 >
-                  All
+                  {t.filter.all}
                 </button>
                 <button
                   type="button"
                   onClick={() => updateFilter({ isFavorite: true }, true)}
                   className={cn(
-                    'px-4 py-3 rounded-md text-sm font-medium transition-colors',
+                    FILTER_CHOICE_BUTTON_CLASS,
                     localFilter.isFavorite === true
                       ? 'bg-primary text-primary-foreground hover:bg-primary/90'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   )}
                 >
-                  Favs
+                  {t.filter.favs}
                 </button>
                 <button
                   type="button"
                   onClick={() => updateFilter({ isFavorite: false }, true)}
                   className={cn(
-                    'px-4 py-3 rounded-md text-sm font-medium transition-colors',
+                    FILTER_CHOICE_BUTTON_CLASS,
                     localFilter.isFavorite === false
                       ? 'bg-primary text-primary-foreground hover:bg-primary/90'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   )}
                 >
-                  Not Favs
+                  {t.filter.notFavs}
                 </button>
               </div>
             </div>
@@ -424,44 +429,44 @@ export default function FilterPanel({
             <div className="space-y-3">
               <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
                 <Heart size={16} />
-                Likes
+                {t.filter.likes}
               </label>
               <div className="grid grid-cols-3 gap-2">
                 <button
                   type="button"
                   onClick={() => updateFilter({ isLiked: undefined }, true)}
                   className={cn(
-                    'px-4 py-3 rounded-md text-sm font-medium transition-colors',
+                    FILTER_CHOICE_BUTTON_CLASS,
                     localFilter.isLiked === undefined
                       ? 'bg-primary text-primary-foreground hover:bg-primary/90'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   )}
                 >
-                  All
+                  {t.filter.all}
                 </button>
                 <button
                   type="button"
                   onClick={() => updateFilter({ isLiked: true }, true)}
                   className={cn(
-                    'px-4 py-3 rounded-md text-sm font-medium transition-colors',
+                    FILTER_CHOICE_BUTTON_CLASS,
                     localFilter.isLiked === true
                       ? 'bg-primary text-primary-foreground hover:bg-primary/90'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   )}
                 >
-                  Liked
+                  {t.filter.liked}
                 </button>
                 <button
                   type="button"
                   onClick={() => updateFilter({ isLiked: false }, true)}
                   className={cn(
-                    'px-4 py-3 rounded-md text-sm font-medium transition-colors',
+                    FILTER_CHOICE_BUTTON_CLASS,
                     localFilter.isLiked === false
                       ? 'bg-primary text-primary-foreground hover:bg-primary/90'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   )}
                 >
-                  Not Liked
+                  {t.filter.notLiked}
                 </button>
               </div>
             </div>
@@ -470,7 +475,7 @@ export default function FilterPanel({
             <div className="space-y-2">
               <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
                 <Tag size={16} />
-                Tags
+                {t.filter.tags}
               </label>
               <div className="space-y-2">
                 {/* No Tags Filter */}
@@ -483,7 +488,7 @@ export default function FilterPanel({
                     }
                     className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
                   />
-                  <span className="text-sm text-gray-600">Show only items without tags</span>
+                  <span className="text-sm text-gray-600">{t.filter.showOnlyWithoutTags}</span>
                 </label>
                 <div className="space-y-2">
                   <SuggestInput
@@ -517,7 +522,7 @@ export default function FilterPanel({
                         setTagLoading(false);
                       }
                     }}
-                    placeholder="Type tag and press Enter"
+                    placeholder={t.filter.typeTagEnter}
                     suggestions={tagSuggestions}
                     loading={tagLoading}
                   />
@@ -545,14 +550,13 @@ export default function FilterPanel({
                   )}
                 </div>
               </div>
-              <p className="text-xs text-gray-500">Type tag and press Enter to add</p>
             </div>
 
             {/* Authors */}
             <div className="space-y-2">
               <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
                 <Calendar size={16} />
-                Authors
+                {t.filter.authors}
               </label>
               <div className="space-y-2">
                 {/* No Author Filter */}
@@ -565,7 +569,7 @@ export default function FilterPanel({
                     }
                     className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
                   />
-                  <span className="text-sm text-gray-600">Show only items without author</span>
+                  <span className="text-sm text-gray-600">{t.filter.showOnlyWithoutAuthor}</span>
                 </label>
                 <SuggestInput
                   value={authorInput}
@@ -601,7 +605,7 @@ export default function FilterPanel({
                       setAuthorLoading(false);
                     }
                   }}
-                  placeholder="Search and select authors"
+                  placeholder={t.filter.searchAuthors}
                   suggestions={authorSuggestions}
                   loading={authorLoading}
                 />
@@ -628,21 +632,17 @@ export default function FilterPanel({
                   </div>
                 )}
               </div>
-              <p className="text-xs text-gray-500">
-                Search and select authors to add them as filters
-              </p>
             </div>
 
             {/* Color Filter */}
             <div className="space-y-4">
               <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
                 <Palette size={16} />
-                Color Filter
+                {t.filter.colorFilter}
               </label>
 
               {/* Color Categories */}
               <div className="space-y-2">
-                <div className="text-xs font-medium text-gray-600">Color</div>
                 <div className="flex gap-2 justify-between">
                   {HUE_CATEGORIES.map((hue) => {
                     const isSelected =
@@ -705,7 +705,7 @@ export default function FilterPanel({
                           : 'border-gray-300 hover:border-gray-400'
                       )}
                       style={{ backgroundColor: customColor }}
-                      title="カスタムカラー"
+                      title={t.filter.customColor}
                     />
                     <input
                       type="color"
@@ -728,13 +728,13 @@ export default function FilterPanel({
                         );
                       }}
                       className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                      title="カスタムカラーを選択"
+                      title={t.filter.selectCustomColor}
                     />
                   </div>
                 </div>
                 {hasHueSelection && (
                   <div className="flex items-center gap-2 pt-1 text-xs text-gray-600">
-                    <span className="shrink-0">Match</span>
+                    <span className="shrink-0">{t.filter.match}</span>
                     <input
                       type="range"
                       min={0}
@@ -764,7 +764,7 @@ export default function FilterPanel({
                   }}
                   className="text-xs text-red-600 hover:text-red-800 underline"
                 >
-                  Clear color filters
+                  {t.filter.clearColorFilters}
                 </button>
               )}
             </div>
@@ -773,7 +773,7 @@ export default function FilterPanel({
             <div className="space-y-2">
               <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
                 <Monitor size={16} />
-                Media Type
+                {t.filter.mediaType}
               </label>
               <Select
                 value={localFilter.mediaType || 'all'}
@@ -791,10 +791,10 @@ export default function FilterPanel({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Types</SelectItem>
-                  <SelectItem value="image">Images</SelectItem>
-                  <SelectItem value="comic">Comics</SelectItem>
-                  <SelectItem value="video">Videos</SelectItem>
+                  <SelectItem value="all">{t.filter.allTypes}</SelectItem>
+                  <SelectItem value="image">{t.filter.images}</SelectItem>
+                  <SelectItem value="comic">{t.filter.comics}</SelectItem>
+                  <SelectItem value="video">{t.filter.videos}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -804,7 +804,7 @@ export default function FilterPanel({
               <div className="space-y-2">
                 <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
                   <ArrowUpDown size={16} />
-                  Sort By
+                  {t.filter.sortByLabel}
                 </label>
                 <div className="space-y-2">
                   <Select
@@ -817,11 +817,11 @@ export default function FilterPanel({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="recommended">Recommended</SelectItem>
-                      <SelectItem value="dateAdded">Date Added</SelectItem>
-                      <SelectItem value="name">Name</SelectItem>
-                      <SelectItem value="likes">Most Liked</SelectItem>
-                      <SelectItem value="updated">Recently Updated</SelectItem>
+                      <SelectItem value="recommended">{t.filter.recommended}</SelectItem>
+                      <SelectItem value="dateAdded">{t.filter.dateAdded}</SelectItem>
+                      <SelectItem value="name">{t.filter.name}</SelectItem>
+                      <SelectItem value="likes">{t.filter.mostLiked}</SelectItem>
+                      <SelectItem value="updated">{t.filter.recentlyUpdated}</SelectItem>
                     </SelectContent>
                   </Select>
                   <div className="flex gap-2">
@@ -837,7 +837,7 @@ export default function FilterPanel({
                           : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                       )}
                     >
-                      Ascending
+                      {t.filter.ascending}
                     </button>
                     <button
                       type="button"
@@ -851,7 +851,7 @@ export default function FilterPanel({
                           : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                       )}
                     >
-                      Descending
+                      {t.filter.descending}
                     </button>
                   </div>
                 </div>
@@ -866,10 +866,10 @@ export default function FilterPanel({
                 {hasActiveFilters ? (
                   <span className="flex items-center gap-2">
                     <div className="w-2 h-2 bg-primary rounded-full" />
-                    Filters active
+                    {t.filter.filtersActive}
                   </span>
                 ) : (
-                  <span>No filters applied</span>
+                  <span>{t.filter.noFiltersApplied}</span>
                 )}
               </div>
               <div className="flex items-center gap-2">
@@ -879,7 +879,7 @@ export default function FilterPanel({
                     onClick={handleUpdateSmartCollection}
                     disabled={isUpdatingSmartCollection}
                   >
-                    {isUpdatingSmartCollection ? 'Applying...' : 'Apply'}
+                    {isUpdatingSmartCollection ? t.filter.applying : t.filter.apply}
                   </Button>
                 )}
                 {hasActiveFilters && datasetId && !isSmartCollection && (
@@ -890,24 +890,22 @@ export default function FilterPanel({
                     <DialogTrigger asChild>
                       <Button size="sm" className="flex items-center gap-1">
                         <PlusCircle size={16} />
-                        Create
+                        {t.filter.create}
                       </Button>
                     </DialogTrigger>
                     <DialogContent className="sm:max-w-md">
                       <DialogHeader>
-                        <DialogTitle>スマートコレクションを作成</DialogTitle>
-                        <DialogDescription>
-                          現在のフィルタ条件を保存して、スマートコレクションを作成します。
-                        </DialogDescription>
+                        <DialogTitle>{t.filter.createSmartCollectionTitle}</DialogTitle>
+                        <DialogDescription>{t.filter.createSmartCollectionDesc}</DialogDescription>
                       </DialogHeader>
                       <div className="grid gap-4 py-4">
                         <div className="grid gap-2">
-                          <Label htmlFor="collection-name">コレクション名</Label>
+                          <Label htmlFor="collection-name">{t.filter.collectionName}</Label>
                           <Input
                             id="collection-name"
                             value={smartCollectionName}
                             onChange={(e) => setSmartCollectionName(e.target.value)}
-                            placeholder="例: お気に入りの青い画像"
+                            placeholder={t.filter.naturalLanguagePlaceholder}
                             disabled={isCreatingSmartCollection}
                           />
                         </div>
@@ -921,7 +919,7 @@ export default function FilterPanel({
                           }}
                           disabled={isCreatingSmartCollection}
                         >
-                          キャンセル
+                          {t.common.cancel}
                         </Button>
                         <Button
                           onClick={async () => {
@@ -953,7 +951,7 @@ export default function FilterPanel({
                           }}
                           disabled={!smartCollectionName.trim() || isCreatingSmartCollection}
                         >
-                          {isCreatingSmartCollection ? '作成中...' : '作成'}
+                          {isCreatingSmartCollection ? t.common.creating : t.common.create}
                         </Button>
                       </DialogFooter>
                     </DialogContent>

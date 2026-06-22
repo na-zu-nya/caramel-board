@@ -30,18 +30,27 @@ function signToken(datasetId: number, passwordHash: string): string {
   return h.digest('hex');
 }
 
+export function isDatasetAuthorizedFromState(
+  c: Context,
+  datasetId: number,
+  ds: { isProtected: boolean; passwordHash: string | null }
+): boolean {
+  if (!ds.isProtected) return true;
+  const token = getCookie(c, getCookieName(datasetId));
+  if (!token) return false;
+  if (!ds.passwordHash) return false;
+  const expected = signToken(datasetId, ds.passwordHash);
+  if (token.length !== expected.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(token, 'hex'), Buffer.from(expected, 'hex'));
+}
+
 export async function isDatasetAuthorized(c: Context, datasetId: number): Promise<boolean> {
   const ds = await prisma.dataSet.findUnique({
     where: { id: datasetId },
     select: { isProtected: true, passwordHash: true },
   });
   if (!ds) return false;
-  if (!ds.isProtected) return true;
-  const token = getCookie(c, getCookieName(datasetId));
-  if (!token) return false;
-  if (!ds.passwordHash) return false;
-  const expected = signToken(datasetId, ds.passwordHash);
-  return crypto.timingSafeEqual(Buffer.from(token, 'hex'), Buffer.from(expected, 'hex'));
+  return isDatasetAuthorizedFromState(c, datasetId, ds);
 }
 
 export async function ensureDatasetAuthorized(c: Context, datasetId: number) {

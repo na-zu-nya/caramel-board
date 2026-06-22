@@ -2,23 +2,25 @@ import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useAtom } from 'jotai';
 import { BookOpen, Film, Image, type LucideIcon } from 'lucide-react';
-import { useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
+import { StackTileGrid } from '@/components/StackTileGrid';
 import { EntityCard } from '@/components/ui/Card/EntityCard';
 import { TagChip } from '@/components/ui/Chip/TagChip';
 import { SectionBlock, SectionHeader } from '@/components/ui/Section/Section';
-import { StackTile } from '@/components/ui/Stack';
 import { useDatasetOverview } from '@/hooks/useDatasetOverview';
 import { useDataset } from '@/hooks/useDatasets';
 import { useHeaderActions } from '@/hooks/useHeaderActions';
 import { isScratchCollection } from '@/hooks/useScratch';
 import { useStackTile } from '@/hooks/useStackTile';
 import { apiClient } from '@/lib/api-client';
-import { getSourceImageFilename, getSourceImageUrl } from '@/lib/stack-drag-data';
+import { getMediaTypeLabel, useT } from '@/lib/i18n';
 import { currentFilterAtom } from '@/stores/ui';
 import type { MediaType, Stack } from '@/types';
 
-type StackCardItem = Partial<Stack> & {
+type StackCardItem = {
   id: string | number;
+  name?: string;
+  title?: string;
   thumbnail?: string | null;
   thumbnailUrl?: string | null;
   likeCount?: string | number | null;
@@ -28,24 +30,26 @@ type StackCardItem = Partial<Stack> & {
   _count?: { assets?: number | null };
   favorited?: boolean | null;
   isFavorite?: boolean | null;
+  mediaType?: string | null;
+  originalName?: unknown;
+  file?: unknown;
+  url?: unknown;
+  preview?: unknown;
+  assets?: unknown;
 };
-
-function toStackCount(value: string | number | null | undefined): number {
-  if (typeof value === 'number') return value;
-  if (typeof value === 'string') return Number(value) || 0;
-  return 0;
-}
 
 export const Route = createFileRoute('/library/$datasetId/')({
   component: DatasetHome,
 });
 
 function DatasetHome() {
+  const t = useT();
   const { datasetId } = Route.useParams();
   const [, setCurrentFilter] = useAtom(currentFilterAtom);
   const { data: dataset } = useDataset(datasetId);
   const { data: overview, isLoading } = useDatasetOverview(datasetId);
-  const stackTileActions = useStackTile(datasetId);
+  const { onOpen, onFindSimilar, onAddToScratch, onDownload, onToggleFavorite, onLike, dragProps } =
+    useStackTile(datasetId);
 
   // Scratch detection (without creating one): find scratch collection and fetch recent items
   const { data: scratchData } = useQuery({
@@ -87,10 +91,77 @@ function DatasetHome() {
   }, [datasetId, setCurrentFilter]);
 
   const mediaTypeConfig: Record<MediaType, { label: string; Icon: LucideIcon }> = {
-    image: { label: 'Images', Icon: Image },
-    comic: { label: 'Comics', Icon: BookOpen },
-    video: { label: 'Videos', Icon: Film },
+    image: { label: getMediaTypeLabel(t, 'image'), Icon: Image },
+    comic: { label: getMediaTypeLabel(t, 'comic'), Icon: BookOpen },
+    video: { label: getMediaTypeLabel(t, 'video'), Icon: Film },
   };
+
+  const recentLikeItems = useMemo<StackCardItem[]>(
+    () => overview?.recentLikes ?? [],
+    [overview?.recentLikes]
+  );
+  const scratchItems = useMemo<StackCardItem[]>(
+    () => scratchData?.stacks ?? [],
+    [scratchData?.stacks]
+  );
+
+  const getStackLinkElement = useCallback(
+    (item: StackCardItem) => (
+      <Link
+        to="/library/$datasetId/stacks/$stackId"
+        params={{ datasetId, stackId: String(item.id) }}
+      />
+    ),
+    [datasetId]
+  );
+
+  const handleOpenStack = useCallback(
+    async (item: StackCardItem) => {
+      await onOpen(item.id);
+    },
+    [onOpen]
+  );
+
+  const handleFindSimilarStack = useCallback(
+    async (item: StackCardItem) => {
+      await onFindSimilar(item.id);
+    },
+    [onFindSimilar]
+  );
+
+  const handleAddToScratchStack = useCallback(
+    async (item: StackCardItem) => {
+      await onAddToScratch(item.id);
+    },
+    [onAddToScratch]
+  );
+
+  const handleDownloadStack = useCallback(
+    (item: StackCardItem) => {
+      onDownload(item.id);
+    },
+    [onDownload]
+  );
+
+  const handleToggleFavoriteStack = useCallback(
+    async (item: StackCardItem, favorited: boolean) => {
+      await onToggleFavorite(item.id, favorited);
+    },
+    [onToggleFavorite]
+  );
+
+  const handleLikeStack = useCallback(
+    async (item: StackCardItem) => {
+      await onLike(item.id);
+    },
+    [onLike]
+  );
+
+  const getStackDragHandlers = useCallback(
+    (item: StackCardItem, sourceImageUrl: string | null, sourceImageFilename: string | undefined) =>
+      dragProps(item.id, sourceImageUrl, sourceImageFilename),
+    [dragProps]
+  );
 
   if (isLoading) {
     return (
@@ -110,11 +181,13 @@ function DatasetHome() {
       }}
     >
       <div className="container mx-auto px-4 py-6 pt-8 pb-24 space-y-8">
-        <h1 className="text-4xl font-bold">{dataset?.name || 'Library'} Overview</h1>
+        <h1 className="text-4xl font-bold">
+          {dataset?.name || t.sidebar.library} {t.overview.title}
+        </h1>
 
         {/* Media Types Section */}
         <section>
-          <SectionHeader title="Media Types" />
+          <SectionHeader title={t.overview.mediaTypes} />
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {overview?.mediaTypes.map((media) => {
               const config = mediaTypeConfig[media.mediaType as MediaType];
@@ -129,7 +202,7 @@ function DatasetHome() {
                       <span className="text-lg font-semibold">{config?.label}</span>
                     </span>
                   }
-                  subtitle={`${media.count.toLocaleString()} items`}
+                  subtitle={t.library.itemCount(media.count)}
                   thumbnailSrc={media.thumbnail || null}
                   icon={config?.Icon ? <config.Icon size={64} className="opacity-20" /> : undefined}
                 >
@@ -146,7 +219,7 @@ function DatasetHome() {
         {/* Collections Section (exclude Scratch) */}
         {overview?.collections && overview.collections.length > 0 && (
           <section>
-            <SectionHeader title="Collections" />
+            <SectionHeader title={t.sidebar.collections} />
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
               {overview.collections
                 .filter((c) => !isScratchCollection(c))
@@ -168,7 +241,7 @@ function DatasetHome() {
         {/* Tag Cloud Section */}
         {overview?.tagCloud && overview.tagCloud.length > 0 && (
           <section>
-            <SectionHeader title="Popular Tags" />
+            <SectionHeader title={t.overview.popularTags} />
             <div className="flex flex-wrap gap-2">
               {overview.tagCloud.slice(0, 30).map((tag) => (
                 <TagChip
@@ -193,136 +266,64 @@ function DatasetHome() {
         )}
 
         {/* Recent Likes Section */}
-        {overview?.recentLikes && overview.recentLikes.length > 0 && (
+        {recentLikeItems.length > 0 && (
           <SectionBlock
-            title="Recently Liked"
+            title={t.overview.recentlyLiked}
             action={
               <Link
                 to="/library/$datasetId/likes"
                 params={{ datasetId }}
                 className="text-blue-600 hover:text-blue-800 font-medium"
               >
-                Recently Liked ›
+                {t.overview.recentlyLiked} ›
               </Link>
             }
           >
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-              {overview.recentLikes.map((item: StackCardItem) => {
-                const {
-                  onOpen,
-                  onAddToScratch,
-                  onDownload,
-                  onFindSimilar,
-                  onToggleFavorite,
-                  onLike,
-                  dragProps,
-                } = stackTileActions;
-                const thumb = item.thumbnail || item.thumbnailUrl || '/no-image.png';
-                const sourceImageUrl = getSourceImageUrl(item, thumb);
-                const sourceImageFilename = sourceImageUrl
-                  ? getSourceImageFilename(item, sourceImageUrl, `stack-${item.id}`)
-                  : undefined;
-                const likeCount = toStackCount(item.likeCount ?? item.liked);
-                const pageCount =
-                  item.assetCount ??
-                  item._count?.assets ??
-                  item.assetsCount ??
-                  item.assets?.length ??
-                  0;
-                const currentFavorited = item.favorited ?? item.isFavorite ?? false;
-                return (
-                  <StackTile
-                    key={item.id}
-                    thumbnailUrl={thumb}
-                    nativeImageDragUrl={sourceImageUrl}
-                    pageCount={pageCount}
-                    favorited={currentFavorited}
-                    likeCount={likeCount}
-                    onOpen={() => onOpen(item.id)}
-                    onInfo={undefined}
-                    onFindSimilar={() => onFindSimilar(item.id)}
-                    onAddToScratch={() => onAddToScratch(item.id)}
-                    onDownload={() => onDownload(item.id)}
-                    onToggleFavorite={() => onToggleFavorite(item.id, currentFavorited)}
-                    onLike={() => onLike(item.id)}
-                    dragHandlers={dragProps(item.id, sourceImageUrl, sourceImageFilename)}
-                    asChild
-                  >
-                    <Link
-                      to="/library/$datasetId/stacks/$stackId"
-                      params={{ datasetId, stackId: String(item.id) }}
-                    />
-                  </StackTile>
-                );
-              })}
-            </div>
+            <StackTileGrid
+              items={recentLikeItems}
+              datasetId={datasetId}
+              gridClassName="grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4"
+              cornerRadius="rounded"
+              getLinkElement={getStackLinkElement}
+              onOpenItem={handleOpenStack}
+              onFindSimilarItem={handleFindSimilarStack}
+              onAddToScratchItem={handleAddToScratchStack}
+              onDownloadItem={handleDownloadStack}
+              onToggleFavoriteItem={handleToggleFavoriteStack}
+              onLikeItem={handleLikeStack}
+              getDragHandlers={getStackDragHandlers}
+            />
           </SectionBlock>
         )}
 
         {/* Recently Scratch Section */}
-        {scratchData?.stacks && scratchData.stacks.length > 0 && (
+        {scratchData && scratchItems.length > 0 && (
           <SectionBlock
-            title="Recently Scratch"
+            title={t.overview.recentlyScratch}
             action={
               <Link
                 to="/library/$datasetId/scratch/$scratchId"
                 params={{ datasetId, scratchId: String(scratchData.id) }}
                 className="text-blue-600 hover:text-blue-800 font-medium"
               >
-                Recently Scratch ›
+                {t.overview.recentlyScratch} ›
               </Link>
             }
           >
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-              {scratchData.stacks.map((item: StackCardItem) => {
-                const {
-                  onOpen,
-                  onAddToScratch,
-                  onDownload,
-                  onFindSimilar,
-                  onToggleFavorite,
-                  onLike,
-                  dragProps,
-                } = stackTileActions;
-                const thumb = item.thumbnail || item.thumbnailUrl || '/no-image.png';
-                const sourceImageUrl = getSourceImageUrl(item, thumb);
-                const sourceImageFilename = sourceImageUrl
-                  ? getSourceImageFilename(item, sourceImageUrl, `stack-${item.id}`)
-                  : undefined;
-                const likeCount = toStackCount(item.likeCount ?? item.liked);
-                const pageCount =
-                  item.assetCount ??
-                  item._count?.assets ??
-                  item.assetsCount ??
-                  item.assets?.length ??
-                  0;
-                const currentFavorited = item.favorited ?? item.isFavorite ?? false;
-                return (
-                  <StackTile
-                    key={item.id}
-                    thumbnailUrl={thumb}
-                    nativeImageDragUrl={sourceImageUrl}
-                    pageCount={pageCount}
-                    favorited={currentFavorited}
-                    likeCount={likeCount}
-                    onOpen={() => onOpen(item.id)}
-                    onInfo={undefined}
-                    onFindSimilar={() => onFindSimilar(item.id)}
-                    onAddToScratch={() => onAddToScratch(item.id)}
-                    onDownload={() => onDownload(item.id)}
-                    onToggleFavorite={() => onToggleFavorite(item.id, currentFavorited)}
-                    onLike={() => onLike(item.id)}
-                    dragHandlers={dragProps(item.id, sourceImageUrl, sourceImageFilename)}
-                    asChild
-                  >
-                    <Link
-                      to="/library/$datasetId/stacks/$stackId"
-                      params={{ datasetId, stackId: String(item.id) }}
-                    />
-                  </StackTile>
-                );
-              })}
-            </div>
+            <StackTileGrid
+              items={scratchItems}
+              datasetId={datasetId}
+              gridClassName="grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4"
+              cornerRadius="rounded"
+              getLinkElement={getStackLinkElement}
+              onOpenItem={handleOpenStack}
+              onFindSimilarItem={handleFindSimilarStack}
+              onAddToScratchItem={handleAddToScratchStack}
+              onDownloadItem={handleDownloadStack}
+              onToggleFavoriteItem={handleToggleFavoriteStack}
+              onLikeItem={handleLikeStack}
+              getDragHandlers={getStackDragHandlers}
+            />
           </SectionBlock>
         )}
       </div>
@@ -346,6 +347,7 @@ function CollectionCard({
   count: number;
   thumbnail?: string | null;
 }) {
+  const t = useT();
   const { data: meta } = useQuery({
     queryKey: ['collection-meta', id],
     enabled: !thumbnail || !count,
@@ -386,7 +388,7 @@ function CollectionCard({
       asChild
       aspect="1/1"
       title={name}
-      subtitle={`${displayCount} items`}
+      subtitle={t.library.itemCount(displayCount)}
       thumbnailSrc={src}
       icon={<span className="text-4xl">{icon}</span>}
     >

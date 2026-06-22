@@ -6,6 +6,7 @@ import StackGrid from '@/components/StackGrid';
 import { useDataset } from '@/hooks/useDatasets';
 import { useHeaderActions } from '@/hooks/useHeaderActions';
 import { useRangeBasedQuery } from '@/hooks/useRangeBasedQuery';
+import { useT } from '@/lib/i18n';
 import { navigationStateAtom } from '@/stores/navigation';
 import { currentFilterAtom } from '@/stores/ui';
 import { genListToken, saveViewContext } from '@/stores/view-context';
@@ -16,6 +17,7 @@ export const Route = createFileRoute('/library/$datasetId/tag/$tagName')({
 });
 
 function TagDetailPage() {
+  const t = useT();
   const { datasetId, tagName } = Route.useParams();
   const { data: dataset } = useDataset(datasetId);
   const navigate = useNavigate();
@@ -70,17 +72,26 @@ function TagDetailPage() {
     () => ({ datasetId, tags: [decodedTagName] }),
     [datasetId, decodedTagName]
   );
+  const routeFilterScopeKey = useMemo(
+    () => `tag-detail:${datasetId}:${decodedTagName}`,
+    [datasetId, decodedTagName]
+  );
+  const [filterScopeKey, setFilterScopeKey] = useState<string | null>(null);
+
   useEffect(() => {
+    setFilterScopeKey(routeFilterScopeKey);
     setCurrentFilter(tagFilter);
-  }, [tagFilter, setCurrentFilter]);
+  }, [routeFilterScopeKey, tagFilter, setCurrentFilter]);
+
+  const routeFilter = filterScopeKey === routeFilterScopeKey ? currentFilter : tagFilter;
 
   const effectiveFilter: StackFilter = useMemo(
     () => ({
-      ...currentFilter,
+      ...routeFilter,
       datasetId,
       tags: [decodedTagName],
     }),
-    [currentFilter, datasetId, decodedTagName]
+    [routeFilter, datasetId, decodedTagName]
   );
 
   // Range-based query for virtual scrolling
@@ -132,9 +143,10 @@ function TagDetailPage() {
   const handleFilterChange = useCallback(
     (newFilter: StackFilter) => {
       // タグ条件と datasetId は常に固定
+      setFilterScopeKey(routeFilterScopeKey);
       setCurrentFilter({ ...newFilter, datasetId, tags: [decodedTagName] });
     },
-    [datasetId, decodedTagName, setCurrentFilter]
+    [datasetId, decodedTagName, routeFilterScopeKey, setCurrentFilter]
   );
 
   // Handle sort changes
@@ -203,12 +215,12 @@ function TagDetailPage() {
         onRefreshAll={refreshAll}
         emptyState={{
           icon: '🏷️',
-          title: `No items tagged with "${decodedTagName}"`,
-          description: 'This tag has not been applied to any items yet.',
+          title: t.emptyState.noTaggedItems(decodedTagName),
+          description: t.emptyState.tagDescription,
         }}
       />
       <FilterPanel
-        currentFilter={currentFilter}
+        currentFilter={effectiveFilter}
         currentSort={currentSort}
         onFilterChange={handleFilterChange}
         onSortChange={handleSortChange}

@@ -12,6 +12,7 @@ import {
   CommandList,
 } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
 interface ComboboxProps {
@@ -31,13 +32,14 @@ interface ComboboxProps {
 export function Combobox({
   value,
   onValueChange,
-  placeholder = 'Select option...',
-  searchPlaceholder = 'Search...',
-  emptyMessage = 'No option found.',
+  placeholder,
+  searchPlaceholder,
+  emptyMessage,
   options,
   disabled = false,
   className,
 }: ComboboxProps) {
+  const t = useT();
   const [open, setOpen] = React.useState(false);
   const [inputValue, setInputValue] = React.useState('');
 
@@ -53,7 +55,7 @@ export function Combobox({
           className={cn('w-full justify-between', className)}
           disabled={disabled}
         >
-          {selectedOption ? selectedOption.label : placeholder}
+          {selectedOption ? selectedOption.label : (placeholder ?? t.common.selectOption)}
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
@@ -63,12 +65,12 @@ export function Combobox({
       >
         <Command shouldFilter={false}>
           <CommandInput
-            placeholder={searchPlaceholder}
+            placeholder={searchPlaceholder ?? t.common.searchPlaceholder}
             value={inputValue}
             onValueChange={setInputValue}
           />
           <CommandList>
-            <CommandEmpty>{emptyMessage}</CommandEmpty>
+            <CommandEmpty>{emptyMessage ?? t.common.noOptionFound}</CommandEmpty>
             <CommandGroup>
               {options
                 .filter((option) => option.label.toLowerCase().includes(inputValue.toLowerCase()))

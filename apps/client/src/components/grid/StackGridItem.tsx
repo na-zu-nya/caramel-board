@@ -1,31 +1,18 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
+import { Book, Bookmark, Check, Heart, Star } from 'lucide-react';
+import { useCallback, useState } from 'react';
+import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
 import {
-  Book,
-  Bookmark,
-  Check,
-  Download,
-  GalleryVerticalEnd,
-  GitMerge,
-  Heart,
-  Info,
-  NotebookText,
-  Star,
-  Trash2,
-} from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuSeparator,
-  ContextMenuTrigger,
-} from '@/components/ui/context-menu';
+  type StackContextMenuCollection,
+  StackContextMenuContent,
+} from '@/components/ui/Stack/StackContextMenuContent';
 import { useDrag } from '@/contexts/DragContext';
 import { useScratch } from '@/hooks/useScratch';
 import { apiClient } from '@/lib/api-client';
 import { downloadStackOriginals } from '@/lib/download-originals';
+import { useT } from '@/lib/i18n';
 import { removeStackFromCache } from '@/lib/stack-cache';
 import {
   extractStackIdsFromDragPayload,
@@ -36,6 +23,7 @@ import {
   setNativeImageDragPreview,
   setStackDragData,
 } from '@/lib/stack-drag-data';
+import { THUMBNAIL_BLUR_TARGET_CLASS } from '@/lib/thumbnail-blur';
 import { cn } from '@/lib/utils';
 import { navigationStateAtom } from '@/stores/navigation';
 import { currentFilterAtom, infoSidebarOpenAtom, selectedItemIdAtom } from '@/stores/ui';
@@ -58,7 +46,16 @@ interface StackGridItemProps {
   onToggleFavorite: (item: MediaGridItem, event: React.MouseEvent) => void;
   selectedItems?: Set<string | number>;
   selectedStackIdsInOrder?: number[];
+  onBulkEditSelected?: () => void | Promise<void>;
   onMergeStacks?: () => void | Promise<void>;
+  onRemoveSelectedStacks?: (stackIds: Array<string | number>) => void | Promise<void>;
+  collectionMenuCollections?: readonly StackContextMenuCollection[];
+  isCollectionMenuLoading?: boolean;
+  onAddStacksToCollection?: (
+    collectionId: number,
+    stackIds: Array<string | number>
+  ) => void | Promise<void>;
+  onCreateCollectionWithStacks?: (stackIds: Array<string | number>) => void | Promise<void>;
   allowRemoveFromCollection?: boolean;
   onRemoveFromCollection?: (id: string | number) => void | Promise<void>;
   allowRemoveFromScratch?: boolean;
@@ -77,12 +74,19 @@ export function StackGridItem({
   onToggleFavorite,
   selectedItems,
   selectedStackIdsInOrder,
+  onBulkEditSelected,
   onMergeStacks,
+  onRemoveSelectedStacks,
+  collectionMenuCollections,
+  isCollectionMenuLoading = false,
+  onAddStacksToCollection,
+  onCreateCollectionWithStacks,
   allowRemoveFromCollection = false,
   onRemoveFromCollection,
   allowRemoveFromScratch = false,
   onRemoveFromScratch,
 }: StackGridItemProps) {
+  const t = useT();
   const currentFavorited = overrideFavorited ?? item.favorited ?? item.isFavorite ?? false;
   const thumbnailUrl = item.thumbnail || item.thumbnailUrl || '/no-image.png';
   const favoriteKind = item.favoriteKind;
@@ -121,10 +125,11 @@ export function StackGridItem({
   const setNavigationState = useSetAtom(navigationStateAtom);
   const selectedInfoId = useAtomValue(selectedItemIdAtom);
   const queryClient = useQueryClient();
+  const isSelectionContext =
+    isSelectionMode && !!selectedItems?.has(item.id) && (selectedItems?.size ?? 0) > 0;
   const canMergeSelectedStacks =
-    isSelectionMode &&
+    isSelectionContext &&
     (selectedStackIdsInOrder?.length ?? 0) >= 2 &&
-    !!selectedItems?.has(item.id) &&
     typeof onMergeStacks === 'function';
   const returnTo = getCurrentReturnTo();
   const stackLinkSearch = {
@@ -134,18 +139,32 @@ export function StackGridItem({
     ...(item.mediaType ? { mediaType: item.mediaType } : {}),
     ...(returnTo ? { returnTo } : {}),
   };
-  const getDownloadStackIds = useCallback((): Array<string | number> => {
-    if (isSelectionMode && selectedItems?.has(item.id)) {
+  const getContextActionStackIds = useCallback((): Array<string | number> => {
+    if (isSelectionContext && selectedItems) {
       if (selectedStackIdsInOrder && selectedStackIdsInOrder.length > 0) {
         return selectedStackIdsInOrder;
       }
       return Array.from(selectedItems);
     }
     return [getStackId()];
-  }, [getStackId, isSelectionMode, item.id, selectedItems, selectedStackIdsInOrder]);
+  }, [getStackId, isSelectionContext, selectedItems, selectedStackIdsInOrder]);
   const handleDownloadOriginals = useCallback(() => {
-    downloadStackOriginals(datasetId, getDownloadStackIds());
-  }, [datasetId, getDownloadStackIds]);
+    downloadStackOriginals(datasetId, getContextActionStackIds());
+  }, [datasetId, getContextActionStackIds]);
+  const handleBulkEditSelected = useCallback(async () => {
+    await onBulkEditSelected?.();
+  }, [onBulkEditSelected]);
+  const handleRemoveSelectedStacks = useCallback(async () => {
+    const stackIds = getContextActionStackIds();
+    if (stackIds.length === 0) return;
+    const confirmed = window.confirm(t.grid.deleteStacksConfirm(stackIds.length));
+    if (!confirmed) return;
+    await onRemoveSelectedStacks?.(stackIds);
+  }, [getContextActionStackIds, onRemoveSelectedStacks, t]);
+  const handleInfo = useCallback(() => {
+    setSelectedItemId(item.id);
+    setInfoOpen(true);
+  }, [item.id, setInfoOpen, setSelectedItemId]);
   const saveNavigationPosition = useCallback(() => {
     setNavigationState({
       scrollPosition: window.scrollY,
@@ -168,11 +187,72 @@ export function StackGridItem({
           : undefined,
     });
   }, [datasetId, favoriteKind, getStackId, item.favoritePage, navigate, saveNavigationPosition]);
+  const handleFindSimilar = useCallback(async () => {
+    const ds = datasetId || '1';
+    const stackId = getStackId();
+    const id = typeof stackId === 'string' ? Number.parseInt(stackId, 10) : stackId;
+    await navigate({
+      to: '/library/$datasetId/stacks/$stackId/similar',
+      params: { datasetId: ds, stackId: String(id) },
+    });
+  }, [datasetId, getStackId, navigate]);
+  const handleAddToScratch = useCallback(async () => {
+    try {
+      const sc = await ensureScratch();
+      const stackId = typeof item.id === 'string' ? Number.parseInt(item.id, 10) : item.id;
+      await apiClient.addStackToCollection(sc.id, stackId);
+      await queryClient.invalidateQueries({ queryKey: ['stacks'] });
+      await queryClient.invalidateQueries({ queryKey: ['library-counts', datasetId] });
+      await queryClient.refetchQueries({ queryKey: ['library-counts', datasetId] });
+    } catch (e) {
+      console.error('Failed to add to Scratch', e);
+    }
+  }, [datasetId, ensureScratch, item.id, queryClient]);
+  const handleAddToCollection = useCallback(
+    async (collectionId: number) => {
+      await onAddStacksToCollection?.(collectionId, getContextActionStackIds());
+    },
+    [getContextActionStackIds, onAddStacksToCollection]
+  );
+  const handleCreateCollectionWithStacks = useCallback(async () => {
+    await onCreateCollectionWithStacks?.(getContextActionStackIds());
+  }, [getContextActionStackIds, onCreateCollectionWithStacks]);
+  const collectionMenu =
+    onAddStacksToCollection && onCreateCollectionWithStacks
+      ? {
+          collections: collectionMenuCollections ?? [],
+          isLoading: isCollectionMenuLoading,
+          onCreateCollection: handleCreateCollectionWithStacks,
+          onAddToCollection: handleAddToCollection,
+        }
+      : undefined;
+  const handleMergeSelected = useCallback(async () => {
+    if (!selectedStackIdsInOrder || typeof onMergeStacks !== 'function') return;
+    const [targetId, ...sourceIds] = selectedStackIdsInOrder;
+    const confirmed = window.confirm(t.grid.mergeSelectedConfirm(targetId, sourceIds.length));
+    if (!confirmed) return;
+    await onMergeStacks();
+  }, [onMergeStacks, selectedStackIdsInOrder, t]);
+  const handleRemoveFromCollectionItem = useCallback(async () => {
+    try {
+      await onRemoveFromCollection?.(item.id);
+    } catch (e) {
+      console.error('Failed to remove from collection', e);
+    }
+  }, [item.id, onRemoveFromCollection]);
+  const handleRemoveFromScratchItem = useCallback(async () => {
+    try {
+      await onRemoveFromScratch?.(item.id);
+    } catch (e) {
+      console.error('Failed to remove from scratch', e);
+    }
+  }, [item.id, onRemoveFromScratch]);
   const enableNativeImageDrag = useCallback(() => {
+    if (isSelectionMode) return;
     if (sourceImageUrl) {
       setIsNativeDragReady(true);
     }
-  }, [sourceImageUrl]);
+  }, [isSelectionMode, sourceImageUrl]);
   const disableNativeImageDrag = useCallback(() => {
     if (!isDragging) {
       setIsNativeDragReady(false);
@@ -191,47 +271,12 @@ export function StackGridItem({
     ]);
   }, [datasetId, queryClient]);
 
-  // Fade-in animation state
-  const [isVisible, setIsVisible] = useState(false);
-  const [hasBeenSeen, setHasBeenSeen] = useState(false);
-  const itemRef = useRef<HTMLAnchorElement>(null);
-
-  // Intersection Observer for fade-in animation
-  useEffect(() => {
-    const element = itemRef.current;
-    if (!element || hasBeenSeen) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting && !hasBeenSeen) {
-            setIsVisible(true);
-            setHasBeenSeen(true);
-            observer.unobserve(element);
-          }
-        }
-      },
-      {
-        threshold: 0.1, // Trigger when 10% visible
-        rootMargin: '50px', // Start animation slightly before fully in view
-      }
-    );
-
-    observer.observe(element);
-
-    return () => {
-      observer.disconnect();
-    };
-  }, [hasBeenSeen]);
-
   const handleRemoveStack = useCallback(async () => {
     const label =
       typeof item.title === 'string' && item.title.length > 0
         ? item.title
-        : item.name || 'Untitled';
-    const confirmed = window.confirm(
-      `Are you sure you want to remove the stack "${label}"? This action cannot be undone.`
-    );
+        : item.name || t.common.untitled;
+    const confirmed = window.confirm(t.info.removeConfirm(label));
     if (!confirmed) return;
 
     const numericId = toNumber(item.id);
@@ -253,7 +298,7 @@ export function StackGridItem({
       console.log('✅ Stack removed from grid');
     } catch (error) {
       console.error('❌ Failed to remove stack:', error);
-      alert('Failed to remove stack. Please try again.');
+      alert(t.info.removeFailed);
     }
   }, [
     invalidateStackData,
@@ -262,14 +307,21 @@ export function StackGridItem({
     selectedInfoId,
     setInfoOpen,
     setSelectedItemId,
+    t,
     toNumber,
   ]);
+
+  const canRemoveSelectedStacks =
+    isSelectionContext && typeof onRemoveSelectedStacks === 'function';
+  const handleContextRemove = canRemoveSelectedStacks
+    ? handleRemoveSelectedStacks
+    : handleRemoveStack;
+  const contextActionCount = getContextActionStackIds().length;
 
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
         <Link
-          ref={itemRef}
           key={item.id}
           to="/library/$datasetId/stacks/$stackId"
           params={{ datasetId, stackId: String(getStackId()) }}
@@ -278,7 +330,6 @@ export function StackGridItem({
           className={cn(
             'group relative aspect-square overflow-hidden cursor-pointer transition-transform duration-150 box-border block',
             isInfoSelected && 'ring-2 ring-primary ring-inset',
-            isVisible ? 'opacity-100' : 'opacity-0',
             isDragging ? 'border-8 border-gray-300 scale-95 opacity-50 rounded-lg' : '',
             isDragOver && 'border-8 border-accent'
           )}
@@ -307,7 +358,10 @@ export function StackGridItem({
             setIsNativeDragReady(false);
           }}
           onDragStart={(e) => {
-            if ((e.target as HTMLElement | null)?.dataset.nativeImageDrag === 'true') {
+            if (
+              !isSelectionMode &&
+              (e.target as HTMLElement | null)?.dataset.nativeImageDrag === 'true'
+            ) {
               setIsDragging(true);
               setGlobalDragging(true);
               setDragKind('native-image');
@@ -319,6 +373,7 @@ export function StackGridItem({
             console.log('Drag started for item:', item.id);
             setIsDragging(true);
             setGlobalDragging(true);
+            setDragKind('stack');
             setDraggedStack({ stackId: getStackId(), collectionIds: [] });
 
             // Check if this item is part of a selection
@@ -401,12 +456,12 @@ export function StackGridItem({
                 .then((resp) => {
                   console.log('✅ Merge completed', { targetId, sourceIds });
                   // Optimistically update any loaded pages to remove sources and update target
-                  const pages = queryClient.getQueriesData(['stacks', 'page']);
+                  const pages = queryClient.getQueriesData<{ stacks?: MediaGridItem[] }>({
+                    queryKey: ['stacks', 'page'],
+                  });
                   for (const [key, data] of pages) {
-                    if (!data || typeof data !== 'object') continue;
-                    const typedData = data as { stacks?: MediaGridItem[] };
-                    if (!Array.isArray(typedData.stacks)) continue;
-                    const stacks = typedData.stacks;
+                    if (!data || !Array.isArray(data.stacks)) continue;
+                    const stacks = data.stacks;
                     const filtered = stacks.filter(
                       (s) =>
                         !sourceIds.includes(
@@ -420,17 +475,17 @@ export function StackGridItem({
                     if (targetIdx >= 0 && resp?.stack) {
                       filtered[targetIdx] = { ...filtered[targetIdx], ...resp.stack };
                     }
-                    queryClient.setQueryData(key, { ...typedData, stacks: filtered });
+                    queryClient.setQueryData(key, { ...data, stacks: filtered });
                   }
                   // Also update count cache down by number of removed sources
-                  const counts = queryClient.getQueriesData(['stacks', 'count']);
+                  const counts = queryClient.getQueriesData<{ total?: number }>({
+                    queryKey: ['stacks', 'count'],
+                  });
                   for (const [key, data] of counts) {
-                    if (!data || typeof data !== 'object') continue;
-                    const typedData = data as { total?: number };
-                    if (typeof typedData.total !== 'number') continue;
+                    if (!data || typeof data.total !== 'number') continue;
                     queryClient.setQueryData(key, {
-                      ...typedData,
-                      total: Math.max(0, typedData.total - sourceIds.length),
+                      ...data,
+                      total: Math.max(0, data.total - sourceIds.length),
                     });
                   }
 
@@ -443,23 +498,27 @@ export function StackGridItem({
                 })
                 .catch((err) => {
                   console.error('❌ Merge failed', err);
-                  alert('スタックの結合に失敗しました');
+                  alert(t.grid.mergeStacksFailed);
                 });
             } catch (err) {
               console.error('Drop handling error', err);
             }
           }}
           tabIndex={0}
-          aria-label={`View item: ${item.name}`}
+          aria-label={t.grid.viewItem(item.name)}
         >
           <img
             src={thumbnailUrl}
             alt={item.name}
-            className="w-full h-full object-cover transition-transform duration-200"
-            loading="lazy"
+            className={cn(
+              'w-full h-full object-cover transition-[filter,transform] duration-200',
+              THUMBNAIL_BLUR_TARGET_CLASS
+            )}
+            loading="eager"
+            decoding="async"
             data-stack-drag-preview="true"
           />
-          {isNativeDragReady && sourceImageUrl ? (
+          {isNativeDragReady && sourceImageUrl && !isSelectionMode ? (
             <img
               src={sourceImageUrl}
               alt=""
@@ -546,110 +605,23 @@ export function StackGridItem({
           )}
         </Link>
       </ContextMenuTrigger>
-      <ContextMenuContent className="w-48">
-        {/* Open */}
-        <ContextMenuItem onClick={handleContextOpen}>Open</ContextMenuItem>
-        <ContextMenuItem onClick={handleDownloadOriginals}>
-          <Download className="w-4 h-4 mr-2" />
-          Download
-        </ContextMenuItem>
-        <ContextMenuSeparator />
-
-        {/* Info + non-destructive actions */}
-        <ContextMenuItem
-          onClick={() => {
-            setSelectedItemId(item.id);
-            setInfoOpen(true);
-          }}
-        >
-          <Info className="w-4 h-4 mr-2" />
-          Info
-        </ContextMenuItem>
-        <ContextMenuItem
-          onClick={async () => {
-            const ds = datasetId || '1';
-            const stackId = getStackId();
-            const id = typeof stackId === 'string' ? Number.parseInt(stackId, 10) : stackId;
-            await navigate({
-              to: '/library/$datasetId/stacks/$stackId/similar',
-              params: { datasetId: ds, stackId: String(id) },
-            });
-          }}
-        >
-          <GalleryVerticalEnd className="w-4 h-4 mr-2" />
-          Find similar
-        </ContextMenuItem>
-        <ContextMenuItem
-          onClick={async () => {
-            try {
-              const sc = await ensureScratch();
-              const stackId =
-                typeof item.id === 'string' ? Number.parseInt(item.id, 10) : (item.id as number);
-              await apiClient.addStackToCollection(sc.id, stackId);
-              await queryClient.invalidateQueries({ queryKey: ['stacks'] });
-              await queryClient.invalidateQueries({ queryKey: ['library-counts', datasetId] });
-              await queryClient.refetchQueries({ queryKey: ['library-counts', datasetId] });
-            } catch (e) {
-              console.error('Failed to add to Scratch', e);
-            }
-          }}
-        >
-          <NotebookText className="w-4 h-4 mr-2" />
-          Add to Scratch
-        </ContextMenuItem>
-        {canMergeSelectedStacks && (
-          <ContextMenuItem
-            onClick={async () => {
-              if (!selectedStackIdsInOrder || typeof onMergeStacks !== 'function') return;
-              const [targetId, ...sourceIds] = selectedStackIdsInOrder;
-              const confirmed = window.confirm(
-                `選択順の先頭スタック #${targetId} に残り ${sourceIds.length} 件をマージします。実行しますか？`
-              );
-              if (!confirmed) return;
-              await onMergeStacks();
-            }}
-          >
-            <GitMerge className="w-4 h-4 mr-2" />
-            Merge Stacks
-          </ContextMenuItem>
-        )}
-        {(allowRemoveFromCollection || allowRemoveFromScratch) && <ContextMenuSeparator />}
-        {allowRemoveFromCollection && (
-          <ContextMenuItem
-            onClick={async () => {
-              try {
-                await onRemoveFromCollection?.(item.id);
-              } catch (e) {
-                console.error('Failed to remove from collection', e);
-              }
-            }}
-            className="text-red-600 focus:text-red-700"
-          >
-            <Trash2 className="w-4 h-4 mr-2" />
-            Remove from Collection
-          </ContextMenuItem>
-        )}
-        {allowRemoveFromScratch && (
-          <ContextMenuItem
-            onClick={async () => {
-              try {
-                await onRemoveFromScratch?.(item.id);
-              } catch (e) {
-                console.error('Failed to remove from scratch', e);
-              }
-            }}
-            className="text-red-600 focus:text-red-700"
-          >
-            <Trash2 className="w-4 h-4 mr-2" />
-            Remove from Scratch
-          </ContextMenuItem>
-        )}
-        <ContextMenuSeparator />
-        <ContextMenuItem className="text-red-600 focus:text-red-700" onClick={handleRemoveStack}>
-          <Trash2 className="w-4 h-4 mr-2" />
-          Remove Stack
-        </ContextMenuItem>
-      </ContextMenuContent>
+      <StackContextMenuContent
+        isSelectionContext={isSelectionContext}
+        selectedActionCount={contextActionCount}
+        onOpen={handleContextOpen}
+        onBulkEditSelected={isSelectionContext ? handleBulkEditSelected : undefined}
+        onDownload={handleDownloadOriginals}
+        onInfo={handleInfo}
+        onFindSimilar={handleFindSimilar}
+        onAddToScratch={handleAddToScratch}
+        collectionMenu={collectionMenu}
+        onMergeSelected={canMergeSelectedStacks ? handleMergeSelected : undefined}
+        onRemoveFromCollection={
+          allowRemoveFromCollection ? handleRemoveFromCollectionItem : undefined
+        }
+        onRemoveFromScratch={allowRemoveFromScratch ? handleRemoveFromScratchItem : undefined}
+        onRemoveStack={handleContextRemove}
+      />
     </ContextMenu>
   );
 }

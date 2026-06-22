@@ -25,6 +25,7 @@ import { useDrag } from '@/contexts/DragContext';
 import { useScratch } from '@/hooks/useScratch';
 import { apiClient } from '@/lib/api-client';
 import { downloadStackOriginals } from '@/lib/download-originals';
+import { useT } from '@/lib/i18n';
 import { removeStackFromCache } from '@/lib/stack-cache';
 import {
   getSourceImageFilename,
@@ -73,6 +74,7 @@ export function StackListItem({
   className = '',
   selectedItemsSet,
 }: StackItemProps) {
+  const t = useT();
   const likeCount = Number(stack.likeCount ?? stack.liked ?? 0);
   const isFavorited = Boolean(stack.favorited ?? stack.isFavorite);
   const thumbnailSrc = stack.thumbnail || stack.thumbnailUrl || null;
@@ -272,10 +274,8 @@ export function StackListItem({
   }, [datasetId, navigate, saveNavigationPosition, stack.id]);
 
   const handleRemoveFromDataset = useCallback(async () => {
-    const stackLabel = stack.title || stack.name || 'Untitled';
-    const confirmed = window.confirm(
-      `Are you sure you want to remove the stack "${stackLabel}"? This action cannot be undone.`
-    );
+    const stackLabel = stack.title || stack.name || t.common.untitled;
+    const confirmed = window.confirm(t.info.removeConfirm(stackLabel));
     if (!confirmed) return;
 
     const numericId =
@@ -302,9 +302,17 @@ export function StackListItem({
       console.log('✅ Stack removed successfully');
     } catch (error) {
       console.error('❌ Failed to remove stack:', error);
-      alert('Failed to remove stack. Please try again.');
+      alert(t.info.removeFailed);
     }
-  }, [invalidateStackData, queryClient, selectedInfoItemId, setInfoOpen, setSelectedItemId, stack]);
+  }, [
+    invalidateStackData,
+    queryClient,
+    selectedInfoItemId,
+    setInfoOpen,
+    setSelectedItemId,
+    stack,
+    t,
+  ]);
 
   return (
     <ContextMenu>
@@ -320,7 +328,7 @@ export function StackListItem({
             {thumbnailSrc ? (
               <img
                 src={getThumbnailPath(thumbnailSrc)}
-                alt={stack.title || stack.name || 'Stack'}
+                alt={stack.title || stack.name || t.common.untitled}
                 className={cn(
                   'w-full h-full object-cover group-hover:scale-105 transition-transform duration-300',
                   selected && 'opacity-75'
@@ -406,7 +414,7 @@ export function StackListItem({
             <div className="px-1">
               {(variant === 'with-title' || variant === 'with-description') && (
                 <h3 className="font-medium text-sm truncate group-hover:text-blue-600 transition-colors">
-                  {stack.title || stack.name || 'Untitled'}
+                  {stack.title || stack.name || t.common.untitled}
                 </h3>
               )}
 
@@ -419,10 +427,10 @@ export function StackListItem({
       </ContextMenuTrigger>
       <ContextMenuContent className="w-56">
         {/* Open */}
-        <ContextMenuItem onClick={handleContextOpen}>Open</ContextMenuItem>
+        <ContextMenuItem onClick={handleContextOpen}>{t.contextMenu.open}</ContextMenuItem>
         <ContextMenuItem onClick={handleDownloadOriginals}>
           <Download className="w-4 h-4 mr-2" />
-          Download
+          {t.contextMenu.download}
         </ContextMenuItem>
         <ContextMenuSeparator />
 
@@ -434,7 +442,7 @@ export function StackListItem({
           }}
         >
           <Info className="w-4 h-4 mr-2" />
-          Info
+          {t.contextMenu.info}
         </ContextMenuItem>
         <ContextMenuItem
           onClick={async () => {
@@ -446,7 +454,7 @@ export function StackListItem({
           }}
         >
           <GalleryVerticalEnd className="w-4 h-4 mr-2" />
-          Find similar
+          {t.contextMenu.findSimilar}
         </ContextMenuItem>
         <ContextMenuItem
           onClick={async () => {
@@ -463,7 +471,7 @@ export function StackListItem({
           }}
         >
           <NotebookText className="w-4 h-4 mr-2" />
-          Add to Scratch
+          {t.contextMenu.addToScratch}
         </ContextMenuItem>
         {(inCollectionPath && isManualCollection) || inScratchPath ? (
           <>
@@ -488,7 +496,7 @@ export function StackListItem({
                 }}
               >
                 <Trash2 className="w-4 h-4 mr-2" />
-                Remove from Collection
+                {t.contextMenu.removeFromCollection}
               </ContextMenuItem>
             )}
             {inScratchPath && (
@@ -510,7 +518,7 @@ export function StackListItem({
                 }}
               >
                 <Trash2 className="w-4 h-4 mr-2" />
-                Remove from Scratch
+                {t.contextMenu.removeFromScratch}
               </ContextMenuItem>
             )}
           </>
@@ -521,7 +529,7 @@ export function StackListItem({
           onClick={handleRemoveFromDataset}
         >
           <Trash2 className="w-4 h-4 mr-2" />
-          Remove Stack
+          {t.info.removeStack}
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

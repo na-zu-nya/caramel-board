@@ -4,7 +4,7 @@ import { useAtom } from 'jotai';
 import type { LucideIcon } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { Grip, MoreVertical, Pencil, Plus, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Combobox } from '@/components/ui/combobox';
 import {
@@ -20,10 +20,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { isScratchCollection, useScratch } from '@/hooks/useScratch';
 import { apiClient } from '@/lib/api-client';
+import { getDefaultPinDisplayName, getMediaTypeLabel, useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { currentDatasetAtom, sidebarOpenAtom } from '@/stores/ui';
 import type { AvailableIcon, Collection, MediaType, Pin, PinType } from '@/types';
@@ -49,7 +49,17 @@ const FIXED_TYPE_ICONS: Record<'SCRATCH' | 'OVERVIEW' | 'FAVORITES' | 'LIKES', A
 
 const capitalizeLabel = (label: string) => label.charAt(0).toUpperCase() + label.slice(1);
 
+const canCustomizePinIcon = (pin: Pin): boolean =>
+  pin.type === 'COLLECTION' &&
+  !(
+    (pin.collection && isScratchCollection(pin.collection)) ||
+    String(pin.name || '')
+      .trim()
+      .toLowerCase() === 'scratch'
+  );
+
 export default function PinsPage() {
+  const t = useT();
   const params = useParams({ strict: false });
   const [currentDataset] = useAtom(currentDatasetAtom);
   const datasetId = (params as { datasetId?: string }).datasetId || currentDataset || '1';
@@ -82,7 +92,6 @@ export default function PinsPage() {
   const [loadingCollections, setLoadingCollections] = useState(false);
 
   // Edit dialog states
-  const [editName, setEditName] = useState('');
   const [editIcon, setEditIcon] = useState<AvailableIcon>('Image');
 
   // Drag state
@@ -128,13 +137,6 @@ export default function PinsPage() {
       return <IconComponent size={size} />;
     }
     return <LucideIcons.Bookmark size={size} />;
-  };
-
-  const formatPinDisplayName = (pin: Pin) => {
-    if (pin.type === 'MEDIA_TYPE' && pin.mediaType) {
-      return capitalizeLabel(pin.mediaType);
-    }
-    return pin.name;
   };
 
   const renderFixedTypePreview = (iconName: AvailableIcon, title: string, description: string) => (
@@ -206,13 +208,7 @@ export default function PinsPage() {
   });
 
   const updateNavigationPinMutation = useMutation({
-    mutationFn: async ({
-      pinId,
-      data,
-    }: {
-      pinId: number;
-      data: { name: string; icon: string };
-    }) => {
+    mutationFn: async ({ pinId, data }: { pinId: number; data: { icon: string } }) => {
       console.log('Updating navigation pin via API:', pinId, data);
       return apiClient.updateNavigationPin(pinId, data);
     },
@@ -308,27 +304,23 @@ export default function PinsPage() {
   };
 
   // Edit pin
-  const handleEditPin = (pin: Pin) => {
+  const handleEditPin = useCallback((pin: Pin) => {
+    if (!canCustomizePinIcon(pin)) return;
     setEditingPin(pin);
-    setEditName(formatPinDisplayName(pin));
-    const fixedIcon = resolveFixedIconForPin(pin);
-    setEditIcon((fixedIcon ?? pin.icon) as AvailableIcon);
+    setEditIcon(pin.icon as AvailableIcon);
     setShowEditDialog(true);
-  };
+  }, []);
 
-  const handleSaveEdit = () => {
-    if (!editingPin || !editName.trim()) return;
-
-    const fixedIcon = resolveFixedIconForPin(editingPin);
+  const handleSaveEdit = useCallback(() => {
+    if (!editingPin || !canCustomizePinIcon(editingPin)) return;
 
     updateNavigationPinMutation.mutate({
       pinId: editingPin.id,
       data: {
-        name: editName.trim(),
-        icon: (fixedIcon ?? editIcon) as string,
+        icon: editIcon,
       },
     });
-  };
+  }, [editIcon, editingPin, updateNavigationPinMutation]);
 
   // Drag and drop handlers
   const handleDragStart = (e: React.DragEvent, pin: Pin, index: number) => {
@@ -373,10 +365,7 @@ export default function PinsPage() {
     setDraggedItem(null);
   };
 
-  const canEditIcon = editingPin
-    ? editingPin.type === 'COLLECTION' && !isScratchPin(editingPin)
-    : false;
-  const editIconPreview = editingPin ? (resolveFixedIconForPin(editingPin) ?? editIcon) : editIcon;
+  const canEditIcon = editingPin ? canCustomizePinIcon(editingPin) : false;
 
   return (
     <div
@@ -389,7 +378,7 @@ export default function PinsPage() {
       <div className="max-w-4xl mx-auto p-6">
         <div className="bg-card rounded-lg shadow-sm border p-6">
           <div className="flex items-center justify-between mb-6">
-            <h1 className="text-2xl font-semibold">Pin Management</h1>
+            <h1 className="text-2xl font-semibold">{t.pins.management}</h1>
             <Button
               onClick={() => {
                 setShowAddDialog(true);
@@ -400,18 +389,18 @@ export default function PinsPage() {
               className=""
             >
               <Plus size={16} className="mr-2" />
-              Add Pin
+              {t.pins.addPin}
             </Button>
           </div>
 
           {isLoading ? (
             <div className="text-center py-12 text-muted-foreground">
-              <p>Loading pins...</p>
+              <p>{t.pins.loadingPins}</p>
             </div>
           ) : currentDatasetPins.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
-              <p>No pinned items</p>
-              <p className="text-sm mt-2">Click the button above to add pins</p>
+              <p>{t.pins.noPinnedItems}</p>
+              <p className="text-sm mt-2">{t.pins.clickToAdd}</p>
             </div>
           ) : (
             <div className="space-y-2">
@@ -434,20 +423,20 @@ export default function PinsPage() {
                   <div className="p-2 bg-muted rounded">{renderIcon(pin.icon, 20)}</div>
 
                   <div className="flex-1">
-                    <div className="font-medium">{formatPinDisplayName(pin)}</div>
+                    <div className="font-medium">{getDefaultPinDisplayName(t, pin)}</div>
                     <div className="text-muted-foreground text-sm">
                       {pin.type === 'COLLECTION'
                         ? (pin.collection && isScratchCollection(pin.collection)) ||
                           pin.name === 'Scratch'
-                          ? 'Scratch'
-                          : 'Collection'
+                          ? t.pins.scratch
+                          : t.pins.collection
                         : pin.type === 'MEDIA_TYPE'
-                          ? 'Media Type'
+                          ? t.pins.mediaType
                           : pin.type === 'OVERVIEW'
-                            ? 'Overview'
+                            ? t.pins.overview
                             : pin.type === 'FAVORITES'
-                              ? 'Favorites'
-                              : 'Likes'}
+                              ? t.pins.favorites
+                              : t.pins.likes}
                     </div>
                   </div>
 
@@ -458,16 +447,18 @@ export default function PinsPage() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onSelect={() => handleEditPin(pin)}>
-                        <Pencil className="w-4 h-4 mr-2" />
-                        Edit
-                      </DropdownMenuItem>
+                      {canCustomizePinIcon(pin) ? (
+                        <DropdownMenuItem onSelect={() => handleEditPin(pin)}>
+                          <Pencil className="w-4 h-4 mr-2" />
+                          {t.common.edit}
+                        </DropdownMenuItem>
+                      ) : null}
                       <DropdownMenuItem
                         className="text-destructive focus:text-destructive"
                         onSelect={() => handleDeletePin(pin.id)}
                       >
                         <Trash2 className="w-4 h-4 mr-2" />
-                        Delete
+                        {t.common.delete}
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -482,15 +473,13 @@ export default function PinsPage() {
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Add Pin</DialogTitle>
-            <DialogDescription>
-              Select an item to display in the header navigation
-            </DialogDescription>
+            <DialogTitle>{t.pins.addPin}</DialogTitle>
+            <DialogDescription>{t.pins.addPinDescription}</DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label>Type</Label>
+              <Label>{t.pins.type}</Label>
               <div className="grid grid-cols-3 gap-2">
                 <Button
                   type="button"
@@ -501,7 +490,7 @@ export default function PinsPage() {
                   }}
                   className=""
                 >
-                  Media Type
+                  {t.pins.mediaType}
                 </Button>
                 <Button
                   type="button"
@@ -512,7 +501,7 @@ export default function PinsPage() {
                   }}
                   className=""
                 >
-                  Collection
+                  {t.pins.collection}
                 </Button>
                 <Button
                   type="button"
@@ -523,7 +512,7 @@ export default function PinsPage() {
                   }}
                   className=""
                 >
-                  Scratch
+                  {t.pins.scratch}
                 </Button>
                 <Button
                   type="button"
@@ -534,7 +523,7 @@ export default function PinsPage() {
                   }}
                   className=""
                 >
-                  Overview
+                  {t.pins.overview}
                 </Button>
                 <Button
                   type="button"
@@ -545,7 +534,7 @@ export default function PinsPage() {
                   }}
                   className=""
                 >
-                  Favorites
+                  {t.pins.favorites}
                 </Button>
                 <Button
                   type="button"
@@ -556,14 +545,14 @@ export default function PinsPage() {
                   }}
                   className=""
                 >
-                  Likes
+                  {t.pins.likes}
                 </Button>
               </div>
             </div>
 
             {selectedType === 'MEDIA_TYPE' ? (
               <div className="space-y-2">
-                <Label>Media Type</Label>
+                <Label>{t.pins.mediaType}</Label>
                 <div className="grid grid-cols-3 gap-2">
                   {(['image', 'comic', 'video'] as MediaType[]).map((type) => (
                     <Button
@@ -577,27 +566,25 @@ export default function PinsPage() {
                       className="h-auto py-3 flex flex-col gap-1"
                     >
                       {renderIcon(MEDIA_TYPE_ICON_MAP[type], 24)}
-                      <span className="text-xs">
-                        {type === 'image' ? 'Images' : type === 'comic' ? 'Comics' : 'Videos'}
-                      </span>
+                      <span className="text-xs">{getMediaTypeLabel(t, type)}</span>
                     </Button>
                   ))}
                 </div>
               </div>
             ) : selectedType === 'COLLECTION' ? (
               <div className="space-y-2">
-                <Label>Collection</Label>
+                <Label>{t.pins.collection}</Label>
                 {loadingCollections ? (
-                  <p className="text-sm text-muted-foreground">Loading...</p>
+                  <p className="text-sm text-muted-foreground">{t.pins.loading}</p>
                 ) : collections.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No collections available</p>
+                  <p className="text-sm text-muted-foreground">{t.pins.noCollectionsAvailable}</p>
                 ) : (
                   <Combobox
                     value={selectedCollectionId?.toString()}
                     onValueChange={(value) => setSelectedCollectionId(Number(value))}
-                    placeholder="Select a collection..."
-                    searchPlaceholder="Search collections..."
-                    emptyMessage="No collections found."
+                    placeholder={t.pins.selectCollection}
+                    searchPlaceholder={t.pins.searchCollections}
+                    emptyMessage={t.pins.noCollectionsFound}
                     options={collections.map((collection) => ({
                       value: collection.id.toString(),
                       label: collection.name,
@@ -606,34 +593,26 @@ export default function PinsPage() {
                 )}
               </div>
             ) : selectedType === 'SCRATCH' ? (
-              renderFixedTypePreview(
-                FIXED_TYPE_ICONS.SCRATCH,
-                'Scratch',
-                'Pin the Scratch list for quick access'
-              )
+              renderFixedTypePreview(FIXED_TYPE_ICONS.SCRATCH, t.pins.scratch, t.pins.scratchDesc)
             ) : selectedType === 'OVERVIEW' ? (
               renderFixedTypePreview(
                 FIXED_TYPE_ICONS.OVERVIEW,
-                'Overview Page',
-                'Pin the dataset overview page for quick access'
+                t.pins.overviewPage,
+                t.pins.overviewDesc
               )
             ) : selectedType === 'FAVORITES' ? (
               renderFixedTypePreview(
                 FIXED_TYPE_ICONS.FAVORITES,
-                'Favorites',
-                'Pin your favorites list for quick access'
+                t.pins.favorites,
+                t.pins.favoritesDesc
               )
             ) : selectedType === 'LIKES' ? (
-              renderFixedTypePreview(
-                FIXED_TYPE_ICONS.LIKES,
-                'Likes',
-                'Pin your likes activity page for quick access'
-              )
+              renderFixedTypePreview(FIXED_TYPE_ICONS.LIKES, t.pins.likes, t.pins.likesDesc)
             ) : null}
 
             {selectedType === 'COLLECTION' && (
               <div className="space-y-2">
-                <Label>Icon</Label>
+                <Label>{t.pins.icon}</Label>
                 <div className="grid grid-cols-8 gap-2 max-h-48 overflow-y-auto border rounded-md p-2">
                   {AVAILABLE_ICONS.map((iconName) => (
                     <button
@@ -658,7 +637,7 @@ export default function PinsPage() {
 
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setShowAddDialog(false)}>
-              Cancel
+              {t.common.cancel}
             </Button>
             <Button
               type="button"
@@ -668,7 +647,7 @@ export default function PinsPage() {
                 createNavigationPinMutation.isPending
               }
             >
-              Add
+              {t.common.add}
             </Button>
           </div>
         </DialogContent>
@@ -678,26 +657,22 @@ export default function PinsPage() {
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Edit Pin</DialogTitle>
-            <DialogDescription>Update the name and icon for this pin</DialogDescription>
+            <DialogTitle>{t.pins.editPin}</DialogTitle>
+            <DialogDescription>{t.pins.editPinDescription}</DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="edit-name">Name *</Label>
-              <Input
-                id="edit-name"
-                type="text"
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                placeholder="Enter pin name"
-                required
-              />
+              <Label>{t.pins.name}</Label>
+              <div className="rounded-md border bg-muted/50 px-3 py-2 text-sm">
+                {editingPin ? getDefaultPinDisplayName(t, editingPin) : ''}
+              </div>
+              <p className="text-sm text-muted-foreground">{t.pins.nameFixed}</p>
             </div>
 
             {canEditIcon ? (
               <div className="space-y-2">
-                <Label>Icon</Label>
+                <Label>{t.pins.icon}</Label>
                 <div className="grid grid-cols-8 gap-2 max-h-48 overflow-y-auto border rounded-md p-2">
                   {AVAILABLE_ICONS.map((iconName) => (
                     <button
@@ -719,12 +694,12 @@ export default function PinsPage() {
               </div>
             ) : editingPin ? (
               <div className="space-y-2">
-                <Label>Icon</Label>
+                <Label>{t.pins.icon}</Label>
                 <div className="flex items-center gap-3 rounded-md border border-dashed bg-muted/50 p-3">
-                  <div className="rounded bg-background p-2">{renderIcon(editIconPreview, 20)}</div>
-                  <span className="text-sm text-muted-foreground">
-                    Icon is fixed for this pin type.
-                  </span>
+                  <div className="rounded bg-background p-2">
+                    {renderIcon(resolveFixedIconForPin(editingPin) ?? editIcon, 20)}
+                  </div>
+                  <span className="text-sm text-muted-foreground">{t.pins.iconFixed}</span>
                 </div>
               </div>
             ) : null}
@@ -732,14 +707,14 @@ export default function PinsPage() {
 
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setShowEditDialog(false)}>
-              Cancel
+              {t.common.cancel}
             </Button>
             <Button
               type="button"
               onClick={handleSaveEdit}
-              disabled={updateNavigationPinMutation.isPending || !editName.trim()}
+              disabled={updateNavigationPinMutation.isPending || !canEditIcon}
             >
-              {updateNavigationPinMutation.isPending ? 'Updating...' : 'Update'}
+              {updateNavigationPinMutation.isPending ? t.common.updating : t.pins.update}
             </Button>
           </div>
         </DialogContent>

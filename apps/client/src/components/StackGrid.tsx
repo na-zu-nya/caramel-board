@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useAtomValue, useSetAtom } from 'jotai';
-import { Clapperboard, GitMerge, Info, Loader2, Pencil, RefreshCw, Trash2 } from 'lucide-react';
+import { Info, Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { StackGridItem } from '@/components/grid/StackGridItem.tsx';
@@ -11,6 +11,7 @@ import { HeaderIconButton } from '@/components/ui/Header/HeaderIconButton';
 import { SelectionActionBar } from '@/components/ui/selection-action-bar';
 import { useStackGrid } from '@/hooks/features/useStackGrid';
 import { useScratch } from '@/hooks/useScratch';
+import { useStackCollectionMenu } from '@/hooks/useStackCollectionMenu';
 import { apiClient } from '@/lib/api-client';
 import {
   type FolderGroup,
@@ -20,7 +21,10 @@ import {
   uploadFolderAsCollection,
   uploadFolderAsSingleStack,
 } from '@/lib/folder-import';
+import { useT } from '@/lib/i18n';
+import { getSelectedMediaGridStackIds } from '@/lib/media-grid-selection';
 import { applyScrollbarCompensation, removeScrollbarCompensation } from '@/lib/scrollbar-utils';
+import { createStackSelectionActions } from '@/lib/stack-selection-actions';
 import { cn } from '@/lib/utils';
 import { currentFilterAtom, reorderModeAtom, selectionModeAtom } from '@/stores/ui';
 import {
@@ -88,10 +92,18 @@ export default function StackGrid({
   allowRemoveFromScratch = false,
   scratchCollectionId,
 }: StackGridProps) {
+  const t = useT();
   const queryClient = useQueryClient();
   const currentFilter = useAtomValue(currentFilterAtom);
   const dsId = dataset?.id ? String(dataset.id) : String((currentFilter as any)?.datasetId || '1');
   const { scratch } = useScratch(dsId);
+  const {
+    collections: collectionMenuCollections,
+    isLoadingCollections: isCollectionMenuLoading,
+    addStackIdsToCollection,
+    openCreateCollectionForStackIds,
+    createCollectionModal,
+  } = useStackCollectionMenu(dsId);
   const setSelectionMode = useSetAtom(selectionModeAtom);
   const reorderMode = useAtomValue(reorderModeAtom);
   const addFilesToQueue = useSetAtom(addFilesToQueueAtom);
@@ -238,6 +250,14 @@ export default function StackGrid({
       // Shift + Click → range select from last clicked
       if (e?.shiftKey) {
         e.preventDefault();
+        if (!isSelectionMode) {
+          setSelectionMode(true);
+          clearSelection();
+          handleToggleSelection(id);
+          lastClickedIndexRef.current = idx >= 0 ? idx : lastClickedIndexRef.current;
+          return;
+        }
+
         setSelectionMode(true);
         const last = lastClickedIndexRef.current ?? idx;
         if (last >= 0 && idx >= 0) {
@@ -261,9 +281,11 @@ export default function StackGrid({
     },
     [
       actualItems,
+      isSelectionMode,
       setSelectionMode,
       handleToggleSelection,
       selectItemRange,
+      clearSelection,
       handleItemClick,
       onItemClick,
       findIndexById,
@@ -271,15 +293,8 @@ export default function StackGrid({
   );
 
   const selectedStackIdsInOrder = useMemo(() => {
-    const stackIds: number[] = [];
-    for (const selectedId of selectedItemOrder) {
-      const stackId = typeof selectedId === 'string' ? Number.parseInt(selectedId, 10) : selectedId;
-      if (Number.isFinite(stackId)) {
-        stackIds.push(stackId);
-      }
-    }
-    return stackIds;
-  }, [selectedItemOrder]);
+    return getSelectedMediaGridStackIds(selectedItemOrder, actualItems);
+  }, [actualItems, selectedItemOrder]);
 
   // Track processed notification IDs to avoid duplicate refreshes
   const processedNotificationIds = useRef<Set<string>>(new Set());
@@ -448,32 +463,46 @@ export default function StackGrid({
     }
   };
 
-  const handleRefreshThumbnails = async (itemIds: (string | number)[]) => {
-    if (itemIds.length === 0) return;
+  const handleRefreshThumbnails = useCallback(
+    async (itemIds: (string | number)[]) => {
+      if (itemIds.length === 0) return;
 
-    try {
-      const stackIds = itemIds.map((id) => (typeof id === 'string' ? Number.parseInt(id, 10) : id));
-      await apiClient.bulkRefreshThumbnails(stackIds);
+      try {
+        const stackIds = itemIds.map((id) =>
+          typeof id === 'string' ? Number.parseInt(id, 10) : id
+        );
+        await apiClient.bulkRefreshThumbnails(stackIds);
 
-      clearSelection();
-      exitSelectionMode();
+        clearSelection();
+        exitSelectionMode();
 
-      if (onRefreshAll) {
-        await onRefreshAll();
-        if (onLoadRange && rangeStart !== undefined) {
-          const endIndex = Math.min(rangeStart + 100, actualTotal);
-          onLoadRange(rangeStart, endIndex);
+        if (onRefreshAll) {
+          await onRefreshAll();
+          if (onLoadRange && rangeStart !== undefined) {
+            const endIndex = Math.min(rangeStart + 100, actualTotal);
+            onLoadRange(rangeStart, endIndex);
+          }
+        } else {
+          void queryClient.invalidateQueries({ queryKey: ['stacks'] });
         }
-      } else {
-        void queryClient.invalidateQueries({ queryKey: ['stacks'] });
+      } catch (error) {
+        console.error('❌ Failed to refresh thumbnails:', error);
+        alert(t.grid.refreshThumbnailsFailed);
       }
-    } catch (error) {
-      console.error('❌ Failed to refresh thumbnails:', error);
-      alert('Failed to refresh thumbnails. Please try again.');
-    }
-  };
+    },
+    [
+      actualTotal,
+      clearSelection,
+      exitSelectionMode,
+      onLoadRange,
+      onRefreshAll,
+      queryClient,
+      rangeStart,
+      t,
+    ]
+  );
 
-  const handleOptimizePreviews = async () => {
+  const handleOptimizePreviews = useCallback(async () => {
     if (selectedItems.size === 0) return;
 
     const stackIds = Array.from(selectedItems).map((id) =>
@@ -499,9 +528,31 @@ export default function StackGrid({
       }
     } catch (error) {
       console.error('❌ Failed to optimize video previews:', error);
-      alert('Failed to optimize video previews. Please try again.');
+      alert(t.grid.optimizeVideoFailed);
     }
-  };
+  }, [
+    actualTotal,
+    clearSelection,
+    dsId,
+    exitSelectionMode,
+    onLoadRange,
+    onRefreshAll,
+    queryClient,
+    rangeStart,
+    selectedItems,
+    t,
+  ]);
+
+  const handleToggleBulkEditPanel = useCallback(() => {
+    if (selectedItems.size === 0) return;
+    setIsEditPanelOpen((prev) => {
+      const next = !prev;
+      if (next) {
+        setInfoSidebarOpen(false);
+      }
+      return next;
+    });
+  }, [selectedItems.size, setInfoSidebarOpen, setIsEditPanelOpen]);
 
   const handleMergeStacks = useCallback(async () => {
     if (selectedStackIdsInOrder.length < 2) return;
@@ -516,7 +567,7 @@ export default function StackGrid({
 
       addNotification({
         type: 'success',
-        message: `選択順の先頭スタック #${targetId} に ${sourceIds.length} 件をマージしました`,
+        message: t.grid.mergeSelectedSuccess(targetId, sourceIds.length),
       });
 
       window.dispatchEvent(new CustomEvent('stacks-merged', { detail: { targetId, sourceIds } }));
@@ -530,7 +581,7 @@ export default function StackGrid({
       ]);
     } catch (error) {
       console.error('❌ Failed to merge stacks:', error);
-      addNotification({ type: 'error', message: 'スタックのマージに失敗しました' });
+      addNotification({ type: 'error', message: t.grid.mergeSelectedFailed });
     }
   }, [
     addNotification,
@@ -539,52 +590,110 @@ export default function StackGrid({
     exitSelectionMode,
     queryClient,
     selectedStackIdsInOrder,
+    t,
   ]);
 
   // Handle bulk delete stacks
-  const handleRemoveStacks = async (itemIds: (string | number)[]) => {
-    try {
-      console.log('🗑️ Deleting stacks:', itemIds);
+  const handleRemoveStacks = useCallback(
+    async (itemIds: (string | number)[]) => {
+      try {
+        console.log('🗑️ Deleting stacks:', itemIds);
 
-      if (itemIds.length === 0) return;
+        if (itemIds.length === 0) return;
 
-      // Use bulk delete if multiple items, otherwise single delete
-      if (itemIds.length > 1) {
-        const result = await apiClient.bulkRemoveStacks(itemIds);
-        console.log(`✅ Bulk delete result: ${result.removed} stacks removed`);
-        if (result.errors && result.errors.length > 0) {
-          console.error('❌ Some deletions failed:', result.errors);
+        // Use bulk delete if multiple items, otherwise single delete
+        if (itemIds.length > 1) {
+          const result = await apiClient.bulkRemoveStacks(itemIds);
+          console.log(`✅ Bulk delete result: ${result.removed} stacks removed`);
+          if (result.errors && result.errors.length > 0) {
+            console.error('❌ Some deletions failed:', result.errors);
+          }
+        } else {
+          await apiClient.removeStack(itemIds[0]);
+          console.log('✅ Stack deleted successfully');
         }
-      } else {
-        await apiClient.removeStack(itemIds[0]);
-        console.log('✅ Stack deleted successfully');
-      }
 
-      // Clear selection and exit selection mode after successful deletion
-      clearSelection();
-      exitSelectionMode();
+        // Clear selection and exit selection mode after successful deletion
+        clearSelection();
+        exitSelectionMode();
 
-      // Refresh the data
-      console.log('🔄 Refreshing after stack deletion...');
-      if (onRefreshAll) {
-        await onRefreshAll();
-        // Reload current view
-        if (onLoadRange && rangeStart !== undefined) {
-          const endIndex = Math.min(rangeStart + 100, actualTotal - itemIds.length);
-          console.log(`📥 Reloading after deletion (${rangeStart} to ${endIndex})`);
-          onLoadRange(rangeStart, endIndex);
+        // Refresh the data
+        console.log('🔄 Refreshing after stack deletion...');
+        if (onRefreshAll) {
+          await onRefreshAll();
+          // Reload current view
+          if (onLoadRange && rangeStart !== undefined) {
+            const endIndex = Math.min(rangeStart + 100, actualTotal - itemIds.length);
+            console.log(`📥 Reloading after deletion (${rangeStart} to ${endIndex})`);
+            onLoadRange(rangeStart, endIndex);
+          }
+        } else {
+          void queryClient.invalidateQueries({ queryKey: ['stacks'] });
+          void queryClient.invalidateQueries({ queryKey: ['library-counts', dsId] });
         }
-      } else {
-        void queryClient.invalidateQueries({ queryKey: ['stacks'] });
-        void queryClient.invalidateQueries({ queryKey: ['library-counts', dsId] });
-      }
 
-      console.log('✅ Stack deletion completed');
-    } catch (error) {
-      console.error('❌ Failed to delete stacks:', error);
-      alert('Failed to delete stacks. Please try again.');
-    }
-  };
+        console.log('✅ Stack deletion completed');
+      } catch (error) {
+        console.error('❌ Failed to delete stacks:', error);
+        alert(t.grid.deleteStacksFailed);
+      }
+    },
+    [
+      actualTotal,
+      clearSelection,
+      dsId,
+      exitSelectionMode,
+      onLoadRange,
+      onRefreshAll,
+      queryClient,
+      rangeStart,
+      t,
+    ]
+  );
+
+  const selectionActions = useMemo(
+    () =>
+      createStackSelectionActions({
+        selectedCount: selectedItems.size,
+        copy: {
+          bulkEdit: t.grid.bulkEdit,
+          downloadSelected: t.contextMenu.downloadSelected,
+          mergeStacks: t.grid.mergeStacks,
+          refreshThumbnails: t.grid.refreshThumbnails,
+          optimizeVideo: t.grid.optimizeVideo,
+          deleteStacks: t.grid.deleteStacks,
+          deleteStacksConfirm: t.grid.deleteStacksConfirm,
+        },
+        bulkEdit: { onSelect: handleToggleBulkEditPanel },
+        mergeStacks:
+          selectedStackIdsInOrder.length >= 2
+            ? {
+                onSelect: handleMergeStacks,
+                confirmMessage: t.grid.mergeSelectedConfirm(
+                  selectedStackIdsInOrder[0],
+                  selectedStackIdsInOrder.length - 1
+                ),
+              }
+            : undefined,
+        refreshThumbnails: {
+          onSelect: () => handleRefreshThumbnails(Array.from(selectedItems)),
+        },
+        optimizeVideo: { onSelect: handleOptimizePreviews },
+        deleteStacks: {
+          onSelect: () => handleRemoveStacks(Array.from(selectedItems)),
+        },
+      }),
+    [
+      handleMergeStacks,
+      handleRemoveStacks,
+      handleToggleBulkEditPanel,
+      handleRefreshThumbnails,
+      handleOptimizePreviews,
+      selectedItems,
+      selectedStackIdsInOrder,
+      t,
+    ]
+  );
 
   const refreshAfterManualUpload = useCallback(async () => {
     try {
@@ -623,7 +732,7 @@ export default function StackGrid({
       if (!defaults) {
         addNotification({
           type: 'error',
-          message: 'Unable to resolve upload defaults for this folder.',
+          message: t.upload.unableToResolveFolderDefaults,
         });
         finalizeFolderProcessing();
         return;
@@ -644,12 +753,12 @@ export default function StackGrid({
           addFilesToQueue({ files: activeFolder.files, type: 'new-stack' });
           addNotification({
             type: 'success',
-            message: `Queued ${activeFolder.files.length} file(s) from “${activeFolder.name}” for upload.`,
+            message: t.upload.queuedFiles(activeFolder.files.length, activeFolder.name),
           });
         } else if (mode === 'single-stack') {
           addNotification({
             type: 'info',
-            message: `Merging “${activeFolder.name}” into a single stack…`,
+            message: t.upload.mergingFolder(activeFolder.name),
           });
           const { stackId, assetIds } = await uploadFolderAsSingleStack(
             activeFolder.files,
@@ -658,7 +767,11 @@ export default function StackGrid({
           await refreshAfterManualUpload();
           addNotification({
             type: 'success',
-            message: `Created stack #${stackId} from “${activeFolder.name}” with ${assetIds.length + 1} file(s).`,
+            message: t.upload.createdStackFromFolder(
+              stackId,
+              activeFolder.name,
+              assetIds.length + 1
+            ),
           });
         } else if (mode === 'create-collection') {
           const cleanDefaults: FolderUploadDefaults = {
@@ -668,7 +781,7 @@ export default function StackGrid({
           const targetName = options.collectionName?.trim() || activeFolder.name;
           addNotification({
             type: 'info',
-            message: `Creating collection “${targetName}” from “${activeFolder.name}”…`,
+            message: t.upload.creatingCollectionFromFolder(targetName, activeFolder.name),
           });
           const { collectionId, stackIds } = await uploadFolderAsCollection(
             activeFolder.files,
@@ -678,12 +791,16 @@ export default function StackGrid({
           await refreshAfterManualUpload();
           addNotification({
             type: 'success',
-            message: `Collection “${targetName}” (ID: ${collectionId}) now contains ${stackIds.length} created stack(s).`,
+            message: t.upload.collectionCreatedFromFolder(
+              targetName,
+              collectionId,
+              stackIds.length
+            ),
           });
         }
       } catch (error) {
         console.error('Folder import flow failed', error);
-        const message = error instanceof Error ? error.message : 'Folder import failed.';
+        const message = error instanceof Error ? error.message : t.grid.folderImportFailed;
         addNotification({ type: 'error', message });
       } finally {
         finalizeFolderProcessing();
@@ -696,6 +813,7 @@ export default function StackGrid({
       finalizeFolderProcessing,
       refreshAfterManualUpload,
       setUploadDefaults,
+      t,
     ]
   );
 
@@ -703,11 +821,11 @@ export default function StackGrid({
     if (activeFolder) {
       addNotification({
         type: 'info',
-        message: `Cancelled import for “${activeFolder.name}”.`,
+        message: t.upload.cancelledFolderImport(activeFolder.name),
       });
     }
     finalizeFolderProcessing();
-  }, [activeFolder, addNotification, finalizeFolderProcessing]);
+  }, [activeFolder, addNotification, finalizeFolderProcessing, t]);
 
   // Check if we're in a collection view
   const _isCollectionView = window.location.pathname.includes('/collections/');
@@ -721,7 +839,7 @@ export default function StackGrid({
       const defaults = computeUploadDefaults();
 
       if (!defaults) {
-        addNotification({ type: 'error', message: 'データセットが特定できませんでした' });
+        addNotification({ type: 'error', message: t.grid.datasetNotFound });
         return;
       }
 
@@ -748,7 +866,7 @@ export default function StackGrid({
         setFolderQueue((prev) => [...prev, ...requests]);
       }
     },
-    [addFilesToQueue, addNotification, computeUploadDefaults, setUploadDefaults]
+    [addFilesToQueue, addNotification, computeUploadDefaults, setUploadDefaults, t]
   );
 
   const handleUrlDrop = useCallback(
@@ -757,7 +875,7 @@ export default function StackGrid({
 
       const datasetNumericId = dataset?.id ? Number(dataset.id) : Number(dsId);
       if (Number.isNaN(datasetNumericId)) {
-        addNotification({ type: 'error', message: 'データセットが特定できませんでした' });
+        addNotification({ type: 'error', message: t.grid.datasetNotFound });
         return;
       }
 
@@ -773,11 +891,6 @@ export default function StackGrid({
       if (inCollectionView) {
         targetMediaType = 'image';
       }
-
-      addNotification({
-        type: 'info',
-        message: `${urls.length}件のURLをダウンロード中です`,
-      });
 
       try {
         const { results } = await apiClient.importAssetsFromUrls({
@@ -801,14 +914,14 @@ export default function StackGrid({
         if (successes.length > 0) {
           addNotification({
             type: 'success',
-            message: `${successes.length}件のURLからアップロードしました`,
+            message: t.grid.urlUploaded(successes.length),
           });
         }
 
         if (duplicates.length > 0) {
           addNotification({
             type: 'info',
-            message: `${duplicates.length}件のURLは既に取り込み済みのためスキップしました`,
+            message: t.grid.urlDuplicatesSkipped(duplicates.length),
           });
         }
 
@@ -822,24 +935,23 @@ export default function StackGrid({
             type: 'error',
             message:
               failures.length === results.length
-                ? 'URLのアップロードに失敗しました'
-                : `${failures.length}件のURLでエラーが発生しました${summary ? `: ${summary}` : ''}`,
+                ? t.grid.urlUploadFailed
+                : t.grid.urlUploadPartialFailed(failures.length, summary),
           });
 
           if (protectedFailures.length > 0) {
             addNotification({
               type: 'info',
-              message:
-                '保護された画像は直接ドロップできません。一度保存してから再度ドロップしてください。',
+              message: t.grid.protectedImageDropHint,
             });
           }
         }
       } catch (error) {
         console.error('Failed to import URLs for new stack', error);
-        addNotification({ type: 'error', message: 'URLのアップロードに失敗しました' });
+        addNotification({ type: 'error', message: t.grid.urlUploadFailed });
       }
     },
-    [dataset?.id, dsId, currentFilter, addNotification]
+    [dataset?.id, dsId, currentFilter, addNotification, t]
   );
 
   // Show loading only for absolute initial load (when no items exist and no total count)
@@ -856,8 +968,8 @@ export default function StackGrid({
     return (
       <div className="fixed inset-0 flex items-center justify-center">
         <div className="text-center">
-          <p className="text-red-400 mb-2">Failed to load items</p>
-          <p className="text-gray-400 text-sm">Please try again later</p>
+          <p className="text-red-400 mb-2">{t.grid.failedToLoad}</p>
+          <p className="text-gray-400 text-sm">{t.grid.tryAgainLater}</p>
         </div>
       </div>
     );
@@ -892,7 +1004,7 @@ export default function StackGrid({
           <div className="fixed top-16 left-1/2 transform -translate-x-1/2 z-30">
             <div className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm flex items-center gap-2 shadow-lg">
               <span className="text-lg">↕</span>
-              Reorder Mode - Drag items to rearrange
+              {t.grid.reorderModeHint}
             </div>
           </div>
         )}
@@ -943,7 +1055,13 @@ export default function StackGrid({
                   onToggleFavorite={handleToggleFavorite}
                   allowRemoveFromCollection={allowRemoveFromCollection}
                   selectedStackIdsInOrder={selectedStackIdsInOrder}
+                  onBulkEditSelected={handleToggleBulkEditPanel}
                   onMergeStacks={handleMergeStacks}
+                  onRemoveSelectedStacks={handleRemoveStacks}
+                  collectionMenuCollections={collectionMenuCollections}
+                  isCollectionMenuLoading={isCollectionMenuLoading}
+                  onAddStacksToCollection={addStackIdsToCollection}
+                  onCreateCollectionWithStacks={openCreateCollectionForStackIds}
                   onRemoveFromCollection={
                     allowRemoveFromCollection ? (id) => handleRemoveFromCollection([id]) : undefined
                   }
@@ -974,7 +1092,7 @@ export default function StackGrid({
           <div className="fixed top-16 left-1/2 transform -translate-x-1/2 z-30">
             <div className="bg-black/80 text-white px-3 py-1 rounded-md text-sm flex items-center gap-2">
               <Loader2 className="h-4 w-4 animate-spin" />
-              Updating...
+              {t.grid.updating}
             </div>
           </div>
         )}
@@ -1017,60 +1135,7 @@ export default function StackGrid({
             : undefined
         }
         showRemoveFromCollection={allowRemoveFromCollection}
-        actions={
-          selectedItems.size > 0
-            ? [
-                {
-                  label: 'Bulk Edit',
-                  value: 'bulk-edit',
-                  onSelect: () => {
-                    setIsEditPanelOpen((prev) => {
-                      const next = !prev;
-                      if (next) {
-                        setInfoSidebarOpen(false);
-                      }
-                      return next;
-                    });
-                  },
-                  icon: <Pencil size={12} />,
-                  group: 'primary' as const,
-                },
-                {
-                  label: 'Merge Stacks',
-                  value: 'merge-stacks',
-                  onSelect: handleMergeStacks,
-                  icon: <GitMerge size={12} />,
-                  confirmMessage:
-                    selectedStackIdsInOrder.length >= 2
-                      ? `選択順の先頭スタック #${selectedStackIdsInOrder[0]} に残り ${selectedStackIdsInOrder.length - 1} 件をマージします。実行しますか？`
-                      : undefined,
-                  group: 'primary' as const,
-                },
-                {
-                  label: 'Refresh Thumbnails',
-                  value: 'refresh-thumbnails',
-                  onSelect: () => handleRefreshThumbnails(Array.from(selectedItems)),
-                  icon: <RefreshCw size={12} />,
-                },
-                {
-                  label: 'Optimize Video',
-                  value: 'optimize-video',
-                  onSelect: handleOptimizePreviews,
-                  icon: <Clapperboard size={12} />,
-                },
-                {
-                  label: 'Delete Stacks',
-                  value: 'delete-stacks',
-                  onSelect: () => handleRemoveStacks(Array.from(selectedItems)),
-                  icon: <Trash2 size={12} />,
-                  confirmMessage: `選択した${selectedItems.size}件のスタックを削除します。元に戻せません。`,
-                  destructive: true,
-                },
-              ].filter(
-                (action) => action.value !== 'merge-stacks' || selectedStackIdsInOrder.length >= 2
-              )
-            : []
-        }
+        actions={selectionActions}
       />
 
       {createPortal(
@@ -1092,6 +1157,8 @@ export default function StackGrid({
         />
       )}
 
+      {createCollectionModal}
+
       {/* Portal for header actions - Info button */}
       {createPortal(
         <HeaderIconButton
@@ -1103,7 +1170,7 @@ export default function StackGrid({
             setInfoSidebarOpen(!infoSidebarOpen);
           }}
           isActive={infoSidebarOpen}
-          aria-label={infoSidebarOpen ? 'Close info panel' : 'Open info panel'}
+          aria-label={infoSidebarOpen ? t.viewer.closeInfo : t.viewer.openInfo}
         >
           <Info size={18} />
         </HeaderIconButton>,

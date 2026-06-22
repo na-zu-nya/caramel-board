@@ -6,7 +6,7 @@ import {promises as fsp} from 'node:fs';
 import {promisify} from 'node:util';
 import {execFile} from 'node:child_process';
 import {createRequire} from 'node:module';
-import {fileURLToPath} from 'node:url';
+import {fileURLToPath, pathToFileURL} from 'node:url';
 import sharp from 'sharp';
 
 const require = createRequire(import.meta.url);
@@ -16,15 +16,17 @@ const __dirname = path.dirname(__filename);
 const serverRoot = path.resolve(__dirname, '..');
 const repoRoot = path.resolve(serverRoot, '..', '..');
 
+const importFilePath = (filePath) => import(pathToFileURL(filePath).href);
+
 let prismaModule;
 let prismaSource = '';
 try {
   prismaSource = path.join(serverRoot, 'node_modules/@prisma/client/index.js');
-  prismaModule = await import(prismaSource);
+  prismaModule = await importFilePath(prismaSource);
 } catch (localError) {
   try {
     prismaSource = require.resolve('@prisma/client');
-    prismaModule = await import(prismaSource);
+    prismaModule = await importFilePath(prismaSource);
   } catch (primaryError) {
     console.error('[migrate-assets] Failed to load @prisma/client');
     console.error('Local workspace error:', localError?.message);

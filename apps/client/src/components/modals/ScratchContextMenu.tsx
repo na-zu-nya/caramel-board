@@ -19,6 +19,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useScratch } from '@/hooks/useScratch';
+import { useT } from '@/lib/i18n';
 
 interface ScratchContextMenuProps {
   datasetId: string;
@@ -27,6 +28,7 @@ interface ScratchContextMenuProps {
 }
 
 export function ScratchContextMenu({ datasetId, scratchId, children }: ScratchContextMenuProps) {
+  const t = useT();
   const navigate = useNavigate();
   const { clearScratch, isClearing, convertScratch, isConverting } = useScratch(datasetId);
   const [showClearDialog, setShowClearDialog] = useState(false);
@@ -72,12 +74,12 @@ export function ScratchContextMenu({ datasetId, scratchId, children }: ScratchCo
         <ContextMenuContent className="w-48">
           <ContextMenuItem onClick={() => setShowClearDialog(true)} disabled={!scratchId}>
             <Eraser className="w-4 h-4 mr-2" />
-            Clear Scratch
+            {t.contextMenu.clearScratch}
           </ContextMenuItem>
           <ContextMenuSeparator />
           <ContextMenuItem onClick={() => setShowConvertDialog(true)} disabled={!scratchId}>
             <FolderPlus className="w-4 h-4 mr-2" />
-            to Collection
+            {t.contextMenu.toCollection}
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
@@ -86,9 +88,11 @@ export function ScratchContextMenu({ datasetId, scratchId, children }: ScratchCo
       <Dialog open={showClearDialog} onOpenChange={setShowClearDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader className="border-b border-gray-200 pb-4">
-            <DialogTitle className="text-lg font-semibold text-gray-900">Clear Scratch</DialogTitle>
+            <DialogTitle className="text-lg font-semibold text-gray-900">
+              {t.contextMenu.clearScratch}
+            </DialogTitle>
             <DialogDescription className="text-gray-600 mt-2">
-              Remove all items from Scratch? This cannot be undone.
+              {t.contextMenu.clearScratchConfirm}
             </DialogDescription>
           </DialogHeader>
           <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
@@ -97,14 +101,14 @@ export function ScratchContextMenu({ datasetId, scratchId, children }: ScratchCo
               onClick={() => setShowClearDialog(false)}
               disabled={isClearing}
             >
-              Cancel
+              {t.common.cancel}
             </Button>
             <Button
               className="bg-red-600 hover:bg-red-700"
               onClick={handleClear}
               disabled={isClearing}
             >
-              {isClearing ? 'Clearing...' : 'Clear'}
+              {isClearing ? t.contextMenu.clearing : t.contextMenu.clear}
             </Button>
           </div>
         </DialogContent>
@@ -115,22 +119,22 @@ export function ScratchContextMenu({ datasetId, scratchId, children }: ScratchCo
         <DialogContent className="sm:max-w-md">
           <DialogHeader className="border-b border-gray-200 pb-4">
             <DialogTitle className="text-lg font-semibold text-gray-900">
-              Convert to Collection
+              {t.contextMenu.convertToCollection}
             </DialogTitle>
             <DialogDescription className="text-gray-600 mt-2">
-              Creates a new collection with current Scratch items, then clears Scratch.
+              {t.contextMenu.convertDescription}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-6 pt-2">
             <div className="space-y-2">
               <Label htmlFor="new-name" className="text-gray-700">
-                Collection Name *
+                {t.contextMenu.collectionName}
               </Label>
               <Input
                 id="new-name"
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
-                placeholder="Enter collection name"
+                placeholder={t.contextMenu.enterCollectionName}
               />
             </div>
             <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
@@ -139,10 +143,10 @@ export function ScratchContextMenu({ datasetId, scratchId, children }: ScratchCo
                 onClick={() => setShowConvertDialog(false)}
                 disabled={isConverting}
               >
-                Cancel
+                {t.common.cancel}
               </Button>
               <Button onClick={handleConvert} disabled={isConverting || !newName.trim()}>
-                {isConverting ? 'Converting...' : 'Convert'}
+                {isConverting ? t.contextMenu.converting : t.contextMenu.convert}
               </Button>
             </div>
           </div>

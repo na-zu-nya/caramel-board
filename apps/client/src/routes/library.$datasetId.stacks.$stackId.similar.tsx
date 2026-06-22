@@ -1,18 +1,23 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { createFileRoute, useNavigate } from '@tanstack/react-router';
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { useAtom } from 'jotai';
-import { Clapperboard, GitMerge, Info, Pencil, RefreshCw, Trash2 } from 'lucide-react';
+import { Info } from 'lucide-react';
+import MersenneTwister from 'mersenne-twister';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import BulkEditPanel, { type EditUpdates } from '@/components/BulkEditPanel';
-import { StackGridItem } from '@/components/grid/StackGridItem';
 import InfoSidebar from '@/components/InfoSidebar';
+import { StackTileGrid } from '@/components/StackTileGrid';
 import { HeaderIconButton } from '@/components/ui/Header/HeaderIconButton';
 import { SelectionActionBar } from '@/components/ui/selection-action-bar';
 import { useSelectionMode } from '@/hooks/features/useSelectionMode';
 import { useHeaderActions } from '@/hooks/useHeaderActions';
+import { useStackTile } from '@/hooks/useStackTile';
 import { apiClient } from '@/lib/api-client';
-import { cn } from '@/lib/utils';
+import { downloadStackOriginals } from '@/lib/download-originals';
+import { useT } from '@/lib/i18n';
+import { getSelectedMediaGridStackIds } from '@/lib/media-grid-selection';
+import { createStackSelectionActions } from '@/lib/stack-selection-actions';
 import {
   currentFilterAtom,
   infoSidebarOpenAtom,
@@ -20,23 +25,43 @@ import {
   selectionModeAtom,
 } from '@/stores/ui';
 import { genListToken, saveViewContext } from '@/stores/view-context';
-import type { MediaGridItem, StackPaginatedResponse } from '@/types';
+import type { MediaGridItem, StackFilter, StackPaginatedResponse } from '@/types';
 
 export const Route = createFileRoute('/library/$datasetId/stacks/$stackId/similar')({
   component: SimilarStacksRoute,
 });
 
+type SimilarStackFilter = StackFilter & { similarTo: number };
+
+const toStackId = (id: string | number): number | null => {
+  const numericId = typeof id === 'string' ? Number.parseInt(id, 10) : id;
+  return Number.isFinite(numericId) ? numericId : null;
+};
+
+const getRandomIndex = (rng: MersenneTwister, total: number) => {
+  const max = 0x100000000;
+  const bound = max - (max % total);
+  let value = 0;
+  do {
+    value = rng.random_int();
+  } while (value >= bound);
+  return value % total;
+};
+
 function SimilarStacksRoute() {
+  const t = useT();
   const { datasetId, stackId } = Route.useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { onOpen, onInfo, onFindSimilar, onAddToScratch, onDownload, onLike, dragProps } =
+    useStackTile(datasetId);
   const [limit] = useState(50);
   const [selectionMode, setSelectionMode] = useAtom(selectionModeAtom);
   const [_currentFilter, setCurrentFilter] = useAtom(currentFilterAtom);
   const [infoSidebarOpen, setInfoSidebarOpen] = useAtom(infoSidebarOpenAtom);
   const [selectedItemId, setSelectedItemId] = useAtom(selectedItemIdAtom);
-  const [favoritePending, setFavoritePending] = useState<Set<string | number>>(() => new Set());
-  const lastClickedIndexRef = useRef<number | null>(null);
+  const mtRef = useRef<MersenneTwister | null>(null);
+  if (!mtRef.current) mtRef.current = new MersenneTwister();
   const {
     selectedItems,
     selectedItemOrder,
@@ -54,10 +79,10 @@ function SimilarStacksRoute() {
     staleTime: 30_000,
   });
 
-  const items = useMemo(() => (data?.stacks ?? []) as unknown as MediaGridItem[], [data]);
-
-  // Header buttons: enable Selection toggle
-  useHeaderActions({ showShuffle: false, showFilter: false, showSelection: true });
+  const items = useMemo<MediaGridItem[]>(
+    () => (data?.stacks ?? []).map((stack) => ({ ...stack, stackId: stack.stackId ?? stack.id })),
+    [data]
+  );
 
   // Ensure currentFilter carries dataset context for downstream components
   useEffect(() => {
@@ -78,82 +103,31 @@ function SimilarStacksRoute() {
   }, [selectedItems.size, setIsEditPanelOpen]);
 
   const selectedStackIdsInOrder = useMemo(() => {
-    const stackIds: number[] = [];
-    for (const selectedId of selectedItemOrder) {
-      const stackId = typeof selectedId === 'string' ? Number.parseInt(selectedId, 10) : selectedId;
-      if (Number.isFinite(stackId)) {
-        stackIds.push(stackId);
-      }
-    }
-    return stackIds;
-  }, [selectedItemOrder]);
+    return getSelectedMediaGridStackIds(selectedItemOrder, items);
+  }, [items, selectedItemOrder]);
 
-  // Click handler with Cmd/Ctrl and Shift support
-  const handleItemClick = useCallback(
-    (item: MediaGridItem, event?: React.MouseEvent) => {
-      const idx = items.findIndex((it) => it?.id === item.id);
-
-      if (event && (event.metaKey || event.ctrlKey)) {
-        if (idx >= 0) lastClickedIndexRef.current = idx;
-        return;
-      }
-      if (event?.altKey) {
-        if (idx >= 0) lastClickedIndexRef.current = idx;
-        return;
-      }
-
-      if (event?.shiftKey) {
-        event.preventDefault();
-        if (!selectionMode) setSelectionMode(true);
-        const last = lastClickedIndexRef.current ?? idx;
-        if (last >= 0 && idx >= 0) {
-          const step = last <= idx ? 1 : -1;
-          const rangeIds: Array<string | number> = [];
-          for (let i = last; step > 0 ? i <= idx : i >= idx; i += step) {
-            const it = items[i];
-            if (it) rangeIds.push(it.id);
-          }
-          selectItemRange(rangeIds);
-        } else {
-          toggleItemSelection(item.id);
-        }
-        if (idx >= 0) lastClickedIndexRef.current = idx;
-        return;
-      }
-
-      if (selectionMode) {
-        event?.preventDefault();
-        toggleItemSelection(item.id);
-        if (idx >= 0) lastClickedIndexRef.current = idx;
-        return;
-      }
-
-      // If info panel open, show detail instead of navigating
-      if (infoSidebarOpen) {
-        setSelectedItemId(item.id);
-        return;
-      }
-
-      // Normal navigation with ViewContext tracking (right→左 order)
-      const loadedIdsLtr = items.map((s) =>
-        typeof s.id === 'string' ? Number.parseInt(s.id as string, 10) : (s.id as number)
-      );
-      const ids = loadedIdsLtr.slice().reverse();
-      const clickedId =
-        typeof item.id === 'string' ? Number.parseInt(item.id as string, 10) : (item.id as number);
+  const navigateToItem = useCallback(
+    (item: MediaGridItem) => {
+      const ids = items
+        .map((similarItem) => toStackId(similarItem.id))
+        .filter((id): id is number => id !== null)
+        .reverse();
+      const clickedId = toStackId(item.id);
+      if (clickedId === null) return;
       const currentIndex = Math.max(0, ids.indexOf(clickedId));
-
-      const mediaType = (item as any).mediaType as string | undefined;
+      const mediaType = item.mediaType;
+      const filters: SimilarStackFilter = { datasetId, similarTo: Number(stackId) };
       const token = genListToken({
         datasetId,
         mediaType,
-        filters: { similarTo: Number(stackId) } as any,
+        filters,
       });
+
       saveViewContext({
         token,
         datasetId,
-        mediaType: mediaType as any,
-        filters: { similarTo: Number(stackId) } as any,
+        mediaType,
+        filters,
         ids,
         currentIndex,
         createdAt: Date.now(),
@@ -165,31 +139,63 @@ function SimilarStacksRoute() {
         search: { page: 0, mediaType, listToken: token },
       });
     },
-    [
-      items,
-      selectionMode,
-      datasetId,
-      stackId,
-      setSelectionMode,
-      toggleItemSelection,
-      selectItemRange,
-      navigate,
-      infoSidebarOpen,
-      setSelectedItemId,
-    ]
+    [datasetId, items, navigate, stackId]
+  );
+
+  const handleShuffle = useCallback(() => {
+    if (items.length === 0 || !mtRef.current) return;
+    const targetIndex = getRandomIndex(mtRef.current, items.length);
+    const item = items[targetIndex];
+    if (!item) return;
+    navigateToItem(item);
+  }, [items, navigateToItem]);
+
+  useHeaderActions({
+    showShuffle: true,
+    showFilter: false,
+    showSelection: true,
+    onShuffle: handleShuffle,
+  });
+
+  // 通常クリック時の遷移だけを持ち、選択操作は StackTileGrid 側に委譲する
+  const handleItemClick = useCallback(
+    (item: MediaGridItem, event?: React.MouseEvent) => {
+      event?.preventDefault();
+      // If info panel open, show detail instead of navigating
+      if (infoSidebarOpen) {
+        setSelectedItemId(item.id);
+        return;
+      }
+
+      navigateToItem(item);
+    },
+    [infoSidebarOpen, setSelectedItemId, navigateToItem]
   );
 
   const handleToggleSelection = useCallback(
     (itemId: string | number) => {
-      if (!selectionMode) setSelectionMode(true);
-      toggleItemSelection(itemId);
-
-      const idx = items.findIndex((item) => item?.id === itemId);
-      if (idx >= 0) {
-        lastClickedIndexRef.current = idx;
+      if (!selectionMode) {
+        setSelectionMode(true);
       }
+      toggleItemSelection(itemId);
     },
-    [items, selectionMode, setSelectionMode, toggleItemSelection]
+    [selectionMode, setSelectionMode, toggleItemSelection]
+  );
+
+  const handleEnterSelectionMode = useCallback(
+    (itemId: string | number) => {
+      setSelectionMode(true);
+      clearSelection();
+      toggleItemSelection(itemId);
+    },
+    [clearSelection, setSelectionMode, toggleItemSelection]
+  );
+
+  const handleSelectRange = useCallback(
+    (itemIds: Array<string | number>) => {
+      selectItemRange(itemIds);
+    },
+    [selectItemRange]
   );
 
   // Favorite toggle
@@ -197,18 +203,6 @@ function SimilarStacksRoute() {
     () => ['similar-stacks', datasetId, stackId, limit] as const,
     [datasetId, stackId, limit]
   );
-
-  const setFavoritePendingForItem = useCallback((itemId: string | number, pending: boolean) => {
-    setFavoritePending((current) => {
-      const next = new Set(current);
-      if (pending) {
-        next.add(itemId);
-      } else {
-        next.delete(itemId);
-      }
-      return next;
-    });
-  }, []);
 
   const patchSimilarFavorite = useCallback(
     (itemId: string | number, favorited: boolean) => {
@@ -228,13 +222,10 @@ function SimilarStacksRoute() {
   );
 
   const onToggleFavorite = useCallback(
-    async (item: MediaGridItem, e: React.MouseEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
+    async (item: MediaGridItem) => {
       const currentFavorited = Boolean(item.favorited ?? item.isFavorite);
       const nextFavorited = !currentFavorited;
       const itemId = item.id;
-      setFavoritePendingForItem(itemId, true);
       patchSimilarFavorite(itemId, nextFavorited);
 
       try {
@@ -247,20 +238,18 @@ function SimilarStacksRoute() {
       } catch (err) {
         patchSimilarFavorite(itemId, currentFavorited);
         console.error('Failed to toggle favorite', err);
-      } finally {
-        setFavoritePendingForItem(itemId, false);
       }
     },
-    [datasetId, patchSimilarFavorite, queryClient, setFavoritePendingForItem, similarQueryKey]
+    [datasetId, patchSimilarFavorite, queryClient, similarQueryKey]
   );
 
   // Bulk edit handlers
   const applyEditUpdates = useCallback(
     async (updates: EditUpdates) => {
       if (selectedItems.size === 0) return;
-      const stackIds = Array.from(selectedItems).map((id) =>
-        typeof id === 'string' ? Number.parseInt(id as string, 10) : (id as number)
-      );
+      const stackIds = selectedStackIdsInOrder;
+      if (stackIds.length === 0) return;
+
       try {
         if (updates.addTags && updates.addTags.length > 0) {
           await apiClient.bulkAddTags(stackIds, updates.addTags);
@@ -278,7 +267,7 @@ function SimilarStacksRoute() {
         console.error('Error applying bulk updates:', error);
       }
     },
-    [selectedItems, clearSelection, exitSelectionMode, refetch]
+    [selectedItems.size, selectedStackIdsInOrder, clearSelection, exitSelectionMode, refetch]
   );
 
   const refreshThumbnails = useCallback(async (stackIds: (string | number)[]) => {
@@ -288,7 +277,9 @@ function SimilarStacksRoute() {
 
   const handleRefreshThumbnails = useCallback(async () => {
     if (selectedItems.size === 0) return;
-    const stackIds = Array.from(selectedItems);
+    const stackIds = selectedStackIdsInOrder;
+    if (stackIds.length === 0) return;
+
     try {
       await refreshThumbnails(stackIds);
       exitSelectionMode();
@@ -296,7 +287,7 @@ function SimilarStacksRoute() {
     } catch (error) {
       console.error('Error refreshing thumbnails:', error);
     }
-  }, [selectedItems, refreshThumbnails, exitSelectionMode, refetch]);
+  }, [selectedItems.size, selectedStackIdsInOrder, refreshThumbnails, exitSelectionMode, refetch]);
 
   const removeStacks = useCallback(async (stackIds: (string | number)[]) => {
     if (stackIds.length === 0) return;
@@ -305,7 +296,9 @@ function SimilarStacksRoute() {
 
   const handleRemoveStacks = useCallback(async () => {
     if (selectedItems.size === 0) return;
-    const stackIds = Array.from(selectedItems);
+    const stackIds = selectedStackIdsInOrder;
+    if (stackIds.length === 0) return;
+
     try {
       await removeStacks(stackIds);
       exitSelectionMode();
@@ -313,14 +306,13 @@ function SimilarStacksRoute() {
     } catch (error) {
       console.error('Error removing stacks:', error);
     }
-  }, [selectedItems, removeStacks, exitSelectionMode, refetch]);
+  }, [selectedItems.size, selectedStackIdsInOrder, removeStacks, exitSelectionMode, refetch]);
 
   const handleOptimizePreviews = useCallback(async () => {
     if (selectedItems.size === 0) return;
 
-    const stackIds = Array.from(selectedItems).map((id) =>
-      typeof id === 'string' ? Number.parseInt(id, 10) : id
-    );
+    const stackIds = selectedStackIdsInOrder;
+    if (stackIds.length === 0) return;
 
     try {
       for (const id of stackIds) {
@@ -331,9 +323,9 @@ function SimilarStacksRoute() {
       await refetch();
     } catch (error) {
       console.error('Error optimizing video previews:', error);
-      alert('Failed to optimize video previews. Please try again.');
+      alert(t.grid.optimizeVideoFailed);
     }
-  }, [selectedItems, datasetId, exitSelectionMode, refetch]);
+  }, [selectedItems.size, selectedStackIdsInOrder, datasetId, exitSelectionMode, refetch, t]);
 
   const handleMergeStacks = useCallback(async () => {
     if (selectedStackIdsInOrder.length < 2) return;
@@ -353,44 +345,166 @@ function SimilarStacksRoute() {
       await refetch();
     } catch (error) {
       console.error('Error merging stacks:', error);
-      alert('スタックのマージに失敗しました');
+      alert(t.grid.mergeStacksFailed);
     }
-  }, [datasetId, exitSelectionMode, queryClient, refetch, selectedStackIdsInOrder]);
+  }, [datasetId, exitSelectionMode, queryClient, refetch, selectedStackIdsInOrder, t]);
+
+  const handleDownloadSelectedStacks = useCallback(() => {
+    if (selectedStackIdsInOrder.length === 0) return;
+    downloadStackOriginals(datasetId, selectedStackIdsInOrder);
+  }, [datasetId, selectedStackIdsInOrder]);
+
+  const handleMergeSelectedStacks = useCallback(async () => {
+    if (selectedStackIdsInOrder.length < 2) return;
+    const confirmed = window.confirm(
+      t.grid.mergeSelectedConfirm(selectedStackIdsInOrder[0], selectedStackIdsInOrder.length - 1)
+    );
+    if (!confirmed) return;
+    await handleMergeStacks();
+  }, [handleMergeStacks, selectedStackIdsInOrder, t]);
+
+  const getStackLinkElement = useCallback(
+    (item: MediaGridItem) => (
+      <Link
+        to="/library/$datasetId/stacks/$stackId"
+        params={{ datasetId, stackId: String(item.id) }}
+      />
+    ),
+    [datasetId]
+  );
+
+  const handleOpenStack = useCallback(
+    async (item: MediaGridItem) => {
+      await onOpen(item.id);
+    },
+    [onOpen]
+  );
+
+  const handleInfoStack = useCallback(
+    (item: MediaGridItem) => {
+      onInfo(item.id);
+    },
+    [onInfo]
+  );
+
+  const handleFindSimilarStack = useCallback(
+    async (item: MediaGridItem) => {
+      await onFindSimilar(item.id);
+    },
+    [onFindSimilar]
+  );
+
+  const handleAddToScratchStack = useCallback(
+    async (item: MediaGridItem) => {
+      await onAddToScratch(item.id);
+    },
+    [onAddToScratch]
+  );
+
+  const handleDownloadStack = useCallback(
+    (item: MediaGridItem) => {
+      onDownload(item.id);
+    },
+    [onDownload]
+  );
+
+  const handleLikeStack = useCallback(
+    async (item: MediaGridItem) => {
+      await onLike(item.id);
+    },
+    [onLike]
+  );
+
+  const getStackDragHandlers = useCallback(
+    (item: MediaGridItem, sourceImageUrl: string | null, sourceImageFilename: string | undefined) =>
+      dragProps(item.id, sourceImageUrl, sourceImageFilename),
+    [dragProps]
+  );
+
+  const selectionActions = useMemo(
+    () =>
+      createStackSelectionActions({
+        selectedCount: selectedItems.size,
+        copy: {
+          bulkEdit: t.grid.bulkEdit,
+          downloadSelected: t.contextMenu.downloadSelected,
+          mergeStacks: t.grid.mergeStacks,
+          refreshThumbnails: t.grid.refreshThumbnails,
+          optimizeVideo: t.grid.optimizeVideo,
+          deleteStacks: t.grid.deleteStacks,
+          deleteStacksConfirm: t.grid.deleteStacksConfirm,
+        },
+        bulkEdit: { onSelect: toggleEditPanel },
+        downloadSelected: { onSelect: handleDownloadSelectedStacks },
+        mergeStacks:
+          selectedStackIdsInOrder.length >= 2
+            ? {
+                onSelect: handleMergeStacks,
+                confirmMessage: t.grid.mergeSelectedConfirm(
+                  selectedStackIdsInOrder[0],
+                  selectedStackIdsInOrder.length - 1
+                ),
+              }
+            : undefined,
+        refreshThumbnails: { onSelect: handleRefreshThumbnails },
+        optimizeVideo: { onSelect: handleOptimizePreviews },
+        deleteStacks: { onSelect: handleRemoveStacks },
+      }),
+    [
+      handleDownloadSelectedStacks,
+      handleMergeStacks,
+      handleOptimizePreviews,
+      handleRefreshThumbnails,
+      handleRemoveStacks,
+      selectedItems.size,
+      selectedStackIdsInOrder,
+      t,
+      toggleEditPanel,
+    ]
+  );
 
   return (
     <div className="p-4">
-      <div className="mb-3 text-sm text-gray-600">Similar to #{stackId}</div>
-      {isLoading && <div className="text-gray-500">Loading similar items…</div>}
-      {isError && <div className="text-red-600">Failed to load similar items</div>}
+      <div className="mb-3 text-sm text-gray-600">{t.similar.similarTo(stackId)}</div>
+      {isLoading && <div className="text-gray-500">{t.similar.loading}</div>}
+      {isError && <div className="text-red-600">{t.similar.failed}</div>}
       {!isLoading && items.length === 0 && (
-        <div className="text-gray-500">No similar items yet (try updating AutoTags)</div>
+        <div className="text-gray-500">{t.similar.emptyAutoTags}</div>
       )}
-      <div
-        className={cn(
-          'grid gap-2',
-          'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6',
-          !selectionMode && infoSidebarOpen ? 'mr-80' : 'mr-0'
-        )}
-        role="list"
-        aria-label="Similar stacks"
-      >
-        {items.map((it) => (
-          <StackGridItem
-            key={it.id}
-            item={it}
-            isSelected={selectedItems.has(it.id)}
-            isInfoSelected={selectedItemId === it.id}
-            isSelectionMode={selectionMode}
-            isFavoritePending={favoritePending.has(it.id)}
-            onItemClick={handleItemClick}
-            onToggleSelection={handleToggleSelection}
-            onToggleFavorite={onToggleFavorite}
-            selectedItems={selectedItems}
-            selectedStackIdsInOrder={selectedStackIdsInOrder}
-            onMergeStacks={handleMergeStacks}
-          />
-        ))}
-      </div>
+      {items.length > 0 ? (
+        <StackTileGrid
+          items={items}
+          datasetId={datasetId}
+          className={!selectionMode && infoSidebarOpen ? 'mr-80' : 'mr-0'}
+          gridClassName="grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2"
+          role="list"
+          ariaLabel={t.similar.ariaLabel}
+          cornerRadius="none"
+          isSelectionMode={selectionMode}
+          selectedItems={selectedItems}
+          selectedInfoItemId={selectedItemId}
+          selectedActionCount={selectedItems.size}
+          getLinkElement={getStackLinkElement}
+          onClickItem={handleItemClick}
+          onEnterSelectionMode={handleEnterSelectionMode}
+          onToggleSelection={handleToggleSelection}
+          onSelectRange={handleSelectRange}
+          onOpenItem={handleOpenStack}
+          onInfoItem={handleInfoStack}
+          onFindSimilarItem={handleFindSimilarStack}
+          onAddToScratchItem={handleAddToScratchStack}
+          onDownloadItem={handleDownloadStack}
+          onDownloadSelected={handleDownloadSelectedStacks}
+          onBulkEditSelected={toggleEditPanel}
+          onMergeSelected={
+            selectedStackIdsInOrder.length >= 2 ? handleMergeSelectedStacks : undefined
+          }
+          onRemoveSelectedStacks={handleRemoveStacks}
+          onToggleFavoriteItem={onToggleFavorite}
+          onLikeItem={handleLikeStack}
+          getDragHandlers={getStackDragHandlers}
+        />
+      ) : null}
 
       {/* Info button in header actions (hidden in selection mode) */}
       {createPortal(
@@ -398,7 +512,7 @@ function SimilarStacksRoute() {
           <HeaderIconButton
             onClick={() => setInfoSidebarOpen(!infoSidebarOpen)}
             isActive={infoSidebarOpen}
-            aria-label={infoSidebarOpen ? 'Close info panel' : 'Open info panel'}
+            aria-label={infoSidebarOpen ? t.viewer.closeInfo : t.viewer.openInfo}
           >
             <Info size={18} />
           </HeaderIconButton>
@@ -412,52 +526,7 @@ function SimilarStacksRoute() {
           selectedCount={selectedItems.size}
           onClearSelection={clearSelection}
           onExitSelectionMode={exitSelectionMode}
-          actions={
-            selectedItems.size > 0
-              ? [
-                  {
-                    label: 'Bulk Edit',
-                    value: 'bulk-edit',
-                    onSelect: toggleEditPanel,
-                    icon: <Pencil size={12} />,
-                    group: 'primary' as const,
-                  },
-                  {
-                    label: 'Merge Stacks',
-                    value: 'merge-stacks',
-                    onSelect: handleMergeStacks,
-                    icon: <GitMerge size={12} />,
-                    confirmMessage:
-                      selectedStackIdsInOrder.length >= 2
-                        ? `選択順の先頭スタック #${selectedStackIdsInOrder[0]} に残り ${selectedStackIdsInOrder.length - 1} 件をマージします。実行しますか？`
-                        : undefined,
-                    group: 'primary' as const,
-                  },
-                  {
-                    label: 'Refresh Thumbnails',
-                    value: 'refresh-thumbnails',
-                    onSelect: handleRefreshThumbnails,
-                    icon: <RefreshCw size={12} />,
-                  },
-                  {
-                    label: 'Optimize Video',
-                    value: 'optimize-video',
-                    onSelect: handleOptimizePreviews,
-                    icon: <Clapperboard size={12} />,
-                  },
-                  {
-                    label: 'Delete Stacks',
-                    value: 'delete-stacks',
-                    onSelect: handleRemoveStacks,
-                    icon: <Trash2 size={12} />,
-                    confirmMessage: `選択した${selectedItems.size}件のスタックを削除します。元に戻せません。`,
-                    destructive: true,
-                  },
-                ].filter(
-                  (action) => action.value !== 'merge-stacks' || selectedStackIdsInOrder.length >= 2
-                )
-              : []
-          }
+          actions={selectionActions}
         />
       )}
 
