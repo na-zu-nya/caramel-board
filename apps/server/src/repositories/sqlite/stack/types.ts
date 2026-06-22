@@ -59,6 +59,8 @@ export interface AssetRow {
   file_type: string;
   original_name: string;
   hash: string;
+  width: number | null;
+  height: number | null;
   order_in_stack: number;
   meta_json: string | null;
   dominant_colors_json: string | null;
@@ -89,6 +91,8 @@ export interface AssetThumbnailRow {
   thumbnail: string;
   file_type: string;
   hash: string;
+  width: number | null;
+  height: number | null;
   order_in_stack: number;
 }
 

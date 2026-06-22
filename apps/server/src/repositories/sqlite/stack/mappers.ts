@@ -13,6 +13,8 @@ export const toAsset = (row: AssetRow, dataSetId: number) => ({
   mimeType: row.file_type,
   originalName: row.original_name,
   hash: row.hash,
+  width: row.width ?? undefined,
+  height: row.height ?? undefined,
   orderInStack: row.order_in_stack,
   meta: parseJsonObject(row.meta_json),
   dominantColors: parseJsonArray(row.dominant_colors_json),

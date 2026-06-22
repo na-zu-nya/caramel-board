@@ -28,10 +28,12 @@ code {
 
 :root {
   --font-sans:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell",
-    "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+    -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Segoe UI",
+    "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
+    sans-serif;
   --font-display: "Tilt Warp", "Murecho", var(--font-sans);
   --font-display-ja: "Murecho", "Tilt Warp", var(--font-sans);
+  --side-menu-list-item-font-size: 0.875rem;
   --caramel-thumbnail-blur-radius: 10px;
   --font-weight-semibold: 500;
   --font-weight-bold: 500;
@@ -70,6 +72,11 @@ code {
   --sidebar-border: oklch(0.92 0.004 286.32);
   --sidebar-ring: oklch(0.871 0.006 286.286);
   --like-color: #d90778;
+}
+
+:root[data-rendering-profile="chrome"],
+[data-rendering-profile="chrome"] {
+  --side-menu-list-item-font-size: 13px;
 }
 
 .dark {

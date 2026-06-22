@@ -20,6 +20,24 @@ export type MediaCategory = 'image' | 'comic' | 'video';
 // Media types describe the actual file composition of a stack.
 export type MediaType = 'image' | 'video' | 'multipleImages';
 
+export type ComicOpeningDirection = 'right-opening' | 'left-opening';
+export type ComicDisplayMode = 'single' | 'spread';
+export type ComicSourceMode = 'single-pages' | 'mixed-spreads';
+
+export interface ComicReadingSettings {
+  openingDirection?: ComicOpeningDirection;
+  spreadDisplayEnabled?: boolean;
+  displayMode?: ComicDisplayMode;
+  sourceMode?: ComicSourceMode;
+  firstPageSingle?: boolean;
+  wideAspectRatioThreshold?: number;
+}
+
+export interface StackMeta {
+  reading?: ComicReadingSettings;
+  thumbnailSource?: Record<string, unknown>;
+}
+
 // Color types
 export interface DominantColor {
   r: number;
@@ -81,6 +99,8 @@ export interface Stack {
   favoritePage?: number;
   assetId?: number;
   stackId?: string | number;
+  dataSetId?: number;
+  meta?: StackMeta;
   assets: Asset[]; // Stack contains assets
   dominantColors?: DominantColor[]; // 代表色
   autoTags?: AutoTag[]; // AI生成タグ

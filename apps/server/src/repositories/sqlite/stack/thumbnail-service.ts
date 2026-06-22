@@ -1,6 +1,7 @@
 import path from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import { DataStorage } from '../../../lib/DataStorage';
+import { readAssetDimensions } from '../../../utils/assetDimensions';
 import { buildStackFrameThumbnailKey } from '../../../utils/assetPath';
 import { generateThumbnail } from '../../../utils/generateThumbnail';
 import { nowIso, parseJsonObject } from '../sqlite';
@@ -190,9 +191,18 @@ export class StackThumbnailService {
     let skipped = 0;
 
     for (const { asset, extension } of eligibleAssets) {
+      const shouldRefreshDimensions = force || asset.width === null || asset.height === null;
+      const dimensions = shouldRefreshDimensions
+        ? await readAssetDimensions(asset.file)
+        : { width: asset.width, height: asset.height };
       const hasUsableThumbnail =
         asset.thumbnail.trim().length > 0 && DataStorage.exists(asset.thumbnail, stack.dataset_id);
       if (!force && hasUsableThumbnail) {
+        if (shouldRefreshDimensions) {
+          this.db
+            .prepare('UPDATE assets SET width = ?, height = ?, updated_at = ? WHERE id = ?')
+            .run(dimensions.width, dimensions.height, nowIso(), asset.id);
+        }
         skipped++;
         thumbnails.push({ assetId: asset.id, thumbnail: asset.thumbnail });
         continue;
@@ -206,8 +216,10 @@ export class StackThumbnailService {
           stack.dataset_id
         );
         this.db
-          .prepare('UPDATE assets SET thumbnail = ?, updated_at = ? WHERE id = ?')
-          .run(thumbnailKey, nowIso(), asset.id);
+          .prepare(
+            'UPDATE assets SET thumbnail = ?, width = ?, height = ?, updated_at = ? WHERE id = ?'
+          )
+          .run(thumbnailKey, dimensions.width, dimensions.height, nowIso(), asset.id);
         regenerated++;
         thumbnails.push({ assetId: asset.id, thumbnail: thumbnailKey });
       } catch (error) {
@@ -242,7 +254,7 @@ export class StackThumbnailService {
   private getThumbnailAssets(stackId: number) {
     return this.db
       .prepare(
-        `SELECT id, file, thumbnail, file_type, hash, order_in_stack
+        `SELECT id, file, thumbnail, file_type, hash, width, height, order_in_stack
          FROM assets
          WHERE stack_id = ?
          ORDER BY order_in_stack ASC, id ASC`
@@ -253,7 +265,7 @@ export class StackThumbnailService {
   private getThumbnailAssetById(stackId: number, assetId: number) {
     return this.db
       .prepare(
-        `SELECT id, file, thumbnail, file_type, hash, order_in_stack
+        `SELECT id, file, thumbnail, file_type, hash, width, height, order_in_stack
          FROM assets
          WHERE stack_id = ? AND id = ?`
       )
@@ -300,9 +312,15 @@ export class StackThumbnailService {
 
     try {
       const thumbnailKey = await generateThumbnail(asset.file, extension, false, datasetId);
+      const dimensions =
+        asset.width === null || asset.height === null
+          ? await readAssetDimensions(asset.file)
+          : { width: asset.width, height: asset.height };
       this.db
-        .prepare('UPDATE assets SET thumbnail = ?, updated_at = ? WHERE id = ?')
-        .run(thumbnailKey, nowIso(), asset.id);
+        .prepare(
+          'UPDATE assets SET thumbnail = ?, width = ?, height = ?, updated_at = ? WHERE id = ?'
+        )
+        .run(thumbnailKey, dimensions.width, dimensions.height, nowIso(), asset.id);
       return thumbnailKey;
     } catch (error) {
       if (strict) throw error;

@@ -367,6 +367,22 @@ class ApiClient {
     return this.fetch<Stack>(`/api/v1/stacks/${stackId}${queryString ? `?${queryString}` : ''}`);
   }
 
+  async updateStack(
+    datasetId: string | number,
+    stackId: string | number,
+    data: {
+      name?: string;
+      thumbnail?: string;
+      meta?: Stack['meta'];
+      mediaType?: 'image' | 'comic' | 'video';
+    }
+  ): Promise<Stack> {
+    return this.fetch<Stack>(`/api/v1/datasets/${datasetId}/stacks/${stackId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
   // Similar stacks (embedding-based)
   async getSimilarStacks(params: {
     datasetId: string | number;

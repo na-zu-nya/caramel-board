@@ -137,10 +137,10 @@ function MediaTypeList() {
       const item = page?.stacks?.[withinPageIndex] ?? allItems[targetIndex];
       if (!item) return;
 
-      // Build a local ids window from the fetched page (right→left order)
-      const ids = (page?.stacks || [])
-        .map((s) => (typeof s.id === 'string' ? Number.parseInt(s.id, 10) : (s.id as number)))
-        .reverse();
+      // Build a local ids window in the same order as the grid list.
+      const ids = (page?.stacks || []).map((s) =>
+        typeof s.id === 'string' ? Number.parseInt(s.id, 10) : (s.id as number)
+      );
       const token = genListToken({
         datasetId,
         mediaType,
@@ -364,14 +364,10 @@ function MediaTypeList() {
         sort: currentSort,
       });
 
-      // Build ViewContext ids window from currently loaded items
-      // StackViewerは右→左の順序を厳守するため、
-      // ビュー文脈のID配列は右から左へ進む並びにする。
-      // ここではグリッドの読み込み順（左→右）から反転させる。
-      const loadedIdsLtr = (allItems || [])
+      // Build ViewContext ids window from currently loaded items in grid-list order.
+      const loadedIds = (allItems || [])
         .filter((it): it is MediaGridItem => !!it)
         .map((it) => (typeof it.id === 'string' ? Number.parseInt(it.id, 10) : (it.id as number)));
-      const loadedIds = loadedIdsLtr.slice().reverse();
       const clickedId =
         typeof item.id === 'string' ? Number.parseInt(item.id, 10) : (item.id as number);
       const currentIndex = Math.max(0, loadedIds.indexOf(clickedId));

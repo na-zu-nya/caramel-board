@@ -118,14 +118,6 @@ export function useStackViewer({
     });
   }, [routePage, stackId]);
 
-  // Clamp current page after stack data loads to avoid out-of-range pages
-  useEffect(() => {
-    if (!stack) return;
-    if (currentPage < 0 || currentPage > (stack.assets?.length || 1) - 1) {
-      setCurrentPage(0);
-    }
-  }, [stack, currentPage, setCurrentPage]);
-
   useEffect(() => {
     const selectedAssetId = stack?.assets?.[currentPage]?.id ?? null;
     startTransition(() => {

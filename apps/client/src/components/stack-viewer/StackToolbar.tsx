@@ -1,7 +1,7 @@
-import { Bookmark, Heart, Layers, Star } from 'lucide-react';
+import { Bookmark, Columns2, Heart, Layers, Square, Star } from 'lucide-react';
 import { useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
-import type { Stack } from '@/types';
+import type { ComicDisplayMode, Stack } from '@/types';
 
 export type AssetSortPreset = 'filename-asc' | 'filename-desc' | 'created-asc' | 'created-desc';
 
@@ -14,6 +14,8 @@ interface StackToolbarProps {
   onAssetFavoriteToggle: () => void;
   onLikeToggle: () => void;
   onListModeToggle: () => void;
+  displayMode?: ComicDisplayMode;
+  onDisplayModeToggle?: () => void;
 }
 
 export default function StackToolbar({
@@ -25,9 +27,12 @@ export default function StackToolbar({
   onAssetFavoriteToggle,
   onLikeToggle,
   onListModeToggle,
+  displayMode = 'single',
+  onDisplayModeToggle,
 }: StackToolbarProps) {
   const t = useT();
-  const canBookmarkPage = stack.assets.length > 1 || stack.assetCount > 1 || stack.assetsCount > 1;
+  const canBookmarkPage =
+    stack.assets.length > 1 || stack.assetCount > 1 || (stack.assetsCount ?? 0) > 1;
 
   return (
     <div
@@ -98,6 +103,25 @@ export default function StackToolbar({
       >
         <Layers size={20} />
       </button>
+
+      {onDisplayModeToggle && (
+        <button
+          onClick={onDisplayModeToggle}
+          className="inline-flex items-center gap-2 rounded-full bg-black/40 px-3.5 py-3 text-sm font-medium text-white transition-colors hover:bg-black/60 hover:text-primary"
+          aria-label={
+            displayMode === 'spread'
+              ? t.viewerControls.singlePageDisplay
+              : t.viewerControls.spreadDisplay
+          }
+        >
+          {displayMode === 'spread' ? <Columns2 size={18} /> : <Square size={18} />}
+          <span>
+            {displayMode === 'spread'
+              ? t.viewerControls.spreadDisplayShort
+              : t.viewerControls.singlePageDisplayShort}
+          </span>
+        </button>
+      )}
     </div>
   );
 }

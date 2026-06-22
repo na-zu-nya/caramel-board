@@ -91,6 +91,8 @@ CREATE TABLE IF NOT EXISTS assets (
   file_type TEXT NOT NULL,
   original_name TEXT NOT NULL,
   hash TEXT NOT NULL,
+  width INTEGER,
+  height INTEGER,
   order_in_stack INTEGER NOT NULL DEFAULT 0,
   meta_json TEXT,
   dominant_colors_json TEXT,

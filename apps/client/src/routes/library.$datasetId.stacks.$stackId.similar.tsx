@@ -110,8 +110,7 @@ function SimilarStacksRoute() {
     (item: MediaGridItem) => {
       const ids = items
         .map((similarItem) => toStackId(similarItem.id))
-        .filter((id): id is number => id !== null)
-        .reverse();
+        .filter((id): id is number => id !== null);
       const clickedId = toStackId(item.id);
       if (clickedId === null) return;
       const currentIndex = Math.max(0, ids.indexOf(clickedId));

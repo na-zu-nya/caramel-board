@@ -25,14 +25,14 @@ export function useStackNavigation({
   const navigate = useNavigate();
   const router = useRouter();
 
-  // Create reverse list and index map for efficient lookup
-  const { reversedStacks, stackIndexMap } = useMemo(() => {
-    const reversed = [...stacks].reverse();
+  // Create ordered list and index map for efficient lookup.
+  const { orderedStacks, stackIndexMap } = useMemo(() => {
+    const ordered = [...stacks];
     const indexMap = new Map<string | number, number>();
-    reversed.forEach((stack, index) => {
+    ordered.forEach((stack, index) => {
       indexMap.set(stack.id, index);
     });
-    return { reversedStacks: reversed, stackIndexMap: indexMap };
+    return { orderedStacks: ordered, stackIndexMap: indexMap };
   }, [stacks]);
 
   // Get current stack index
@@ -45,9 +45,9 @@ export function useStackNavigation({
   const getSiblingStack = useCallback(
     (offset: number) => {
       if (singleStack || currentStackIndex === -1) return undefined;
-      return reversedStacks[currentStackIndex + offset];
+      return orderedStacks[currentStackIndex + offset];
     },
-    [singleStack, currentStackIndex, reversedStacks]
+    [singleStack, currentStackIndex, orderedStacks]
   );
 
   const nextStack = useMemo(() => getSiblingStack(1), [getSiblingStack]);
@@ -134,11 +134,11 @@ export function useStackNavigation({
 
   // Shuffle navigation
   const navigateShuffle = useCallback(() => {
-    if (reversedStacks.length === 0) return;
-    const randomIndex = Math.floor(Math.random() * reversedStacks.length);
-    const randomStack = reversedStacks[randomIndex];
+    if (orderedStacks.length === 0) return;
+    const randomIndex = Math.floor(Math.random() * orderedStacks.length);
+    const randomStack = orderedStacks[randomIndex];
     navigateToStack(randomStack.id, 0);
-  }, [reversedStacks, navigateToStack]);
+  }, [orderedStacks, navigateToStack]);
 
   return {
     currentStackIndex,

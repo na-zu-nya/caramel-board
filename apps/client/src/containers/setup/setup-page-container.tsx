@@ -393,8 +393,8 @@ export function SetupPageContainer({ preview = false }: SetupPageContainerProps)
       const target = uploads[index];
       if (!target || !createdDatasetId) return;
       // 隣接スタックへスワイプ移動できるよう、全スタックの並び(ViewContext)を用意する。
-      // グリッドは新しい順に並ぶため、ids も uploads を逆順にして揃える
-      const ids = [...uploads].reverse().map((u) => Number(u.stackId));
+      // ミニグリッドに表示している順序のまま保存する。
+      const ids = uploads.map((u) => Number(u.stackId));
       const currentIndex = ids.indexOf(Number(target.stackId));
       const token = genListToken({ datasetId: createdDatasetId, mediaType: 'image' });
       saveViewContext({

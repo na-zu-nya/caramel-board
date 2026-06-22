@@ -13,6 +13,7 @@ import { createPortal } from 'react-dom';
 import VideoSeekBar from '@/components/ui/SeekBar/VideoSeekBar';
 import { VideoTransportControls } from '@/components/ui/VideoTransportControls';
 import { useVideoPausedSeekFrameFlush } from '@/hooks/features/useVideoPausedSeekFrameFlush';
+import type { LogicalPage, ReadingUnit } from '@/lib/comic-reading';
 import { getImageDisplaySource, isVideoAsset } from '@/lib/media';
 import { cn } from '@/lib/utils';
 import {
@@ -29,6 +30,14 @@ interface ImageCarouselProps {
   currentAsset?: Asset;
   nextAsset?: Asset;
   prevAsset?: Asset;
+  currentUnit?: ReadingUnit;
+  nextUnit?: ReadingUnit;
+  prevUnit?: ReadingUnit;
+  nextIsStackNeighbor?: boolean;
+  prevIsStackNeighbor?: boolean;
+  nextStackNeighborSide?: 'left' | 'right';
+  prevStackNeighborSide?: 'left' | 'right';
+  openingDirection?: 'right-opening' | 'left-opening';
   /** マーカーのオーバーライド（指定時はcurrentAsset.metaではなくこちらを使用） */
   markers?: VideoMarker[];
   gestureTransform?: {
@@ -160,12 +169,40 @@ const getFiniteVideoCurrentTime = (video: HTMLVideoElement, fallback: number) =>
 const clampVideoTime = (time: number, duration: number) =>
   Math.min(Math.max(Number.isFinite(time) ? time : 0, 0), Math.max(0, duration || 0));
 
+const createAssetReadingUnit = (asset: Asset | undefined): ReadingUnit | undefined => {
+  if (!asset) return undefined;
+  return {
+    id: `${String(asset.id)}:full`,
+    index: 0,
+    kind: 'single',
+    pages: [
+      {
+        id: `${String(asset.id)}:full`,
+        asset,
+        assetIndex: asset.orderInStack ?? 0,
+        segment: 'full',
+      },
+    ],
+  };
+};
+
+const getUnitAssets = (unit: ReadingUnit | undefined) =>
+  unit?.pages.map((page) => page.asset) ?? [];
+
 const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
   (
     {
       currentAsset,
       nextAsset,
       prevAsset,
+      currentUnit,
+      nextUnit,
+      prevUnit,
+      nextIsStackNeighbor = false,
+      prevIsStackNeighbor = false,
+      nextStackNeighborSide,
+      prevStackNeighborSide,
+      openingDirection = 'right-opening',
       markers,
       gestureTransform = { translateX: 0, translateY: 0, scale: 1, opacity: 1 },
       onImageClick,
@@ -220,6 +257,19 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
     const currentVerticalTransformRef = useRef({ translateY: 0, scale: 1, opacity: 1 });
     // const [activePointers, setActivePointers] = useState<Set<number>>(new Set());
 
+    const resolvedCurrentUnit = useMemo(
+      () => currentUnit ?? createAssetReadingUnit(currentAsset),
+      [currentAsset, currentUnit]
+    );
+    const resolvedNextUnit = useMemo(
+      () => nextUnit ?? createAssetReadingUnit(nextAsset),
+      [nextAsset, nextUnit]
+    );
+    const resolvedPrevUnit = useMemo(
+      () => prevUnit ?? createAssetReadingUnit(prevAsset),
+      [prevAsset, prevUnit]
+    );
+
     const getVideoSource = useCallback(
       (asset?: Asset | null) => asset?.preview || asset?.file || asset?.url || '',
       []
@@ -242,6 +292,34 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
         resumeAfterSeekTimerRef.current = null;
       }
     }, []);
+
+    const getNeighborXOffset = useCallback(
+      (position: 'next' | 'prev', containerWidth: number) => {
+        const sideToOffset = (side: 'left' | 'right') =>
+          side === 'left' ? -containerWidth : containerWidth;
+
+        if (position === 'next') {
+          const side = nextStackNeighborSide ?? (nextIsStackNeighbor ? 'right' : undefined);
+          if (side) return sideToOffset(side);
+        }
+
+        if (position === 'prev') {
+          const side = prevStackNeighborSide ?? (prevIsStackNeighbor ? 'left' : undefined);
+          if (side) return sideToOffset(side);
+        }
+
+        const nextDirection = openingDirection === 'right-opening' ? -1 : 1;
+        const direction = position === 'next' ? nextDirection : -nextDirection;
+        return direction * containerWidth;
+      },
+      [
+        nextIsStackNeighbor,
+        nextStackNeighborSide,
+        openingDirection,
+        prevIsStackNeighbor,
+        prevStackNeighborSide,
+      ]
+    );
 
     const handlePausedSeekFrameFlushed = useCallback(
       (video: HTMLVideoElement, targetTime: number) => {
@@ -296,9 +374,8 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
         }
 
         if (nextAssetRef.current) {
-          // Next page sits on the left to align with forward direction (left)
           nextAssetRef.current.style.transform = `translate3d(${
-            totalTranslateX - containerWidth
+            totalTranslateX + getNeighborXOffset('next', containerWidth)
           }px, ${finalTranslateY}px, 0) scale(${finalScale})`;
           nextAssetRef.current.style.transformOrigin = 'center bottom';
           nextAssetRef.current.style.opacity = String(finalOpacity);
@@ -306,16 +383,15 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
         }
 
         if (prevAssetRef.current) {
-          // Previous page sits on the right
           prevAssetRef.current.style.transform = `translate3d(${
-            totalTranslateX + containerWidth
+            totalTranslateX + getNeighborXOffset('prev', containerWidth)
           }px, ${finalTranslateY}px, 0) scale(${finalScale})`;
           prevAssetRef.current.style.transformOrigin = 'center bottom';
           prevAssetRef.current.style.opacity = String(finalOpacity);
           prevAssetRef.current.style.filter = blurAmount > 0 ? `blur(${blurAmount}px)` : '';
         }
       },
-      [gestureTransform]
+      [gestureTransform, getNeighborXOffset]
     );
 
     // Handle video play/pause toggle (mute stateは変更しない)
@@ -702,7 +778,11 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
 
     // Preload images
     useEffect(() => {
-      const targets = [currentAsset, nextAsset, prevAsset]
+      const targets = [
+        ...getUnitAssets(resolvedCurrentUnit),
+        ...getUnitAssets(resolvedNextUnit),
+        ...getUnitAssets(resolvedPrevUnit),
+      ]
         .map((asset) => getPreloadTarget(asset))
         .filter(Boolean) as string[];
 
@@ -715,7 +795,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
           img.src = src;
         }
       }
-    }, [currentAsset, nextAsset, prevAsset, loadedImages, getPreloadTarget]);
+    }, [resolvedCurrentUnit, resolvedNextUnit, resolvedPrevUnit, loadedImages, getPreloadTarget]);
 
     // Handle click for navigation
     const handleContainerClick = useCallback(
@@ -749,7 +829,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
       updateDOMTransforms(translateX);
     }, [translateX, updateDOMTransforms]);
 
-    const assetTransformKey = `${currentAsset?.id ?? 'none'}:${nextAsset?.id ?? 'none'}:${prevAsset?.id ?? 'none'}`;
+    const assetTransformKey = `${resolvedCurrentUnit?.id ?? 'none'}:${resolvedNextUnit?.id ?? 'none'}:${resolvedPrevUnit?.id ?? 'none'}`;
 
     // ページが切り替わった直後にも、再利用されたDOMへ現在の位置を同期する
     useLayoutEffect(() => {
@@ -1055,8 +1135,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
       const containerWidth =
         containerRef.current?.clientWidth ||
         (typeof window !== 'undefined' ? window.innerWidth : 0);
-      const xOffset =
-        position === 'next' ? -containerWidth : position === 'prev' ? containerWidth : 0;
+      const xOffset = position === 'current' ? 0 : getNeighborXOffset(position, containerWidth);
       const translateXValue = gestureTransform.translateX + currentTranslateXRef.current + xOffset;
       const translateYValue = gestureTransform.translateY + verticalTransform.translateY;
       const scale = gestureTransform.scale * verticalTransform.scale;
@@ -1107,6 +1186,17 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
       }
     }, []);
 
+    const getPositionRef = (position: 'current' | 'next' | 'prev') => {
+      switch (position) {
+        case 'current':
+          return currentAssetRef;
+        case 'next':
+          return nextAssetRef;
+        case 'prev':
+          return prevAssetRef;
+      }
+    };
+
     const renderAsset = (asset: Asset | undefined, position: 'current' | 'next' | 'prev') => {
       if (!asset) return null;
 
@@ -1132,24 +1222,12 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
           }
         : undefined;
 
-      // Get the appropriate ref for this position
-      const getRef = () => {
-        switch (position) {
-          case 'current':
-            return currentAssetRef;
-          case 'next':
-            return nextAssetRef;
-          case 'prev':
-            return prevAssetRef;
-        }
-      };
-
       // 現在表示の動画のみ、ネイティブ要素を手動で保持して再マウントを避ける
       if (isVideo && position === 'current') {
         return (
           <div
             key={assetRenderKey}
-            ref={getRef()}
+            ref={getPositionRef(position)}
             className="absolute inset-0 flex items-center justify-center"
             style={style}
           >
@@ -1171,7 +1249,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
       return (
         <div
           key={assetRenderKey}
-          ref={getRef()}
+          ref={getPositionRef(position)}
           className="absolute inset-0 flex items-center justify-center"
           style={style}
         >
@@ -1203,6 +1281,92 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
               </div>
             </div>
           )}
+        </div>
+      );
+    };
+
+    const renderLogicalPageImage = (page: LogicalPage, visualIndex?: number) => {
+      const asset = page.asset;
+      const source = withImageRefreshKey(getImageDisplaySource(asset), asset.updatedAt);
+      const dragStyle: DragImageStyle = {
+        cursor: nativeDragEnabled ? 'grab' : 'default',
+        WebkitUserDrag: nativeDragEnabled ? 'element' : 'none',
+      };
+      const objectPosition =
+        visualIndex === 0 ? 'right center' : visualIndex === 1 ? 'left center' : undefined;
+
+      if (page.segment === 'full') {
+        return (
+          <img
+            src={source || ''}
+            alt={asset.preview || asset.file || asset.url || ''}
+            className="max-w-full max-h-full w-full h-full object-contain select-none"
+            draggable={nativeDragEnabled}
+            style={{ ...dragStyle, objectPosition }}
+          />
+        );
+      }
+
+      return (
+        <div className="relative h-full w-full overflow-hidden">
+          <img
+            src={source || ''}
+            alt={asset.preview || asset.file || asset.url || ''}
+            className="absolute top-0 h-full w-[200%] max-w-none select-none object-fill"
+            draggable={nativeDragEnabled}
+            style={{
+              ...dragStyle,
+              left: page.segment === 'left' ? 0 : '-100%',
+            }}
+          />
+        </div>
+      );
+    };
+
+    const getVisualPages = (pages: LogicalPage[]) => {
+      if (pages.length !== 2) return pages;
+      return openingDirection === 'right-opening' ? [pages[1], pages[0]] : pages;
+    };
+
+    const renderUnit = (unit: ReadingUnit | undefined, position: 'current' | 'next' | 'prev') => {
+      if (!unit) return null;
+      if (unit.pages.length === 1 && unit.pages[0]?.segment === 'full') {
+        return renderAsset(unit.pages[0].asset, position);
+      }
+
+      const style = getImageStyle(position);
+      const isCurrentUnit = position === 'current';
+      const zoomStyle: CSSProperties | undefined = isCurrentUnit
+        ? {
+            transform: `translate3d(${zoomTransform.translateX}px, ${zoomTransform.translateY}px, 0) scale(${zoomTransform.scale})`,
+            transformOrigin: 'center center',
+            willChange: 'transform',
+          }
+        : undefined;
+      const visualPages = getVisualPages(unit.pages);
+
+      return (
+        <div
+          key={`unit-${unit.id}`}
+          ref={getPositionRef(position)}
+          className="absolute inset-0 flex items-center justify-center"
+          style={style}
+        >
+          <div
+            ref={isCurrentUnit ? currentImageSurfaceRef : undefined}
+            className="max-w-full max-h-full w-full h-full flex items-center justify-center"
+          >
+            <div className="flex h-full w-full items-center justify-center gap-0" style={zoomStyle}>
+              {visualPages.map((page, visualIndex) => (
+                <div
+                  key={page.id}
+                  className="flex h-full min-w-0 flex-1 items-center justify-center overflow-hidden"
+                >
+                  {renderLogicalPageImage(page, visualPages.length === 2 ? visualIndex : undefined)}
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       );
     };
@@ -1509,9 +1673,9 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
 
         {/* Preload container for smoother transitions */}
         <div className="absolute inset-0">
-          {renderAsset(prevAsset, 'prev')}
-          {renderAsset(currentAsset, 'current')}
-          {renderAsset(nextAsset, 'next')}
+          {renderUnit(resolvedPrevUnit, 'prev')}
+          {renderUnit(resolvedCurrentUnit, 'current')}
+          {renderUnit(resolvedNextUnit, 'next')}
         </div>
 
         {isCurrentVideo && (

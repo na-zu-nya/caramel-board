@@ -201,11 +201,9 @@ function ScratchView() {
     const item = page.stacks?.[withinPageIndex];
     if (!item) return;
 
-    const ids = (page.stacks || [])
-      .map((s) =>
-        typeof s.id === 'string' ? Number.parseInt(s.id as string, 10) : (s.id as number)
-      )
-      .reverse();
+    const ids = (page.stacks || []).map((s) =>
+      typeof s.id === 'string' ? Number.parseInt(s.id as string, 10) : (s.id as number)
+    );
     const clickedId =
       typeof item.id === 'string' ? Number.parseInt(item.id as string, 10) : (item.id as number);
     const currentIndex = Math.max(0, ids.indexOf(clickedId));
@@ -251,8 +249,7 @@ function ScratchView() {
 
   const handleItemClick = useCallback(
     (item: MediaGridItem) => {
-      const loadedIdsLtr = (items || []).map((it) => Number(it.id));
-      const loadedIds = loadedIdsLtr.slice().reverse();
+      const loadedIds = (items || []).map((it) => Number(it.id));
       const clickedId =
         typeof item.id === 'string' ? Number.parseInt(item.id as string, 10) : (item.id as number);
       const currentIndex = Math.max(0, loadedIds.indexOf(clickedId));

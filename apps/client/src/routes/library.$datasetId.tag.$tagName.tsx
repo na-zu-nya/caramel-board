@@ -174,11 +174,10 @@ function TagDetailPage() {
       filter: effectiveFilter,
       sort: currentSort,
     });
-    // Build ordered ids (right-to-left) from loaded items
-    const loadedIdsLtr = (allItems || [])
+    // Build ordered ids from loaded items in grid-list order.
+    const ids = (allItems || [])
       .filter((it): it is MediaGridItem => !!it)
       .map((it) => toNumericId(it.id));
-    const ids = loadedIdsLtr.slice().reverse();
     const clickedId = toNumericId(item.id);
     const currentIndex = Math.max(0, ids.indexOf(clickedId));
 

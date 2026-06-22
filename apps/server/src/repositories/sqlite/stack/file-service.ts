@@ -3,6 +3,7 @@ import path from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import { DuplicateAssetError } from '../../../errors/DuplicateAssetError';
 import { DataStorage } from '../../../lib/DataStorage';
+import { readAssetDimensions } from '../../../utils/assetDimensions';
 import { buildAssetKey } from '../../../utils/assetPath';
 import { getExtension, getFileType, getHash } from '../../../utils/functions';
 import { generateMediaPreview } from '../../../utils/generateMediaPreview';
@@ -127,6 +128,7 @@ export class StackFileService {
     }
 
     const dominantColors = await this.colorService.extractAssetColors(key, thumbnailKey, ext);
+    const dimensions = await readAssetDimensions(key);
     const nextOrder =
       (
         this.db
@@ -139,8 +141,8 @@ export class StackFileService {
     const created = this.db
       .prepare(
         `INSERT INTO assets
-           (stack_id, file, thumbnail, preview, file_type, original_name, hash, order_in_stack, meta_json, dominant_colors_json, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+           (stack_id, file, thumbnail, preview, file_type, original_name, hash, width, height, order_in_stack, meta_json, dominant_colors_json, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         stackId,
@@ -150,6 +152,8 @@ export class StackFileService {
         ext,
         file.originalname,
         hash,
+        dimensions.width,
+        dimensions.height,
         nextOrder + 1,
         JSON.stringify(options.meta ?? {}),
         toColorJson(dominantColors),

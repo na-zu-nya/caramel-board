@@ -2,9 +2,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation, useNavigate, useParams } from '@tanstack/react-router';
 import { useAtom, useSetAtom } from 'jotai';
 import {
+  BookOpen,
   Calendar,
   ChevronDown,
   ChevronUp,
+  Columns2,
   Copy,
   Download,
   GalleryVerticalEnd,
@@ -15,7 +17,10 @@ import {
   Loader2,
   NotebookText,
   Palette,
+  PanelLeftOpen,
+  PanelRightOpen,
   RefreshCw,
+  Square,
   Star,
   Tag,
   Trash2,
@@ -27,6 +32,7 @@ import { AuthorLinkQuickAdd } from '@/components/authors/AuthorLinkQuickAdd';
 import { authorLinkStyles } from '@/components/authors/authorLinkStyles';
 import { AutoTagDisplay } from '@/components/ui/autotag-display';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { ColorPalette } from '@/components/ui/color-ball';
 import { Progress } from '@/components/ui/progress';
 import {
@@ -42,6 +48,7 @@ import { useScratch } from '@/hooks/useScratch';
 import { apiClient } from '@/lib/api-client';
 import { getAuthorLinkLabel, MAX_AUTHOR_LINKS } from '@/lib/author-links';
 import { copyText } from '@/lib/clipboard';
+import { normalizeComicReadingSettings } from '@/lib/comic-reading';
 import { downloadStackOriginals } from '@/lib/download-originals';
 import { getMediaTypeLabel, useT } from '@/lib/i18n';
 import { removeStackFromCache } from '@/lib/stack-cache';
@@ -54,7 +61,14 @@ import {
   selectedItemIdAtom,
 } from '@/stores/ui';
 import { addUploadNotificationAtom } from '@/stores/upload';
-import type { Author, DominantColor } from '@/types';
+import type {
+  Author,
+  ComicDisplayMode,
+  ComicOpeningDirection,
+  ComicReadingSettings,
+  DominantColor,
+  Stack,
+} from '@/types';
 
 interface InfoSidebarProps {
   hideThumbnails?: boolean;
@@ -73,6 +87,10 @@ const isSameEntityId = (left: string | number | undefined, right: string | numbe
   if (left === undefined || right === null) return false;
   return String(left) === String(right);
 };
+
+const PAGE_SETTING_CHOICE_BUTTON_CLASS =
+  'flex min-w-0 items-center justify-center gap-1.5 rounded-md px-2 py-2.5 text-xs font-medium leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60';
+const PAGE_SETTING_CHOICE_INACTIVE_CLASS = 'bg-gray-200/80 text-gray-700 hover:bg-gray-200';
 
 export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps) {
   const t = useT();
@@ -129,6 +147,16 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
     if (!selectedItem?.assets || selectedInfoAssetId === null) return undefined;
     return selectedItem.assets.find((asset) => isSameEntityId(asset.id, selectedInfoAssetId))?.id;
   }, [selectedInfoAssetId, selectedItem?.assets]);
+
+  const selectedItemAssetCount =
+    selectedItem?.assetsCount ?? selectedItem?.assetCount ?? selectedItem?.assets?.length ?? 0;
+  const canEditReadingSettings =
+    !!selectedItem && selectedItem.mediaType !== 'video' && selectedItemAssetCount > 1;
+  const readingSettings = useMemo(
+    () => normalizeComicReadingSettings(selectedItem?.meta?.reading),
+    [selectedItem?.meta?.reading]
+  );
+  const pageSettingDisplayMode = readingSettings.displayMode ?? 'spread';
 
   useEffect(() => {
     if (selectedInfoAssetId === null || !selectedItem?.assets) return;
@@ -396,6 +424,15 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
     },
   });
 
+  const updateReadingSettingsMutation = useMutation({
+    mutationFn: async ({ stackId, meta }: { stackId: string | number; meta: Stack['meta'] }) =>
+      apiClient.updateStack(datasetId, stackId, { meta }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['stack'] });
+      queryClient.invalidateQueries({ queryKey: ['stacks'] });
+    },
+  });
+
   const currentTagNames = useMemo(() => {
     const names = new Set<string>();
     for (const tag of selectedItem?.tags || []) {
@@ -559,6 +596,43 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
       updateMediaTypeMutation.mutate({ stackId: Number(selectedItem.id), mediaType });
     }
   };
+
+  const handleReadingSettingsChange = useCallback(
+    (patch: ComicReadingSettings) => {
+      if (!selectedItem) return;
+      updateReadingSettingsMutation.mutate({
+        stackId: selectedItem.id,
+        meta: {
+          ...(selectedItem.meta ?? {}),
+          reading: {
+            ...readingSettings,
+            ...patch,
+          },
+        },
+      });
+    },
+    [readingSettings, selectedItem, updateReadingSettingsMutation]
+  );
+
+  const handleSpreadDisplayEnabledChange = useCallback(
+    (checked: boolean) => {
+      handleReadingSettingsChange({
+        spreadDisplayEnabled: checked,
+        displayMode: checked ? pageSettingDisplayMode : readingSettings.displayMode,
+      });
+    },
+    [handleReadingSettingsChange, pageSettingDisplayMode, readingSettings.displayMode]
+  );
+
+  const handlePageDisplayModeChange = useCallback(
+    (displayMode: ComicDisplayMode) => {
+      handleReadingSettingsChange({
+        spreadDisplayEnabled: true,
+        displayMode,
+      });
+    },
+    [handleReadingSettingsChange]
+  );
 
   const likeMutation = useMutation({
     mutationFn: async ({ stackId, assetId }: { stackId: number; assetId?: string | number }) => {
@@ -730,6 +804,134 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
     isActive: isOpen,
     onClose: () => setIsOpen(false),
   });
+
+  const pageSettingsSection = canEditReadingSettings ? (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+        <BookOpen size={16} />
+        {t.info.pageSettings}
+      </div>
+      <div className="space-y-3">
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium leading-none text-gray-500">
+            {t.info.openingDirection}
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            {(
+              [
+                {
+                  value: 'right-opening',
+                  label: t.viewerControls.rightOpening,
+                  Icon: PanelRightOpen,
+                },
+                {
+                  value: 'left-opening',
+                  label: t.viewerControls.leftOpening,
+                  Icon: PanelLeftOpen,
+                },
+              ] satisfies Array<{
+                value: ComicOpeningDirection;
+                label: string;
+                Icon: typeof PanelRightOpen;
+              }>
+            ).map(({ value, label, Icon }) => {
+              const isSelected = readingSettings.openingDirection === value;
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={isSelected}
+                  disabled={updateReadingSettingsMutation.isPending}
+                  onClick={() => handleReadingSettingsChange({ openingDirection: value })}
+                  className={cn(
+                    PAGE_SETTING_CHOICE_BUTTON_CLASS,
+                    isSelected
+                      ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+                      : PAGE_SETTING_CHOICE_INACTIVE_CLASS
+                  )}
+                >
+                  <Icon size={15} />
+                  <span>{label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="space-y-2.5">
+          <label className="flex min-h-7 items-center gap-2 text-sm font-medium text-gray-700">
+            <Checkbox
+              checked={readingSettings.spreadDisplayEnabled}
+              onCheckedChange={(checked) => handleSpreadDisplayEnabledChange(checked === true)}
+              disabled={updateReadingSettingsMutation.isPending}
+            />
+            <span>{t.info.useAutoSpreadDisplay}</span>
+          </label>
+
+          {readingSettings.spreadDisplayEnabled && (
+            <div className="space-y-2.5">
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium leading-none text-gray-500">
+                  {t.info.defaultDisplay}
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {(
+                    [
+                      {
+                        value: 'spread',
+                        label: t.viewerControls.spreadDisplayShort,
+                        Icon: Columns2,
+                      },
+                      {
+                        value: 'single',
+                        label: t.viewerControls.singlePageDisplayShort,
+                        Icon: Square,
+                      },
+                    ] satisfies Array<{
+                      value: ComicDisplayMode;
+                      label: string;
+                      Icon: typeof Columns2;
+                    }>
+                  ).map(({ value, label, Icon }) => {
+                    const isSelected = pageSettingDisplayMode === value;
+                    return (
+                      <button
+                        key={value}
+                        type="button"
+                        aria-pressed={isSelected}
+                        disabled={updateReadingSettingsMutation.isPending}
+                        onClick={() => handlePageDisplayModeChange(value)}
+                        className={cn(
+                          PAGE_SETTING_CHOICE_BUTTON_CLASS,
+                          isSelected
+                            ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+                            : PAGE_SETTING_CHOICE_INACTIVE_CLASS
+                        )}
+                      >
+                        <Icon size={15} />
+                        <span>{label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <label className="flex min-h-7 items-center gap-2 text-sm font-medium text-gray-700">
+                <Checkbox
+                  checked={readingSettings.firstPageSingle}
+                  onCheckedChange={(checked) =>
+                    handleReadingSettingsChange({ firstPageSingle: checked === true })
+                  }
+                  disabled={updateReadingSettingsMutation.isPending}
+                />
+                <span>{t.info.coverPageSingle}</span>
+              </label>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  ) : null;
 
   return (
     <div
@@ -1165,6 +1367,8 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
                 </div>
               </div>
             </div>
+
+            {pageSettingsSection}
 
             {/* Stats */}
             <div className="space-y-2">

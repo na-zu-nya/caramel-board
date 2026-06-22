@@ -118,11 +118,9 @@ function CollectionViewContent() {
     const item = page.stacks?.[withinPageIndex];
     if (!item) return;
 
-    const ids = (page.stacks || [])
-      .map((s) =>
-        typeof s.id === 'string' ? Number.parseInt(s.id as string, 10) : (s.id as number)
-      )
-      .reverse();
+    const ids = (page.stacks || []).map((s) =>
+      typeof s.id === 'string' ? Number.parseInt(s.id as string, 10) : (s.id as number)
+    );
     const clickedId =
       typeof item.id === 'string' ? Number.parseInt(item.id as string, 10) : (item.id as number);
     const currentIndex = Math.max(0, ids.indexOf(clickedId));
@@ -533,12 +531,10 @@ function CollectionViewContent() {
       sort: currentSort,
     });
     console.log('Navigate to stack:', item.id);
-    // Build ids from loaded stacks
-    // StackViewerは右→左の順序で巡回するため、ID配列は反転させて保存する
-    const loadedIdsLtr = resolvedLoadedItems.map((it) =>
+    // Build ids from loaded stacks in grid-list order.
+    const loadedIds = resolvedLoadedItems.map((it) =>
       typeof it.id === 'string' ? Number.parseInt(it.id, 10) : (it.id as number)
     );
-    const loadedIds = loadedIdsLtr.slice().reverse();
     const clickedId =
       typeof item.id === 'string' ? Number.parseInt(item.id, 10) : (item.id as number);
     const currentIndex = Math.max(0, loadedIds.indexOf(clickedId));

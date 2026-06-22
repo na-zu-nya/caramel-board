@@ -428,7 +428,7 @@ function TagsPage() {
     const page = await apiClient.getStacksWithFilters(qp);
     const item = page?.stacks?.[withinPageIndex];
     if (!item) return;
-    const ids = (page.stacks || []).map((stack) => toNumericId(stack.id)).reverse();
+    const ids = (page.stacks || []).map((stack) => toNumericId(stack.id));
     const clickedId = toNumericId(item.id);
     const currentIndex = Math.max(
       0,
@@ -686,8 +686,7 @@ function TagsPage() {
       }
 
       event.preventDefault();
-      const loadedIdsLtr = (allStacks || []).map((s) => toNumericId(s.id));
-      const ids = loadedIdsLtr.slice().reverse();
+      const ids = (allStacks || []).map((s) => toNumericId(s.id));
       const clickedId = toNumericId(stack.id);
       const currentIndex = Math.max(0, ids.indexOf(clickedId));
 

@@ -37,6 +37,8 @@ const meta: Meta<typeof StackToolbar> = {
     onAssetFavoriteToggle: () => console.log('page bookmark'),
     onLikeToggle: () => console.log('like'),
     onListModeToggle: () => console.log('list'),
+    displayMode: 'single',
+    onDisplayModeToggle: () => console.log('display mode'),
   },
 };
 
@@ -64,6 +66,12 @@ export const StackFavorited: Story = {
       ...baseStack,
       favorited: true,
     },
+  },
+};
+
+export const SpreadMode: Story = {
+  args: {
+    displayMode: 'spread',
   },
 };
 
