@@ -20,7 +20,10 @@ const uvRuntimeResource = path.join(runtimeResource, 'uv');
 const serverRoot = path.join(repoRoot, 'apps/server');
 const clientRoot = path.join(repoRoot, 'apps/client');
 const rootPackageJson = JSON.parse(fs.readFileSync(path.join(repoRoot, 'package.json'), 'utf8'));
-const rootPackageLock = JSON.parse(fs.readFileSync(path.join(repoRoot, 'package-lock.json'), 'utf8'));
+const rootPackageLock = JSON.parse(
+  fs.readFileSync(path.join(repoRoot, 'package-lock.json'), 'utf8')
+);
+const serverRuntimeDependencyNames = new Set(['dotenv', 'fs-extra', 'sharp']);
 const nodeMajor = Number(process.env.CARAMEL_NODE_MAJOR || 24);
 
 const npmCommand = () => (process.platform === 'win32' ? 'npm.cmd' : 'npm');
@@ -247,12 +250,17 @@ const installUvRuntime = async () => {
 
 const writeRuntimeServerPackageJson = () => {
   const raw = JSON.parse(fs.readFileSync(path.join(serverRoot, 'package.json'), 'utf8'));
+  const dependencies = Object.fromEntries(
+    Object.entries(raw.dependencies ?? {}).filter(([name]) =>
+      serverRuntimeDependencyNames.has(name)
+    )
+  );
   const packageJson = {
     name: '@caramelboard/runtime-server',
     private: true,
     version: rootPackageJson.version,
     type: 'module',
-    dependencies: raw.dependencies,
+    dependencies,
   };
   fs.writeFileSync(
     path.join(serverResource, 'package.json'),
@@ -334,11 +342,10 @@ const copyRuntimeDependencyClosure = (packagePath, copiedPackagePaths) => {
 };
 
 const installServerRuntimeDependencies = () => {
-  const raw = JSON.parse(fs.readFileSync(path.join(serverRoot, 'package.json'), 'utf8'));
   const copiedPackagePaths = new Set();
   fs.mkdirSync(path.join(serverResource, 'node_modules'), { recursive: true });
 
-  for (const dependencyName of Object.keys(raw.dependencies ?? {})) {
+  for (const dependencyName of serverRuntimeDependencyNames) {
     copyRuntimeDependencyClosure(rootDependencyPackagePath(dependencyName), copiedPackagePaths);
   }
   console.log(`Copied ${copiedPackagePaths.size} runtime packages from root node_modules`);
@@ -366,13 +373,21 @@ const pruneServerRuntime = () => {
   removeFilesByExtension(nodeModules, ['.map', '.d.ts', '.d.mts']);
 };
 
+const copyServerRuntimeDist = () => {
+  const sourceDist = path.join(serverRoot, 'dist');
+  const targetDist = path.join(serverResource, 'dist');
+  fs.mkdirSync(targetDist, { recursive: true });
+
+  const entry = path.join(sourceDist, 'entry.node.mjs');
+  if (!fs.existsSync(entry)) {
+    throw new Error(`Server build output was not found: ${entry}`);
+  }
+  fs.copyFileSync(entry, path.join(targetDist, 'entry.node.mjs'));
+};
+
 const prepareServerRuntime = () => {
   ensureEmptyDir(serverResource);
-  fs.mkdirSync(path.join(serverResource, 'dist'), { recursive: true });
-  fs.cpSync(path.join(serverRoot, 'dist'), path.join(serverResource, 'dist'), {
-    recursive: true,
-    force: true,
-  });
+  copyServerRuntimeDist();
   fs.cpSync(path.join(serverRoot, 'sqlite'), path.join(serverResource, 'sqlite'), {
     recursive: true,
     force: true,
@@ -407,7 +422,7 @@ const main = async () => {
   run(npmCommand(), ['run', '-w', '@caramelboard/server', 'build']);
   run(npmCommand(), ['run', '-w', '@caramelboard/client', 'build']);
 
-  fs.mkdirSync(resourcesRoot, { recursive: true });
+  ensureEmptyDir(resourcesRoot);
   await installNodeRuntime();
   await installUvRuntime();
   prepareServerRuntime();

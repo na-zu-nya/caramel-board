@@ -9,7 +9,7 @@
     "start:prod": "node dist/entry.node.mjs",
     "dev": "npm run build && nodemon --watch src --ext ts --exec 'npm run build && node dist/entry.node.mjs'",
     "dev:next": "npm run build && STANDALONE_SQLITE_PATH=${STANDALONE_SQLITE_PATH:-../../exports/imported-reference-check.sqlite} PORT=${PORT:-9000} nodemon --watch src --ext ts --exec 'npm run build && node dist/entry.node.mjs'",
-    "build": "esbuild src/entry.node.ts --sourcemap --bundle --platform=node --format=esm --external:sharp --external:dotenv --external:fs-extra --external:form-data --external:dayjs --external:axios --outfile=dist/entry.node.mjs",
+    "build": "esbuild src/entry.node.ts --sourcemap --bundle --platform=node --format=esm --external:sharp --external:dotenv --external:fs-extra --outfile=dist/entry.node.mjs",
     "watch": "npm run build -- --watch",
     "import:standalone": "node scripts/import-standalone-sqlite.mjs",
     "migrate:standalone": "node scripts/migrate-standalone-sqlite.mjs",
@@ -36,11 +36,9 @@
     "zod": "^3.25.34"
   },
   "dependencies": {
-    "axios": "^1.9.0",
     "colorlip": "^1.0.0",
     "dayjs": "^1.10.7",
     "dotenv": "^10.0.0",
-    "form-data": "^4.0.2",
     "fs-extra": "^10.1.0",
     "sharp": "^0.34.2"
   }
