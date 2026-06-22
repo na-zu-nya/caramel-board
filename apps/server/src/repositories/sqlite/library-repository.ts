@@ -18,6 +18,14 @@ interface CountRow {
   count: number;
 }
 
+const STACK_MEDIA_TYPES = ['image', 'video', 'multipleImages'] as const;
+
+function readStackMediaTypes(value: unknown): StandaloneStackListParams['mediaTypes'] {
+  if (!Array.isArray(value)) return undefined;
+  const selected = STACK_MEDIA_TYPES.filter((mediaType) => value.includes(mediaType));
+  return selected.length > 0 ? selected : undefined;
+}
+
 interface DatasetRow {
   id: number;
   name: string;
@@ -561,12 +569,7 @@ export class StandaloneLibraryRepository {
       filterConfig.mediaCategory === 'video'
         ? filterConfig.mediaCategory
         : undefined;
-    const mediaType =
-      filterConfig.mediaType === 'image' ||
-      filterConfig.mediaType === 'video' ||
-      filterConfig.mediaType === 'multipleImages'
-        ? filterConfig.mediaType
-        : undefined;
+    const mediaTypes = readStackMediaTypes(filterConfig.mediaTypes);
     const stackIds = getSmartCollectionColorStackIds(
       this.colorRepository,
       collection.dataset_id,
@@ -576,7 +579,7 @@ export class StandaloneLibraryRepository {
     const params: StandaloneStackListParams = {
       dataSetId: collection.dataset_id,
       mediaCategory,
-      mediaType,
+      mediaTypes,
       tag: Array.isArray(filterConfig.tagIds)
         ? filterConfig.tagIds.map((value) => String(value))
         : undefined,

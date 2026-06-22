@@ -1,7 +1,9 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { DataStorage } from '../lib/DataStorage';
+import { generateMediaPreview, shouldGeneratePreview } from '../utils/generateMediaPreview';
 import { isPdfFileInput } from '../utils/pdfImport';
 
 describe('Test', () => {
@@ -45,6 +47,44 @@ describe('PDF互換ベクトル取り込み判定', () => {
         })
       ).resolves.toBe(true);
     } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('SVGプレビュー生成', () => {
+  it('SVGをPNGプレビュー対象として生成する', async () => {
+    expect(shouldGeneratePreview('svg')).toBe(true);
+    expect(shouldGeneratePreview('.svgz')).toBe(true);
+
+    const previousStorage = process.env.FILES_STORAGE;
+    const tempDir = mkdtempSync(path.join(os.tmpdir(), 'caramel-svg-preview-'));
+    process.env.FILES_STORAGE = tempDir;
+
+    const fileKey = 'library/1/assets/ab/source.svg';
+    const inputPath = DataStorage.getPath(fileKey);
+    mkdirSync(path.dirname(inputPath), { recursive: true });
+    writeFileSync(
+      inputPath,
+      '<svg xmlns="http://www.w3.org/2000/svg" width="256" height="128" viewBox="0 0 256 128"><rect width="256" height="128" fill="#fff"/><path d="M24 96 C80 20 156 20 232 96" fill="none" stroke="#222" stroke-width="12"/></svg>'
+    );
+
+    try {
+      const previewKey = await generateMediaPreview(fileKey, 'abcdef1234567890', 'svg', {
+        dataSetId: 1,
+        force: true,
+      });
+
+      expect(previewKey).not.toBeNull();
+      if (!previewKey) return;
+      expect(previewKey).toBe('library/1/preview/ab/abcdef1234567890.png');
+      expect(existsSync(DataStorage.getPath(previewKey))).toBe(true);
+    } finally {
+      if (previousStorage === undefined) {
+        delete process.env.FILES_STORAGE;
+      } else {
+        process.env.FILES_STORAGE = previousStorage;
+      }
       rmSync(tempDir, { recursive: true, force: true });
     }
   });

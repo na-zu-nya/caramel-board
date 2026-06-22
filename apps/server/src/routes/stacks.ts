@@ -18,6 +18,14 @@ import { createZipArchive } from '../utils/zip';
 export const stacksRoute = new Hono();
 
 type MediaCategory = 'image' | 'comic' | 'video';
+const ActualMediaTypeSchema = z.enum(['image', 'video', 'multipleImages']);
+const ActualMediaTypesQuerySchema = z
+  .union([ActualMediaTypeSchema, z.array(ActualMediaTypeSchema)])
+  .optional()
+  .transform((value) => {
+    if (value === undefined) return undefined;
+    return Array.isArray(value) ? value : [value];
+  });
 type ImportedFile = {
   path: string;
   originalname: string;
@@ -41,7 +49,7 @@ const PaginatedQuerySchema = z.object({
   dataSetId: z.coerce.number().int().positive(),
   collection: z.coerce.number().int().positive().optional(),
   mediaCategory: z.enum(['image', 'comic', 'video']).optional(),
-  mediaType: z.enum(['image', 'video', 'multipleImages']).optional(),
+  mediaTypes: ActualMediaTypesQuerySchema,
   tag: z.union([z.array(z.string()), z.string()]).optional(),
   author: z.union([z.array(z.string()), z.string()]).optional(),
   fav: z.enum(['0', '1']).optional(),
@@ -86,7 +94,7 @@ const AutoTagSearchQuerySchema = z.object({
   offset: z.coerce.number().int().min(0).optional().default(0),
   search: z.string().optional(),
   mediaCategory: z.enum(['image', 'comic', 'video']).optional(),
-  mediaType: z.enum(['image', 'video', 'multipleImages']).optional(),
+  mediaTypes: ActualMediaTypesQuerySchema,
   author: z.union([z.array(z.string()), z.string()]).optional(),
   tag: z.union([z.array(z.string()), z.string()]).optional(),
   fav: z.enum(['0', '1']).optional(),
@@ -113,6 +121,13 @@ const BulkFavoriteSchema = z.object({
 });
 const BulkRefreshThumbsSchema = z.object({ stackIds: z.array(z.number().int().positive()) });
 const BulkRemoveSchema = z.object({ stackIds: z.array(z.number().int().positive()) });
+const SetThumbnailSourceSchema = z.object({
+  dataSetId: z.coerce.number().int().positive().optional(),
+  datasetId: z.coerce.number().int().positive().optional(),
+  assetId: z.coerce.number().int().positive(),
+  pageNumber: z.coerce.number().int().positive().optional(),
+  timeSeconds: z.coerce.number().min(0).optional(),
+});
 const MergeStacksSchema = z.object({
   targetId: z.number().int().positive(),
   sourceIds: z.array(z.number().int().positive()).min(1),
@@ -536,7 +551,7 @@ stacksRoute.get('/paginated', async (c) => {
     dataSetId: query.dataSetId,
     collection: query.collection,
     mediaCategory: query.mediaCategory,
-    mediaType: query.mediaType,
+    mediaTypes: query.mediaTypes,
     tag: query.tag,
     author: query.author,
     fav: query.fav,
@@ -594,7 +609,7 @@ stacksRoute.get('/search/autotag', async (c) => {
     offset,
     search,
     mediaCategory,
-    mediaType,
+    mediaTypes,
     author,
     tag,
     fav,
@@ -614,7 +629,7 @@ stacksRoute.get('/search/autotag', async (c) => {
       offset,
       search,
       mediaCategory,
-      mediaType,
+      mediaTypes,
       author,
       tag,
       fav,
@@ -651,9 +666,37 @@ stacksRoute.put('/:id{[0-9]+}/favorite', async (c) => {
 
 stacksRoute.post('/:id{[0-9]+}/refresh-thumbnail', async (c) => {
   const id = Number.parseInt(c.req.param('id'), 10);
-  const stack = stackRepository.refreshStackThumbnail(id);
+  const stack = await stackRepository.refreshStackThumbnail(id);
   if (!stack) return c.json({ error: 'Stack not found' }, 404);
   return c.json(stack);
+});
+
+stacksRoute.post('/:id{[0-9]+}/thumbnail-source', async (c) => {
+  const id = Number.parseInt(c.req.param('id'), 10);
+  const parse = SetThumbnailSourceSchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!parse.success) return c.json({ error: 'Invalid body', details: parse.error }, 400);
+
+  const dataSetId = parse.data.dataSetId ?? parse.data.datasetId;
+  if (dataSetId !== undefined) {
+    const auth = await ensureDatasetAuthorizedForCurrentStore(c, dataSetId);
+    if (auth) return auth;
+    if (!stackRepository.stackBelongsToDataset(id, dataSetId)) {
+      return c.json({ error: 'Stack not found' }, 404);
+    }
+  }
+
+  try {
+    const result = await stackRepository.setStackThumbnailSource(id, {
+      assetId: parse.data.assetId,
+      pageNumber: parse.data.pageNumber,
+      timeSeconds: parse.data.timeSeconds,
+    });
+    if (!result) return c.json({ error: 'Thumbnail source not found' }, 404);
+    return c.json(result);
+  } catch (error) {
+    console.error('Error setting stack thumbnail source:', error);
+    return c.json({ error: 'Failed to set stack thumbnail source' }, 500);
+  }
 });
 
 stacksRoute.post('/:id{[0-9]+}/aggregate-tags', async (c) => {
@@ -773,8 +816,38 @@ stacksRoute.put('/bulk/favorite', async (c) => {
 stacksRoute.post('/bulk/refresh-thumbnails', async (c) => {
   const parse = BulkRefreshThumbsSchema.safeParse(await c.req.json().catch(() => ({})));
   if (!parse.success) return c.json({ error: 'Invalid body', details: parse.error }, 400);
-  const updated = stackRepository.bulkRefreshThumbnails(parse.data.stackIds);
-  return c.json({ success: true, updated });
+  const updated = await stackRepository.bulkRefreshThumbnails(parse.data.stackIds);
+  let previewEligible = 0;
+  let previewRegenerated = 0;
+  let previewFailures = 0;
+
+  for (const stackId of parse.data.stackIds) {
+    try {
+      const stack = stackRepository.getById(stackId);
+      const dataSetId = Number(stack?.dataSetId ?? stack?.datasetId);
+      if (!stack || !Number.isFinite(dataSetId)) {
+        previewFailures++;
+        continue;
+      }
+      const result = await stackRepository.regeneratePreviews(stackId, dataSetId, { force: true });
+      previewEligible += result?.eligible ?? 0;
+      previewRegenerated += result?.regenerated ?? 0;
+      previewFailures += result?.failed?.length ?? 0;
+    } catch (error) {
+      previewFailures++;
+      console.error(`Failed to regenerate previews for stack ${stackId}:`, error);
+    }
+  }
+
+  return c.json({
+    success: updated.success && previewFailures === 0,
+    updated,
+    previews: {
+      eligible: previewEligible,
+      regenerated: previewRegenerated,
+      failures: previewFailures,
+    },
+  });
 });
 
 stacksRoute.post('/merge', async (c) => {

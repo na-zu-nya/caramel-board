@@ -2,6 +2,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import { nowIso } from '../sqlite';
 import type { StackFavoriteService } from './favorite-service';
 import { getStackDataset, placeholders } from './helpers';
+import type { StackMediaTypeService } from './media-type-service';
 import type { StackMetadataService } from './metadata-service';
 import type { StackThumbnailService } from './thumbnail-service';
 import type { CountRow, StackDatasetRow } from './types';
@@ -11,6 +12,7 @@ type StackResolver<TStack> = (id: number) => TStack | null;
 export class StackBulkService {
   constructor(
     private db: DatabaseSync,
+    private mediaTypeService: StackMediaTypeService,
     private metadataService: StackMetadataService,
     private favoriteService: StackFavoriteService,
     private thumbnailService: StackThumbnailService
@@ -61,17 +63,42 @@ export class StackBulkService {
     return { success: true, updated };
   }
 
-  bulkRefreshThumbnails(stackIds: number[]) {
+  async bulkRefreshThumbnails(stackIds: number[]) {
     let updated = 0;
+    let eligible = 0;
+    let regenerated = 0;
+    let skipped = 0;
+    let failed = 0;
     const errors: string[] = [];
     for (const stackId of stackIds) {
-      if (this.thumbnailService.refreshStackThumbnail(stackId)) {
+      const result = await this.thumbnailService.regenerateAssetThumbnails(stackId, {
+        force: true,
+      });
+      if (result) {
+        this.mediaTypeService.refreshStackActualMediaType(stackId);
+        eligible += result.eligible;
+        regenerated += result.regenerated;
+        skipped += result.skipped;
+        failed += result.failed.length;
         updated++;
+        if (!result.success) {
+          errors.push(`Stack ${stackId} thumbnail refresh failed`);
+        }
       } else {
         errors.push(`Stack ${stackId} not found`);
       }
     }
-    return { success: errors.length === 0, updated, errors };
+    return {
+      success: errors.length === 0,
+      updated,
+      errors,
+      thumbnails: {
+        eligible,
+        regenerated,
+        skipped,
+        failures: failed,
+      },
+    };
   }
 
   bulkRemoveStacks(stackIds: number[]) {
@@ -158,7 +185,10 @@ export class StackBulkService {
       this.db
         .prepare(`DELETE FROM stacks WHERE id IN (${placeholders(sourceIds)})`)
         .run(...sourceIds);
-      this.thumbnailService.refreshStackThumbnail(targetId);
+      void this.thumbnailService
+        .refreshStackThumbnail(targetId)
+        .catch((error) => console.error(`Failed to refresh stack ${targetId} thumbnail`, error));
+      this.mediaTypeService.refreshStackActualMediaType(targetId);
       this.db.prepare('UPDATE stacks SET updated_at = ? WHERE id = ?').run(now, targetId);
       this.db.exec('COMMIT');
       return resolveStack(targetId);

@@ -5,7 +5,7 @@ export interface StandaloneStackListParams {
   dataSetId: number;
   collection?: number;
   mediaCategory?: StackMediaCategory;
-  mediaType?: StackMediaType;
+  mediaTypes?: StackMediaType[];
   tag?: string | string[];
   author?: string | string[];
   fav?: '0' | '1';
@@ -28,6 +28,7 @@ export interface StackRow {
   name: string;
   thumbnail: string;
   media_type: string;
+  actual_media_type: StackMediaType | null;
   liked: number;
   meta_json: string | null;
   dominant_colors_json: string | null;
@@ -80,6 +81,15 @@ export interface AssetPreviewRow {
   file_type: string;
   hash: string;
   preview: string | null;
+}
+
+export interface AssetThumbnailRow {
+  id: number;
+  file: string;
+  thumbnail: string;
+  file_type: string;
+  hash: string;
+  order_in_stack: number;
 }
 
 export interface StackDatasetRow {

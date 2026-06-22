@@ -18,13 +18,25 @@ const pickExisting = (paths: Candidate[], fallback: string) => {
 
 export const getFFMPEGPath = () =>
   pickExisting(
-    [process.env.FFMPEG_PATH, 'ffmpeg', '/usr/bin/ffmpeg', '/usr/local/bin/ffmpeg'],
+    [
+      process.env.FFMPEG_PATH,
+      '/opt/homebrew/bin/ffmpeg',
+      '/usr/local/bin/ffmpeg',
+      'ffmpeg',
+      '/usr/bin/ffmpeg',
+    ],
     'ffmpeg'
   );
 
 export const getFFPROBEPath = () =>
   pickExisting(
-    [process.env.FFPROBE_PATH, 'ffprobe', '/usr/bin/ffprobe', '/usr/local/bin/ffprobe'],
+    [
+      process.env.FFPROBE_PATH,
+      '/opt/homebrew/bin/ffprobe',
+      '/usr/local/bin/ffprobe',
+      'ffprobe',
+      '/usr/bin/ffprobe',
+    ],
     'ffprobe'
   );
 

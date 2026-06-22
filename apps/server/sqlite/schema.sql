@@ -65,6 +65,7 @@ CREATE TABLE IF NOT EXISTS stacks (
   name TEXT NOT NULL COLLATE NOCASE,
   thumbnail TEXT NOT NULL,
   media_type TEXT NOT NULL DEFAULT 'image' CHECK (media_type IN ('image', 'comic', 'video')),
+  actual_media_type TEXT CHECK (actual_media_type IN ('image', 'video', 'multipleImages')),
   liked INTEGER NOT NULL DEFAULT 0,
   meta_json TEXT,
   dominant_colors_json TEXT,
@@ -76,6 +77,8 @@ CREATE TABLE IF NOT EXISTS stacks (
 
 CREATE INDEX IF NOT EXISTS idx_stacks_dataset_created ON stacks(dataset_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_stacks_dataset_media_type ON stacks(dataset_id, media_type);
+CREATE INDEX IF NOT EXISTS idx_stacks_dataset_actual_media_type
+  ON stacks(dataset_id, actual_media_type);
 CREATE INDEX IF NOT EXISTS idx_stacks_author ON stacks(author_id);
 CREATE INDEX IF NOT EXISTS idx_stacks_liked ON stacks(liked DESC);
 

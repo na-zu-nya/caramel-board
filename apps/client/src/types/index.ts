@@ -134,6 +134,7 @@ export interface Asset {
     markers?: VideoMarker[];
   };
   createdAt?: string;
+  updatedAt?: string;
 }
 
 // Video marker types
@@ -353,7 +354,7 @@ export interface StackFilter {
   datasetId?: string;
   collectionId?: string;
   mediaCategory?: MediaCategory;
-  mediaType?: MediaType;
+  mediaTypes?: MediaType[];
   tags?: string[];
   authors?: string[];
   isFavorite?: boolean;

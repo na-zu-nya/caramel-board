@@ -2,17 +2,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import { toPublicAssetPath } from '../../../utils/assetPath';
 import { nowIso } from '../sqlite';
 import { getStackDataset } from './helpers';
-
-const detectActualMediaType = (counts: {
-  assetCount: number;
-  imageCount: number;
-  videoCount: number;
-}) => {
-  if (counts.videoCount > 0) return 'video';
-  if (counts.imageCount === 1 && counts.assetCount === 1) return 'image';
-  if (counts.imageCount > 1 && counts.imageCount === counts.assetCount) return 'multipleImages';
-  return undefined;
-};
+import type { StackMediaType } from './types';
 
 export class StackFavoriteService {
   constructor(private db: DatabaseSync) {}
@@ -96,12 +86,11 @@ export class StackFavoriteService {
            s.name,
            s.thumbnail,
            s.media_type,
+           s.actual_media_type,
            s.liked,
            s.created_at,
            s.updated_at,
            COUNT(a.id) AS asset_count,
-           COALESCE(SUM(CASE WHEN a.file_type LIKE 'image/%' THEN 1 ELSE 0 END), 0) AS image_count,
-           COALESCE(SUM(CASE WHEN a.file_type LIKE 'video/%' THEN 1 ELSE 0 END), 0) AS video_count,
            first_asset.thumbnail AS first_asset_thumbnail
          FROM stack_favorites sf
          JOIN stacks s ON s.id = sf.stack_id
@@ -119,12 +108,11 @@ export class StackFavoriteService {
       name: string;
       thumbnail: string;
       media_type: string;
+      actual_media_type: StackMediaType | null;
       liked: number;
       created_at: string;
       updated_at: string;
       asset_count: number;
-      image_count: number;
-      video_count: number;
       first_asset_thumbnail: string | null;
     }>;
 
@@ -140,12 +128,11 @@ export class StackFavoriteService {
            s.id AS stack_id,
            s.name,
            s.media_type,
+           s.actual_media_type,
            s.liked,
            s.created_at,
            s.updated_at,
            COUNT(all_assets.id) AS asset_count,
-           COALESCE(SUM(CASE WHEN all_assets.file_type LIKE 'image/%' THEN 1 ELSE 0 END), 0) AS image_count,
-           COALESCE(SUM(CASE WHEN all_assets.file_type LIKE 'video/%' THEN 1 ELSE 0 END), 0) AS video_count,
            CASE WHEN sf.id IS NULL THEN 0 ELSE 1 END AS stack_favorited
          FROM asset_favorites af
          JOIN assets asset ON asset.id = af.asset_id
@@ -165,12 +152,11 @@ export class StackFavoriteService {
       stack_id: number;
       name: string;
       media_type: string;
+      actual_media_type: StackMediaType | null;
       liked: number;
       created_at: string;
       updated_at: string;
       asset_count: number;
-      image_count: number;
-      video_count: number;
       stack_favorited: number;
     }>;
 
@@ -185,12 +171,8 @@ export class StackFavoriteService {
           favoriteCreatedAt: row.favorite_created_at,
           name: row.name,
           mediaType: row.media_type,
-          actualMediaType: detectActualMediaType({
-            assetCount: row.asset_count,
-            imageCount: row.image_count,
-            videoCount: row.video_count,
-          }),
-          thumbnail: toPublicAssetPath(row.first_asset_thumbnail || row.thumbnail, dataSetId),
+          actualMediaType: row.actual_media_type ?? undefined,
+          thumbnail: toPublicAssetPath(row.thumbnail || row.first_asset_thumbnail, dataSetId),
           favorited: true,
           isFavorite: true,
           liked: likeCount,
@@ -213,11 +195,7 @@ export class StackFavoriteService {
           favoritePage: row.order_in_stack + 1,
           name: row.name,
           mediaType: row.media_type,
-          actualMediaType: detectActualMediaType({
-            assetCount: row.asset_count,
-            imageCount: row.image_count,
-            videoCount: row.video_count,
-          }),
+          actualMediaType: row.actual_media_type ?? undefined,
           thumbnail: toPublicAssetPath(row.asset_thumbnail || row.asset_file, dataSetId),
           favorited: true,
           isFavorite: true,

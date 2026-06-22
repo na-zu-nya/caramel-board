@@ -19,6 +19,7 @@ import {
   toColorJson,
 } from './helpers';
 import { toAsset } from './mappers';
+import type { StackMediaTypeService } from './media-type-service';
 import type { StackMetadataService } from './metadata-service';
 import type { StackThumbnailService } from './thumbnail-service';
 import type {
@@ -36,6 +37,7 @@ export class StackFileService {
   constructor(
     private db: DatabaseSync,
     private colorService: StackColorService,
+    private mediaTypeService: StackMediaTypeService,
     private metadataService: StackMetadataService,
     private thumbnailService: StackThumbnailService
   ) {}
@@ -169,6 +171,7 @@ export class StackFileService {
       );
     const assetId = Number(created.lastInsertRowid);
     this.colorService.replaceAssetColors(assetId, dominantColors);
+    this.mediaTypeService.refreshStackActualMediaType(stackId);
 
     if (thumbnailKey) {
       this.db
@@ -225,7 +228,8 @@ export class StackFileService {
       this.db
         .prepare('UPDATE stacks SET meta_json = ?, updated_at = ? WHERE id = ?')
         .run(JSON.stringify(nextMeta), nowIso(), stackId);
-      this.thumbnailService.refreshStackThumbnail(stackId);
+      await this.thumbnailService.refreshStackThumbnail(stackId);
+      this.mediaTypeService.refreshStackActualMediaType(stackId);
       this.colorService.refreshStackColors(stackId);
       return firstAsset;
     } catch (error) {
@@ -233,7 +237,8 @@ export class StackFileService {
         this.db
           .prepare(`DELETE FROM assets WHERE id IN (${placeholders(createdAssetIds)})`)
           .run(...createdAssetIds);
-        this.thumbnailService.refreshStackThumbnail(stackId);
+        await this.thumbnailService.refreshStackThumbnail(stackId);
+        this.mediaTypeService.refreshStackActualMediaType(stackId);
         this.colorService.refreshStackColors(stackId);
       }
       throw error;

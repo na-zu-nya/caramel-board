@@ -7,11 +7,15 @@ import { StackCollectionLinkService } from './stack/collection-link-service';
 import { StackColorService } from './stack/color-service';
 import { StackFavoriteService } from './stack/favorite-service';
 import { StackFileService } from './stack/file-service';
+import { StackMediaTypeService } from './stack/media-type-service';
 import { StackMetadataService } from './stack/metadata-service';
 import { StackPreviewService } from './stack/preview-service';
 import { StackQueryService } from './stack/query-service';
 import { StackSimilarService } from './stack/similar-service';
-import { StackThumbnailService } from './stack/thumbnail-service';
+import {
+  type SetStackThumbnailSourceInput,
+  StackThumbnailService,
+} from './stack/thumbnail-service';
 import type {
   AddAssetWithFileOptions,
   CreateStackWithFileInput,
@@ -30,6 +34,7 @@ export class StandaloneStackRepository {
   private colorService: StackColorService;
   private favoriteService: StackFavoriteService;
   private fileService: StackFileService;
+  private mediaTypeService: StackMediaTypeService;
   private metadataService: StackMetadataService;
   private previewService: StackPreviewService;
   private queryService: StackQueryService;
@@ -39,15 +44,17 @@ export class StandaloneStackRepository {
 
   constructor(db: DatabaseSync = getStandaloneSqlite()) {
     this.thumbnailService = new StackThumbnailService(db);
-    this.assetService = new StackAssetService(db, this.thumbnailService);
     this.autoTagReadService = new StackAutoTagReadService(db);
     this.collectionLinkService = new StackCollectionLinkService(db);
     this.colorService = new StackColorService(db);
     this.favoriteService = new StackFavoriteService(db);
+    this.mediaTypeService = new StackMediaTypeService(db);
     this.metadataService = new StackMetadataService(db);
+    this.assetService = new StackAssetService(db, this.mediaTypeService, this.thumbnailService);
     this.fileService = new StackFileService(
       db,
       this.colorService,
+      this.mediaTypeService,
       this.metadataService,
       this.thumbnailService
     );
@@ -61,6 +68,7 @@ export class StandaloneStackRepository {
     this.similarService = new StackSimilarService(db);
     this.bulkService = new StackBulkService(
       db,
+      this.mediaTypeService,
       this.metadataService,
       this.favoriteService,
       this.thumbnailService
@@ -78,6 +86,14 @@ export class StandaloneStackRepository {
 
   getStackIdsByDataset(dataSetId: number) {
     return this.queryService.getStackIdsByDataset(dataSetId);
+  }
+
+  refreshActualMediaType(stackId: number) {
+    return this.mediaTypeService.refreshStackActualMediaType(stackId);
+  }
+
+  refreshActualMediaTypesForDataset(dataSetId: number) {
+    return this.mediaTypeService.refreshDatasetActualMediaTypes(dataSetId);
   }
 
   getAssetsByStackId(stackId: number, dataSetId: number) {
@@ -199,8 +215,12 @@ export class StandaloneStackRepository {
     return this.bulkService.bulkSetFavorite(stackIds, favorited);
   }
 
-  bulkRefreshThumbnails(stackIds: number[]) {
+  async bulkRefreshThumbnails(stackIds: number[]) {
     return this.bulkService.bulkRefreshThumbnails(stackIds);
+  }
+
+  async setStackThumbnailSource(stackId: number, input: SetStackThumbnailSourceInput) {
+    return this.thumbnailService.setStackThumbnailSource(stackId, input);
   }
 
   bulkRemoveStacks(stackIds: number[]) {
@@ -219,7 +239,16 @@ export class StandaloneStackRepository {
     return this.favoriteService.getFavoriteItems(dataSetId, limit, offset);
   }
 
-  refreshStackThumbnail(stackId: number) {
-    return this.thumbnailService.refreshStackThumbnail(stackId);
+  async refreshStackThumbnail(
+    stackId: number,
+    options: { refreshActualMediaType?: boolean; force?: boolean } = {}
+  ) {
+    const refreshed = await this.thumbnailService.regenerateAssetThumbnails(stackId, {
+      force: options.force ?? true,
+    });
+    if (refreshed && (options.refreshActualMediaType ?? true)) {
+      this.mediaTypeService.refreshStackActualMediaType(stackId);
+    }
+    return refreshed;
   }
 }

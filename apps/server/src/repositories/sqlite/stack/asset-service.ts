@@ -3,6 +3,7 @@ import { extractPdfOriginalsFromMeta } from '../../../utils/pdfImport';
 import { nowIso, parseJsonObject } from '../sqlite';
 import { placeholders } from './helpers';
 import { toAsset } from './mappers';
+import type { StackMediaTypeService } from './media-type-service';
 import type { StackThumbnailService } from './thumbnail-service';
 import type { AssetRow, OriginalAssetRow } from './types';
 
@@ -11,6 +12,7 @@ type StackResolver<TStack> = (id: number) => TStack | null;
 export class StackAssetService {
   constructor(
     private db: DatabaseSync,
+    private mediaTypeService: StackMediaTypeService,
     private thumbnailService: StackThumbnailService
   ) {}
 
@@ -149,7 +151,12 @@ export class StackAssetService {
     const asset = this.getAssetWithDataset(assetId);
     if (!asset) return false;
     this.db.prepare('DELETE FROM assets WHERE id = ?').run(assetId);
-    this.thumbnailService.refreshStackThumbnail(asset.stack_id);
+    void this.thumbnailService
+      .refreshStackThumbnail(asset.stack_id)
+      .catch((error) =>
+        console.error(`Failed to refresh stack ${asset.stack_id} thumbnail`, error)
+      );
+    this.mediaTypeService.refreshStackActualMediaType(asset.stack_id);
     return true;
   }
 
@@ -219,7 +226,13 @@ export class StackAssetService {
         updateOrder.run(index, now, row.id);
       });
 
-      this.thumbnailService.refreshStackThumbnail(asset.stack_id);
+      void this.thumbnailService
+        .refreshStackThumbnail(asset.stack_id)
+        .catch((error) =>
+          console.error(`Failed to refresh stack ${asset.stack_id} thumbnail`, error)
+        );
+      this.mediaTypeService.refreshStackActualMediaType(asset.stack_id);
+      this.mediaTypeService.refreshStackActualMediaType(newStackId);
       this.db.exec('COMMIT');
       return resolveStack(newStackId);
     } catch (error) {

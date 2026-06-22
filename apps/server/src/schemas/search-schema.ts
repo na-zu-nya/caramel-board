@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 // 検索モード
 export const SearchModeSchema = z.enum(['all', 'similar', 'unified']);
+const ActualMediaTypeSchema = z.enum(['image', 'video', 'multipleImages']);
 
 // 作者フィルタ
 export const AuthorFilterSchema = z
@@ -58,7 +59,7 @@ export const SearchFiltersSchema = z.object({
   likes: z.enum(['is-liked', 'not-liked']).optional(),
   color: ColorFilterSchema,
   mediaCategory: z.enum(['all', 'image', 'comic', 'video']).optional(),
-  mediaType: z.enum(['all', 'image', 'video', 'multipleImages']).optional(),
+  mediaTypes: z.array(ActualMediaTypeSchema).optional(),
   collectionId: z.number().int().positive().optional(),
   includeAutoTags: z.boolean().optional(),
 });

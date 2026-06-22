@@ -3,7 +3,12 @@ import { toPublicAssetPath, withPublicAssetArray } from '../../../utils/assetPat
 import { parseJsonObject } from '../sqlite';
 import type { StackAssetService } from './asset-service';
 import type { StackAutoTagReadService } from './auto-tag-read-service';
-import { parseJsonArray, placeholders, toArray } from './helpers';
+import {
+  detectActualMediaTypeFromFileTypes,
+  parseJsonArray,
+  placeholders,
+  toArray,
+} from './helpers';
 import type { StackMetadataService } from './metadata-service';
 import type { CountRow, StackRow, StandaloneStackListParams } from './types';
 
@@ -94,8 +99,10 @@ export class StackQueryService {
       sqlParams.push(params.mediaCategory);
     }
 
-    if (params.mediaType) {
-      where.push(this.buildActualMediaTypeWhere(params.mediaType));
+    if (params.mediaTypes?.length) {
+      const mediaTypes = [...new Set(params.mediaTypes)];
+      where.push(`s.actual_media_type IN (${placeholders(mediaTypes)})`);
+      sqlParams.push(...mediaTypes);
     }
 
     const tags = toArray(params.tag).filter((tag) => tag.trim().length > 0);
@@ -186,6 +193,7 @@ export class StackQueryService {
         s.name,
         s.thumbnail,
         s.media_type,
+        s.actual_media_type,
         s.liked,
         s.meta_json,
         s.dominant_colors_json,
@@ -199,46 +207,6 @@ export class StackQueryService {
       WHERE ${whereSql}
       GROUP BY s.id
     `;
-  }
-
-  private buildActualMediaTypeWhere(
-    mediaType: NonNullable<StandaloneStackListParams['mediaType']>
-  ) {
-    switch (mediaType) {
-      case 'image':
-        return `(
-          (SELECT COUNT(*)
-             FROM assets media_assets
-            WHERE media_assets.stack_id = s.id
-              AND media_assets.file_type LIKE 'image/%') = 1
-          AND NOT EXISTS (
-            SELECT 1
-              FROM assets media_assets
-             WHERE media_assets.stack_id = s.id
-               AND media_assets.file_type NOT LIKE 'image/%'
-          )
-        )`;
-      case 'multipleImages':
-        return `(
-          (SELECT COUNT(*)
-             FROM assets media_assets
-            WHERE media_assets.stack_id = s.id
-              AND media_assets.file_type LIKE 'image/%') > 1
-          AND NOT EXISTS (
-            SELECT 1
-              FROM assets media_assets
-             WHERE media_assets.stack_id = s.id
-               AND media_assets.file_type NOT LIKE 'image/%'
-          )
-        )`;
-      case 'video':
-        return `EXISTS (
-          SELECT 1
-            FROM assets media_assets
-           WHERE media_assets.stack_id = s.id
-             AND media_assets.file_type LIKE 'video/%'
-        )`;
-    }
   }
 
   private orderBy(params: StandaloneStackListParams) {
@@ -263,10 +231,12 @@ export class StackQueryService {
       : [];
     const tags = options.includeTags ? this.metadataService.getTagsByStackId(row.id) : undefined;
     const autoTags = this.autoTagReadService.getAutoTagsByStackId(row.id, row.dataset_id);
-    const thumbnail = toPublicAssetPath(assets[0]?.thumbnail || row.thumbnail, row.dataset_id);
+    const thumbnail = toPublicAssetPath(row.thumbnail || assets[0]?.thumbnail, row.dataset_id);
     const likeCount = Number(row.liked ?? 0);
     const isFavorite = row.is_favorite === 1;
-    const actualMediaType = this.detectActualMediaType(assets);
+    const actualMediaType =
+      row.actual_media_type ??
+      detectActualMediaTypeFromFileTypes(assets.map((asset) => asset.fileType ?? asset.mimeType));
 
     return {
       id: row.id,
@@ -283,7 +253,7 @@ export class StackQueryService {
       name: row.name,
       thumbnail,
       mediaType: row.media_type,
-      actualMediaType,
+      actualMediaType: actualMediaType ?? undefined,
       liked: likeCount,
       likeCount,
       meta: parseJsonObject(row.meta_json),
@@ -299,20 +269,5 @@ export class StackQueryService {
       autoTags,
       assets: withPublicAssetArray(assets, row.dataset_id),
     };
-  }
-
-  private detectActualMediaType(
-    assets: Array<{ fileType?: string | null; mimeType?: string | null }>
-  ) {
-    if (assets.some((asset) => (asset.fileType ?? asset.mimeType ?? '').startsWith('video/'))) {
-      return 'video';
-    }
-
-    const imageCount = assets.filter((asset) =>
-      (asset.fileType ?? asset.mimeType ?? '').startsWith('image/')
-    ).length;
-    if (imageCount === 1 && assets.length === 1) return 'image';
-    if (imageCount > 1 && imageCount === assets.length) return 'multipleImages';
-    return undefined;
   }
 }

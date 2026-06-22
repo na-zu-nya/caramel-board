@@ -218,7 +218,7 @@ app.delete('/:id', async (c) => {
   return c.json({ success: true });
 });
 
-// Full dataset refresh: thumbnails + colors + autotags (embeddings removed)
+// Full dataset refresh: thumbnails + previews + colors + autotags (embeddings removed)
 app.post('/:id/refresh-all', async (c) => {
   const id = Number.parseInt(c.req.param('id'), 10);
   const forceRegenerate = c.req.query('forceRegenerate') === 'true';
@@ -233,9 +233,33 @@ app.post('/:id/refresh-all', async (c) => {
     const autoTagRepository = new StandaloneAutoTagRepository();
     const stackIds = stackRepository.getStackIdsByDataset(id);
     const colorStackIds = colorRepository.getDatasetUpdateCandidateStackIds(id);
+    const actualMediaTypeResult = stackRepository.refreshActualMediaTypesForDataset(id);
+    let thumbnailEligible = 0;
+    let thumbnailRegenerated = 0;
+    let thumbnailFailures = 0;
+    let previewEligible = 0;
+    let previewRegenerated = 0;
+    let previewFailures = 0;
 
     for (const stackId of stackIds) {
-      stackRepository.refreshStackThumbnail(stackId);
+      const thumbnailResult = await stackRepository.refreshStackThumbnail(stackId, {
+        refreshActualMediaType: false,
+        force: forceRegenerate,
+      });
+      thumbnailEligible += thumbnailResult?.eligible ?? 0;
+      thumbnailRegenerated += thumbnailResult?.regenerated ?? 0;
+      thumbnailFailures += thumbnailResult?.failed?.length ?? 0;
+      try {
+        const previewResult = await stackRepository.regeneratePreviews(stackId, id, {
+          force: forceRegenerate,
+        });
+        previewEligible += previewResult?.eligible ?? 0;
+        previewRegenerated += previewResult?.regenerated ?? 0;
+        previewFailures += previewResult?.failed?.length ?? 0;
+      } catch (error) {
+        previewFailures++;
+        console.error(`Failed to regenerate previews for stack ${stackId}:`, error);
+      }
     }
     for (const stackId of colorStackIds) {
       colorRepository.updateStackColors(stackId);
@@ -263,13 +287,20 @@ app.post('/:id/refresh-all', async (c) => {
       datasetId: id,
       totalStacks: stackIds.length,
       scheduled: {
-        thumbnails: stackIds.length,
+        thumbnails: thumbnailRegenerated,
+        previews: previewRegenerated,
         colors: colorStackIds.length,
+        actualMediaTypes: actualMediaTypeResult.total,
         autotags: autotagUpdated,
         autotagPredictions: autotagPredictionResult.predictedAssets,
         embeddings: 0,
       },
       totals: {
+        thumbnailCandidates: thumbnailEligible,
+        thumbnailFailures,
+        previewCandidates: previewEligible,
+        previewFailures,
+        actualMediaTypeCandidates: actualMediaTypeResult.total,
         autotagCandidates: autotagPredictionResult.candidateAssets,
         autotagFailures: autotagPredictionResult.failedAssets,
         embeddings: 0,

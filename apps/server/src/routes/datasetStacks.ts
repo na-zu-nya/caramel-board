@@ -142,14 +142,12 @@ app.get(
         filters.mediaCategory && filters.mediaCategory !== 'all'
           ? filters.mediaCategory
           : undefined;
-      const mediaType =
-        filters.mediaType && filters.mediaType !== 'all' ? filters.mediaType : undefined;
       const stackIds = getStandaloneColorStackIds(dataSetId, mediaCategory, filters.color);
       const result = stackRepository.getPaginated({
         dataSetId,
         collection: filters.collectionId,
         mediaCategory,
-        mediaType,
+        mediaTypes: filters.mediaTypes,
         tag: filters.tags?.includeAny ?? filters.tags?.include,
         author: filters.author?.includeAny ?? filters.author?.include,
         fav:

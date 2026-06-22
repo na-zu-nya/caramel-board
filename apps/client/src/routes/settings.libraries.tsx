@@ -196,6 +196,8 @@ function DatasetManagement() {
           t.library.fullRefreshStarted,
           '',
           `- ${t.library.scheduledThumbnails(result.scheduled?.thumbnails ?? 0)}`,
+          `- ${t.library.scheduledPreviews(result.scheduled?.previews ?? 0)}`,
+          `- ${t.library.scheduledMediaTypes(result.scheduled?.actualMediaTypes ?? 0)}`,
           `- ${t.library.scheduledColors(result.scheduled?.colors ?? 0)}`,
           `- ${t.library.scheduledAutoTags(result.scheduled?.autotags ?? 0)}`,
           '',

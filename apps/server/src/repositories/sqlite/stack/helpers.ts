@@ -1,6 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
 import type { DominantColor } from '../../../utils/colorExtractor';
-import type { AutoTagEntry, StackDatasetRow } from './types';
+import type { AutoTagEntry, StackDatasetRow, StackMediaType } from './types';
 
 export const DEFAULT_AUTO_STOP_TAGS = [
   '1girl',
@@ -75,6 +75,27 @@ export const canonicalizeExtension = (ext: string) => {
 
 export const isImageExtension = (ext: string) => IMAGE_EXTENSIONS.has(canonicalizeExtension(ext));
 export const isVideoExtension = (ext: string) => VIDEO_EXTENSIONS.has(canonicalizeExtension(ext));
+export const isImageFileType = (fileType: string) => {
+  const normalized = fileType.trim().toLowerCase();
+  return normalized.startsWith('image/') || isImageExtension(normalized);
+};
+export const isVideoFileType = (fileType: string) => {
+  const normalized = fileType.trim().toLowerCase();
+  return normalized.startsWith('video/') || isVideoExtension(normalized);
+};
+
+export const detectActualMediaTypeFromFileTypes = (
+  fileTypes: Array<string | null | undefined>
+): StackMediaType | null => {
+  const normalized = fileTypes.filter((fileType): fileType is string => Boolean(fileType));
+  if (normalized.length === 0) return null;
+  if (normalized.some(isVideoFileType)) return 'video';
+
+  const imageCount = normalized.filter(isImageFileType).length;
+  if (imageCount === 1 && normalized.length === 1) return 'image';
+  if (imageCount > 1 && imageCount === normalized.length) return 'multipleImages';
+  return null;
+};
 
 export const toColorJson = (colors: DominantColor[] | null) =>
   colors && colors.length > 0 ? JSON.stringify(colors) : null;

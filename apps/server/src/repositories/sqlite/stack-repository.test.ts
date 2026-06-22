@@ -1,7 +1,9 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
+import path, { resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { DataStorage } from '../../lib/DataStorage';
 import { StandaloneStackRepository } from './stack-repository';
 
 const schemaPath = resolve(process.cwd(), 'sqlite/schema.sql');
@@ -31,11 +33,12 @@ describe('StandaloneStackRepository search', () => {
       `INSERT INTO assets
          (id, stack_id, file, thumbnail, file_type, original_name, hash, order_in_stack, created_at, updated_at)
        VALUES
-         (1, 1, '/tmp/landscape.png', '', 'image/png', 'landscape.png', 'hash-1', 0, ?, ?),
-         (2, 2, '/tmp/portrait-1.png', '', 'image/png', 'portrait-1.png', 'hash-2', 0, ?, ?),
-         (3, 2, '/tmp/portrait-2.jpg', '', 'image/jpeg', 'portrait-2.jpg', 'hash-3', 1, ?, ?),
-         (4, 3, '/tmp/motion.mp4', '', 'video/mp4', 'motion.mp4', 'hash-4', 0, ?, ?)`
+         (1, 1, '/tmp/landscape.png', '', 'png', 'landscape.png', 'hash-1', 0, ?, ?),
+         (2, 2, '/tmp/portrait-1.png', '', 'png', 'portrait-1.png', 'hash-2', 0, ?, ?),
+         (3, 2, '/tmp/portrait-2.jpg', '', 'jpg', 'portrait-2.jpg', 'hash-3', 1, ?, ?),
+         (4, 3, '/tmp/motion.mp4', '', 'mp4', 'motion.mp4', 'hash-4', 0, ?, ?)`
     ).run(now, now, now, now, now, now, now, now);
+    repository.refreshActualMediaTypesForDataset(1);
     db.prepare(
       `INSERT INTO stack_auto_tag_aggregates
          (id, stack_id, aggregated_tags_json, top_tags_json, asset_count, threshold, created_at, updated_at)
@@ -99,20 +102,26 @@ describe('StandaloneStackRepository search', () => {
   it('filters by actual media type independently from media category', () => {
     const singleImage = repository.getPaginated({
       dataSetId: 1,
-      mediaType: 'image',
+      mediaTypes: ['image'],
       limit: 50,
       offset: 0,
     });
     const multipleImages = repository.getPaginated({
       dataSetId: 1,
-      mediaType: 'multipleImages',
+      mediaTypes: ['multipleImages'],
+      limit: 50,
+      offset: 0,
+    });
+    const imageLike = repository.getPaginated({
+      dataSetId: 1,
+      mediaTypes: ['image', 'multipleImages'],
       limit: 50,
       offset: 0,
     });
     const categoryVideo = repository.getPaginated({
       dataSetId: 1,
       mediaCategory: 'comic',
-      mediaType: 'video',
+      mediaTypes: ['video'],
       limit: 50,
       offset: 0,
     });
@@ -123,11 +132,146 @@ describe('StandaloneStackRepository search', () => {
     expect(multipleImages.stacks.map((stack) => [stack.id, stack.actualMediaType])).toEqual([
       [2, 'multipleImages'],
     ]);
+    expect(imageLike.stacks.map((stack) => [stack.id, stack.actualMediaType])).toEqual([
+      [2, 'multipleImages'],
+      [1, 'image'],
+    ]);
     expect(categoryVideo.stacks.map((stack) => [stack.id, stack.mediaType])).toEqual([
       [3, 'comic'],
     ]);
     expect(categoryVideo.stacks.map((stack) => [stack.id, stack.actualMediaType])).toEqual([
       [3, 'video'],
     ]);
+  });
+
+  it('refreshes actual media types for a dataset', () => {
+    db.prepare('UPDATE stacks SET actual_media_type = NULL').run();
+
+    const refreshResult = repository.refreshActualMediaTypesForDataset(1);
+    const result = repository.getPaginated({
+      dataSetId: 1,
+      mediaTypes: ['image', 'multipleImages', 'video'],
+      limit: 50,
+      offset: 0,
+    });
+
+    expect(refreshResult).toEqual({ updated: 3, total: 3 });
+    expect(result.stacks.map((stack) => [stack.id, stack.actualMediaType])).toEqual([
+      [3, 'video'],
+      [2, 'multipleImages'],
+      [1, 'image'],
+    ]);
+  });
+
+  it('refreshes actual media type after asset changes', () => {
+    const before = repository.getById(2, 1);
+    expect(before?.actualMediaType).toBe('multipleImages');
+
+    expect(repository.deleteAsset(3)).toBe(true);
+
+    const after = repository.getById(2, 1);
+    expect(after?.actualMediaType).toBe('image');
+
+    const multipleImages = repository.getPaginated({
+      dataSetId: 1,
+      mediaTypes: ['multipleImages'],
+      limit: 50,
+      offset: 0,
+    });
+    expect(multipleImages.stacks.map((stack) => stack.id)).toEqual([]);
+  });
+
+  it('keeps the selected asset as stack thumbnail during refresh', async () => {
+    const previousStorage = process.env.FILES_STORAGE;
+    const tempDir = mkdtempSync(path.join(os.tmpdir(), 'caramel-selected-thumbnail-'));
+    process.env.FILES_STORAGE = tempDir;
+
+    const firstThumbnail = 'library/1/thumbnails/aa/first.jpg';
+    const secondThumbnail = 'library/1/thumbnails/bb/second.jpg';
+    for (const thumbnail of [firstThumbnail, secondThumbnail]) {
+      const thumbnailPath = DataStorage.getPath(thumbnail);
+      mkdirSync(path.dirname(thumbnailPath), { recursive: true });
+      writeFileSync(thumbnailPath, '');
+    }
+
+    db.prepare('UPDATE assets SET thumbnail = ? WHERE id = 2').run(firstThumbnail);
+    db.prepare('UPDATE assets SET thumbnail = ? WHERE id = 3').run(secondThumbnail);
+    db.prepare('UPDATE stacks SET thumbnail = ? WHERE id = 2').run(firstThumbnail);
+
+    try {
+      const setResult = await repository.setStackThumbnailSource(2, {
+        assetId: 3,
+        pageNumber: 2,
+      });
+      db.prepare('UPDATE stacks SET thumbnail = ? WHERE id = 2').run(firstThumbnail);
+
+      const refreshResult = await repository.refreshStackThumbnail(2, { force: false });
+      const stack = db.prepare('SELECT thumbnail, meta_json FROM stacks WHERE id = 2').get() as
+        | { thumbnail: string; meta_json: string | null }
+        | undefined;
+      const fetched = repository.getById(2, 1);
+      const meta = stack?.meta_json ? JSON.parse(stack.meta_json) : {};
+
+      expect(setResult?.thumbnail).toBe(secondThumbnail);
+      expect(refreshResult?.success).toBe(true);
+      expect(stack?.thumbnail).toBe(secondThumbnail);
+      expect(fetched?.thumbnail).toBe(`/files/${secondThumbnail}`);
+      expect(meta.thumbnailSource).toEqual({
+        kind: 'asset',
+        assetId: 3,
+        pageNumber: 2,
+      });
+    } finally {
+      if (previousStorage === undefined) {
+        delete process.env.FILES_STORAGE;
+      } else {
+        process.env.FILES_STORAGE = previousStorage;
+      }
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('regenerates missing asset thumbnails during stack thumbnail refresh', async () => {
+    const previousStorage = process.env.FILES_STORAGE;
+    const tempDir = mkdtempSync(path.join(os.tmpdir(), 'caramel-stack-thumbnail-'));
+    process.env.FILES_STORAGE = tempDir;
+
+    const fileKey = 'library/1/assets/ab/source.svg';
+    const inputPath = DataStorage.getPath(fileKey);
+    mkdirSync(path.dirname(inputPath), { recursive: true });
+    writeFileSync(
+      inputPath,
+      '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="#fff"/><circle cx="32" cy="32" r="20" fill="#222"/></svg>'
+    );
+    db.prepare(
+      `UPDATE assets
+       SET file = ?, thumbnail = '', file_type = 'svg'
+       WHERE id = 1`
+    ).run(fileKey);
+
+    try {
+      const refreshResult = await repository.refreshStackThumbnail(1, { force: false });
+      const asset = db.prepare('SELECT thumbnail FROM assets WHERE id = 1').get() as
+        | { thumbnail: string }
+        | undefined;
+      const stack = db.prepare('SELECT thumbnail FROM stacks WHERE id = 1').get() as
+        | { thumbnail: string }
+        | undefined;
+
+      expect(refreshResult?.success).toBe(true);
+      expect(refreshResult?.regenerated).toBe(1);
+      expect(asset?.thumbnail).toMatch(/^library\/1\/thumbnails\/[a-f0-9]{2}\//);
+      expect(stack?.thumbnail).toBe(asset?.thumbnail);
+      expect(asset?.thumbnail ? existsSync(DataStorage.getPath(asset.thumbnail)) : false).toBe(
+        true
+      );
+    } finally {
+      if (previousStorage === undefined) {
+        delete process.env.FILES_STORAGE;
+      } else {
+        process.env.FILES_STORAGE = previousStorage;
+      }
+      rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 });

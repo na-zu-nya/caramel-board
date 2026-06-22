@@ -327,7 +327,7 @@ class ApiClient {
       offset: params.offset,
       collection: params.collection,
       mediaCategory: params.mediaCategory,
-      mediaType: params.mediaType,
+      mediaTypes: params.mediaTypes,
       tag: params.tag,
       author: params.author,
       fav: params.fav,
@@ -773,13 +773,55 @@ class ApiClient {
   }
 
   // Stack maintenance operations
-  async refreshThumbnail(stackId: string | number): Promise<{ success: boolean; message: string }> {
-    return this.fetch<{ success: boolean; message: string }>(
-      `/api/v1/stacks/${stackId}/refresh-thumbnail`,
-      {
-        method: 'POST',
-      }
-    );
+  async refreshThumbnail(stackId: string | number): Promise<{
+    success: boolean;
+    totalAssets: number;
+    eligible: number;
+    regenerated: number;
+    skipped: number;
+    failed: number[];
+  }> {
+    return this.fetch<{
+      success: boolean;
+      totalAssets: number;
+      eligible: number;
+      regenerated: number;
+      skipped: number;
+      failed: number[];
+    }>(`/api/v1/stacks/${stackId}/refresh-thumbnail`, {
+      method: 'POST',
+    });
+  }
+
+  async setStackThumbnailSource(params: {
+    datasetId: string | number;
+    stackId: string | number;
+    assetId: string | number;
+    pageNumber: number;
+    timeSeconds?: number;
+  }): Promise<{
+    success: boolean;
+    thumbnail: string;
+    thumbnailSource:
+      | { kind: 'asset'; assetId: number; pageNumber: number }
+      | { kind: 'videoFrame'; assetId: number; pageNumber: number; timeSeconds: number };
+  }> {
+    const { datasetId, stackId, assetId, pageNumber, timeSeconds } = params;
+    return this.fetch<{
+      success: boolean;
+      thumbnail: string;
+      thumbnailSource:
+        | { kind: 'asset'; assetId: number; pageNumber: number }
+        | { kind: 'videoFrame'; assetId: number; pageNumber: number; timeSeconds: number };
+    }>(`/api/v1/stacks/${stackId}/thumbnail-source`, {
+      method: 'POST',
+      body: JSON.stringify({
+        datasetId,
+        assetId,
+        pageNumber,
+        timeSeconds,
+      }),
+    });
   }
 
   async regenerateStackPreview(params: {
@@ -1017,19 +1059,32 @@ class ApiClient {
     );
   }
 
-  async bulkRefreshThumbnails(
-    stackIds: (string | number)[]
-  ): Promise<{ success: boolean; updated: number; errors?: string[] }> {
+  async refreshStacks(stackIds: (string | number)[]): Promise<{
+    success: boolean;
+    updated: {
+      success: boolean;
+      updated: number;
+      errors?: string[];
+      thumbnails?: { eligible: number; regenerated: number; skipped: number; failures: number };
+    };
+    previews?: { eligible: number; regenerated: number; failures: number };
+  }> {
     const numericIds = stackIds.map((id) =>
       typeof id === 'string' ? Number.parseInt(id, 10) : id
     );
-    return this.fetch<{ success: boolean; updated: number; errors?: string[] }>(
-      '/api/v1/stacks/bulk/refresh-thumbnails',
-      {
-        method: 'POST',
-        body: JSON.stringify({ stackIds: numericIds }),
-      }
-    );
+    return this.fetch<{
+      success: boolean;
+      updated: {
+        success: boolean;
+        updated: number;
+        errors?: string[];
+        thumbnails?: { eligible: number; regenerated: number; skipped: number; failures: number };
+      };
+      previews?: { eligible: number; regenerated: number; failures: number };
+    }>('/api/v1/stacks/bulk/refresh-thumbnails', {
+      method: 'POST',
+      body: JSON.stringify({ stackIds: numericIds }),
+    });
   }
 
   async removeStack(stackId: string | number): Promise<{ success: boolean; message: string }> {
@@ -1233,7 +1288,11 @@ class ApiClient {
     const f = params.filter;
     if (f) {
       if (f.mediaCategory) query.append('mediaCategory', f.mediaCategory);
-      if (f.mediaType) query.append('mediaType', f.mediaType);
+      if (Array.isArray(f.mediaTypes)) {
+        for (const mediaType of f.mediaTypes) {
+          query.append('mediaTypes', mediaType);
+        }
+      }
       if (f.isFavorite === true) query.append('fav', '1');
       if (f.isFavorite === false) query.append('fav', '0');
       if (f.isLiked === true) query.append('liked', '1');
@@ -1458,8 +1517,22 @@ class ApiClient {
     message: string;
     datasetId: number;
     totalStacks: number;
-    scheduled: { thumbnails: number; colors: number; autotags: number; embeddings: number };
-    totals: { embeddings: number };
+    scheduled: {
+      thumbnails: number;
+      previews?: number;
+      colors: number;
+      actualMediaTypes?: number;
+      autotags: number;
+      embeddings: number;
+    };
+    totals: {
+      thumbnailCandidates?: number;
+      thumbnailFailures?: number;
+      previewCandidates?: number;
+      previewFailures?: number;
+      actualMediaTypeCandidates?: number;
+      embeddings: number;
+    };
   }> {
     const queryParams = new URLSearchParams();
     if (params.forceRegenerate)
