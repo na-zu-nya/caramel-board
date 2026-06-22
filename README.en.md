@@ -57,7 +57,7 @@ For desktop use, download the app from the releases page.
 The CLI / Docker edition is frozen at the `release/v1.0.8` checkpoint and is no longer maintained on mainline. Use the Desktop edition for normal use.
 
 - CLI / Docker freeze notes: [CLI / Docker setup](./docs/cli-installation.md)
-- Migration from the old Docker setup to Desktop: [Standalone migration notes](./docs/standalone-migration.md)
+- Migration from the old Docker setup to Desktop: [Docker to Desktop migration guide](./docs/docker-to-desktop-migration.md)
 
 ### Optional Setup Guides
 
