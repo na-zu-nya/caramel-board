@@ -13,7 +13,7 @@ import {
   X,
 } from 'lucide-react';
 import MersenneTwister from 'mersenne-twister';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { FullPageDropZone } from '@/components/ui/DropZone';
 import { HeaderIconButton } from '@/components/ui/Header/HeaderIconButton';
@@ -204,7 +204,6 @@ export default function StackViewer({
   // Interactions + neighbors + animations
   const {
     imageCarouselRef,
-    dragOffset,
     currentAsset,
     nextAsset,
     prevAsset,
@@ -1095,6 +1094,7 @@ export default function StackViewer({
     [stack, addNotification, refetch, queryClient, datasetId, t]
   );
 
+  const gestureState = useMemo(() => ({ translateX: 0, translateY: 0, scale: 1, opacity: 1 }), []);
   if (isLoading) {
     return (
       <div className="fixed inset-0 bg-black flex items-center justify-center">
@@ -1119,7 +1119,6 @@ export default function StackViewer({
     );
   }
 
-  const gestureState = { translateX: 0, translateY: 0, scale: 1, opacity: 1 };
   const isGesturing = false;
 
   return (
@@ -1192,7 +1191,6 @@ export default function StackViewer({
                 onDeleteMarkerRequest={handleDeleteMarker}
                 onChangeMarkerColorRequest={handleChangeMarkerColor}
                 gestureTransform={gestureState}
-                translateX={dragOffset}
                 nativeDragEnabled={isNativeInteractionMode}
                 zoomTransform={zoomTransform}
                 uiInsets={{

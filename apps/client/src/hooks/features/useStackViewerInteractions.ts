@@ -1,11 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import { useViewContext } from '@/hooks/useViewContext';
 import { apiClient } from '@/lib/api-client';
 import type { Asset, Stack } from '@/types';
 
 export interface ImageCarouselBridge {
+  prepareTranslateX: (value: number) => void;
   updateTranslateX: (value: number) => void;
   updateVerticalTransform: (y: number, scale: number, opacity: number, bg?: number) => void;
   getViewportWidth: () => number;
@@ -35,7 +36,7 @@ export function useStackViewerInteractions(params: {
   returnTo?: string;
   stack?: Stack;
   currentPage: number;
-  setCurrentPage: (fn: (p: number) => number | number) => void;
+  setCurrentPage: (page: number | ((prev: number) => number)) => void;
   // 埋め込み時はルート遷移の代わりに、隣接スタックへの切り替えをコールバックで通知する
   onNavigateStack?: (stackId: string) => void;
 }) {
@@ -72,9 +73,7 @@ export function useStackViewerInteractions(params: {
   const animationFrameRef = useRef<number | null>(null);
   const currentDragOffsetRef = useRef(0);
   const currentVerticalOffsetRef = useRef(0);
-  const [dragOffset, setDragOffset] = useState(0);
   const crossStackEnabled = mediaType !== 'comic';
-  const skipResetOnceRef = useRef(false);
 
   // Neighbors based on latest URL + context ids
   const numericStackId = Number.parseInt(String(stackId), 10);
@@ -115,13 +114,9 @@ export function useStackViewerInteractions(params: {
 
   // Resets
   useLayoutEffect(() => {
-    if (skipResetOnceRef.current) {
-      skipResetOnceRef.current = false;
-      return;
-    }
     currentDragOffsetRef.current = 0;
+    imageCarouselRef.current?.prepareTranslateX(0);
     imageCarouselRef.current?.updateTranslateX(0);
-    setDragOffset(0);
     currentVerticalOffsetRef.current = 0;
     imageCarouselRef.current?.updateVerticalTransform(0, 1, 1, 0);
   }, []);
@@ -136,8 +131,8 @@ export function useStackViewerInteractions(params: {
       const nx = lerp(cur, 0, 0.15);
       if (Math.abs(nx) < 0.5) {
         currentDragOffsetRef.current = 0;
+        imageCarouselRef.current?.prepareTranslateX(0);
         imageCarouselRef.current?.updateTranslateX(0);
-        setDragOffset(0);
         animationFrameRef.current = null;
         return;
       }
@@ -148,80 +143,78 @@ export function useStackViewerInteractions(params: {
     animationFrameRef.current = requestAnimationFrame(step);
   }, [lerp]);
 
-  const animateHorizontalPageChange = useCallback(
-    (direction: 1 | -1) => {
+  const animateToOffset = useCallback(
+    (targetOffset: number, onComplete?: () => void) => {
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
-      const viewportW = imageCarouselRef.current?.getViewportWidth() ?? window.innerWidth;
-      const d = currentDragOffsetRef.current;
-      const startOffset = direction === 1 ? d - viewportW : d + viewportW;
-      requestAnimationFrame(() => {
-        currentDragOffsetRef.current = startOffset;
-        setDragOffset(startOffset);
-        setCurrentPage((p) => p + direction);
-        requestAnimationFrame(() => {
-          imageCarouselRef.current?.updateTranslateX(startOffset);
-          const step = () => {
-            const cur = currentDragOffsetRef.current;
-            const nx = lerp(cur, 0, 0.3);
-            if (Math.abs(nx) < 0.5) {
-              currentDragOffsetRef.current = 0;
-              imageCarouselRef.current?.updateTranslateX(0);
-              setDragOffset(0);
-              animationFrameRef.current = null;
-              return;
-            }
-            currentDragOffsetRef.current = nx;
-            imageCarouselRef.current?.updateTranslateX(nx);
-            animationFrameRef.current = requestAnimationFrame(step);
-          };
-          animationFrameRef.current = requestAnimationFrame(step);
-        });
-      });
+      const step = () => {
+        const cur = currentDragOffsetRef.current;
+        const nx = lerp(cur, targetOffset, 0.3);
+        if (Math.abs(nx - targetOffset) < 0.5) {
+          currentDragOffsetRef.current = targetOffset;
+          imageCarouselRef.current?.updateTranslateX(targetOffset);
+          animationFrameRef.current = null;
+          onComplete?.();
+          return;
+        }
+        currentDragOffsetRef.current = nx;
+        imageCarouselRef.current?.updateTranslateX(nx);
+        animationFrameRef.current = requestAnimationFrame(step);
+      };
+      animationFrameRef.current = requestAnimationFrame(step);
     },
-    [lerp, setCurrentPage]
+    [lerp]
   );
 
-  const navigateCrossStackImmediate = useCallback(
-    (direction: 1 | -1, targetStackId: number) => {
-      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+  const commitPageChange = useCallback(
+    (direction: 1 | -1) => {
+      currentDragOffsetRef.current = 0;
+      imageCarouselRef.current?.prepareTranslateX(0);
+      setCurrentPage((page) => page + direction);
+    },
+    [setCurrentPage]
+  );
+
+  const animateHorizontalPageChange = useCallback(
+    (direction: 1 | -1) => {
       const viewportW = imageCarouselRef.current?.getViewportWidth() ?? window.innerWidth;
-      const d = currentDragOffsetRef.current;
-      const startOffset = direction === 1 ? d - viewportW : d + viewportW;
-      skipResetOnceRef.current = true;
-      currentDragOffsetRef.current = startOffset;
-      setDragOffset(startOffset);
-      if (ctx) moveIndex(direction);
-      if (onNavigateStack) {
-        // 埋め込み時: 親に stackId 切り替えを通知(ルート遷移しない)
-        onNavigateStack(String(targetStackId));
-      } else {
-        navigate({
-          to: '/library/$datasetId/stacks/$stackId',
-          params: { datasetId, stackId: String(targetStackId) },
-          search: { page: 0, mediaType, listToken, returnTo },
-          replace: true,
-        });
-      }
-      requestAnimationFrame(() => {
-        imageCarouselRef.current?.updateTranslateX(startOffset);
-        const step = () => {
-          const cur = currentDragOffsetRef.current;
-          const nx = lerp(cur, 0, 0.3);
-          if (Math.abs(nx) < 0.5) {
-            currentDragOffsetRef.current = 0;
-            imageCarouselRef.current?.updateTranslateX(0);
-            setDragOffset(0);
-            animationFrameRef.current = null;
-            return;
-          }
-          currentDragOffsetRef.current = nx;
-          imageCarouselRef.current?.updateTranslateX(nx);
-          animationFrameRef.current = requestAnimationFrame(step);
-        };
-        animationFrameRef.current = requestAnimationFrame(step);
+      const targetOffset = direction === 1 ? viewportW : -viewportW;
+      animateToOffset(targetOffset, () => commitPageChange(direction));
+    },
+    [animateToOffset, commitPageChange]
+  );
+
+  const navigateCrossStackAfterAnimation = useCallback(
+    (direction: 1 | -1, targetStackId: number) => {
+      const viewportW = imageCarouselRef.current?.getViewportWidth() ?? window.innerWidth;
+      const targetOffset = direction === 1 ? viewportW : -viewportW;
+      animateToOffset(targetOffset, () => {
+        currentDragOffsetRef.current = 0;
+        imageCarouselRef.current?.prepareTranslateX(0);
+        if (ctx) moveIndex(direction);
+        if (onNavigateStack) {
+          // 埋め込み時: 親に stackId 切り替えを通知(ルート遷移しない)
+          onNavigateStack(String(targetStackId));
+        } else {
+          navigate({
+            to: '/library/$datasetId/stacks/$stackId',
+            params: { datasetId, stackId: String(targetStackId) },
+            search: { page: 0, mediaType, listToken, returnTo },
+            replace: true,
+          });
+        }
       });
     },
-    [ctx, moveIndex, navigate, datasetId, mediaType, listToken, returnTo, lerp, onNavigateStack]
+    [
+      animateToOffset,
+      ctx,
+      datasetId,
+      listToken,
+      mediaType,
+      moveIndex,
+      navigate,
+      onNavigateStack,
+      returnTo,
+    ]
   );
 
   // Drag handlers
@@ -275,7 +268,7 @@ export function useStackViewerInteractions(params: {
                 const chainId = ctx.ids[index - 2];
                 if (chainId !== undefined) void apiClient.getStack(String(chainId), datasetId);
               }
-              navigateCrossStackImmediate(-1, Number(prevNeighborId));
+              navigateCrossStackAfterAnimation(-1, Number(prevNeighborId));
             } else {
               animateToCenter();
             }
@@ -287,7 +280,7 @@ export function useStackViewerInteractions(params: {
                 const chainId = ctx.ids[index + 2];
                 if (chainId !== undefined) void apiClient.getStack(String(chainId), datasetId);
               }
-              navigateCrossStackImmediate(1, Number(nextNeighborId));
+              navigateCrossStackAfterAnimation(1, Number(nextNeighborId));
             } else {
               animateToCenter();
             }
@@ -310,7 +303,7 @@ export function useStackViewerInteractions(params: {
       datasetId,
       ctx,
       index,
-      navigateCrossStackImmediate,
+      navigateCrossStackAfterAnimation,
     ]
   );
 
@@ -318,33 +311,33 @@ export function useStackViewerInteractions(params: {
   const onLeftTap = useCallback(() => {
     // left tap → next
     if (stack && currentPage < stack.assets.length - 1) {
-      setCurrentPage((p) => p + 1);
-      currentDragOffsetRef.current = 0;
-      imageCarouselRef.current?.updateTranslateX(0);
-      setDragOffset(0);
+      commitPageChange(1);
     } else if (crossStackEnabled && nextNeighborId !== undefined) {
-      navigateCrossStackImmediate(1, Number(nextNeighborId));
+      navigateCrossStackAfterAnimation(1, Number(nextNeighborId));
     }
   }, [
     stack,
     currentPage,
     crossStackEnabled,
     nextNeighborId,
-    navigateCrossStackImmediate,
-    setCurrentPage,
+    commitPageChange,
+    navigateCrossStackAfterAnimation,
   ]);
 
   const onRightTap = useCallback(() => {
     // right tap → previous
     if (currentPage > 0) {
-      setCurrentPage((p) => p - 1);
-      currentDragOffsetRef.current = 0;
-      imageCarouselRef.current?.updateTranslateX(0);
-      setDragOffset(0);
+      commitPageChange(-1);
     } else if (crossStackEnabled && prevNeighborId !== undefined) {
-      navigateCrossStackImmediate(-1, Number(prevNeighborId));
+      navigateCrossStackAfterAnimation(-1, Number(prevNeighborId));
     }
-  }, [currentPage, crossStackEnabled, prevNeighborId, navigateCrossStackImmediate, setCurrentPage]);
+  }, [
+    currentPage,
+    crossStackEnabled,
+    prevNeighborId,
+    commitPageChange,
+    navigateCrossStackAfterAnimation,
+  ]);
 
   // Near-edge aggressive prefetch
   useEffect(() => {
@@ -357,8 +350,6 @@ export function useStackViewerInteractions(params: {
 
   return {
     imageCarouselRef,
-    dragOffset,
-    setDragOffset,
     currentAsset,
     nextAsset,
     prevAsset,

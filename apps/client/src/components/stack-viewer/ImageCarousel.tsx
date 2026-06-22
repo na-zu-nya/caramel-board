@@ -60,6 +60,8 @@ interface ImageCarouselProps {
 }
 
 export interface ImageCarouselRef {
+  /** 次のレイアウト同期で使う水平位置だけを更新する。現在のDOMは動かさない。 */
+  prepareTranslateX: (value: number) => void;
   updateTranslateX: (value: number) => void;
   updateVerticalTransform: (
     translateY: number,
@@ -488,6 +490,9 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
     useImperativeHandle(
       ref,
       () => ({
+        prepareTranslateX: (value: number) => {
+          currentTranslateXRef.current = value;
+        },
         updateTranslateX: (value: number) => {
           currentTranslateXRef.current = value;
           updateDOMTransforms(value);
@@ -1043,28 +1048,34 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
       };
     }, [cancelPausedSeekFrameFlush]);
 
-    // Calculate initial styles (transforms will be handled by direct DOM manipulation)
+    // React が prev/current/next のスロットを再利用しても、commit 直後から正しい位置に置く。
     const getImageStyle = (position: 'current' | 'next' | 'prev') => {
-      const opacity = gestureTransform.opacity;
       const shouldShowNeighbor = gestureTransform.scale === 1 && zoomTransform.scale === 1;
+      const verticalTransform = currentVerticalTransformRef.current;
+      const containerWidth =
+        containerRef.current?.clientWidth ||
+        (typeof window !== 'undefined' ? window.innerWidth : 0);
+      const xOffset =
+        position === 'next' ? -containerWidth : position === 'prev' ? containerWidth : 0;
+      const translateXValue = gestureTransform.translateX + currentTranslateXRef.current + xOffset;
+      const translateYValue = gestureTransform.translateY + verticalTransform.translateY;
+      const scale = gestureTransform.scale * verticalTransform.scale;
+      const opacity =
+        (position === 'current' || shouldShowNeighbor ? gestureTransform.opacity : 0) *
+        verticalTransform.opacity;
+      const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 1;
+      const blurAmount =
+        verticalTransform.translateY > 0
+          ? Math.min(20, (Math.abs(verticalTransform.translateY) / viewportHeight) * 40)
+          : 0;
 
-      switch (position) {
-        case 'current':
-          return {
-            opacity,
-            willChange: 'transform', // Optimize for frequent transform changes
-          };
-        case 'next':
-          return {
-            opacity: shouldShowNeighbor ? opacity : 0,
-            willChange: 'transform',
-          };
-        case 'prev':
-          return {
-            opacity: shouldShowNeighbor ? opacity : 0,
-            willChange: 'transform',
-          };
-      }
+      return {
+        opacity,
+        willChange: 'transform',
+        transform: `translate3d(${translateXValue}px, ${translateYValue}px, 0) scale(${scale})`,
+        transformOrigin: 'center bottom',
+        filter: blurAmount > 0 ? `blur(${blurAmount}px)` : '',
+      };
     };
 
     const releaseOwnedVideo = useCallback(() => {
@@ -1104,6 +1115,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
       const source = isVideo
         ? getVideoSource(asset)
         : withImageRefreshKey(getImageDisplaySource(asset), asset.updatedAt);
+      const assetRenderKey = `asset-${String(asset.id ?? source ?? position)}`;
       const dragStyle: DragImageStyle | undefined = !isVideo
         ? {
             cursor: nativeDragEnabled ? 'grab' : 'default',
@@ -1136,6 +1148,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
       if (isVideo && position === 'current') {
         return (
           <div
+            key={assetRenderKey}
             ref={getRef()}
             className="absolute inset-0 flex items-center justify-center"
             style={style}
@@ -1157,6 +1170,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
       // それ以外は従来どおり
       return (
         <div
+          key={assetRenderKey}
           ref={getRef()}
           className="absolute inset-0 flex items-center justify-center"
           style={style}
