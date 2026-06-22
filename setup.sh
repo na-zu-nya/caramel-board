@@ -73,6 +73,48 @@ write_env() { # key val
 
 have() { command -v "$1" >/dev/null 2>&1; }
 
+docker_shim_missing_output() {
+  grep -qi "could not be found in this WSL 2 distro"
+}
+
+docker_engine_platform() {
+  local output status platform
+  set +e
+  output=$(docker version --format '{{.Server.Os}}/{{.Server.Arch}}' 2>&1)
+  status=$?
+  set -e
+  if [ "$status" -ne 0 ] || printf "%s" "$output" | docker_shim_missing_output; then
+    return 1
+  fi
+  platform=$(printf "%s\n" "$output" | tr -d '\r' | grep -E '^[[:alnum:]_/-]+/[[:alnum:]_/-]+$' | head -n1 || true)
+  [ -n "$platform" ] || return 1
+  printf "%s\n" "$platform"
+}
+
+docker_engine_ready() {
+  docker_engine_platform >/dev/null
+}
+
+compose_usable() {
+  local output status
+  set +e
+  output=$("$@" version 2>&1)
+  status=$?
+  set -e
+  [ "$status" -eq 0 ] || return 1
+  ! printf "%s" "$output" | docker_shim_missing_output
+}
+
+print_docker_unavailable() {
+  if [ "$CB_LANG" = "ja" ]; then
+    echo "[setup] WSL 内から Docker に接続できません。" >&2
+    echo "[setup] Docker Desktop > Settings > Resources > WSL integration で Ubuntu を有効化し、Apply & restart 後に再実行してください。" >&2
+  else
+    echo "[setup] Docker is not reachable from WSL." >&2
+    echo "[setup] Enable Docker Desktop > Settings > Resources > WSL integration for Ubuntu, apply/restart, then rerun this command." >&2
+  fi
+}
+
 ensure_huggingface_cli() {
   local target_dir="$1"
   local hf_bin=""
@@ -397,6 +439,21 @@ if ! $CHANNEL_MODE && $INTERACTIVE && [ -z "$CB_CHANNEL_SELECTED" ]; then
   echo ""
 fi
 
+if ! $CHANNEL_MODE; then
+  if ! have docker; then
+    if [ "$CB_LANG" = "ja" ]; then
+      echo "[setup] Docker が見つかりませんでした。Docker Desktop（Windows/macOS）または Docker Engine + compose（Linux）をインストールしてください。" >&2
+    else
+      echo "[setup] Docker not found. Please install Docker Desktop (Windows/macOS) or Docker Engine + compose (Linux)." >&2
+    fi
+    exit 1
+  fi
+  if ! docker_engine_ready; then
+    print_docker_unavailable
+    exit 1
+  fi
+fi
+
 # 1.5) Dependency notes (Python hint for JoyTag)
 python_ok=false; if have python3; then python_ok=true; fi
 if ! $python_ok; then
@@ -509,9 +566,7 @@ if [ "$storage_sel" != "3" ]; then
   # Detect Docker server platform (os/arch) and normalize to compose 'platform'
   DETECTED_PLATFORM=""
   if command -v docker >/dev/null 2>&1; then
-    set +e
-    DETECTED_PLATFORM=$(docker version --format '{{.Server.Os}}/{{.Server.Arch}}' 2>/dev/null | tr -d '"' | tr -d '\r' | head -n1)
-    set -e
+    DETECTED_PLATFORM=$(docker_engine_platform || true)
   fi
   DOCKER_PLATFORM=""
   if [ -n "$DETECTED_PLATFORM" ]; then
@@ -566,9 +621,13 @@ if ! have docker; then
   fi
   exit 1
 fi
-if docker compose version >/dev/null 2>&1; then
+if ! docker_engine_ready; then
+  print_docker_unavailable
+  exit 1
+fi
+if compose_usable docker compose; then
   DC=(docker compose)
-elif have docker-compose; then
+elif compose_usable docker-compose; then
   DC=(docker-compose)
 else
   if [ "$CB_LANG" = "ja" ]; then

@@ -108,20 +108,70 @@ have() { command -v "$1" >/dev/null 2>&1; }
 
 GIT_BEHIND_COUNT=0
 
+docker_shim_missing_output() {
+  grep -qi "could not be found in this WSL 2 distro"
+}
+
+docker_engine_platform() {
+  local output status platform
+  set +e
+  output=$(docker version --format '{{.Server.Os}}/{{.Server.Arch}}' 2>&1)
+  status=$?
+  set -e
+  if [ "$status" -ne 0 ] || printf "%s" "$output" | docker_shim_missing_output; then
+    return 1
+  fi
+  platform=$(printf "%s\n" "$output" | tr -d '\r' | grep -E '^[[:alnum:]_/-]+/[[:alnum:]_/-]+$' | head -n1 || true)
+  [ -n "$platform" ] || return 1
+  printf "%s\n" "$platform"
+}
+
+docker_engine_ready() {
+  docker_engine_platform >/dev/null
+}
+
+compose_usable() {
+  local output status
+  set +e
+  output=$("$@" version 2>&1)
+  status=$?
+  set -e
+  [ "$status" -eq 0 ] || return 1
+  ! printf "%s" "$output" | docker_shim_missing_output
+}
+
+print_docker_unavailable() {
+  if [ "$CB_LANG" = "ja" ]; then
+    echo "[start] WSL 内から Docker に接続できません。" >&2
+    echo "[start] Docker Desktop > Settings > Resources > WSL integration で Ubuntu を有効化し、Apply & restart 後に再実行してください。" >&2
+  else
+    echo "[start] Docker is not reachable from WSL." >&2
+    echo "[start] Enable Docker Desktop > Settings > Resources > WSL integration for Ubuntu, apply/restart, then rerun this command." >&2
+  fi
+}
+
+if ! have docker || ! docker_engine_ready; then
+  print_docker_unavailable
+  exit 1
+fi
+
 # Resolve docker compose command
-if command -v docker compose >/dev/null 2>&1; then
+if compose_usable docker compose; then
   DC=(docker compose)
-else
+elif compose_usable docker-compose; then
   DC=(docker-compose)
+else
+  if [ "$CB_LANG" = "ja" ]; then
+    echo "[start] compose コマンドが見つかりませんでした。Docker Desktop（または docker-compose）をインストールしてください。" >&2
+  else
+    echo "[start] compose command not found. Please install Docker Desktop (or docker-compose)." >&2
+  fi
+  exit 1
 fi
 
 # Helper for dev-only compose file
 dcdev() {
-  if command -v docker compose >/dev/null 2>&1; then
-    docker compose -f docker-compose.dev.yml "$@"
-  else
-    docker-compose -f docker-compose.dev.yml "$@"
-  fi
+  "${DC[@]}" -f docker-compose.dev.yml "$@"
 }
 
 # Compose file set (prod)

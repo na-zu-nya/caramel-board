@@ -23,7 +23,13 @@ services:
       # redis removed (no embedding queue)
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6766/api/v1/health"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:6766/api/v1/health').then((response)=>{if(!response.ok)process.exit(1);}).catch(()=>process.exit(1));",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -42,8 +48,10 @@ services:
     build:
       context: ./docker/postgres
       dockerfile: Dockerfile
-    expose:
-      - "5432"
+    ports:
+      # Desktop migration needs to reach the old Docker DB from the host.
+      # Bind to loopback only so PostgreSQL is not exposed to the LAN.
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432"
     environment:
       POSTGRES_USER: caramel_user
       POSTGRES_PASSWORD: caramel_pass

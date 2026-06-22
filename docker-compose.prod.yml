@@ -39,9 +39,10 @@ services:
       POSTGRES_USER: caramel_user
       POSTGRES_PASSWORD: caramel_pass
       POSTGRES_DB: caramel_board_db
-    # Do not publish DB port in production; internal network only
-    expose:
-      - "5432"
+    # Desktop migration needs to reach the old Docker DB from the host.
+    # Bind to loopback only so PostgreSQL is not exposed to the LAN.
+    ports:
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432"
     restart: always
     networks:
       - caramelboard-network
