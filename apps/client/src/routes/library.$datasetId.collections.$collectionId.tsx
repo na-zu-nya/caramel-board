@@ -192,7 +192,8 @@ function CollectionViewContent() {
         if (filterConfig.hasNoTags) restoredFilter.hasNoTags = filterConfig.hasNoTags;
         if (filterConfig.hasNoAuthor) restoredFilter.hasNoAuthor = filterConfig.hasNoAuthor;
         if (filterConfig.mediaCategory) restoredFilter.mediaCategory = filterConfig.mediaCategory;
-        if (filterConfig.mediaType) restoredFilter.mediaType = filterConfig.mediaType;
+        if (Array.isArray(filterConfig.mediaTypes))
+          restoredFilter.mediaTypes = filterConfig.mediaTypes;
         if (filterConfig.colorFilter) restoredFilter.colorFilter = filterConfig.colorFilter;
 
         setCurrentFilter(restoredFilter);
@@ -225,7 +226,7 @@ function CollectionViewContent() {
       currentFilter.hasNoTags !== originalConfig.hasNoTags ||
       currentFilter.hasNoAuthor !== originalConfig.hasNoAuthor ||
       currentFilter.mediaCategory !== originalConfig.mediaCategory ||
-      currentFilter.mediaType !== originalConfig.mediaType ||
+      JSON.stringify(currentFilter.mediaTypes) !== JSON.stringify(originalConfig.mediaTypes) ||
       JSON.stringify(currentFilter.colorFilter) !== JSON.stringify(originalConfig.colorFilter)
     );
   }, [collection, currentFilter]);
@@ -284,7 +285,7 @@ function CollectionViewContent() {
               datasetId,
               collectionId,
               mediaCategory: currentFilter.mediaCategory,
-              mediaType: currentFilter.mediaType,
+              mediaTypes: currentFilter.mediaTypes,
               tags: currentFilter.tags,
               authors: currentFilter.authors,
               isFavorite: currentFilter.isFavorite,
@@ -339,7 +340,7 @@ function CollectionViewContent() {
           filterParams.collection = Number.parseInt(collectionId, 10);
         }
         if (currentFilter.mediaCategory) filterParams.mediaCategory = currentFilter.mediaCategory;
-        if (currentFilter.mediaType) filterParams.mediaType = currentFilter.mediaType;
+        if (currentFilter.mediaTypes?.length) filterParams.mediaTypes = currentFilter.mediaTypes;
         if (currentFilter.tags && currentFilter.tags.length > 0)
           filterParams.tag = currentFilter.tags;
         if (currentFilter.authors && currentFilter.authors.length > 0)

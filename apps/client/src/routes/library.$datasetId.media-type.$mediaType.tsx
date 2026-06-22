@@ -8,6 +8,7 @@ import { useDataset } from '@/hooks/useDatasets';
 import { useHeaderActions } from '@/hooks/useHeaderActions';
 import { useRangeBasedQuery } from '@/hooks/useRangeBasedQuery';
 import { useT } from '@/lib/i18n';
+import { areStackFiltersEqual } from '@/lib/stack-filter';
 import { navigationStateAtom } from '@/stores/navigation';
 import { currentFilterAtom } from '@/stores/ui';
 import { genListToken, saveViewContext } from '@/stores/view-context';
@@ -29,7 +30,7 @@ function MediaTypeList() {
     authors?: string[];
     hasNoTags?: boolean;
     hasNoAuthor?: boolean;
-    mediaType?: StackFilter['mediaType'];
+    mediaTypes?: StackFilter['mediaTypes'];
     colorFilter?: string;
   };
   const { data: dataset } = useDataset(datasetId);
@@ -69,7 +70,6 @@ function MediaTypeList() {
   useEffect(() => {
     // If we're returning from stack viewer (nav state exists for this path), preserve the filter
     if (navigationState && navigationState.lastPath === window.location.pathname) {
-      console.log('📌 Preserving filter state from navigation');
       return;
     }
 
@@ -77,7 +77,7 @@ function MediaTypeList() {
     const newFilter: StackFilter = {
       datasetId,
       mediaCategory: mediaType as MediaCategory,
-      mediaType: search.mediaType,
+      mediaTypes: search.mediaTypes,
       // Preserve explicit false/empty values correctly; avoid `|| undefined` which drops false
       tags: search.tags ?? undefined,
       search: search.search ?? undefined,
@@ -88,7 +88,9 @@ function MediaTypeList() {
       hasNoAuthor: search.hasNoAuthor ?? undefined,
       colorFilter: search.colorFilter ? JSON.parse(search.colorFilter) : undefined,
     };
-    setCurrentFilter(newFilter);
+    setCurrentFilter((previousFilter) =>
+      areStackFiltersEqual(previousFilter, newFilter) ? previousFilter : newFilter
+    );
   }, [
     datasetId,
     mediaType,
@@ -99,7 +101,7 @@ function MediaTypeList() {
     search.authors,
     search.hasNoTags,
     search.hasNoAuthor,
-    search.mediaType,
+    search.mediaTypes,
     search.colorFilter,
     setCurrentFilter,
     navigationState,
@@ -207,8 +209,6 @@ function MediaTypeList() {
   useEffect(() => {
     // We treat presence of navigationState for this path as "returning"
     if (navigationState && navigationState.lastPath === window.location.pathname) {
-      console.log('📌 Restoring navigation state');
-
       // Restore filter and sort state
       if (navigationState.filter) {
         setCurrentFilter(navigationState.filter);
@@ -269,7 +269,6 @@ function MediaTypeList() {
         const startIndex = Math.max(0, (startRow - bufferRows) * itemsPerRow);
         const endIndex = Math.min((endRow + bufferRows) * itemsPerRow - 1, total - 1);
 
-        console.log(`📌 Loading previously visible range: ${startIndex}-${endIndex}`);
         void (async () => {
           await loadRange(startIndex, endIndex);
           // After range is loaded, ensure final restoration
@@ -287,9 +286,11 @@ function MediaTypeList() {
   // Handle filter changes
   const handleFilterChange = useCallback(
     (newFilter: StackFilter) => {
-      setCurrentFilter(newFilter);
+      setCurrentFilter((previousFilter) =>
+        areStackFiltersEqual(previousFilter, newFilter) ? previousFilter : newFilter
+      );
       // Clear navigation state on filter change
-      setNavigationState(null);
+      setNavigationState((previousState) => (previousState === null ? previousState : null));
 
       // Update URL with new filter params
       const searchParams: Record<string, any> = {};
@@ -314,8 +315,8 @@ function MediaTypeList() {
       if (newFilter.hasNoAuthor !== undefined) {
         searchParams.hasNoAuthor = newFilter.hasNoAuthor;
       }
-      if (newFilter.mediaType) {
-        searchParams.mediaType = newFilter.mediaType;
+      if (newFilter.mediaTypes?.length) {
+        searchParams.mediaTypes = newFilter.mediaTypes;
       }
       if (newFilter.colorFilter) {
         searchParams.colorFilter = JSON.stringify(newFilter.colorFilter);
@@ -353,8 +354,6 @@ function MediaTypeList() {
 
   const handleItemClick = useCallback(
     (item: MediaGridItem) => {
-      console.log('Navigate to stack:', item.id);
-
       // Save current state before navigation
       setNavigationState({
         scrollPosition: window.scrollY,

@@ -85,7 +85,7 @@ function ScratchView() {
             datasetId,
             collectionId,
             mediaCategory: currentFilter.mediaCategory,
-            mediaType: currentFilter.mediaType,
+            mediaTypes: currentFilter.mediaTypes,
             tags: currentFilter.tags,
             authors: currentFilter.authors,
             isFavorite: currentFilter.isFavorite,
@@ -135,7 +135,7 @@ function ScratchView() {
         order: currentSort.order,
       };
       if (currentFilter.mediaCategory) qp.mediaCategory = currentFilter.mediaCategory;
-      if (currentFilter.mediaType) qp.mediaType = currentFilter.mediaType;
+      if (currentFilter.mediaTypes?.length) qp.mediaTypes = currentFilter.mediaTypes;
       if (currentFilter.tags && currentFilter.tags.length > 0) qp.tag = currentFilter.tags;
       if (currentFilter.authors && currentFilter.authors.length > 0)
         qp.author = currentFilter.authors;

@@ -86,7 +86,7 @@ function AutoTagStacksPage() {
     const f = currentFilter || ({} as any);
     const key = {
       mediaCategory: f.mediaCategory ?? undefined,
-      mediaType: f.mediaType ?? undefined,
+      mediaTypes: Array.isArray(f.mediaTypes) ? [...f.mediaTypes].sort() : undefined,
       search: f.search ?? undefined,
       authors: Array.isArray(f.authors) ? [...f.authors].sort() : undefined,
       tags: Array.isArray(f.tags) ? [...f.tags].sort() : undefined,

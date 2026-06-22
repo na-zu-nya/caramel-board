@@ -2,6 +2,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
 import { useAtom } from 'jotai';
 import {
+  ArrowDown,
   ArrowUpDown,
   Calendar,
   Heart,
@@ -14,7 +15,7 @@ import {
   Tag,
   X,
 } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { memo, startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -61,6 +62,31 @@ function isMediaCategory(value: unknown): value is MediaCategory {
   return value === 'image' || value === 'comic' || value === 'video';
 }
 
+function isMediaType(value: unknown): value is MediaType {
+  return value === 'image' || value === 'video' || value === 'multipleImages';
+}
+
+const MEDIA_TYPE_OPTIONS: Array<{
+  value: MediaType;
+  labelKey: 'images' | 'videos' | 'multipleImages';
+}> = [
+  { value: 'image', labelKey: 'images' },
+  { value: 'video', labelKey: 'videos' },
+  { value: 'multipleImages', labelKey: 'multipleImages' },
+];
+
+function normalizeMediaTypes(values: MediaType[]): MediaType[] | undefined {
+  const selected = MEDIA_TYPE_OPTIONS.map((option) => option.value).filter((value) =>
+    values.includes(value)
+  );
+  return selected.length === 0 ? undefined : selected;
+}
+
+function readMediaTypes(value: unknown): MediaType[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  return normalizeMediaTypes(value.filter(isMediaType));
+}
+
 interface FilterPanelProps {
   currentFilter: StackFilter;
   currentSort?: { field: string; order: 'asc' | 'desc' };
@@ -72,7 +98,7 @@ interface FilterPanelProps {
   isFilterModified?: boolean;
 }
 
-export default function FilterPanel({
+function FilterPanel({
   currentFilter,
   currentSort,
   onFilterChange,
@@ -93,7 +119,7 @@ export default function FilterPanel({
   const [authorSuggestions, setAuthorSuggestions] = useState<string[]>([]);
   const [tagLoading, setTagLoading] = useState(false);
   const [authorLoading, setAuthorLoading] = useState(false);
-  const debounceTimerRef = useRef<number | null>(null);
+  const filterCommitTimerRef = useRef<number | null>(null);
   // Ref for the Search input to focus when panel opens
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const params = useParams({ strict: false });
@@ -144,7 +170,7 @@ export default function FilterPanel({
     if (filter.hasNoTags) config.hasNoTags = filter.hasNoTags;
     if (filter.hasNoAuthor) config.hasNoAuthor = filter.hasNoAuthor;
     if (filter.mediaCategory) config.mediaCategory = filter.mediaCategory;
-    if (filter.mediaType) config.mediaType = filter.mediaType;
+    if (filter.mediaTypes?.length) config.mediaTypes = filter.mediaTypes;
     if (filter.colorFilter) config.colorFilter = filter.colorFilter;
 
     return config;
@@ -187,16 +213,18 @@ export default function FilterPanel({
     }
   }, [isOpen]);
 
-  // Create debounced filter change handler
-  const debouncedFilterChange = useCallback(
-    (filter: StackFilter) => {
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current);
+  const commitFilterChange = useCallback(
+    (filter: StackFilter, delayMs: number) => {
+      if (filterCommitTimerRef.current) {
+        window.clearTimeout(filterCommitTimerRef.current);
       }
 
-      debounceTimerRef.current = window.setTimeout(() => {
-        onFilterChange(filter);
-      }, 300); // 300ms debounce
+      filterCommitTimerRef.current = window.setTimeout(() => {
+        filterCommitTimerRef.current = null;
+        startTransition(() => {
+          onFilterChange(filter);
+        });
+      }, delayMs);
     },
     [onFilterChange]
   );
@@ -208,12 +236,12 @@ export default function FilterPanel({
       setLocalFilter(newFilter);
 
       if (immediate) {
-        onFilterChange(newFilter);
+        commitFilterChange(newFilter, 0);
       } else {
-        debouncedFilterChange(newFilter);
+        commitFilterChange(newFilter, 300);
       }
     },
-    [localFilter, onFilterChange, debouncedFilterChange]
+    [localFilter, commitFilterChange]
   );
 
   const updateColorSimilarityThreshold = useCallback(
@@ -234,7 +262,53 @@ export default function FilterPanel({
 
   const colorSimilarityThreshold = localFilter.colorFilter?.similarityThreshold ?? 0;
   const hasHueSelection = Boolean(localFilter.colorFilter?.hueCategories?.length);
+  const selectedMediaTypes = localFilter.mediaTypes ?? [];
+  const mediaTypeLabels = useMemo<Record<MediaType, string>>(
+    () => ({
+      image: t.filter.images,
+      video: t.filter.videos,
+      multipleImages: t.filter.multipleImages,
+    }),
+    [t.filter.images, t.filter.multipleImages, t.filter.videos]
+  );
 
+  const updateMediaTypeSelection = useCallback(
+    (mediaType: MediaType, checked: boolean) => {
+      const selected = new Set(localFilter.mediaTypes ?? []);
+      if (checked) {
+        selected.add(mediaType);
+      } else {
+        selected.delete(mediaType);
+      }
+      updateFilter({ mediaTypes: normalizeMediaTypes([...selected]) }, true);
+    },
+    [localFilter.mediaTypes, updateFilter]
+  );
+
+  const clearMediaTypeSelection = useCallback(() => {
+    updateFilter({ mediaTypes: undefined }, true);
+  }, [updateFilter]);
+
+  const sortField = currentSort?.field ?? 'recommended';
+  const sortOrder = currentSort?.order ?? 'desc';
+
+  const updateSortField = useCallback(
+    (field: string) => {
+      onSortChange?.({ field, order: sortOrder });
+    },
+    [onSortChange, sortOrder]
+  );
+
+  const toggleSortOrder = useCallback(() => {
+    onSortChange?.({
+      field: sortField,
+      order: sortOrder === 'desc' ? 'asc' : 'desc',
+    });
+  }, [onSortChange, sortField, sortOrder]);
+
+  const sortOrderLabel = useMemo(() => {
+    return sortOrder === 'desc' ? t.filter.descending : t.filter.ascending;
+  }, [sortOrder, t.filter.ascending, t.filter.descending]);
   const clearFilter = () => {
     if (isSmartCollection && originalFilterConfig) {
       // For smart collections, restore to original filter config
@@ -255,13 +329,12 @@ export default function FilterPanel({
         restoredFilter.hasNoAuthor = originalFilterConfig.hasNoAuthor;
       if (originalFilterConfig.mediaCategory)
         restoredFilter.mediaCategory = originalFilterConfig.mediaCategory as MediaCategory;
-      if (originalFilterConfig.mediaType)
-        restoredFilter.mediaType = originalFilterConfig.mediaType as MediaType;
+      restoredFilter.mediaTypes = readMediaTypes(originalFilterConfig.mediaTypes);
       if (originalFilterConfig.colorFilter)
         restoredFilter.colorFilter = originalFilterConfig.colorFilter;
 
       setLocalFilter(restoredFilter);
-      onFilterChange(restoredFilter);
+      commitFilterChange(restoredFilter, 0);
     } else {
       // For regular views and manual collections, clear all filters
       const clearedFilter: StackFilter = {
@@ -269,7 +342,7 @@ export default function FilterPanel({
         mediaCategory: routeMediaCategory,
       };
       setLocalFilter(clearedFilter);
-      onFilterChange(clearedFilter);
+      commitFilterChange(clearedFilter, 0);
     }
   };
 
@@ -311,8 +384,8 @@ export default function FilterPanel({
   // Cleanup debounce timer on unmount
   useEffect(() => {
     return () => {
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current);
+      if (filterCommitTimerRef.current) {
+        window.clearTimeout(filterCommitTimerRef.current);
       }
     };
   }, []);
@@ -811,40 +884,54 @@ export default function FilterPanel({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">{t.filter.allCategories}</SelectItem>
-                  <SelectItem value="image">{t.filter.images}</SelectItem>
-                  <SelectItem value="comic">{t.filter.comics}</SelectItem>
-                  <SelectItem value="video">{t.filter.videos}</SelectItem>
+                  <SelectItem value="image">{t.sidebar.images}</SelectItem>
+                  <SelectItem value="comic">{t.sidebar.comics}</SelectItem>
+                  <SelectItem value="video">{t.sidebar.videos}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             {/* Media Type */}
-            <div className="space-y-2">
-              <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                <Images size={16} />
-                {t.filter.mediaType}
+            <div className="space-y-3">
+              <label className="flex items-center justify-between gap-2 text-sm font-medium text-gray-700">
+                <span className="flex items-center gap-2">
+                  <Images size={16} />
+                  {t.filter.mediaType}
+                </span>
+                {selectedMediaTypes.length === 0 ? (
+                  <span className="text-[11px] font-normal text-gray-400">{t.filter.allTypes}</span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={clearMediaTypeSelection}
+                    className="rounded px-1.5 py-0.5 text-[11px] font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                  >
+                    {t.filter.allTypes}
+                  </button>
+                )}
               </label>
-              <Select
-                value={localFilter.mediaType || 'all'}
-                onValueChange={(value) =>
-                  updateFilter(
-                    {
-                      mediaType: value === 'all' ? undefined : (value as MediaType),
-                    },
-                    true
-                  )
-                }
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">{t.filter.allMediaTypes}</SelectItem>
-                  <SelectItem value="image">{t.filter.images}</SelectItem>
-                  <SelectItem value="video">{t.filter.videos}</SelectItem>
-                  <SelectItem value="multipleImages">{t.filter.multipleImages}</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="grid grid-cols-3 gap-2">
+                {MEDIA_TYPE_OPTIONS.map((option) => {
+                  const isSelected = selectedMediaTypes.includes(option.value);
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      aria-pressed={isSelected}
+                      onClick={() => updateMediaTypeSelection(option.value, !isSelected)}
+                      className={cn(
+                        FILTER_CHOICE_BUTTON_CLASS,
+                        'min-w-0 truncate focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30',
+                        isSelected
+                          ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      )}
+                    >
+                      {mediaTypeLabels[option.value]}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             {/* Sort Options */}
@@ -854,14 +941,9 @@ export default function FilterPanel({
                   <ArrowUpDown size={16} />
                   {t.filter.sortByLabel}
                 </label>
-                <div className="space-y-2">
-                  <Select
-                    value={currentSort?.field || 'recommended'}
-                    onValueChange={(value) =>
-                      onSortChange({ field: value, order: currentSort?.order || 'desc' })
-                    }
-                  >
-                    <SelectTrigger className="w-full">
+                <div className="flex items-center gap-2">
+                  <Select value={sortField} onValueChange={updateSortField}>
+                    <SelectTrigger className="min-w-0 flex-1">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -872,36 +954,24 @@ export default function FilterPanel({
                       <SelectItem value="updated">{t.filter.recentlyUpdated}</SelectItem>
                     </SelectContent>
                   </Select>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        onSortChange({ field: currentSort?.field || 'recommended', order: 'asc' })
-                      }
-                      className={cn(
-                        'flex-1 px-3 py-2 rounded-md text-sm font-medium transition-colors',
-                        currentSort?.order === 'asc'
-                          ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      )}
-                    >
-                      {t.filter.ascending}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        onSortChange({ field: currentSort?.field || 'recommended', order: 'desc' })
-                      }
-                      className={cn(
-                        'flex-1 px-3 py-2 rounded-md text-sm font-medium transition-colors',
-                        currentSort?.order === 'desc'
-                          ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      )}
-                    >
-                      {t.filter.descending}
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={toggleSortOrder}
+                    aria-label={sortOrderLabel}
+                    aria-pressed={sortOrder === 'desc'}
+                    title={sortOrderLabel}
+                    className={cn(
+                      'flex h-10 w-10 shrink-0 items-center justify-center rounded-md border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30',
+                      sortOrder === 'desc'
+                        ? 'border-primary bg-primary text-primary-foreground hover:bg-primary/90'
+                        : 'border-gray-200 bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-900'
+                    )}
+                  >
+                    <ArrowDown
+                      size={15}
+                      className={cn('transition-transform', sortOrder === 'asc' && 'rotate-180')}
+                    />
+                  </button>
                 </div>
               </div>
             )}
@@ -1013,3 +1083,5 @@ export default function FilterPanel({
     </>
   );
 }
+
+export default memo(FilterPanel);

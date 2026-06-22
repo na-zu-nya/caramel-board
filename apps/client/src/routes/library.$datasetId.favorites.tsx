@@ -90,7 +90,11 @@ function FavoritesPage() {
     const filtered = items.filter((item) => {
       if (currentFilter.mediaCategory && item.mediaType !== currentFilter.mediaCategory)
         return false;
-      if (currentFilter.mediaType && item.actualMediaType !== currentFilter.mediaType) return false;
+      if (
+        currentFilter.mediaTypes?.length &&
+        (!item.actualMediaType || !currentFilter.mediaTypes.includes(item.actualMediaType))
+      )
+        return false;
       if (
         search &&
         !String(item.name ?? '')
@@ -128,7 +132,7 @@ function FavoritesPage() {
     });
   }, [
     currentFilter.mediaCategory,
-    currentFilter.mediaType,
+    currentFilter.mediaTypes,
     currentFilter.search,
     currentSort,
     favoriteItems?.stacks,

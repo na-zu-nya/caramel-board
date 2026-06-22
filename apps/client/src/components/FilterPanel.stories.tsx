@@ -15,14 +15,19 @@ const meta: Meta<typeof FilterPanel> = {
 
 export default meta;
 type Story = StoryObj<typeof FilterPanel>;
+type SortState = { field: string; order: 'asc' | 'desc' };
 
-function FilterPanelStory() {
-  const [filter, setFilter] = useState<StackFilter>({
-    datasetId: '1',
-    search: 'blue reference',
-    mediaCategory: 'comic',
-    mediaType: 'multipleImages',
-  });
+interface FilterPanelStoryProps {
+  initialFilter: StackFilter;
+  initialSort?: SortState;
+}
+
+function FilterPanelStory({
+  initialFilter,
+  initialSort = { field: 'dateAdded', order: 'desc' },
+}: FilterPanelStoryProps) {
+  const [filter, setFilter] = useState<StackFilter>(initialFilter);
+  const [sort, setSort] = useState<SortState>(initialSort);
   const queryClient = useMemo(() => new QueryClient(), []);
   const jotaiStore = useMemo(() => {
     const store = createStore();
@@ -44,7 +49,12 @@ function FilterPanelStory() {
       <RouterContextProvider router={router}>
         <JotaiProvider store={jotaiStore}>
           <div className="h-[760px] bg-gray-100">
-            <FilterPanel currentFilter={filter} onFilterChange={setFilter} />
+            <FilterPanel
+              currentFilter={filter}
+              currentSort={sort}
+              onFilterChange={setFilter}
+              onSortChange={setSort}
+            />
           </div>
         </JotaiProvider>
       </RouterContextProvider>
@@ -52,6 +62,23 @@ function FilterPanelStory() {
   );
 }
 
+const selectedMediaTypeFilter: StackFilter = {
+  datasetId: '1',
+  search: 'blue reference',
+  mediaCategory: 'comic',
+  mediaTypes: ['image', 'multipleImages'],
+};
+
+const allMediaTypeFilter: StackFilter = {
+  datasetId: '1',
+  search: 'blue reference',
+  mediaCategory: 'comic',
+};
+
 export const Default: Story = {
-  render: () => <FilterPanelStory />,
+  render: () => <FilterPanelStory initialFilter={selectedMediaTypeFilter} />,
+};
+
+export const AllMediaTypes: Story = {
+  render: () => <FilterPanelStory initialFilter={allMediaTypeFilter} />,
 };
