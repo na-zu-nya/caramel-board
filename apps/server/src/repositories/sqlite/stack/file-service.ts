@@ -98,26 +98,13 @@ export class StackFileService {
            FROM assets a
            JOIN stacks s ON s.id = a.stack_id
            WHERE s.dataset_id = ? AND a.hash = ?
+           ORDER BY CASE WHEN a.stack_id = ? THEN 0 ELSE 1 END, a.id ASC
            LIMIT 1`
         )
-        .get(stack.dataset_id, hash) as DuplicateAssetRow | undefined;
+        .get(stack.dataset_id, hash, stackId) as DuplicateAssetRow | undefined;
 
       if (existing) {
-        try {
-          fs.rmSync(file.path, { force: true });
-        } catch {}
-        if (existing.stack_id === stackId) {
-          throw new DuplicateAssetError('このスタックに同一画像が既に存在します', {
-            assetId: existing.id,
-            stackId: existing.stack_id,
-            scope: 'same-stack',
-          });
-        }
-        throw new DuplicateAssetError('重複画像のため追加できません（別スタックに存在）', {
-          assetId: existing.id,
-          stackId: existing.stack_id,
-          scope: 'dataset',
-        });
+        this.rejectDuplicateFile(file.path, existing, stackId);
       }
     }
 
@@ -196,7 +183,13 @@ export class StackFileService {
   }
 
   private async addPdfWithFile(stackId: number, file: StandaloneFileInput, dataSetId: number) {
-    const preparedPdf = await preparePdfImport(file, dataSetId);
+    const sourceHash = await getHash(file.path);
+    const existing = this.findPdfSourceDuplicate(dataSetId, sourceHash, stackId);
+    if (existing) {
+      this.rejectDuplicateFile(file.path, existing, stackId);
+    }
+
+    const preparedPdf = await preparePdfImport(file, dataSetId, { sourceHash });
     const createdAssetIds: number[] = [];
     let firstAsset: ReturnType<typeof toAsset> | null = null;
 
@@ -250,6 +243,49 @@ export class StackFileService {
   private deleteStack(stackId: number) {
     const result = this.db.prepare('DELETE FROM stacks WHERE id = ?').run(stackId);
     return result.changes > 0;
+  }
+
+  private findPdfSourceDuplicate(
+    dataSetId: number,
+    sourceHash: string,
+    stackId: number
+  ): DuplicateAssetRow | undefined {
+    return this.db
+      .prepare(
+        `SELECT a.id, a.stack_id
+         FROM assets a
+         JOIN stacks s ON s.id = a.stack_id
+         WHERE s.dataset_id = ?
+           AND json_extract(
+             CASE WHEN json_valid(a.meta_json) THEN a.meta_json ELSE '{}' END,
+             '$.sourcePdfHash'
+           ) = ?
+         ORDER BY CASE WHEN a.stack_id = ? THEN 0 ELSE 1 END, a.id ASC
+         LIMIT 1`
+      )
+      .get(dataSetId, sourceHash, stackId) as DuplicateAssetRow | undefined;
+  }
+
+  private rejectDuplicateFile(
+    filePath: string,
+    existing: DuplicateAssetRow,
+    stackId: number
+  ): never {
+    try {
+      fs.rmSync(filePath, { force: true });
+    } catch {}
+    if (existing.stack_id === stackId) {
+      throw new DuplicateAssetError('このスタックに同一ファイルが既に存在します', {
+        assetId: existing.id,
+        stackId: existing.stack_id,
+        scope: 'same-stack',
+      });
+    }
+    throw new DuplicateAssetError('重複ファイルのため追加できません（別スタックに存在）', {
+      assetId: existing.id,
+      stackId: existing.stack_id,
+      scope: 'dataset',
+    });
   }
 
   private resolveAssetExtension(sourcePath: string, originalName: string) {

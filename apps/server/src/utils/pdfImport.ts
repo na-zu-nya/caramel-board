@@ -49,6 +49,11 @@ export interface PreparedPdfImport {
   cleanup: () => void;
 }
 
+export interface PreparePdfImportOptions {
+  dpi?: number;
+  sourceHash?: string;
+}
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
@@ -246,9 +251,10 @@ export const extractPdfOriginalsFromMeta = (meta: unknown): PdfOriginalMeta[] =>
 export const preparePdfImport = async (
   file: FileInput,
   dataSetId: number,
-  dpi = PDF_RASTER_DPI
+  options: PreparePdfImportOptions = {}
 ): Promise<PreparedPdfImport> => {
-  const pdfHash = await getHash(file.path);
+  const dpi = options.dpi ?? PDF_RASTER_DPI;
+  const pdfHash = options.sourceHash ?? (await getHash(file.path));
   const importId = randomUUID();
   const originalExtension = getImportExtension(file);
   const originalKey = buildOriginalKey(dataSetId, pdfHash, originalExtension);

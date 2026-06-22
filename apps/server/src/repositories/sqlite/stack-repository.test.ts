@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path, { resolve } from 'node:path';
@@ -7,6 +8,7 @@ import { DataStorage } from '../../lib/DataStorage';
 import { StandaloneStackRepository } from './stack-repository';
 
 const schemaPath = resolve(process.cwd(), 'sqlite/schema.sql');
+const sha256 = (content: string) => createHash('sha256').update(content).digest('hex');
 
 describe('StandaloneStackRepository search', () => {
   let db: DatabaseSync;
@@ -271,6 +273,101 @@ describe('StandaloneStackRepository search', () => {
       } else {
         process.env.FILES_STORAGE = previousStorage;
       }
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects a duplicated PDF source before rasterizing pages', async () => {
+    const now = '2026-06-20T00:00:00.000Z';
+    const tempDir = mkdtempSync(path.join(os.tmpdir(), 'caramel-pdf-duplicate-'));
+    const pdfContent = '%PDF-1.7\nsame document\n';
+    const sourceHash = sha256(pdfContent);
+    const filePath = path.join(tempDir, 'same.pdf');
+    writeFileSync(filePath, pdfContent);
+    db.prepare(
+      `INSERT INTO assets
+         (id, stack_id, file, thumbnail, file_type, original_name, hash, order_in_stack, meta_json, created_at, updated_at)
+       VALUES
+         (5, 1, '/tmp/pdf-page-1.jpg', '', 'jpg', 'same-p001.jpg', 'pdf-page-hash-1', 1, ?, ?, ?)`
+    ).run(JSON.stringify({ sourcePdfHash: sourceHash, sourcePdfPage: 1 }), now, now);
+
+    try {
+      await expect(
+        repository.addAssetWithFile(2, {
+          path: filePath,
+          originalname: 'same.pdf',
+          mimetype: 'application/pdf',
+          size: pdfContent.length,
+        })
+      ).rejects.toMatchObject({
+        code: 'DUPLICATE_ASSET',
+        details: { stackId: 1, scope: 'dataset' },
+      });
+      expect(existsSync(filePath)).toBe(false);
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects a duplicated AI source through the PDF-compatible import path', async () => {
+    const now = '2026-06-20T00:00:00.000Z';
+    const tempDir = mkdtempSync(path.join(os.tmpdir(), 'caramel-ai-duplicate-'));
+    const aiContent = '%PDF-1.7\nsame artwork\n';
+    const sourceHash = sha256(aiContent);
+    const filePath = path.join(tempDir, 'same.ai');
+    writeFileSync(filePath, aiContent);
+    db.prepare(
+      `INSERT INTO assets
+         (id, stack_id, file, thumbnail, file_type, original_name, hash, order_in_stack, meta_json, created_at, updated_at)
+       VALUES
+         (5, 1, '/tmp/ai-page-1.jpg', '', 'jpg', 'same-p001.jpg', 'ai-page-hash-1', 1, ?, ?, ?)`
+    ).run(JSON.stringify({ sourcePdfHash: sourceHash, sourcePdfPage: 1 }), now, now);
+
+    try {
+      await expect(
+        repository.addAssetWithFile(2, {
+          path: filePath,
+          originalname: 'same.ai',
+          mimetype: 'application/postscript',
+          size: aiContent.length,
+        })
+      ).rejects.toMatchObject({
+        code: 'DUPLICATE_ASSET',
+        details: { stackId: 1, scope: 'dataset' },
+      });
+      expect(existsSync(filePath)).toBe(false);
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects a duplicated SVG through the normal asset hash path', async () => {
+    const tempDir = mkdtempSync(path.join(os.tmpdir(), 'caramel-svg-duplicate-'));
+    const svgContent =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><rect width="32" height="32"/></svg>';
+    const sourceHash = sha256(svgContent);
+    const filePath = path.join(tempDir, 'same.svg');
+    writeFileSync(filePath, svgContent);
+    db.prepare('UPDATE assets SET file_type = ?, original_name = ?, hash = ? WHERE id = 1').run(
+      'svg',
+      'same.svg',
+      sourceHash
+    );
+
+    try {
+      await expect(
+        repository.addAssetWithFile(2, {
+          path: filePath,
+          originalname: 'same.svg',
+          mimetype: 'image/svg+xml',
+          size: svgContent.length,
+        })
+      ).rejects.toMatchObject({
+        code: 'DUPLICATE_ASSET',
+        details: { stackId: 1, scope: 'dataset' },
+      });
+      expect(existsSync(filePath)).toBe(false);
+    } finally {
       rmSync(tempDir, { recursive: true, force: true });
     }
   });
