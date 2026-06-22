@@ -230,6 +230,10 @@ export const translations = {
     dockerMigrationCompleted: (dbPath: string, exportDir: string) =>
       `Docker migration completed.\nDB: ${dbPath}\nExport: ${exportDir}`,
     dockerMigrationInProgress: 'Migration in progress',
+    dockerMigrationResetConfirmTitle: 'Clear the target and create a new data store?',
+    dockerMigrationResetConfirmBody:
+      'The current SQLite database files will be deleted, then Docker migration will start again. Existing asset files are not copied and will be reused from the selected asset folder.',
+    dockerMigrationResetConfirmAction: 'Clear and migrate',
     settingsAutoSaved: 'Settings are saved automatically.',
     sqliteFilterName: 'SQLite Database',
   },
@@ -462,6 +466,10 @@ export const translations = {
     dockerMigrationCompleted: (dbPath: string, exportDir: string) =>
       `Docker版からの移行が完了しました。\nDB: ${dbPath}\nExport: ${exportDir}`,
     dockerMigrationInProgress: '移行中',
+    dockerMigrationResetConfirmTitle: '移行先をクリアして新規作成しますか?',
+    dockerMigrationResetConfirmBody:
+      '現在のSQLite DB関連ファイルを削除してから、Docker版からの移行をもう一度開始します。既存のアセットファイルはコピーせず、選択したアセットフォルダをそのまま再利用します。',
+    dockerMigrationResetConfirmAction: 'クリアして移行',
     settingsAutoSaved: '設定は自動保存されます。',
     sqliteFilterName: 'SQLiteデータベース',
   },

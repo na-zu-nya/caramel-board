@@ -212,13 +212,13 @@ const wizardCopy = {
     migrateDetectNotFound: 'Could not find the previous version. Start it, then click Retry.',
     migrateLocationTitle: 'Where to put the migrated data?',
     migrateLocationBody:
-      'A new data store will be created here. The migration copies your data into it.',
+      'A new SQLite data store will be created here. Existing asset files will stay in the selected asset folder and be reused.',
     migrateConfirmTitle: 'Ready to migrate',
     migrateConfirmBody:
-      'Data from the previous version will be copied into the new data store. This can take some time depending on the size of the library.',
+      'Database records from the previous version will be imported into the new data store. Existing asset files will not be copied.',
     migrateRunningTitle: 'Migrating…',
     migrateRunningBody:
-      'Copying data into the new data store. Please leave the previous version running until this finishes.',
+      'Importing database records. Please leave the previous version running until this finishes.',
     migrateCompleteTitle: 'Import complete',
     migrateCompleteBody: 'Import is complete. You can quit the command line version now.',
     doneTitle: 'All set',
@@ -377,13 +377,14 @@ const wizardCopy = {
     migrateDetectNotFound:
       '以前の版に接続できませんでした。起動してから「もう一度確認」を押してください。',
     migrateLocationTitle: '引き継いだデータの保存先',
-    migrateLocationBody: 'この場所に新しいデータストアを作り、引き継ぎデータを保存します。',
+    migrateLocationBody:
+      'この場所に新しい SQLite データストアを作ります。既存のアセットファイルは選択したアセットフォルダに残し、そのまま再利用します。',
     migrateConfirmTitle: '引き継ぎの準備ができました',
     migrateConfirmBody:
-      '以前の版のデータを新しいデータストアにコピーします。ライブラリの量によっては時間がかかります。',
+      '以前の版のデータベース情報を新しいデータストアに取り込みます。既存のアセットファイルはコピーしません。',
     migrateRunningTitle: '引き継ぎ中…',
     migrateRunningBody:
-      'データをコピーしています。完了するまで以前の版は起動したままにしてください。',
+      'データベース情報を取り込んでいます。完了するまで以前の版は起動したままにしてください。',
     migrateCompleteTitle: '取り込みが完了しました',
     migrateCompleteBody: '取り込み完了しました。コマンドライン版は終了できます。',
     doneTitle: '準備ができました',
@@ -978,6 +979,7 @@ export function SetupWizard({
       try {
         const progress = await invoke<DockerMigrationProgress>('start_docker_migration', {
           settings: settingsForMigration,
+          resetTarget: true,
         });
         setDockerMigrationProgress(progress);
         if (progress.completed && !progress.error) {
@@ -1431,6 +1433,14 @@ export function SetupWizard({
     const inspectionHint = (() => {
       if (!targetPath.trim()) return null;
       if (!inspection) return null;
+      if (forMigration && dataStoreHasContents(inspection)) {
+        return (
+          <div className="wizard-path-card warn">
+            <strong>{t.detectExistingResettable}</strong>
+            <span>{inspection.path}</span>
+          </div>
+        );
+      }
       if (!forMigration && dataStoreHasContents(inspection)) {
         return (
           <div className="wizard-path-card warn">
@@ -1463,8 +1473,7 @@ export function SetupWizard({
       );
     })();
 
-    const canClearForMigration =
-      forMigration && inspection?.exists && !inspection.isEmpty && !inspection.hasDatabase;
+    const canClearForMigration = forMigration && dataStoreHasContents(inspection);
     const blocked = !targetPath.trim();
 
     return (
@@ -2370,7 +2379,7 @@ export function SetupWizard({
                 className="primary-button"
                 onClick={() => {
                   setResetDataStoreConfirmOpen(false);
-                  if (step === 'migrate-location') {
+                  if (mode === 'migrate') {
                     void handleClearMigrationTarget();
                     return;
                   }
@@ -2378,7 +2387,7 @@ export function SetupWizard({
                 }}
                 disabled={busy}
               >
-                {step === 'migrate-location' ? t.resetDataStoreContinue : t.resetDataStoreConfirm}
+                {mode === 'migrate' ? t.resetDataStoreContinue : t.resetDataStoreConfirm}
               </button>
             </div>
           </div>

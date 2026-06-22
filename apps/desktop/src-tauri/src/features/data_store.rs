@@ -343,6 +343,7 @@ fn apply_data_store(
     settings.setup_completed = setup_completed;
     let normalized = normalize_settings_for_app(&app, settings)?;
     write_settings(&app, &normalized)?;
+    apply_app_shell_settings(&app, &normalized)?;
     Ok(normalized)
 }
 
@@ -352,6 +353,7 @@ fn complete_setup(app: AppHandle) -> Result<AppSettings, String> {
     settings.setup_completed = true;
     let normalized = normalize_settings_for_app(&app, settings)?;
     write_settings(&app, &normalized)?;
+    apply_app_shell_settings(&app, &normalized)?;
     Ok(normalized)
 }
 
@@ -374,5 +376,6 @@ fn reset_setup(
     settings.setup_completed = false;
     let normalized = normalize_settings_for_app(&app, settings)?;
     write_settings(&app, &normalized)?;
+    apply_app_shell_settings(&app, &normalized)?;
     Ok(normalized)
 }
