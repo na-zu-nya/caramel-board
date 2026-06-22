@@ -168,6 +168,9 @@ function SelectableStackTileGrid({ cornerRadius }: { cornerRadius: 'rounded' | '
             onAddToScratchItem={() => undefined}
             onDownloadItem={() => undefined}
             onDownloadSelected={() => undefined}
+            onRefreshStacks={(stackIds) => {
+              console.log('refresh stacks', stackIds);
+            }}
             onBulkEditSelected={() => undefined}
             onRemoveSelectedStacks={() => {
               setSelectedItems(new Set());

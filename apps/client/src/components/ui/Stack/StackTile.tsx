@@ -31,6 +31,7 @@ export interface StackTileProps extends React.HTMLAttributes<HTMLDivElement> {
   collectionMenu?: StackContextCollectionMenuProps;
   onDownload?: () => void;
   onDownloadSelected?: () => void;
+  onRefresh?: () => void;
   onBulkEditSelected?: () => void;
   onMergeSelected?: () => void;
   onRemoveSelectedStacks?: () => void;
@@ -69,6 +70,7 @@ export function StackTile({
   collectionMenu,
   onDownload,
   onDownloadSelected,
+  onRefresh,
   onBulkEditSelected,
   onMergeSelected,
   onRemoveSelectedStacks,
@@ -272,6 +274,7 @@ export function StackTile({
         onOpen={onOpen}
         onBulkEditSelected={onBulkEditSelected}
         onDownload={onDownload ? handleDownload : undefined}
+        onRefresh={onRefresh}
         onInfo={onInfo}
         onFindSimilar={onFindSimilar}
         onAddToScratch={onAddToScratch}

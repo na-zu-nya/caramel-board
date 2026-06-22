@@ -54,9 +54,9 @@ export const Default: Story = {
               group: 'primary',
             },
             {
-              label: 'Refresh Thumbnails',
-              value: 'refresh-thumbnails',
-              onSelect: () => console.log('refresh thumbnails'),
+              label: 'Refresh',
+              value: 'refresh',
+              onSelect: () => console.log('refresh'),
               icon: <RefreshCw size={12} />,
             },
             {

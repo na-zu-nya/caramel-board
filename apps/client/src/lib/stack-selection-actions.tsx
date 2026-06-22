@@ -1,12 +1,11 @@
-import { Clapperboard, Download, GitMerge, Pencil, RefreshCw, Trash2 } from 'lucide-react';
+import { Download, GitMerge, Pencil, RefreshCw, Trash2 } from 'lucide-react';
 import type { SelectionAction } from '@/components/ui/selection-action-bar';
 
 interface StackSelectionActionCopy {
   bulkEdit: string;
   downloadSelected: (count: number) => string;
   mergeStacks: string;
-  refreshThumbnails: string;
-  optimizeVideo: string;
+  refresh: string;
   deleteStacks: string;
   deleteStacksConfirm: (count: number) => string;
 }
@@ -25,8 +24,7 @@ interface CreateStackSelectionActionsOptions {
   bulkEdit?: StackSelectionActionHandler;
   downloadSelected?: StackSelectionActionHandler;
   mergeStacks?: StackSelectionMergeAction;
-  refreshThumbnails?: StackSelectionActionHandler;
-  optimizeVideo?: StackSelectionActionHandler;
+  refresh?: StackSelectionActionHandler;
   deleteStacks?: StackSelectionActionHandler;
 }
 
@@ -36,8 +34,7 @@ export function createStackSelectionActions({
   bulkEdit,
   downloadSelected,
   mergeStacks,
-  refreshThumbnails,
-  optimizeVideo,
+  refresh,
   deleteStacks,
 }: CreateStackSelectionActionsOptions): SelectionAction[] {
   if (selectedCount === 0) return [];
@@ -74,21 +71,12 @@ export function createStackSelectionActions({
     });
   }
 
-  if (refreshThumbnails) {
+  if (refresh) {
     actions.push({
-      label: copy.refreshThumbnails,
-      value: 'refresh-thumbnails',
-      onSelect: refreshThumbnails.onSelect,
+      label: copy.refresh,
+      value: 'refresh',
+      onSelect: refresh.onSelect,
       icon: <RefreshCw size={12} />,
-    });
-  }
-
-  if (optimizeVideo) {
-    actions.push({
-      label: copy.optimizeVideo,
-      value: 'optimize-video',
-      onSelect: optimizeVideo.onSelect,
-      icon: <Clapperboard size={12} />,
     });
   }
 

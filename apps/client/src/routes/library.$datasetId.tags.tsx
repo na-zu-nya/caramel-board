@@ -113,7 +113,7 @@ interface TagStacksQueryParams {
   offset: number;
   tag: string[];
   mediaCategory?: MediaCategory;
-  mediaType?: MediaType;
+  mediaTypes?: MediaType[];
   author?: string[];
   fav?: 0 | 1;
   liked?: 0 | 1;
@@ -155,7 +155,7 @@ function buildTagStacksQuery(params: {
   };
 
   if (params.filter.mediaCategory) query.mediaCategory = params.filter.mediaCategory;
-  if (params.filter.mediaType) query.mediaType = params.filter.mediaType;
+  if (params.filter.mediaTypes?.length) query.mediaTypes = params.filter.mediaTypes;
   if (params.filter.tags && params.filter.tags.length > 0) {
     const extras = params.filter.tags.filter((tag) => tag !== params.selectedTag.title);
     if (extras.length > 0) query.tag = [...query.tag, ...extras];
@@ -857,26 +857,27 @@ function TagsPage() {
   );
 
   // Bulk operations handlers
-  const refreshThumbnails = useCallback(
+  const refreshStacks = useCallback(
     async (stackIds: (string | number)[]) => {
       if (stackIds.length === 0) return;
-      await apiClient.bulkRefreshThumbnails(stackIds);
+      await apiClient.refreshStacks(stackIds);
       queryClient.invalidateQueries({ queryKey: ['tag-stacks', selectedTag?.id] });
     },
     [queryClient, selectedTag]
   );
 
-  const handleRefreshThumbnails = useCallback(async () => {
-    if (selectedStackItems.size === 0) return;
-
-    const stackIds = Array.from(selectedStackItems);
-    try {
-      await refreshThumbnails(stackIds);
-      exitSelectionMode();
-    } catch (error) {
-      console.error('Error refreshing thumbnails:', error);
-    }
-  }, [selectedStackItems, refreshThumbnails, exitSelectionMode]);
+  const handleRefreshStacks = useCallback(
+    async (targetStackIds?: Array<string | number>) => {
+      const stackIds = targetStackIds ?? Array.from(selectedStackItems);
+      try {
+        await refreshStacks(stackIds);
+        exitSelectionMode();
+      } catch (error) {
+        console.error('Error refreshing stacks:', error);
+      }
+    },
+    [selectedStackItems, refreshStacks, exitSelectionMode]
+  );
 
   const removeStacks = useCallback(
     async (stackIds: (string | number)[]) => {
@@ -905,26 +906,6 @@ function TagsPage() {
     downloadStackOriginals(datasetId, selectedStackIds);
   }, [datasetId, selectedStackIds]);
 
-  const handleOptimizePreviews = useCallback(async () => {
-    if (selectedStackItems.size === 0) return;
-
-    const stackIds = Array.from(selectedStackItems).map((id) =>
-      typeof id === 'string' ? Number.parseInt(id, 10) : id
-    );
-
-    try {
-      for (const id of stackIds) {
-        await apiClient.regenerateStackPreview({ stackId: id, datasetId, force: true });
-      }
-
-      exitSelectionMode();
-      queryClient.invalidateQueries({ queryKey: ['tag-stacks', selectedTag?.id] });
-    } catch (error) {
-      console.error('Error optimizing video previews:', error);
-      alert(t.grid.optimizeVideoFailed);
-    }
-  }, [selectedStackItems, datasetId, exitSelectionMode, queryClient, selectedTag, t]);
-
   const selectionActions = useMemo(
     () =>
       createStackSelectionActions({
@@ -933,21 +914,18 @@ function TagsPage() {
           bulkEdit: t.grid.bulkEdit,
           downloadSelected: t.contextMenu.downloadSelected,
           mergeStacks: t.grid.mergeStacks,
-          refreshThumbnails: t.grid.refreshThumbnails,
-          optimizeVideo: t.grid.optimizeVideo,
+          refresh: t.grid.refresh,
           deleteStacks: t.grid.deleteStacks,
           deleteStacksConfirm: t.grid.deleteStacksConfirm,
         },
         bulkEdit: { onSelect: toggleEditPanel },
         downloadSelected: { onSelect: handleDownloadSelectedStacks },
-        refreshThumbnails: { onSelect: handleRefreshThumbnails },
-        optimizeVideo: { onSelect: handleOptimizePreviews },
+        refresh: { onSelect: () => handleRefreshStacks() },
         deleteStacks: { onSelect: handleRemoveStacks },
       }),
     [
       handleDownloadSelectedStacks,
-      handleOptimizePreviews,
-      handleRefreshThumbnails,
+      handleRefreshStacks,
       handleRemoveStacks,
       selectedStackItems.size,
       t,
@@ -1195,6 +1173,7 @@ function TagsPage() {
                       onAddToScratchItem={handleAddToScratchStack}
                       onDownloadItem={handleDownloadStack}
                       onDownloadSelected={handleDownloadSelectedStacks}
+                      onRefreshStacks={handleRefreshStacks}
                       onBulkEditSelected={toggleEditPanel}
                       onRemoveSelectedStacks={handleRemoveStacks}
                       onToggleFavoriteItem={handleToggleFavoriteStack}

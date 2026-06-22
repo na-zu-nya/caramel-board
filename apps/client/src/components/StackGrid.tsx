@@ -71,6 +71,8 @@ interface FolderImportRequest {
   defaults: FolderUploadDefaults;
 }
 
+const EMPTY_SELECTED_STACK_IDS: number[] = [];
+
 export default function StackGrid({
   // Legacy mode props
   items,
@@ -96,7 +98,7 @@ export default function StackGrid({
   const queryClient = useQueryClient();
   const currentFilter = useAtomValue(currentFilterAtom);
   const dsId = dataset?.id ? String(dataset.id) : String((currentFilter as any)?.datasetId || '1');
-  const { scratch } = useScratch(dsId);
+  const { scratch, ensureScratch } = useScratch(dsId);
   const {
     collections: collectionMenuCollections,
     isLoadingCollections: isCollectionMenuLoading,
@@ -293,6 +295,7 @@ export default function StackGrid({
   );
 
   const selectedStackIdsInOrder = useMemo(() => {
+    if (selectedItemOrder.length === 0) return EMPTY_SELECTED_STACK_IDS;
     return getSelectedMediaGridStackIds(selectedItemOrder, actualItems);
   }, [actualItems, selectedItemOrder]);
 
@@ -463,7 +466,7 @@ export default function StackGrid({
     }
   };
 
-  const handleRefreshThumbnails = useCallback(
+  const handleRefreshStacks = useCallback(
     async (itemIds: (string | number)[]) => {
       if (itemIds.length === 0) return;
 
@@ -471,7 +474,7 @@ export default function StackGrid({
         const stackIds = itemIds.map((id) =>
           typeof id === 'string' ? Number.parseInt(id, 10) : id
         );
-        await apiClient.bulkRefreshThumbnails(stackIds);
+        await apiClient.refreshStacks(stackIds);
 
         clearSelection();
         exitSelectionMode();
@@ -486,8 +489,8 @@ export default function StackGrid({
           void queryClient.invalidateQueries({ queryKey: ['stacks'] });
         }
       } catch (error) {
-        console.error('❌ Failed to refresh thumbnails:', error);
-        alert(t.grid.refreshThumbnailsFailed);
+        console.error('❌ Failed to refresh stacks:', error);
+        alert(t.grid.refreshFailed);
       }
     },
     [
@@ -501,47 +504,6 @@ export default function StackGrid({
       t,
     ]
   );
-
-  const handleOptimizePreviews = useCallback(async () => {
-    if (selectedItems.size === 0) return;
-
-    const stackIds = Array.from(selectedItems).map((id) =>
-      typeof id === 'string' ? Number.parseInt(id, 10) : id
-    );
-
-    try {
-      for (const stackId of stackIds) {
-        await apiClient.regenerateStackPreview({ stackId, datasetId: dsId, force: true });
-      }
-
-      clearSelection();
-      exitSelectionMode();
-
-      if (onRefreshAll) {
-        await onRefreshAll();
-        if (onLoadRange && rangeStart !== undefined) {
-          const endIndex = Math.min(rangeStart + 100, actualTotal);
-          onLoadRange(rangeStart, endIndex);
-        }
-      } else {
-        void queryClient.invalidateQueries({ queryKey: ['stacks'] });
-      }
-    } catch (error) {
-      console.error('❌ Failed to optimize video previews:', error);
-      alert(t.grid.optimizeVideoFailed);
-    }
-  }, [
-    actualTotal,
-    clearSelection,
-    dsId,
-    exitSelectionMode,
-    onLoadRange,
-    onRefreshAll,
-    queryClient,
-    rangeStart,
-    selectedItems,
-    t,
-  ]);
 
   const handleToggleBulkEditPanel = useCallback(() => {
     if (selectedItems.size === 0) return;
@@ -659,8 +621,7 @@ export default function StackGrid({
           bulkEdit: t.grid.bulkEdit,
           downloadSelected: t.contextMenu.downloadSelected,
           mergeStacks: t.grid.mergeStacks,
-          refreshThumbnails: t.grid.refreshThumbnails,
-          optimizeVideo: t.grid.optimizeVideo,
+          refresh: t.grid.refresh,
           deleteStacks: t.grid.deleteStacks,
           deleteStacksConfirm: t.grid.deleteStacksConfirm,
         },
@@ -675,10 +636,9 @@ export default function StackGrid({
                 ),
               }
             : undefined,
-        refreshThumbnails: {
-          onSelect: () => handleRefreshThumbnails(Array.from(selectedItems)),
+        refresh: {
+          onSelect: () => handleRefreshStacks(Array.from(selectedItems)),
         },
-        optimizeVideo: { onSelect: handleOptimizePreviews },
         deleteStacks: {
           onSelect: () => handleRemoveStacks(Array.from(selectedItems)),
         },
@@ -687,8 +647,7 @@ export default function StackGrid({
       handleMergeStacks,
       handleRemoveStacks,
       handleToggleBulkEditPanel,
-      handleRefreshThumbnails,
-      handleOptimizePreviews,
+      handleRefreshStacks,
       selectedItems,
       selectedStackIdsInOrder,
       t,
@@ -954,6 +913,20 @@ export default function StackGrid({
     [dataset?.id, dsId, currentFilter, addNotification, t]
   );
 
+  const handleAddStackToScratch = useCallback(
+    async (id: string | number) => {
+      const scratchCollection = await ensureScratch();
+      const stackId = typeof id === 'string' ? Number.parseInt(id, 10) : id;
+      if (!Number.isFinite(stackId)) return;
+
+      await apiClient.addStackToCollection(scratchCollection.id, stackId);
+      await queryClient.invalidateQueries({ queryKey: ['stacks'] });
+      await queryClient.invalidateQueries({ queryKey: ['library-counts', dsId] });
+      await queryClient.refetchQueries({ queryKey: ['library-counts', dsId] });
+    },
+    [dsId, ensureScratch, queryClient]
+  );
+
   // Show loading only for absolute initial load (when no items exist and no total count)
   // Avoid showing loading screen during data transitions
   if (actualIsLoading && actualItems.length === 0 && actualTotal === 0) {
@@ -1049,6 +1022,7 @@ export default function StackGrid({
                   isSelectionMode={isSelectionMode}
                   isFavoritePending={favoriteStates.has(item.id)}
                   overrideFavorited={favoriteOverrides.get(item.id)}
+                  datasetId={dsId}
                   selectedItems={selectedItems}
                   onItemClick={onTileClick}
                   onToggleSelection={handleToggleSelection}
@@ -1057,11 +1031,13 @@ export default function StackGrid({
                   selectedStackIdsInOrder={selectedStackIdsInOrder}
                   onBulkEditSelected={handleToggleBulkEditPanel}
                   onMergeStacks={handleMergeStacks}
+                  onRefreshStacks={handleRefreshStacks}
                   onRemoveSelectedStacks={handleRemoveStacks}
                   collectionMenuCollections={collectionMenuCollections}
                   isCollectionMenuLoading={isCollectionMenuLoading}
                   onAddStacksToCollection={addStackIdsToCollection}
                   onCreateCollectionWithStacks={openCreateCollectionForStackIds}
+                  onAddToScratch={handleAddStackToScratch}
                   onRemoveFromCollection={
                     allowRemoveFromCollection ? (id) => handleRemoveFromCollection([id]) : undefined
                   }

@@ -1,15 +1,14 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
-import { useAtom, useAtomValue, useSetAtom } from 'jotai';
+import { useAtomValue, useSetAtom } from 'jotai';
 import { Book, Bookmark, Check, Heart, Star } from 'lucide-react';
-import { useCallback, useState } from 'react';
+import { memo, useCallback, useState } from 'react';
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
 import {
   type StackContextMenuCollection,
   StackContextMenuContent,
 } from '@/components/ui/Stack/StackContextMenuContent';
 import { useDrag } from '@/contexts/DragContext';
-import { useScratch } from '@/hooks/useScratch';
 import { apiClient } from '@/lib/api-client';
 import { downloadStackOriginals } from '@/lib/download-originals';
 import { useT } from '@/lib/i18n';
@@ -26,7 +25,7 @@ import {
 import { THUMBNAIL_BLUR_TARGET_CLASS } from '@/lib/thumbnail-blur';
 import { cn } from '@/lib/utils';
 import { navigationStateAtom } from '@/stores/navigation';
-import { currentFilterAtom, infoSidebarOpenAtom, selectedItemIdAtom } from '@/stores/ui';
+import { infoSidebarOpenAtom, selectedItemIdAtom } from '@/stores/ui';
 import type { MediaGridItem } from '@/types';
 
 const getCurrentReturnTo = () => {
@@ -48,6 +47,7 @@ interface StackGridItemProps {
   selectedStackIdsInOrder?: number[];
   onBulkEditSelected?: () => void | Promise<void>;
   onMergeStacks?: () => void | Promise<void>;
+  onRefreshStacks?: (stackIds: Array<string | number>) => void | Promise<void>;
   onRemoveSelectedStacks?: (stackIds: Array<string | number>) => void | Promise<void>;
   collectionMenuCollections?: readonly StackContextMenuCollection[];
   isCollectionMenuLoading?: boolean;
@@ -56,13 +56,15 @@ interface StackGridItemProps {
     stackIds: Array<string | number>
   ) => void | Promise<void>;
   onCreateCollectionWithStacks?: (stackIds: Array<string | number>) => void | Promise<void>;
+  onAddToScratch?: (id: string | number) => void | Promise<void>;
   allowRemoveFromCollection?: boolean;
   onRemoveFromCollection?: (id: string | number) => void | Promise<void>;
   allowRemoveFromScratch?: boolean;
   onRemoveFromScratch?: (id: string | number) => void | Promise<void>;
+  datasetId?: string;
 }
 
-export function StackGridItem({
+function StackGridItemComponent({
   item,
   isSelected,
   isInfoSelected,
@@ -76,15 +78,18 @@ export function StackGridItem({
   selectedStackIdsInOrder,
   onBulkEditSelected,
   onMergeStacks,
+  onRefreshStacks,
   onRemoveSelectedStacks,
   collectionMenuCollections,
   isCollectionMenuLoading = false,
   onAddStacksToCollection,
   onCreateCollectionWithStacks,
+  onAddToScratch,
   allowRemoveFromCollection = false,
   onRemoveFromCollection,
   allowRemoveFromScratch = false,
   onRemoveFromScratch,
+  datasetId: datasetIdProp = '1',
 }: StackGridItemProps) {
   const t = useT();
   const currentFavorited = overrideFavorited ?? item.favorited ?? item.isFavorite ?? false;
@@ -110,15 +115,14 @@ export function StackGridItem({
   const [isDragging, setIsDragging] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [isNativeDragReady, setIsNativeDragReady] = useState(false);
+  const [isContextMenuOpen, setIsContextMenuOpen] = useState(false);
   const {
     draggedStack,
     setDraggedStack,
     setDragKind,
     setIsDragging: setGlobalDragging,
   } = useDrag();
-  const [filter] = useAtom(currentFilterAtom);
-  const datasetId = (filter?.datasetId as string) || '1';
-  const { ensureScratch } = useScratch(datasetId);
+  const datasetId = datasetIdProp;
   const navigate = useNavigate();
   const setInfoOpen = useSetAtom(infoSidebarOpenAtom);
   const setSelectedItemId = useSetAtom(selectedItemIdAtom);
@@ -161,6 +165,11 @@ export function StackGridItem({
     if (!confirmed) return;
     await onRemoveSelectedStacks?.(stackIds);
   }, [getContextActionStackIds, onRemoveSelectedStacks, t]);
+  const handleRefreshStacks = useCallback(async () => {
+    const stackIds = getContextActionStackIds();
+    if (stackIds.length === 0) return;
+    await onRefreshStacks?.(stackIds);
+  }, [getContextActionStackIds, onRefreshStacks]);
   const handleInfo = useCallback(() => {
     setSelectedItemId(item.id);
     setInfoOpen(true);
@@ -198,16 +207,11 @@ export function StackGridItem({
   }, [datasetId, getStackId, navigate]);
   const handleAddToScratch = useCallback(async () => {
     try {
-      const sc = await ensureScratch();
-      const stackId = typeof item.id === 'string' ? Number.parseInt(item.id, 10) : item.id;
-      await apiClient.addStackToCollection(sc.id, stackId);
-      await queryClient.invalidateQueries({ queryKey: ['stacks'] });
-      await queryClient.invalidateQueries({ queryKey: ['library-counts', datasetId] });
-      await queryClient.refetchQueries({ queryKey: ['library-counts', datasetId] });
+      await onAddToScratch?.(item.id);
     } catch (e) {
       console.error('Failed to add to Scratch', e);
     }
-  }, [datasetId, ensureScratch, item.id, queryClient]);
+  }, [item.id, onAddToScratch]);
   const handleAddToCollection = useCallback(
     async (collectionId: number) => {
       await onAddStacksToCollection?.(collectionId, getContextActionStackIds());
@@ -319,7 +323,7 @@ export function StackGridItem({
   const contextActionCount = getContextActionStackIds().length;
 
   return (
-    <ContextMenu>
+    <ContextMenu onOpenChange={setIsContextMenuOpen}>
       <ContextMenuTrigger asChild>
         <Link
           key={item.id}
@@ -605,23 +609,29 @@ export function StackGridItem({
           )}
         </Link>
       </ContextMenuTrigger>
-      <StackContextMenuContent
-        isSelectionContext={isSelectionContext}
-        selectedActionCount={contextActionCount}
-        onOpen={handleContextOpen}
-        onBulkEditSelected={isSelectionContext ? handleBulkEditSelected : undefined}
-        onDownload={handleDownloadOriginals}
-        onInfo={handleInfo}
-        onFindSimilar={handleFindSimilar}
-        onAddToScratch={handleAddToScratch}
-        collectionMenu={collectionMenu}
-        onMergeSelected={canMergeSelectedStacks ? handleMergeSelected : undefined}
-        onRemoveFromCollection={
-          allowRemoveFromCollection ? handleRemoveFromCollectionItem : undefined
-        }
-        onRemoveFromScratch={allowRemoveFromScratch ? handleRemoveFromScratchItem : undefined}
-        onRemoveStack={handleContextRemove}
-      />
+      {isContextMenuOpen ? (
+        <StackContextMenuContent
+          isSelectionContext={isSelectionContext}
+          selectedActionCount={contextActionCount}
+          onOpen={handleContextOpen}
+          onBulkEditSelected={isSelectionContext ? handleBulkEditSelected : undefined}
+          onDownload={handleDownloadOriginals}
+          onRefresh={onRefreshStacks ? handleRefreshStacks : undefined}
+          onInfo={handleInfo}
+          onFindSimilar={handleFindSimilar}
+          onAddToScratch={onAddToScratch ? handleAddToScratch : undefined}
+          collectionMenu={collectionMenu}
+          onMergeSelected={canMergeSelectedStacks ? handleMergeSelected : undefined}
+          onRemoveFromCollection={
+            allowRemoveFromCollection ? handleRemoveFromCollectionItem : undefined
+          }
+          onRemoveFromScratch={allowRemoveFromScratch ? handleRemoveFromScratchItem : undefined}
+          onRemoveStack={handleContextRemove}
+        />
+      ) : null}
     </ContextMenu>
   );
 }
+
+export const StackGridItem = memo(StackGridItemComponent);
+StackGridItem.displayName = 'StackGridItem';

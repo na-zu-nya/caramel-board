@@ -270,24 +270,26 @@ function SimilarStacksRoute() {
     [selectedItems.size, selectedStackIdsInOrder, clearSelection, exitSelectionMode, refetch]
   );
 
-  const refreshThumbnails = useCallback(async (stackIds: (string | number)[]) => {
+  const refreshStacks = useCallback(async (stackIds: (string | number)[]) => {
     if (stackIds.length === 0) return;
-    await apiClient.bulkRefreshThumbnails(stackIds);
+    await apiClient.refreshStacks(stackIds);
   }, []);
 
-  const handleRefreshThumbnails = useCallback(async () => {
-    if (selectedItems.size === 0) return;
-    const stackIds = selectedStackIdsInOrder;
-    if (stackIds.length === 0) return;
+  const handleRefreshStacks = useCallback(
+    async (targetStackIds?: Array<string | number>) => {
+      const stackIds = targetStackIds ?? selectedStackIdsInOrder;
+      if (stackIds.length === 0) return;
 
-    try {
-      await refreshThumbnails(stackIds);
-      exitSelectionMode();
-      await refetch();
-    } catch (error) {
-      console.error('Error refreshing thumbnails:', error);
-    }
-  }, [selectedItems.size, selectedStackIdsInOrder, refreshThumbnails, exitSelectionMode, refetch]);
+      try {
+        await refreshStacks(stackIds);
+        exitSelectionMode();
+        await refetch();
+      } catch (error) {
+        console.error('Error refreshing stacks:', error);
+      }
+    },
+    [selectedStackIdsInOrder, refreshStacks, exitSelectionMode, refetch]
+  );
 
   const removeStacks = useCallback(async (stackIds: (string | number)[]) => {
     if (stackIds.length === 0) return;
@@ -307,25 +309,6 @@ function SimilarStacksRoute() {
       console.error('Error removing stacks:', error);
     }
   }, [selectedItems.size, selectedStackIdsInOrder, removeStacks, exitSelectionMode, refetch]);
-
-  const handleOptimizePreviews = useCallback(async () => {
-    if (selectedItems.size === 0) return;
-
-    const stackIds = selectedStackIdsInOrder;
-    if (stackIds.length === 0) return;
-
-    try {
-      for (const id of stackIds) {
-        await apiClient.regenerateStackPreview({ stackId: id, datasetId, force: true });
-      }
-
-      exitSelectionMode();
-      await refetch();
-    } catch (error) {
-      console.error('Error optimizing video previews:', error);
-      alert(t.grid.optimizeVideoFailed);
-    }
-  }, [selectedItems.size, selectedStackIdsInOrder, datasetId, exitSelectionMode, refetch, t]);
 
   const handleMergeStacks = useCallback(async () => {
     if (selectedStackIdsInOrder.length < 2) return;
@@ -429,8 +412,7 @@ function SimilarStacksRoute() {
           bulkEdit: t.grid.bulkEdit,
           downloadSelected: t.contextMenu.downloadSelected,
           mergeStacks: t.grid.mergeStacks,
-          refreshThumbnails: t.grid.refreshThumbnails,
-          optimizeVideo: t.grid.optimizeVideo,
+          refresh: t.grid.refresh,
           deleteStacks: t.grid.deleteStacks,
           deleteStacksConfirm: t.grid.deleteStacksConfirm,
         },
@@ -446,15 +428,13 @@ function SimilarStacksRoute() {
                 ),
               }
             : undefined,
-        refreshThumbnails: { onSelect: handleRefreshThumbnails },
-        optimizeVideo: { onSelect: handleOptimizePreviews },
+        refresh: { onSelect: () => handleRefreshStacks() },
         deleteStacks: { onSelect: handleRemoveStacks },
       }),
     [
       handleDownloadSelectedStacks,
       handleMergeStacks,
-      handleOptimizePreviews,
-      handleRefreshThumbnails,
+      handleRefreshStacks,
       handleRemoveStacks,
       selectedItems.size,
       selectedStackIdsInOrder,
@@ -495,6 +475,7 @@ function SimilarStacksRoute() {
           onAddToScratchItem={handleAddToScratchStack}
           onDownloadItem={handleDownloadStack}
           onDownloadSelected={handleDownloadSelectedStacks}
+          onRefreshStacks={handleRefreshStacks}
           onBulkEditSelected={toggleEditPanel}
           onMergeSelected={
             selectedStackIdsInOrder.length >= 2 ? handleMergeSelectedStacks : undefined

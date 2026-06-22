@@ -12,6 +12,7 @@ import {
   NotebookText,
   Pencil,
   Plus,
+  RefreshCw,
   Trash2,
 } from 'lucide-react';
 import {
@@ -51,6 +52,7 @@ interface StackContextMenuContentProps {
   onOpen?: () => void | Promise<void>;
   onBulkEditSelected?: () => void | Promise<void>;
   onDownload?: () => void | Promise<void>;
+  onRefresh?: () => void | Promise<void>;
   onInfo?: () => void | Promise<void>;
   onFindSimilar?: () => void | Promise<void>;
   onAddToScratch?: () => void | Promise<void>;
@@ -159,6 +161,7 @@ export function StackContextMenuContent({
   onOpen,
   onBulkEditSelected,
   onDownload,
+  onRefresh,
   onInfo,
   onFindSimilar,
   onAddToScratch,
@@ -176,7 +179,7 @@ export function StackContextMenuContent({
   const deleteLabel = isSelectionContext
     ? t.contextMenu.deleteSelected(selectedActionCount)
     : t.info.removeStack;
-  const hasPrimaryActions = Boolean(onOpen || onBulkEditSelected || onDownload);
+  const hasPrimaryActions = Boolean(onOpen || onBulkEditSelected || onDownload || onRefresh);
   const hasSecondaryActions = Boolean(
     onInfo || onFindSimilar || onAddToScratch || collectionMenu || onMergeSelected
   );
@@ -202,6 +205,12 @@ export function StackContextMenuContent({
         <ContextMenuItem onClick={() => void onDownload()}>
           <Download className="w-4 h-4 mr-2" />
           {downloadLabel}
+        </ContextMenuItem>
+      ) : null}
+      {onRefresh ? (
+        <ContextMenuItem onClick={() => void onRefresh()}>
+          <RefreshCw className="w-4 h-4 mr-2" />
+          {t.grid.refresh}
         </ContextMenuItem>
       ) : null}
 

@@ -5,7 +5,6 @@ import {
   Calendar,
   ChevronDown,
   ChevronUp,
-  Clapperboard,
   Copy,
   Download,
   GalleryVerticalEnd,
@@ -183,18 +182,6 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
   ]);
 
   const previewGenerated = Boolean(selectedItem?.assets?.some((asset) => asset.preview));
-  const previewEligible = useMemo(() => {
-    if (!selectedItem?.assets) return false;
-    const previewable = new Set(['gif', 'mp4', 'mov', 'webm', 'm4v', 'avi', 'mkv']);
-    return selectedItem.assets.some((asset) => {
-      const ext = asset.fileType?.toLowerCase();
-      if (ext && previewable.has(ext)) return true;
-      const src = asset.file || asset.url || '';
-      const match = src.toLowerCase().match(/\.([a-z0-9]+)(?:$|[?#])/);
-      if (!match) return false;
-      return previewable.has(match[1]);
-    });
-  }, [selectedItem?.assets]);
 
   // State for editing
   const [tagInput, setTagInput] = useState('');
@@ -643,10 +630,15 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
     },
   });
 
-  // Refresh (thumbnail + colors + auto-tags) in sequence (embeddings removed)
+  // Refresh (thumbnail + preview + colors + auto-tags) in sequence (embeddings removed)
   const refreshAllMutation = useMutation({
     mutationFn: async ({ stackId }: { stackId: number }) => {
       const thumbnailResult = await apiClient.refreshThumbnail(stackId);
+      const previewResult = await apiClient.regenerateStackPreview({
+        stackId,
+        datasetId,
+        force: true,
+      });
       const colorResult = await apiClient.updateStackColors(stackId);
       const autoTagResult = await apiClient.refreshStackAutoTags(stackId, {
         threshold: 0.4,
@@ -655,6 +647,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
 
       return {
         thumbnailResult,
+        previewResult,
         colorResult,
         autoTagResult,
       };
@@ -672,6 +665,20 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
             result.colorResult?.message || '色情報が未生成のため、カラー更新はスキップされました。',
         });
       }
+
+      if (result.previewResult?.failed?.length) {
+        addNotification({
+          type: 'info',
+          message: `プレビュー生成に失敗したアセットがあります: ${result.previewResult.failed.length} 件`,
+        });
+      }
+
+      if (result.thumbnailResult?.failed?.length) {
+        addNotification({
+          type: 'info',
+          message: `サムネイル生成に失敗したアセットがあります: ${result.thumbnailResult.failed.length} 件`,
+        });
+      }
     },
     onError: (error: unknown) => {
       const message =
@@ -679,16 +686,6 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
           ? error.message
           : 'リフレッシュ処理に失敗しました。時間を置いて再実行してください。';
       addNotification({ type: 'error', message });
-    },
-  });
-
-  const regeneratePreviewMutation = useMutation({
-    mutationFn: async ({ stackId, dataSetId }: { stackId: number; dataSetId: string }) => {
-      return apiClient.regenerateStackPreview({ stackId, datasetId: dataSetId, force: true });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['stack', datasetId, selectedItemId] });
-      queryClient.invalidateQueries({ queryKey: ['stacks'] });
     },
   });
 
@@ -1268,27 +1265,6 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
                   <NotebookText size={16} />
                   {t.info.addToScratch}
                 </button>
-                {previewEligible && (
-                  <button
-                    type="button"
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
-                    onClick={() =>
-                      selectedItem &&
-                      regeneratePreviewMutation.mutate({
-                        stackId: Number(selectedItem.id),
-                        dataSetId: datasetId,
-                      })
-                    }
-                    disabled={!selectedItem || regeneratePreviewMutation.isPending}
-                  >
-                    {regeneratePreviewMutation.isPending ? (
-                      <Loader2 size={16} className="animate-spin" />
-                    ) : (
-                      <Clapperboard size={16} />
-                    )}
-                    {t.info.optimizeVideo}
-                  </button>
-                )}
                 <button
                   type="button"
                   className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
