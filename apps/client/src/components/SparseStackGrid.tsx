@@ -31,7 +31,6 @@ import { selectionModeAtom } from '@/stores/ui';
 import {
   addFilesToQueueAtom,
   addUploadNotificationAtom,
-  uploadDefaultsAtom,
   uploadNotificationsAtom,
 } from '@/stores/upload';
 import type { Dataset, MediaGridItem, SortOption, StackFilter } from '@/types';
@@ -75,7 +74,6 @@ export default function SparseStackGrid({
   const queryClient = useQueryClient();
   const setSelectionMode = useSetAtom(selectionModeAtom);
   const addFilesToQueue = useSetAtom(addFilesToQueueAtom);
-  const setUploadDefaults = useSetAtom(uploadDefaultsAtom);
   const addNotification = useSetAtom(addUploadNotificationAtom);
   const uploadNotifications = useAtomValue(uploadNotificationsAtom);
   const { ensureScratch } = useScratch(datasetId);
@@ -195,14 +193,11 @@ export default function SparseStackGrid({
 
       try {
         if (mode === 'flat-upload') {
-          setUploadDefaults({
-            datasetId: defaults.datasetId,
-            mediaType: defaults.mediaType,
-            tags: defaults.tags,
-            author: defaults.author,
-            collectionId: defaults.collectionId,
+          addFilesToQueue({
+            files: activeFolder.files,
+            type: 'new-stack',
+            metadata: defaults,
           });
-          addFilesToQueue({ files: activeFolder.files, type: 'new-stack' });
           addNotification({
             type: 'success',
             message: t.upload.queuedFiles(activeFolder.files.length, activeFolder.name),
@@ -264,7 +259,6 @@ export default function SparseStackGrid({
       addNotification,
       finalizeFolderProcessing,
       refreshAfterManualUpload,
-      setUploadDefaults,
       t,
     ]
   );
@@ -591,14 +585,7 @@ export default function SparseStackGrid({
       const { folders, standalone } = splitFilesByTopLevelFolder(files);
 
       if (standalone.length > 0) {
-        setUploadDefaults({
-          datasetId: defaults.datasetId,
-          mediaType: defaults.mediaType,
-          tags: defaults.tags,
-          author: defaults.author,
-          collectionId: defaults.collectionId,
-        });
-        addFilesToQueue({ files: standalone, type: 'new-stack' });
+        addFilesToQueue({ files: standalone, type: 'new-stack', metadata: defaults });
       }
 
       if (folders.length > 0) {
@@ -611,7 +598,7 @@ export default function SparseStackGrid({
         setFolderQueue((prev) => [...prev, ...requests]);
       }
     },
-    [addFilesToQueue, addNotification, computeUploadDefaults, setUploadDefaults, t]
+    [addFilesToQueue, addNotification, computeUploadDefaults, t]
   );
 
   const handleUrlDrop = useCallback(

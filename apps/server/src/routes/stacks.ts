@@ -17,7 +17,8 @@ import { createZipArchive } from '../utils/zip';
 
 export const stacksRoute = new Hono();
 
-type MediaCategory = 'image' | 'comic' | 'video';
+const MediaCategorySchema = z.enum(['image', 'comic', 'video']);
+type MediaCategory = z.infer<typeof MediaCategorySchema>;
 const ActualMediaTypeSchema = z.enum(['image', 'video', 'multipleImages']);
 const ActualMediaTypesQuerySchema = z
   .union([ActualMediaTypeSchema, z.array(ActualMediaTypeSchema)])
@@ -48,7 +49,7 @@ const colorRepository = new StandaloneColorRepository();
 const PaginatedQuerySchema = z.object({
   dataSetId: z.coerce.number().int().positive(),
   collection: z.coerce.number().int().positive().optional(),
-  mediaCategory: z.enum(['image', 'comic', 'video']).optional(),
+  mediaCategory: MediaCategorySchema.optional(),
   mediaTypes: ActualMediaTypesQuerySchema,
   tag: z.union([z.array(z.string()), z.string()]).optional(),
   author: z.union([z.array(z.string()), z.string()]).optional(),
@@ -93,7 +94,7 @@ const AutoTagSearchQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).optional().default(50),
   offset: z.coerce.number().int().min(0).optional().default(0),
   search: z.string().optional(),
-  mediaCategory: z.enum(['image', 'comic', 'video']).optional(),
+  mediaCategory: MediaCategorySchema.optional(),
   mediaTypes: ActualMediaTypesQuerySchema,
   author: z.union([z.array(z.string()), z.string()]).optional(),
   tag: z.union([z.array(z.string()), z.string()]).optional(),
@@ -113,7 +114,7 @@ const BulkAuthorSchema = z.object({
 });
 const BulkMediaTypeSchema = z.object({
   stackIds: z.array(z.number().int().positive()),
-  mediaType: z.enum(['image', 'comic', 'video']),
+  mediaType: MediaCategorySchema,
 });
 const BulkFavoriteSchema = z.object({
   stackIds: z.array(z.number().int().positive()),
@@ -137,7 +138,7 @@ const ImportFromUrlsSchema = z.object({
   urls: z.array(z.string().url()).min(1).max(20),
   dataSetId: z.number().int().positive().optional(),
   stackId: z.number().int().positive().optional(),
-  mediaType: z.enum(['image', 'comic', 'video']).optional(),
+  mediaType: MediaCategorySchema.optional(),
   collectionId: z.number().int().positive().optional(),
   author: z.string().min(1).max(200).optional(),
   tags: z.array(z.string().min(1)).optional(),
@@ -931,10 +932,16 @@ stacksRoute.post('/', async (c) => {
     const mediaTypeValue = formData.get('mediaType');
     const authorValue = formData.get('author');
     const tags = formData.getAll('tags[]').map((tag) => String(tag));
-    const mediaType = inferMediaTypeFromMime(
-      typeof mediaTypeValue === 'string' ? mediaTypeValue : file.type,
-      file.name
-    );
+    let mediaType: MediaCategory;
+    if (typeof mediaTypeValue === 'string' && mediaTypeValue.length > 0) {
+      const parsedMediaType = MediaCategorySchema.safeParse(mediaTypeValue);
+      if (!parsedMediaType.success) {
+        return c.json({ error: 'mediaType must be one of image, comic, or video' }, 400);
+      }
+      mediaType = parsedMediaType.data;
+    } else {
+      mediaType = inferMediaTypeFromMime(file.type, file.name);
+    }
 
     const storageRoot = process.env.FILES_STORAGE || path.resolve('./data');
     const tmpDir = path.join(storageRoot, 'tmp');

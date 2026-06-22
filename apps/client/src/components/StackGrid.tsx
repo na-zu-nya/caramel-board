@@ -30,10 +30,9 @@ import { currentFilterAtom, reorderModeAtom, selectionModeAtom } from '@/stores/
 import {
   addFilesToQueueAtom,
   addUploadNotificationAtom,
-  uploadDefaultsAtom,
   uploadNotificationsAtom,
 } from '@/stores/upload';
-import type { Dataset, MediaGridItem } from '@/types';
+import type { Dataset, MediaCategory, MediaGridItem } from '@/types';
 import BulkEditPanel from './BulkEditPanel.tsx';
 
 interface StackGridProps {
@@ -59,6 +58,7 @@ interface StackGridProps {
   onItemClick?: (item: MediaGridItem) => void;
   className?: string;
   allowRemoveFromCollection?: boolean;
+  uploadMediaCategory?: MediaCategory;
   // Scratch support
   allowRemoveFromScratch?: boolean;
   scratchCollectionId?: string | number;
@@ -91,6 +91,7 @@ export default function StackGrid({
   className,
   useWindowScroll = true,
   allowRemoveFromCollection = false,
+  uploadMediaCategory,
   allowRemoveFromScratch = false,
   scratchCollectionId,
 }: StackGridProps) {
@@ -109,7 +110,6 @@ export default function StackGrid({
   const setSelectionMode = useSetAtom(selectionModeAtom);
   const reorderMode = useAtomValue(reorderModeAtom);
   const addFilesToQueue = useSetAtom(addFilesToQueueAtom);
-  const setUploadDefaults = useSetAtom(uploadDefaultsAtom);
   const addNotification = useSetAtom(addUploadNotificationAtom);
   const uploadNotifications = useAtomValue(uploadNotificationsAtom);
 
@@ -145,7 +145,7 @@ export default function StackGrid({
         ? currentFilter.authors[0]
         : undefined;
 
-    let targetMediaType = currentFilter.mediaCategory || undefined;
+    let targetMediaType = uploadMediaCategory ?? currentFilter.mediaCategory ?? undefined;
     const collectionMatch = window.location.pathname.match(/(?:collections|scratch)\/(\d+)/);
     const inCollectionView = Boolean(collectionMatch);
     const collectionId = collectionMatch ? Number.parseInt(collectionMatch[1], 10) : undefined;
@@ -160,7 +160,7 @@ export default function StackGrid({
       author: currentAuthor,
       collectionId,
     };
-  }, [currentFilter, dataset?.id, dsId, dataset]);
+  }, [currentFilter, dataset?.id, dsId, dataset, uploadMediaCategory]);
 
   // While this grid is mounted, stabilize body scrollbar gutter for contextmenu reflows
   useEffect(() => {
@@ -702,14 +702,11 @@ export default function StackGrid({
 
       try {
         if (mode === 'flat-upload') {
-          setUploadDefaults({
-            datasetId: defaults.datasetId,
-            mediaType: defaults.mediaType,
-            tags: defaults.tags,
-            author: defaults.author,
-            collectionId: defaults.collectionId,
+          addFilesToQueue({
+            files: activeFolder.files,
+            type: 'new-stack',
+            metadata: defaults,
           });
-          addFilesToQueue({ files: activeFolder.files, type: 'new-stack' });
           addNotification({
             type: 'success',
             message: t.upload.queuedFiles(activeFolder.files.length, activeFolder.name),
@@ -771,7 +768,6 @@ export default function StackGrid({
       addNotification,
       finalizeFolderProcessing,
       refreshAfterManualUpload,
-      setUploadDefaults,
       t,
     ]
   );
@@ -805,14 +801,7 @@ export default function StackGrid({
       const { folders, standalone } = splitFilesByTopLevelFolder(files);
 
       if (standalone.length > 0) {
-        setUploadDefaults({
-          datasetId: defaults.datasetId,
-          mediaType: defaults.mediaType,
-          tags: defaults.tags,
-          author: defaults.author,
-          collectionId: defaults.collectionId,
-        });
-        addFilesToQueue({ files: standalone, type: 'new-stack' });
+        addFilesToQueue({ files: standalone, type: 'new-stack', metadata: defaults });
       }
 
       if (folders.length > 0) {
@@ -825,7 +814,7 @@ export default function StackGrid({
         setFolderQueue((prev) => [...prev, ...requests]);
       }
     },
-    [addFilesToQueue, addNotification, computeUploadDefaults, setUploadDefaults, t]
+    [addFilesToQueue, addNotification, computeUploadDefaults, t]
   );
 
   const handleUrlDrop = useCallback(
@@ -843,7 +832,7 @@ export default function StackGrid({
           ? currentFilter.authors[0]
           : undefined;
 
-      let targetMediaType = currentFilter.mediaCategory || undefined;
+      let targetMediaType = uploadMediaCategory ?? currentFilter.mediaCategory ?? undefined;
       const collectionMatch = window.location.pathname.match(/(?:collections|scratch)\/(\d+)/);
       const inCollectionView = Boolean(collectionMatch);
       const collectionId = collectionMatch ? Number.parseInt(collectionMatch[1], 10) : undefined;
@@ -910,7 +899,7 @@ export default function StackGrid({
         addNotification({ type: 'error', message: t.grid.urlUploadFailed });
       }
     },
-    [dataset?.id, dsId, currentFilter, addNotification, t]
+    [dataset?.id, dsId, currentFilter, uploadMediaCategory, addNotification, t]
   );
 
   const handleAddStackToScratch = useCallback(

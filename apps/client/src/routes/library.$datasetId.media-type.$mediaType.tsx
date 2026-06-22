@@ -468,6 +468,7 @@ function MediaTypeList() {
         onLoadRange={handleLoadRange}
         onRefreshAll={refreshAll}
         dataset={dataset}
+        uploadMediaCategory={mediaType as MediaCategory}
         onItemClick={handleItemClick}
         containerRef={containerRef}
         useWindowScroll
