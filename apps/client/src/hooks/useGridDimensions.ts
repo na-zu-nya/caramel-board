@@ -14,7 +14,6 @@ export function useGridDimensions() {
       if (isAnimating) {
         return;
       }
-      console.log('update calculateGridDimensions');
 
       // Use full viewport width for consistent column calculation
       // regardless of sidebar/panel states

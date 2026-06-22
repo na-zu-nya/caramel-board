@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { BookText, FolderPlus } from 'lucide-react';
-import { useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { CreateCollectionModal } from '@/components/modals/CreateCollectionModal';
 import { CreateFolderModal } from '@/components/modals/CreateFolderModal';
 import { FolderTreeView } from '@/components/sidebar/FolderTreeView';
@@ -15,7 +15,7 @@ import { SideMenuGroup, SideMenuMessage } from '@/components/ui/SideMenu';
 import { apiClient } from '@/lib/api-client';
 import { useT } from '@/lib/i18n';
 
-export function CollectionsSection({
+function CollectionsSectionComponent({
   datasetId,
   isCollapsed = false,
   onToggle,
@@ -46,47 +46,61 @@ export function CollectionsSection({
   const folders = collectionData?.folders || [];
   const rootCollections = collectionData?.rootCollections || [];
 
-  const actions = (
-    <>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            type="button"
-            className="p-0.5 hover:bg-gray-100 rounded transition-colors"
-            aria-label={t.sidebar.createCollection}
-          >
-            <BookText size={16} className="text-gray-600" />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-44">
-          <DropdownMenuItem
-            onClick={() => {
-              setCreateModalType('MANUAL');
-              setCreateModalOpen(true);
-            }}
-          >
-            {t.sidebar.createCollection}
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() => {
-              setCreateModalType('SMART');
-              setCreateModalOpen(true);
-            }}
-          >
-            {t.sidebar.createSmartCollection}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+  const openManualCollectionModal = useCallback(() => {
+    setCreateModalType('MANUAL');
+    setCreateModalOpen(true);
+  }, []);
 
-      <button
-        type="button"
-        className="p-0.5 hover:bg-gray-100 rounded transition-colors"
-        aria-label={t.sidebar.createFolder}
-        onClick={() => setCreateFolderModalOpen(true)}
-      >
-        <FolderPlus size={16} className="text-gray-600" />
-      </button>
-    </>
+  const openSmartCollectionModal = useCallback(() => {
+    setCreateModalType('SMART');
+    setCreateModalOpen(true);
+  }, []);
+
+  const openFolderModal = useCallback(() => {
+    setCreateFolderModalOpen(true);
+  }, []);
+
+  const actions = useMemo(
+    () => (
+      <>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="p-0.5 hover:bg-gray-100 rounded transition-colors"
+              aria-label={t.sidebar.createCollection}
+            >
+              <BookText size={16} className="text-gray-600" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-44">
+            <DropdownMenuItem onClick={openManualCollectionModal}>
+              {t.sidebar.createCollection}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={openSmartCollectionModal}>
+              {t.sidebar.createSmartCollection}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <button
+          type="button"
+          className="p-0.5 hover:bg-gray-100 rounded transition-colors"
+          aria-label={t.sidebar.createFolder}
+          onClick={openFolderModal}
+        >
+          <FolderPlus size={16} className="text-gray-600" />
+        </button>
+      </>
+    ),
+    [
+      openFolderModal,
+      openManualCollectionModal,
+      openSmartCollectionModal,
+      t.sidebar.createCollection,
+      t.sidebar.createFolder,
+      t.sidebar.createSmartCollection,
+    ]
   );
 
   return (
@@ -135,3 +149,6 @@ export function CollectionsSection({
     </>
   );
 }
+
+export const CollectionsSection = memo(CollectionsSectionComponent);
+CollectionsSection.displayName = 'CollectionsSection';

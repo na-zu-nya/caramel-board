@@ -85,26 +85,40 @@ export default function Sidebar() {
   });
 
   // Toggle group collapsed state
-  const toggleGroup = (groupKey: string) => {
-    const newState = {
-      ...collapsedGroups,
-      [groupKey]: !collapsedGroups[groupKey],
-    };
-    setCollapsedGroups(newState);
-    saveCollapsedState(newState);
-  };
+  const toggleGroup = useCallback((groupKey: string) => {
+    setCollapsedGroups((currentGroups) => ({
+      ...currentGroups,
+      [groupKey]: !currentGroups[groupKey],
+    }));
+  }, []);
+
+  const toggleDatasetGroup = useCallback(() => {
+    toggleGroup('dataset');
+  }, [toggleGroup]);
+
+  const toggleSettingsGroup = useCallback(() => {
+    toggleGroup('settings');
+  }, [toggleGroup]);
+
+  const toggleLibraryGroup = useCallback(() => {
+    toggleGroup('library');
+  }, [toggleGroup]);
+
+  const toggleCollectionsGroup = useCallback(() => {
+    toggleGroup('collections');
+  }, [toggleGroup]);
 
   // Handle collection creation success
-  const handleCollectionCreated = () => {
-    queryClient.invalidateQueries({ queryKey: ['collection-folders', datasetId] });
-  };
+  const handleCollectionCreated = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: ['collection-folders', datasetId] });
+  }, [datasetId, queryClient]);
 
   // Handle collection update/delete
-  const handleCollectionChanged = () => {
-    queryClient.invalidateQueries({ queryKey: ['collection-folders', datasetId] });
+  const handleCollectionChanged = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: ['collection-folders', datasetId] });
     // Also invalidate stacks queries to refresh collection membership
-    queryClient.invalidateQueries({ queryKey: ['stacks'] });
-  };
+    void queryClient.invalidateQueries({ queryKey: ['stacks'] });
+  }, [datasetId, queryClient]);
 
   // Pin management functions - implementation of NavigationPinHandlers
   const isPinned: NavigationPinHandlers['isPinned'] = useCallback(
@@ -305,21 +319,21 @@ export default function Sidebar() {
           datasetId={datasetId}
           currentDataset={currentDataset}
           isCollapsed={collapsedGroups.dataset}
-          onToggle={() => toggleGroup('dataset')}
+          onToggle={toggleDatasetGroup}
         />
 
         {/* Settings Section */}
         <SettingsSection
           datasetId={datasetId}
           isCollapsed={collapsedGroups.settings}
-          onToggle={() => toggleGroup('settings')}
+          onToggle={toggleSettingsGroup}
         />
 
         {/* Library Section */}
         <LibrarySection
           datasetId={datasetId}
           isCollapsed={collapsedGroups.library}
-          onToggle={() => toggleGroup('library')}
+          onToggle={toggleLibraryGroup}
           isPinned={isPinned}
           onPinMediaType={handlePinMediaType}
           onUnpinMediaType={handleUnpinMediaType}
@@ -331,7 +345,7 @@ export default function Sidebar() {
         <CollectionsSection
           datasetId={datasetId}
           isCollapsed={collapsedGroups.collections}
-          onToggle={() => toggleGroup('collections')}
+          onToggle={toggleCollectionsGroup}
           isPinned={isPinned}
           onPinCollection={handlePinCollection}
           onUnpinCollection={handleUnpinCollection}

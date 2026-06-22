@@ -42,7 +42,7 @@ export function LibrarySection({
   const queryClient = useQueryClient();
   const { scratch, ensureScratch } = useScratch(datasetId);
   const navigate = useNavigate();
-  const location = useLocation();
+  const pathname = useLocation({ select: (location) => location.pathname });
 
   // Counts (Favorites, Likes, MediaTypes, Scratch)
   const { data: counts } = useQuery({
@@ -256,7 +256,7 @@ export function LibrarySection({
             count={counts?.scratch}
             onStacksDrop={handleScratchDrop}
             acceptDrop
-            active={location.pathname.includes(`/library/${datasetId}/scratch/`)}
+            active={pathname.includes(`/library/${datasetId}/scratch/`)}
           />
         </ScratchContextMenu>
 

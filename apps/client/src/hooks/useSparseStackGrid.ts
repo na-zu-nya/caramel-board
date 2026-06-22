@@ -21,8 +21,7 @@ export function useSparseStackGrid({
   sort,
   pageSize = 50,
 }: UseSparseStackGridOptions) {
-  const location = useLocation();
-  const currentPath = location.pathname;
+  const currentPath = useLocation({ select: (location) => location.pathname });
   const [navigationState, setNavigationState] = useAtom(navigationStateAtom);
   const scrollRestoredRef = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -62,7 +61,6 @@ export function useSparseStackGrid({
     if (total > 0) {
       if (shouldRestore && navigationState) {
         // 保存された状態から復元
-        console.log('📌 Restoring navigation state');
         setItems(navigationState.items);
         setLoadedPages(new Set()); // ページ情報は再計算が必要
 
@@ -73,7 +71,6 @@ export function useSparseStackGrid({
         }
       } else if (items.length !== total) {
         // 新規作成
-        console.log('📌 Creating sparse array with total:', total);
         setItems(new Array(total).fill(undefined));
         setLoadedPages(new Set());
         scrollRestoredRef.current = false;

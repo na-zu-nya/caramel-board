@@ -28,7 +28,6 @@ export function useInfiniteScroll(options: InfiniteScrollOptions) {
       const visibleBottom = visibleTop + clientHeight;
 
       // Calculate how many items we need for current view + buffer
-      const visibleRowStart = Math.floor(visibleTop / itemSize);
       const visibleRowEnd = Math.ceil(visibleBottom / itemSize);
       const bufferRows = 10; // Aggressive buffer for smooth scrolling
 
@@ -37,13 +36,6 @@ export function useInfiniteScroll(options: InfiniteScrollOptions) {
 
       // Load more if we don't have enough items for current position + buffer
       if (neededItemCount > itemsLength) {
-        console.log('🚀 Loading more items for current position', {
-          currentItems: itemsLength,
-          neededItems: neededItemCount,
-          visibleRowStart,
-          visibleRowEnd,
-          scrollTop: Math.round(scrollTop),
-        });
         onLoadMore();
       }
     },
@@ -62,7 +54,6 @@ export function useInfiniteScroll(options: InfiniteScrollOptions) {
 
       // Update scroll position immediately for smooth rendering
       const scrollTop = container.scrollTop;
-      console.log('setScrollTop', scrollTop);
       setScrollTop(scrollTop);
 
       // Clear previous scroll end timeout
@@ -73,7 +64,6 @@ export function useInfiniteScroll(options: InfiniteScrollOptions) {
       // Only check for load more when scrolling stops AND no animations are running
       scrollEndTimeoutRef.current = window.setTimeout(() => {
         if (!shouldSuppressScroll) {
-          console.log('📍 Scroll stopped, checking for load more...');
           checkLoadMore(containerRef, itemsLength);
         }
       }, 500); // Increased delay to prevent aggressive loading

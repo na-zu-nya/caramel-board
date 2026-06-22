@@ -42,7 +42,7 @@ export default function HeaderContainer() {
   const [infoSidebarOpen, setInfoSidebarOpen] = useAtom(infoSidebarOpenAtom);
   const { data: datasets = [] } = useDatasets();
   const navigate = useNavigate();
-  const location = useLocation();
+  const pathname = useLocation({ select: (location) => location.pathname });
 
   const params = useParams({ strict: false }) as { datasetId?: string };
   const datasetId = params.datasetId || currentDataset || '1';
@@ -71,7 +71,7 @@ export default function HeaderContainer() {
   // Check if a navigation pin is active
   const isNavigationPinActive = useCallback(
     (pin: Pin) => {
-      const path = location.pathname;
+      const path = pathname;
       if (pin.type === 'COLLECTION' && pin.collectionId) {
         const scratch =
           (pin.collection && isScratchCollection(pin.collection)) || pin.name === 'Scratch';
@@ -89,7 +89,7 @@ export default function HeaderContainer() {
       }
       return false;
     },
-    [datasetId, location.pathname]
+    [datasetId, pathname]
   );
 
   const handleNavigationPinClick = useCallback(

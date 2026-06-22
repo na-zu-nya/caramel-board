@@ -2,7 +2,7 @@ import type { LucideIcon } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { Pencil, Pin, PinOff, Search, Trash2 } from 'lucide-react';
 import type { FormEvent, ReactNode } from 'react';
-import { useCallback, useEffect, useState } from 'react';
+import { memo, useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   ContextMenu,
@@ -46,7 +46,7 @@ interface CollectionContextMenuProps {
   onFindSimilar?: () => void;
 }
 
-export function CollectionContextMenu({
+function CollectionContextMenuComponent({
   children,
   collection,
   onUpdate,
@@ -61,6 +61,7 @@ export function CollectionContextMenu({
   const [showRenameDialog, setShowRenameDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showPinDialog, setShowPinDialog] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -184,8 +185,9 @@ export function CollectionContextMenu({
     }
   }, [closePinDialog, onPin, selectedPinIcon]);
 
-  const handleMenuOpenChange = useCallback((isOpen: boolean) => {
-    if (!isOpen) {
+  const handleMenuOpenChange = useCallback((open: boolean) => {
+    setIsMenuOpen(open);
+    if (!open) {
       setLoading(false);
       restoreBodyPointerEvents();
     }
@@ -224,190 +226,198 @@ export function CollectionContextMenu({
     <>
       <ContextMenu onOpenChange={handleMenuOpenChange}>
         <ContextMenuTrigger>{children}</ContextMenuTrigger>
-        <ContextMenuContent className="w-44">
-          <ContextMenuItem onSelect={onOpen}>{t.contextMenu.open}</ContextMenuItem>
-          <ContextMenuItem onSelect={handleFindSimilar}>
-            <Search className="w-4 h-4 mr-2" />
-            {t.contextMenu.findSimilar}
-          </ContextMenuItem>
-          <ContextMenuSeparator />
-          <ContextMenuItem onSelect={openRenameDialog}>
-            <Pencil className="w-4 h-4 mr-2" />
-            {t.common.edit}
-          </ContextMenuItem>
-          <ContextMenuSeparator />
-          {isPinned ? (
-            <ContextMenuItem onSelect={onUnpin}>
-              <PinOff className="w-4 h-4 mr-2" />
-              {t.contextMenu.unpin}
+        {isMenuOpen ? (
+          <ContextMenuContent className="w-44">
+            <ContextMenuItem onSelect={onOpen}>{t.contextMenu.open}</ContextMenuItem>
+            <ContextMenuItem onSelect={handleFindSimilar}>
+              <Search className="w-4 h-4 mr-2" />
+              {t.contextMenu.findSimilar}
             </ContextMenuItem>
-          ) : (
-            <ContextMenuItem onSelect={openPinDialog}>
-              <Pin className="w-4 h-4 mr-2" />
-              {t.contextMenu.pin}
+            <ContextMenuSeparator />
+            <ContextMenuItem onSelect={openRenameDialog}>
+              <Pencil className="w-4 h-4 mr-2" />
+              {t.common.edit}
             </ContextMenuItem>
-          )}
-          <ContextMenuSeparator />
-          <ContextMenuItem
-            className="text-red-600 focus:text-red-600 hover:text-red-600"
-            onSelect={() => {
-              closeMenu();
-              setShowDeleteDialog(true);
-            }}
-          >
-            <Trash2 className="w-4 h-4 mr-2" />
-            {t.common.delete}
-          </ContextMenuItem>
-        </ContextMenuContent>
+            <ContextMenuSeparator />
+            {isPinned ? (
+              <ContextMenuItem onSelect={onUnpin}>
+                <PinOff className="w-4 h-4 mr-2" />
+                {t.contextMenu.unpin}
+              </ContextMenuItem>
+            ) : (
+              <ContextMenuItem onSelect={openPinDialog}>
+                <Pin className="w-4 h-4 mr-2" />
+                {t.contextMenu.pin}
+              </ContextMenuItem>
+            )}
+            <ContextMenuSeparator />
+            <ContextMenuItem
+              className="text-red-600 focus:text-red-600 hover:text-red-600"
+              onSelect={() => {
+                closeMenu();
+                setShowDeleteDialog(true);
+              }}
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              {t.common.delete}
+            </ContextMenuItem>
+          </ContextMenuContent>
+        ) : null}
       </ContextMenu>
 
-      {/* Rename Dialog */}
-      <Dialog open={showRenameDialog} onOpenChange={handleRenameDialogOpenChange}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader className="border-b border-gray-200 pb-4">
-            <DialogTitle className="text-lg font-semibold text-gray-900">
-              {t.collection.editCollection}
-            </DialogTitle>
-          </DialogHeader>
+      {showRenameDialog ? (
+        <Dialog open={showRenameDialog} onOpenChange={handleRenameDialogOpenChange}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader className="border-b border-gray-200 pb-4">
+              <DialogTitle className="text-lg font-semibold text-gray-900">
+                {t.collection.editCollection}
+              </DialogTitle>
+            </DialogHeader>
 
-          <form className="space-y-6 pt-2" onSubmit={handleRename}>
-            <div className="space-y-2">
-              <Label htmlFor="edit-name" className="text-gray-700">
-                {t.collection.collectionName} *
-              </Label>
-              <Input
-                id="edit-name"
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder={t.contextMenu.enterCollectionName}
-                required
-                autoFocus
-                disabled={loading}
-              />
-            </div>
+            <form className="space-y-6 pt-2" onSubmit={handleRename}>
+              <div className="space-y-2">
+                <Label htmlFor="edit-name" className="text-gray-700">
+                  {t.collection.collectionName} *
+                </Label>
+                <Input
+                  id="edit-name"
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder={t.contextMenu.enterCollectionName}
+                  required
+                  autoFocus
+                  disabled={loading}
+                />
+              </div>
+
+              <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={closeRenameDialog}
+                  disabled={loading}
+                  className="px-4 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                >
+                  {t.common.cancel}
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={loading || !name.trim()}
+                  className="px-4 py-2 text-sm text-primary-foreground bg-primary rounded-md hover:bg-primary/90 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                >
+                  {loading ? t.common.updating : t.common.update}
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
+      ) : null}
+
+      {showDeleteDialog ? (
+        <Dialog open={showDeleteDialog} onOpenChange={handleDeleteDialogOpenChange}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader className="border-b border-gray-200 pb-4">
+              <DialogTitle className="text-lg font-semibold text-gray-900">
+                {t.collection.deleteCollection}
+              </DialogTitle>
+              <DialogDescription className="text-gray-600 mt-2">
+                {t.collection.deleteCollectionConfirm(collection.name)}
+              </DialogDescription>
+            </DialogHeader>
 
             <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
               <Button
                 type="button"
                 variant="outline"
-                onClick={closeRenameDialog}
+                onClick={closeDeleteDialog}
                 disabled={loading}
                 className="px-4 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
               >
                 {t.common.cancel}
               </Button>
               <Button
-                type="submit"
-                disabled={loading || !name.trim()}
-                className="px-4 py-2 text-sm text-primary-foreground bg-primary rounded-md hover:bg-primary/90 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-              >
-                {loading ? t.common.updating : t.common.update}
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={showDeleteDialog} onOpenChange={handleDeleteDialogOpenChange}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader className="border-b border-gray-200 pb-4">
-            <DialogTitle className="text-lg font-semibold text-gray-900">
-              {t.collection.deleteCollection}
-            </DialogTitle>
-            <DialogDescription className="text-gray-600 mt-2">
-              {t.collection.deleteCollectionConfirm(collection.name)}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={closeDeleteDialog}
-              disabled={loading}
-              className="px-4 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
-            >
-              {t.common.cancel}
-            </Button>
-            <Button
-              onClick={handleDelete}
-              disabled={loading}
-              className="px-4 py-2 text-sm text-white bg-red-600 rounded-md hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-            >
-              {loading ? t.common.deleting : t.common.delete}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Pin Dialog */}
-      <Dialog open={showPinDialog} onOpenChange={handlePinDialogOpenChange}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader className="border-b border-gray-200 pb-4">
-            <DialogTitle className="text-lg font-semibold text-gray-900">
-              {t.collection.pinCollection(collection.name)}
-            </DialogTitle>
-            <DialogDescription className="text-gray-600 mt-2">
-              {t.collection.setHeaderPinDisplay}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-6 pt-2">
-            <div className="space-y-2">
-              <Label className="text-gray-700">{t.pins.name}</Label>
-              <div className="rounded-md border bg-gray-50 px-3 py-2 text-sm text-gray-700">
-                {collection.name}
-              </div>
-              <p className="text-sm text-gray-500">{t.pins.nameFixed}</p>
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-gray-700">{t.contextMenu.icon}</Label>
-              <div className="grid grid-cols-8 gap-2 max-h-48 overflow-y-auto border border-gray-200 rounded-md p-2">
-                {AVAILABLE_ICONS.map((iconName) => (
-                  <button
-                    key={iconName}
-                    type="button"
-                    onClick={() => setSelectedPinIcon(iconName)}
-                    className={`p-2 rounded-md border transition-colors ${
-                      selectedPinIcon === iconName
-                        ? 'border-primary bg-primary/10'
-                        : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                    }`}
-                    title={iconName}
-                  >
-                    {renderIcon(iconName)}
-                  </button>
-                ))}
-              </div>
-              <p className="text-xs text-gray-500">
-                {t.collection.selected} {selectedPinIcon}
-              </p>
-            </div>
-
-            <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={closePinDialog}
+                onClick={handleDelete}
                 disabled={loading}
-                className="px-4 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                className="px-4 py-2 text-sm text-white bg-red-600 rounded-md hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
               >
-                {t.common.cancel}
-              </Button>
-              <Button
-                onClick={handlePin}
-                disabled={loading}
-                className="px-4 py-2 text-sm text-primary-foreground bg-primary rounded-md hover:bg-primary/90 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-              >
-                {loading ? t.contextMenu.pinning : t.contextMenu.pin}
+                {loading ? t.common.deleting : t.common.delete}
               </Button>
             </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+          </DialogContent>
+        </Dialog>
+      ) : null}
+
+      {showPinDialog ? (
+        <Dialog open={showPinDialog} onOpenChange={handlePinDialogOpenChange}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader className="border-b border-gray-200 pb-4">
+              <DialogTitle className="text-lg font-semibold text-gray-900">
+                {t.collection.pinCollection(collection.name)}
+              </DialogTitle>
+              <DialogDescription className="text-gray-600 mt-2">
+                {t.collection.setHeaderPinDisplay}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-6 pt-2">
+              <div className="space-y-2">
+                <Label className="text-gray-700">{t.pins.name}</Label>
+                <div className="rounded-md border bg-gray-50 px-3 py-2 text-sm text-gray-700">
+                  {collection.name}
+                </div>
+                <p className="text-sm text-gray-500">{t.pins.nameFixed}</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-gray-700">{t.contextMenu.icon}</Label>
+                <div className="grid grid-cols-8 gap-2 max-h-48 overflow-y-auto border border-gray-200 rounded-md p-2">
+                  {AVAILABLE_ICONS.map((iconName) => (
+                    <button
+                      key={iconName}
+                      type="button"
+                      onClick={() => setSelectedPinIcon(iconName)}
+                      className={`p-2 rounded-md border transition-colors ${
+                        selectedPinIcon === iconName
+                          ? 'border-primary bg-primary/10'
+                          : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                      }`}
+                      title={iconName}
+                    >
+                      {renderIcon(iconName)}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-500">
+                  {t.collection.selected} {selectedPinIcon}
+                </p>
+              </div>
+
+              <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={closePinDialog}
+                  disabled={loading}
+                  className="px-4 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                >
+                  {t.common.cancel}
+                </Button>
+                <Button
+                  onClick={handlePin}
+                  disabled={loading}
+                  className="px-4 py-2 text-sm text-primary-foreground bg-primary rounded-md hover:bg-primary/90 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                >
+                  {loading ? t.contextMenu.pinning : t.contextMenu.pin}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      ) : null}
     </>
   );
 }
+
+export const CollectionContextMenu = memo(CollectionContextMenuComponent);
+CollectionContextMenu.displayName = 'CollectionContextMenu';
