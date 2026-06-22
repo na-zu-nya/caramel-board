@@ -27,9 +27,9 @@ npm run -w @caramelboard/desktop build:app
 - server/client を production build する
 - 配布対象 OS/CPU 向けの Node.js runtime を取得して `apps/desktop/resources/runtime/node` に配置する
 - 配布対象 OS/CPU 向けの uv runtime を取得して `apps/desktop/resources/runtime/uv` に配置する
-- `apps/server/dist`、Prisma schema、migration/export/import scripts を `apps/desktop/resources/server` に配置する
+- `apps/server/dist`、SQLite schema/migrations、server scripts を `apps/desktop/resources/server` に配置する
 - server runtime に必要な production dependencies を OS ネイティブ込みで install する
-- packaged resource として `server` / `client` / `runtime` / `migration` / `integrations` を Tauri bundle に含める
+- packaged resource として `server` / `client` / `runtime` / `integrations` を Tauri bundle に含める
 
 macOS arm64 で確認済みの出力先:
 
@@ -38,7 +38,7 @@ macOS arm64 で確認済みの出力先:
 
 ## Windows パッケージ作成
 
-Windows 配布物は、Windows 実機または Windows CI 上で作成する。Prisma / sharp などの native dependency と Node runtime が OS ごとに異なるため、macOS から Windows 用 package を作らない。
+Windows 配布物は、Windows 実機または Windows CI 上で作成する。sharp などの native dependency と Node runtime が OS ごとに異なるため、macOS から Windows 用 package を作らない。
 
 手元の Windows で作る場合:
 
@@ -63,7 +63,7 @@ GitHub Release を作る場合:
 
 ## 別 PC 検証チェックリスト
 
-検証機には Node.js / PostgreSQL / Git / uv が入っていない状態を基本にする。Node.js と uv はアプリに同梱される。
+検証機には Node.js / Git / uv が入っていない状態を基本にする。Node.js と uv はアプリに同梱される。
 
 1. アプリをインストールして起動する
 2. 設定画面が表示される
@@ -87,9 +87,9 @@ macOS arm64 で `.app` と `.dmg` の生成を確認した。
 - `runtime/node/bin/node`
 - `runtime/uv/uv`
 - `server/dist/entry.node.mjs`
+- `server/sqlite`
 - `server/node_modules`
 - `client/dist/index.html`
-- `migration/scripts`
 - `integrations/joytag`
 
 `.app` 内の Node runtime と server dist だけを使ったスモークテストでは、次を確認した。

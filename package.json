@@ -20,8 +20,6 @@
     "test:watch": "turbo run test:watch",
     "clean": "turbo run clean --parallel && rm -rf node_modules/.cache node_modules/.vite .turbo",
     "clean:all": "npm run clean && rm -rf node_modules apps/*/node_modules",
-    "standalone:export": "npm run -w @caramelboard/docker-migration export:standalone --",
-    "standalone:import": "npm run -w @caramelboard/docker-migration import:standalone --",
     "desktop:prepare": "npm run -w @caramelboard/desktop prepare:sidecar",
     "desktop:dev": "npm run -w @caramelboard/desktop dev",
     "desktop:build": "npm run -w @caramelboard/desktop build:app",

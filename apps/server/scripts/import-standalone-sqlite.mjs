@@ -33,7 +33,7 @@ const dbPath = path.resolve(
 );
 const schemaPath = path.resolve(
   resolveUserPath(
-    getArgValue('schema') ?? path.join(serverRoot, 'prisma', 'standalone', 'schema.sql')
+    getArgValue('schema') ?? path.join(serverRoot, 'sqlite', 'schema.sql')
   )
 );
 const force = hasFlag('force');

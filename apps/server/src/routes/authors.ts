@@ -4,13 +4,11 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { ensureDatasetAuthorizedForCurrentStore } from '../repositories/sqlite/auth';
 import { StandaloneMetadataRepository } from '../repositories/sqlite/metadata-repository';
-import { isStandaloneSqliteEnabled } from '../repositories/sqlite/sqlite';
 import { IdParamSchema, ManagementPaginationSchema } from '../schemas/index.js';
 import type { AuthorLinkInput } from '../shared/author-links';
-import { AuthorService, type AuthorUpdateInput } from '../shared/services/AuthorService';
 
 export const authorsRoute = new Hono();
-const authorService = new AuthorService();
+const metadataRepository = new StandaloneMetadataRepository();
 
 const AuthorLinkInputSchema = z.object({
   id: z.number().int().positive().optional(),
@@ -32,6 +30,7 @@ const AuthorMergeSchema = z.object({
 
 type AuthorLinkInputBody = z.infer<typeof AuthorLinkInputSchema>;
 type AuthorUpdateBody = z.infer<typeof AuthorUpdateSchema>;
+type AuthorUpdateInput = { name?: string; links?: AuthorLinkInput[] };
 
 const toAuthorLinkInput = (input: AuthorLinkInputBody): AuthorLinkInput | null => {
   if (!input.url) return null;
@@ -69,13 +68,7 @@ authorsRoute.get('/', zValidator('query', ManagementPaginationSchema), async (c)
     const dataSetId = getDataSetId(c);
     const auth = await ensureDatasetAuthorizedForCurrentStore(c, dataSetId);
     if (auth) return auth;
-    if (isStandaloneSqliteEnabled()) {
-      return c.json(
-        new StandaloneMetadataRepository().getAuthors({ limit, offset, datasetId: dataSetId })
-      );
-    }
-    const result = await authorService.getAll({ limit, offset, dataSetId });
-    return c.json(result);
+    return c.json(metadataRepository.getAuthors({ limit, offset, datasetId: dataSetId }));
   } catch (error) {
     console.error('Error getting authors:', error);
     return c.json({ error: 'Failed to get authors' }, 500);
@@ -89,11 +82,7 @@ authorsRoute.get('/search', async (c) => {
     const dataSetId = getDataSetId(c);
     const auth = await ensureDatasetAuthorizedForCurrentStore(c, dataSetId);
     if (auth) return auth;
-    if (isStandaloneSqliteEnabled()) {
-      return c.json(new StandaloneMetadataRepository().searchAuthors(key, dataSetId));
-    }
-    const authors = await authorService.search(key, dataSetId);
-    return c.json(authors);
+    return c.json(metadataRepository.searchAuthors(key, dataSetId));
   } catch (error) {
     console.error('Error searching authors:', error);
     return c.json({ error: 'Failed to search authors' }, 500);
@@ -107,13 +96,11 @@ authorsRoute.post('/merge', zValidator('json', AuthorMergeSchema), async (c) => 
     const dataSetId = body.dataSetId ?? body.datasetId ?? getDataSetId(c);
     const auth = await ensureDatasetAuthorizedForCurrentStore(c, dataSetId);
     if (auth) return auth;
-    const result = isStandaloneSqliteEnabled()
-      ? new StandaloneMetadataRepository().mergeAuthors(
-          dataSetId,
-          body.targetAuthorId,
-          body.sourceAuthorIds
-        )
-      : await authorService.merge(dataSetId, body.targetAuthorId, body.sourceAuthorIds);
+    const result = metadataRepository.mergeAuthors(
+      dataSetId,
+      body.targetAuthorId,
+      body.sourceAuthorIds
+    );
     if (!result) return c.json({ error: 'Author not found' }, 404);
     return c.json(result);
   } catch (error) {
@@ -132,9 +119,7 @@ authorsRoute.get('/:id', zValidator('param', IdParamSchema), async (c) => {
     const dataSetId = getDataSetId(c);
     const auth = await ensureDatasetAuthorizedForCurrentStore(c, dataSetId);
     if (auth) return auth;
-    const result = isStandaloneSqliteEnabled()
-      ? new StandaloneMetadataRepository().getAuthor(id, dataSetId)
-      : await authorService.getById(id, dataSetId);
+    const result = metadataRepository.getAuthor(id, dataSetId);
     if (!result) return c.json({ error: 'Author not found' }, 404);
     return c.json(result);
   } catch (error) {
@@ -157,9 +142,7 @@ authorsRoute.put(
       const dataSetId = getDataSetId(c);
       const auth = await ensureDatasetAuthorizedForCurrentStore(c, dataSetId);
       if (auth) return auth;
-      const result = isStandaloneSqliteEnabled()
-        ? new StandaloneMetadataRepository().updateAuthor(id, dataSetId, input)
-        : await authorService.update(id, dataSetId, input);
+      const result = metadataRepository.updateAuthor(id, dataSetId, input);
       if (!result) return c.json({ error: 'Author not found' }, 404);
       return c.json(result);
     } catch (error) {
@@ -186,9 +169,7 @@ authorsRoute.post(
       const dataSetId = getDataSetId(c);
       const auth = await ensureDatasetAuthorizedForCurrentStore(c, dataSetId);
       if (auth) return auth;
-      const result = isStandaloneSqliteEnabled()
-        ? new StandaloneMetadataRepository().addAuthorLink(id, dataSetId, input)
-        : await authorService.addLink(id, dataSetId, input);
+      const result = metadataRepository.addAuthorLink(id, dataSetId, input);
       if (!result) return c.json({ error: 'Author not found' }, 404);
       return c.json(result);
     } catch (error) {

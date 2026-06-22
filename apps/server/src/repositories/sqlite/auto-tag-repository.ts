@@ -1,6 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { getAutoTagClient } from '../../lib/AutoTagClient';
-import { getStandaloneSqlite, nowIso } from './sqlite';
+import { getStandaloneSqlite, nowIso, type SqliteBindValue } from './sqlite';
 
 export interface AutoTagStats {
   autoTagKey: string;
@@ -319,7 +319,7 @@ export class StandaloneAutoTagRepository {
       totalTags: tags.length,
       totalPredictions: options.includeTotal ? this.countPredictions(options.datasetId) : undefined,
       tags,
-      method: options.source === 'raw' ? 'sql' : 'aggregate',
+      method: options.source === 'raw' ? ('sql' as const) : ('aggregate' as const),
     };
   }
 
@@ -558,7 +558,7 @@ export class StandaloneAutoTagRepository {
   }
 
   private getStatisticsFromPredictions(options: AutoTagStatisticsOptions) {
-    const params: unknown[] = [options.datasetId, options.threshold];
+    const params: SqliteBindValue[] = [options.datasetId, options.threshold];
     const search = options.searchQuery?.trim();
     const searchSql = search ? 'AND scores.tag_key LIKE ? COLLATE NOCASE' : '';
     if (search) params.push(likeQuery(search));
@@ -583,7 +583,7 @@ export class StandaloneAutoTagRepository {
   }
 
   private getStatisticsFromAggregates(options: AutoTagStatisticsOptions) {
-    const params: unknown[] = [options.datasetId, options.threshold];
+    const params: SqliteBindValue[] = [options.datasetId, options.threshold];
     const search = options.searchQuery?.trim();
     const searchSql = search ? 'AND scores.tag_key LIKE ? COLLATE NOCASE' : '';
     if (search) params.push(likeQuery(search));
@@ -623,7 +623,7 @@ export class StandaloneAutoTagRepository {
   }
 
   private hasTagConflict(datasetId: number, tagId: number, autoTagKey: string, mappingId?: number) {
-    const params: unknown[] = [datasetId, tagId, autoTagKey];
+    const params: SqliteBindValue[] = [datasetId, tagId, autoTagKey];
     const mappingFilter = mappingId ? 'AND id <> ?' : '';
     if (mappingId) params.push(mappingId);
     const row = this.db

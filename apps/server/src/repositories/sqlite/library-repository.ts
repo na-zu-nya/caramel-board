@@ -11,7 +11,7 @@ import type {
   UpdateCollectionInput,
 } from '../../models/CollectionModel';
 import { StandaloneColorRepository } from './color-repository';
-import { getStandaloneSqlite, nowIso, parseJsonObject } from './sqlite';
+import { getStandaloneSqlite, nowIso, parseJsonObject, type SqliteBindValue } from './sqlite';
 import { type StandaloneStackListParams, StandaloneStackRepository } from './stack-repository';
 
 interface CountRow {
@@ -331,7 +331,7 @@ export class StandaloneLibraryRepository {
 
   getCollectionList(query: CollectionQuery) {
     const where = [];
-    const params: unknown[] = [];
+    const params: SqliteBindValue[] = [];
 
     if (query.dataSetId) {
       where.push('c.dataset_id = ?');
@@ -407,7 +407,7 @@ export class StandaloneLibraryRepository {
   updateCollection(id: number, data: UpdateCollectionInput) {
     if (!this.getCollectionRow(id)) return null;
     const updates = ['updated_at = ?'];
-    const params: unknown[] = [nowIso()];
+    const params: SqliteBindValue[] = [nowIso()];
 
     if (data.name !== undefined) {
       updates.push('name = ?');
@@ -605,7 +605,7 @@ export class StandaloneLibraryRepository {
 
   getFolderList(query: CollectionFolderQuery) {
     const where = [];
-    const params: unknown[] = [];
+    const params: SqliteBindValue[] = [];
 
     if (query.dataSetId) {
       where.push('f.dataset_id = ?');
@@ -675,7 +675,7 @@ export class StandaloneLibraryRepository {
   updateFolder(id: number, data: UpdateCollectionFolderInput) {
     if (!this.getFolderRow(id)) return null;
     const updates = ['updated_at = ?'];
-    const params: unknown[] = [nowIso()];
+    const params: SqliteBindValue[] = [nowIso()];
 
     if (data.name !== undefined) {
       updates.push('name = ?');
@@ -835,7 +835,7 @@ export class StandaloneLibraryRepository {
   updateNavigationPin(id: number, data: { name?: string; icon?: string; order?: number }) {
     if (!this.getNavigationPin(id)) return null;
     const updates = ['updated_at = ?'];
-    const params: unknown[] = [nowIso()];
+    const params: SqliteBindValue[] = [nowIso()];
     if (data.name !== undefined) {
       updates.push('name = ?');
       params.push(data.name);

@@ -4,7 +4,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { StandaloneStackRepository } from './stack-repository';
 
-const schemaPath = resolve(process.cwd(), 'prisma/standalone/schema.sql');
+const schemaPath = resolve(process.cwd(), 'sqlite/schema.sql');
 
 describe('StandaloneStackRepository search', () => {
   let db: DatabaseSync;

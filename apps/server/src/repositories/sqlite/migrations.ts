@@ -52,9 +52,9 @@ const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 const resolveMigrationsDir = () => {
   if (process.env.STANDALONE_MIGRATIONS_PATH) return process.env.STANDALONE_MIGRATIONS_PATH;
   const candidates = [
-    path.join(process.cwd(), 'prisma', 'standalone', 'migrations'),
-    path.join(process.cwd(), 'apps', 'server', 'prisma', 'standalone', 'migrations'),
-    path.join(moduleDir, '..', 'prisma', 'standalone', 'migrations'),
+    path.join(process.cwd(), 'sqlite', 'migrations'),
+    path.join(process.cwd(), 'apps', 'server', 'sqlite', 'migrations'),
+    path.join(moduleDir, '..', 'sqlite', 'migrations'),
   ];
   return candidates.find((candidate) => existsSync(candidate)) ?? candidates[0];
 };

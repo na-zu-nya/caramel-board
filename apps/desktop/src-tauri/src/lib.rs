@@ -45,7 +45,6 @@ include!("features/autotag.rs");
 include!("features/standalone_migration.rs");
 include!("features/sidecar.rs");
 include!("features/data_store.rs");
-include!("features/docker_migration.rs");
 include!("tray.rs");
 
 static EXIT_CLEANUP_STARTED: AtomicBool = AtomicBool::new(false);
@@ -156,9 +155,6 @@ pub fn run() {
             move_library,
             prepare_autotag,
             start_autotag_install,
-            detect_docker_source,
-            docker_migration_progress,
-            start_docker_migration,
             standalone_migration_status,
             standalone_migration_progress,
             start_standalone_migration,
@@ -166,7 +162,6 @@ pub fn run() {
             inspect_data_store,
             complete_setup,
             reset_setup,
-            resolve_docker_storage_root,
             local_ip_address,
             wait_server_ready
         ])

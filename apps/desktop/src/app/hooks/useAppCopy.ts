@@ -2,7 +2,6 @@ import { useCallback, useMemo } from 'react';
 import type { AutoTagInstallCopy } from '../../features/autotag/AutoTagInstallDialog';
 import type { AutoTagSettingsCopy } from '../../features/autotag/AutoTagSettingsSection';
 import type { AutoTagProgressCopy } from '../../features/autotag/progressText';
-import type { DockerMigrationCopy } from '../../features/migrations/docker/types';
 import type { StandaloneMigrationCopy } from '../../features/migrations/standalone/types';
 import type { GeneralSettingsCopy } from '../../features/settings/GeneralSettingsSection';
 import type { translations } from '../translations';
@@ -155,37 +154,10 @@ export function useAppCopy(t: AppTranslation) {
     [autoTagProgressCopy, t]
   );
 
-  const dockerMigrationCopy = useMemo<DockerMigrationCopy>(
-    () => ({
-      title: t.dockerMigration,
-      description: t.dockerMigrationDescription,
-      readyTitle: t.migrationReadyTitle,
-      waitingTitle: t.migrationWaitingTitle,
-      notFoundTitle: t.migrationNotFoundTitle,
-      waitingDescription: t.migrationWaitingDescription,
-      notFoundDescription: t.migrationNotFoundDescription,
-      readyDescription: t.migrationReadyDescription,
-      storageLocation: t.storageLocation,
-      storageRoot: t.dockerStorageRoot,
-      chooseStorageRoot: t.chooseDockerStorageRoot,
-      detect: t.detectOldDocker,
-      migrate: t.migrateFromDocker,
-      inProgress: t.dockerMigrationInProgress,
-      advancedSettings: t.advancedSettings,
-      advancedDescription: t.advancedSettingsDescription,
-      postgresDatabaseUrl: t.postgresDatabaseUrl,
-      datasetId: t.datasetId,
-      optional: t.optional,
-      verifyFileReferences: t.verifyFileReferences,
-    }),
-    [t]
-  );
-
   return {
     generalSettingsCopy,
     standaloneMigrationCopy,
     autoTagInstallCopy,
     autoTagSettingsCopy,
-    dockerMigrationCopy,
   };
 }

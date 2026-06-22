@@ -35,10 +35,6 @@ fn child_process_path(path: impl AsRef<Path>) -> PathBuf {
     path.as_ref().to_path_buf()
 }
 
-fn child_process_path_string(path: impl AsRef<Path>) -> String {
-    child_process_path(path).to_string_lossy().into_owned()
-}
-
 #[cfg(target_os = "windows")]
 fn local_address_matches_port(address: &str, port: &str) -> bool {
     address

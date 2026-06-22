@@ -4,18 +4,12 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { getAutoTagClient } from '../lib/AutoTagClient';
 import { ensureDatasetAuthorizedForCurrentStore } from '../repositories/sqlite/auth';
-import { StandaloneAutoTagRepository } from '../repositories/sqlite/auto-tag-repository';
-import { isStandaloneSqliteEnabled } from '../repositories/sqlite/sqlite';
-import { prisma } from '../shared/di';
+import {
+  type AutoTagStats,
+  StandaloneAutoTagRepository,
+} from '../repositories/sqlite/auto-tag-repository';
 
 export const autoTagsRoute = new Hono();
-
-// Simple in-memory cache for statistics
-interface AutoTagStats {
-  autoTagKey: string;
-  predictionCount: number;
-  assetCount: number;
-}
 
 interface AutoTagStatisticsResult {
   datasetId: number;
@@ -34,7 +28,8 @@ interface CacheEntry<TValue = CacheValue> {
 }
 
 const statisticsCache = new Map<string, CacheEntry>();
-const CACHE_TTL = 5 * 60 * 1000; // 5分間のキャッシュ
+const CACHE_TTL = 5 * 60 * 1000;
+const autoTagRepository = new StandaloneAutoTagRepository();
 
 autoTagsRoute.get('/joytag/health', async (c) => {
   try {
@@ -72,7 +67,6 @@ function getCachedData<TValue extends CacheValue>(key: string): TValue | null {
 }
 
 function setCachedData<TValue extends CacheValue>(key: string, data: TValue): void {
-  // キャッシュサイズ制限（最大100エントリ）
   if (statisticsCache.size >= 100) {
     const firstKey = statisticsCache.keys().next().value;
     if (firstKey) statisticsCache.delete(firstKey);
@@ -84,160 +78,10 @@ function setCachedData<TValue extends CacheValue>(key: string, data: TValue): vo
   });
 }
 
-// Helper function to execute raw SQL for better performance with JSONB
-async function getAutoTagStatisticsOptimized(
-  datasetId: number,
-  threshold: number,
-  limit: number,
-  searchQuery?: string
-): Promise<AutoTagStats[]> {
-  // PostgreSQL の JSONB 関数を使用した効率的な集計クエリ
-  const query = `
-    WITH tag_scores AS (
-      SELECT 
-        jsonb_each_text(atp.scores::jsonb) as tag_score,
-        atp."assetId"
-      FROM "AutoTagPrediction" atp
-      INNER JOIN "Asset" a ON a.id = atp."assetId"
-      INNER JOIN "Stack" s ON s.id = a."stackId"
-      WHERE s."dataSetId" = $1
-    ),
-    filtered_tags AS (
-      SELECT 
-        (tag_score).key as tag,
-        (tag_score).value::float as score,
-        "assetId"
-      FROM tag_scores
-      WHERE (tag_score).value::float >= $2
-    ),
-    tag_aggregates AS (
-      SELECT 
-        tag,
-        COUNT(*) as prediction_count,
-        COUNT(DISTINCT "assetId") as asset_count
-      FROM filtered_tags
-      ${searchQuery ? 'WHERE LOWER(tag) LIKE LOWER($4)' : ''}
-      GROUP BY tag
-    )
-    SELECT 
-      tag as "autoTagKey",
-      prediction_count::int as "predictionCount",
-      asset_count::int as "assetCount"
-    FROM tag_aggregates
-    ORDER BY prediction_count DESC
-    LIMIT $3
-  `;
-
-  const params: Array<number | string> = [datasetId, threshold, limit];
-  if (searchQuery) {
-    params.push(`%${searchQuery}%`);
-  }
-
-  try {
-    const result = await prisma.$queryRawUnsafe<AutoTagStats[]>(query, ...params);
-
-    return result;
-  } catch (error) {
-    console.error('Error in raw SQL query:', error);
-    throw error;
-  }
-}
-
-// Helper: Aggregate from StackAutoTagAggregate.topTags (fast path)
-async function getAutoTagStatisticsFromAggregate(
-  datasetId: number,
-  threshold: number,
-  limit: number,
-  searchQuery?: string
-): Promise<AutoTagStats[]> {
-  // Count stacks that contain the tag in topTags over threshold.
-  // Also sum assetCount of those stacks as an inexpensive proxy for assets.
-  const query = `
-    WITH matched AS (
-      SELECT 
-        (elem->>'tag') AS tag,
-        (elem->>'score')::float AS score,
-        agg."assetCount" as asset_count
-      FROM "StackAutoTagAggregate" agg
-      JOIN "Stack" s ON s.id = agg."stackId"
-      CROSS JOIN LATERAL jsonb_array_elements(agg."topTags"::jsonb) AS elem
-      WHERE s."dataSetId" = $1
-        AND (elem->>'score')::float >= $2
-        ${searchQuery ? "AND LOWER(elem->>'tag') LIKE LOWER($4)" : ''}
-    )
-    SELECT 
-      tag as "autoTagKey",
-      COUNT(*)::int as "predictionCount", -- here this means stack occurrences
-      COALESCE(SUM(asset_count), 0)::int as "assetCount"
-    FROM matched
-    GROUP BY tag
-    ORDER BY "predictionCount" DESC
-    LIMIT $3
-  `;
-
-  const params: Array<number | string> = [datasetId, threshold, limit];
-  if (searchQuery) params.push(`%${searchQuery}%`);
-
-  const rows = await prisma.$queryRawUnsafe<AutoTagStats[]>(query, ...params);
-
-  return rows;
-}
-
-// Authorization middleware helper per request (datasetId from params or query)
 async function ensureAuth(c: Context, datasetId: number): Promise<Response | null> {
   return ensureDatasetAuthorizedForCurrentStore(c, datasetId);
 }
 
-// Optimized strict counts for a specific set of keys (exact match) from AutoTagPrediction
-async function getStrictCountsForKeys(
-  datasetId: number,
-  threshold: number,
-  keys: string[]
-): Promise<AutoTagStats[]> {
-  if (keys.length === 0) return [];
-
-  // Lowercase once for matching
-  const lowered = keys.map((k) => k.toLowerCase());
-
-  const query = `
-    WITH preds AS (
-      SELECT atp."assetId", atp.scores::jsonb AS scores
-      FROM "AutoTagPrediction" atp
-      JOIN "Asset" a ON a.id = atp."assetId"
-      JOIN "Stack" s ON s.id = a."stackId"
-      WHERE s."dataSetId" = $1
-        AND atp.scores ?| $3::text[] -- prefilter: any of keys exist as fields
-    ), kv AS (
-      SELECT LOWER(kv.key) AS tag, (kv.value)::float AS score, p."assetId"
-      FROM preds p, LATERAL jsonb_each_text(p.scores) kv
-      WHERE LOWER(kv.key) = ANY($4)
-        AND (kv.value)::float >= $2
-    ), agg AS (
-      SELECT tag, COUNT(*) AS prediction_count, COUNT(DISTINCT "assetId") AS asset_count
-      FROM kv
-      GROUP BY tag
-    )
-    SELECT k.key AS "autoTagKey",
-           COALESCE(a.prediction_count, 0)::int AS "predictionCount",
-           COALESCE(a.asset_count, 0)::int AS "assetCount"
-    FROM unnest($3::text[]) AS k(key)
-    LEFT JOIN agg a ON a.tag = k.key
-  `;
-
-  const rows = await prisma.$queryRawUnsafe<AutoTagStats[]>(
-    query,
-    datasetId,
-    threshold,
-    keys,
-    lowered
-  );
-
-  // Return with original key casing if possible
-  const mapOrig = new Map(lowered.map((l, i) => [l, keys[i]]));
-  return rows.map((r) => ({ ...r, autoTagKey: mapOrig.get(r.autoTagKey) || r.autoTagKey }));
-}
-
-// Get AutoTag statistics (most frequent tags across a dataset)
 autoTagsRoute.get(
   '/statistics/:datasetId',
   zValidator(
@@ -273,80 +117,22 @@ autoTagsRoute.get(
     const { limit, threshold, q, source, includeTotal } = c.req.valid('query');
 
     try {
-      // キャッシュチェック
       const cacheKey = getCacheKey(datasetId, threshold, limit, q, source, includeTotal);
       const cachedResult = getCachedData<AutoTagStatisticsResult>(cacheKey);
 
       if (cachedResult) {
-        console.log(`Cache hit for AutoTag statistics (dataset: ${datasetId})`);
         return c.json({ ...cachedResult, cached: true });
       }
 
-      if (isStandaloneSqliteEnabled()) {
-        const result = new StandaloneAutoTagRepository().getStatistics({
-          datasetId,
-          threshold,
-          limit,
-          searchQuery: q,
-          source,
-          includeTotal,
-        });
-        setCachedData(cacheKey, result);
-        return c.json(result);
-      }
-
-      // ソース選択: クエリ優先、未指定の場合は環境変数/デフォルト
-      const envPrefersRaw = process.env.AUTOTAG_USE_RAW_SQL !== 'false';
-      const useRawSQL = source === 'raw' || (source !== 'aggregate' && envPrefersRaw);
-
-      let tags: AutoTagStats[];
-      let totalPredictions: number | undefined;
-
-      if (useRawSQL) {
-        // SQL最適化版を使用（推奨）
-        console.log(`Using optimized SQL for AutoTag statistics (dataset: ${datasetId})`);
-
-        if (includeTotal) {
-          // 総予測数（必要な時のみ）
-          totalPredictions = await prisma.autoTagPrediction.count({
-            where: {
-              asset: {
-                stack: {
-                  dataSetId: datasetId,
-                },
-              },
-            },
-          });
-        }
-
-        // 最適化されたSQLクエリで集計
-        tags = await getAutoTagStatisticsOptimized(datasetId, threshold, limit, q);
-      } else {
-        // 集計テーブルからの取得（高速パス）
-        console.log(`Using aggregate table for AutoTag statistics (dataset: ${datasetId})`);
-
-        // 集計テーブルからの集計は非常に高速。総予測数はデフォルト未計算。
-        if (includeTotal) {
-          totalPredictions = await prisma.autoTagPrediction.count({
-            where: { asset: { stack: { dataSetId: datasetId } } },
-          });
-        }
-
-        tags = await getAutoTagStatisticsFromAggregate(datasetId, threshold, limit, q);
-      }
-
-      const result = {
+      const result = autoTagRepository.getStatistics({
         datasetId,
         threshold,
-        totalTags: tags.length,
-        totalPredictions,
-        tags,
-        method: useRawSQL ? 'sql' : 'aggregate',
-      };
-
-      // 結果をキャッシュに保存
+        limit,
+        searchQuery: q,
+        source,
+        includeTotal,
+      });
       setCachedData(cacheKey, result);
-
       return c.json(result);
     } catch (error) {
       console.error('Error getting AutoTag statistics:', error);
@@ -355,7 +141,6 @@ autoTagsRoute.get(
   }
 );
 
-// Strict counts endpoint for specified keys (delayed refinement use-case)
 autoTagsRoute.get(
   '/statistics/:datasetId/strict',
   zValidator(
@@ -391,7 +176,7 @@ autoTagsRoute.get(
 
     try {
       const cacheKey = `strict-${datasetId}-${threshold}-${keys
-        .map((k) => k.toLowerCase())
+        .map((key) => key.toLowerCase())
         .sort()
         .join('|')}`;
       const cached = getCachedData<AutoTagStats[]>(cacheKey);
@@ -406,18 +191,7 @@ autoTagsRoute.get(
         });
       }
 
-      if (isStandaloneSqliteEnabled()) {
-        const rows = new StandaloneAutoTagRepository().getStrictCountsForKeys(
-          datasetId,
-          threshold,
-          keys
-        );
-        setCachedData(cacheKey, rows);
-        return c.json({ datasetId, threshold, keys, tags: rows, method: 'sql-keys' });
-      }
-
-      const rows = await getStrictCountsForKeys(datasetId, threshold, keys);
-
+      const rows = autoTagRepository.getStrictCountsForKeys(datasetId, threshold, keys);
       setCachedData(cacheKey, rows);
       return c.json({ datasetId, threshold, keys, tags: rows, method: 'sql-keys' });
     } catch (error) {
@@ -427,7 +201,6 @@ autoTagsRoute.get(
   }
 );
 
-// Get AutoTag mappings for a dataset
 autoTagsRoute.get(
   '/mappings/:datasetId',
   zValidator(
@@ -458,30 +231,7 @@ autoTagsRoute.get(
     try {
       const auth = await ensureAuth(c, datasetId);
       if (auth) return auth;
-      if (isStandaloneSqliteEnabled()) {
-        return c.json(new StandaloneAutoTagRepository().getMappings(datasetId, limit, offset));
-      }
-      const [mappings, total] = await Promise.all([
-        prisma.autoTagMapping.findMany({
-          where: { dataSetId: datasetId },
-          include: {
-            tag: true,
-          },
-          orderBy: { autoTagKey: 'asc' },
-          take: limit,
-          skip: offset,
-        }),
-        prisma.autoTagMapping.count({
-          where: { dataSetId: datasetId },
-        }),
-      ]);
-
-      return c.json({
-        mappings,
-        total,
-        limit,
-        offset,
-      });
+      return c.json(autoTagRepository.getMappings(datasetId, limit, offset));
     } catch (error) {
       console.error('Error getting AutoTag mappings:', error);
       return c.json({ error: 'Failed to get AutoTag mappings' }, 500);
@@ -489,7 +239,6 @@ autoTagsRoute.get(
   }
 );
 
-// Create or update AutoTag mapping
 autoTagsRoute.post(
   '/mappings/:datasetId',
   zValidator(
@@ -513,59 +262,17 @@ autoTagsRoute.post(
     const { autoTagKey, tagId, displayName, description, isActive } = c.req.valid('json');
 
     try {
-      if (isStandaloneSqliteEnabled()) {
-        const result = new StandaloneAutoTagRepository().upsertMapping(datasetId, {
-          autoTagKey,
-          tagId,
-          displayName,
-          description,
-          isActive,
-        });
-        if (result.conflict) {
-          return c.json({ error: 'This tag is already assigned to another AutoTag mapping' }, 400);
-        }
-        return c.json(result.mapping);
-      }
-
-      // If linking to a user Tag, ensure the tag is not already assigned to another AutoTag mapping
-      if (tagId) {
-        const existing = await prisma.autoTagMapping.findFirst({
-          where: { dataSetId: datasetId, tagId },
-          select: { id: true, autoTagKey: true },
-        });
-        if (existing && existing.autoTagKey !== autoTagKey) {
-          return c.json({ error: 'This tag is already assigned to another AutoTag mapping' }, 400);
-        }
-      }
-
-      const mapping = await prisma.autoTagMapping.upsert({
-        where: {
-          autoTagKey_dataSetId: {
-            autoTagKey,
-            dataSetId: datasetId,
-          },
-        },
-        update: {
-          tagId,
-          displayName,
-          description,
-          isActive,
-          updatedAt: new Date(),
-        },
-        create: {
-          autoTagKey,
-          tagId,
-          displayName,
-          description,
-          isActive,
-          dataSetId: datasetId,
-        },
-        include: {
-          tag: true,
-        },
+      const result = autoTagRepository.upsertMapping(datasetId, {
+        autoTagKey,
+        tagId,
+        displayName,
+        description,
+        isActive,
       });
-
-      return c.json(mapping);
+      if (result.conflict) {
+        return c.json({ error: 'This tag is already assigned to another AutoTag mapping' }, 400);
+      }
+      return c.json(result.mapping);
     } catch (error) {
       console.error('Error creating/updating AutoTag mapping:', error);
       return c.json({ error: 'Failed to create/update AutoTag mapping' }, 500);
@@ -573,7 +280,6 @@ autoTagsRoute.post(
   }
 );
 
-// Update AutoTag mapping
 autoTagsRoute.put(
   '/mappings/:datasetId/:mappingId',
   zValidator(
@@ -597,59 +303,14 @@ autoTagsRoute.put(
     const updateData = c.req.valid('json');
 
     try {
-      if (isStandaloneSqliteEnabled()) {
-        const result = new StandaloneAutoTagRepository().updateMapping(
-          datasetId,
-          mappingId,
-          updateData
-        );
-        if (!result) {
-          return c.json({ error: 'Mapping not found in this dataset' }, 404);
-        }
-        if (result.conflict) {
-          return c.json({ error: 'This tag is already assigned to another AutoTag mapping' }, 400);
-        }
-        return c.json(result.mapping);
-      }
-
-      // First verify the mapping belongs to this dataset
-      const existingMapping = await prisma.autoTagMapping.findUnique({
-        where: { id: mappingId },
-      });
-
-      if (!existingMapping || existingMapping.dataSetId !== datasetId) {
+      const result = autoTagRepository.updateMapping(datasetId, mappingId, updateData);
+      if (!result) {
         return c.json({ error: 'Mapping not found in this dataset' }, 404);
       }
-
-      // If changing tagId, ensure it's not already used by another mapping in this dataset
-      if (updateData.tagId) {
-        const conflict = await prisma.autoTagMapping.findFirst({
-          where: {
-            dataSetId: datasetId,
-            tagId: updateData.tagId,
-            NOT: { id: mappingId },
-          },
-          select: { id: true },
-        });
-        if (conflict) {
-          return c.json({ error: 'This tag is already assigned to another AutoTag mapping' }, 400);
-        }
+      if (result.conflict) {
+        return c.json({ error: 'This tag is already assigned to another AutoTag mapping' }, 400);
       }
-
-      const mapping = await prisma.autoTagMapping.update({
-        where: {
-          id: mappingId,
-        },
-        data: {
-          ...updateData,
-          updatedAt: new Date(),
-        },
-        include: {
-          tag: true,
-        },
-      });
-
-      return c.json(mapping);
+      return c.json(result.mapping);
     } catch (error) {
       console.error('Error updating AutoTag mapping:', error);
       return c.json({ error: 'Failed to update AutoTag mapping' }, 500);
@@ -657,7 +318,6 @@ autoTagsRoute.put(
   }
 );
 
-// Delete AutoTag mapping
 autoTagsRoute.delete(
   '/mappings/:datasetId/:mappingId',
   zValidator(
@@ -671,29 +331,10 @@ autoTagsRoute.delete(
     const { datasetId, mappingId } = c.req.valid('param');
 
     try {
-      if (isStandaloneSqliteEnabled()) {
-        const ok = new StandaloneAutoTagRepository().deleteMapping(datasetId, mappingId);
-        if (!ok) {
-          return c.json({ error: 'Mapping not found in this dataset' }, 404);
-        }
-        return c.json({ success: true });
-      }
-
-      // First verify the mapping belongs to this dataset
-      const existingMapping = await prisma.autoTagMapping.findUnique({
-        where: { id: mappingId },
-      });
-
-      if (!existingMapping || existingMapping.dataSetId !== datasetId) {
+      const ok = autoTagRepository.deleteMapping(datasetId, mappingId);
+      if (!ok) {
         return c.json({ error: 'Mapping not found in this dataset' }, 404);
       }
-
-      await prisma.autoTagMapping.delete({
-        where: {
-          id: mappingId,
-        },
-      });
-
       return c.json({ success: true });
     } catch (error) {
       console.error('Error deleting AutoTag mapping:', error);

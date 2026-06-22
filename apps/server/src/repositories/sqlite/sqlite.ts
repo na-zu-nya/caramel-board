@@ -1,6 +1,8 @@
 import { DatabaseSync } from 'node:sqlite';
 import { assertStandaloneMigrationsReady } from './migrations';
 
+export type SqliteBindValue = null | number | bigint | string | Uint8Array;
+
 let database: DatabaseSync | null = null;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -8,8 +10,6 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 export const getStandaloneSqlitePath = () =>
   process.env.STANDALONE_SQLITE_PATH || process.env.SQLITE_DB_PATH || '';
-
-export const isStandaloneSqliteEnabled = () => getStandaloneSqlitePath().trim().length > 0;
 
 export const getStandaloneSqlite = () => {
   const dbPath = getStandaloneSqlitePath();

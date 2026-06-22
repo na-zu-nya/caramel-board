@@ -8,7 +8,6 @@ const __filename = fileURLToPath(import.meta.url);
 const repoRoot = path.resolve(path.dirname(__filename), '..');
 const appPackagePaths = [
   'apps/desktop/package.json',
-  'apps/docker-migration/package.json',
   'apps/chrome-extension/package.json',
 ];
 

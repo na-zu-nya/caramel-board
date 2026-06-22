@@ -1,52 +1,28 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { Prisma, PrismaClient, Stack } from '@prisma/client';
 import { type Context, Hono } from 'hono';
 import { z } from 'zod';
 import { DuplicateAssetError } from '../errors/DuplicateAssetError';
-import { createAssetService } from '../features/datasets/services/asset-service';
-import { createColorSearchService } from '../features/datasets/services/color-search-service';
-import {
-  type ColorFilter,
-  createSearchService,
-  type SearchFilters,
-  SearchMode,
-  type SortOptions,
-} from '../features/datasets/services/search-service';
-import { createStackService } from '../features/datasets/services/stack-service';
-import { createStacksService } from '../features/datasets/services/stacks-service';
-import { createTagStatsService } from '../features/datasets/services/tag-stats-service';
 import { ensureDatasetAuthorizedForCurrentStore } from '../repositories/sqlite/auth';
 import { StandaloneAutoTagRepository } from '../repositories/sqlite/auto-tag-repository';
 import { StandaloneColorRepository } from '../repositories/sqlite/color-repository';
 import { StandaloneLibraryRepository } from '../repositories/sqlite/library-repository';
-import { isStandaloneSqliteEnabled } from '../repositories/sqlite/sqlite';
-import { StandaloneStackRepository } from '../repositories/sqlite/stack-repository';
-import { prisma, useDataStorage, usePrisma } from '../shared/di';
-import { AutoTagService } from '../shared/services/AutoTagService';
-import { CollectionService } from '../shared/services/CollectionService';
-import { ensureSuperUser } from '../shared/services/UserService';
-import { toPublicAssetPath, withPublicAssetArray } from '../utils/assetPath';
-import { extractPdfOriginalsFromMeta } from '../utils/pdfImport';
+import {
+  type StandaloneStackListParams,
+  StandaloneStackRepository,
+} from '../repositories/sqlite/stack-repository';
+import { useDataStorage } from '../shared/di';
 import { createZipArchive } from '../utils/zip';
 
-type StackAssetSummary = {
-  id?: number;
-  file?: string | null;
-  thumbnail?: string | null;
-  preview?: string | null;
-  [key: string]: unknown;
-};
+export const stacksRoute = new Hono();
 
-type SearchStack = Stack & {
-  assets?: StackAssetSummary[];
-};
-
-type StandaloneAutoTagAsset = {
-  id?: number;
-  stackId?: number;
-  fileType?: string;
+type MediaType = 'image' | 'comic' | 'video';
+type ImportedFile = {
+  path: string;
+  originalname: string;
+  mimetype: string;
+  size: number;
 };
 
 interface UploadedFile {
@@ -56,29 +32,13 @@ interface UploadedFile {
   arrayBuffer: () => Promise<ArrayBuffer>;
 }
 
-function isUploadedFile(value: unknown): value is UploadedFile {
-  if (typeof value !== 'object' || value === null) return false;
-  const candidate = value as Partial<UploadedFile> & { arrayBuffer?: unknown };
-  return (
-    typeof candidate.name === 'string' &&
-    typeof candidate.type === 'string' &&
-    typeof candidate.size === 'number' &&
-    typeof candidate.arrayBuffer === 'function'
-  );
-}
-
-const scheduleStandaloneAutoTagPrediction = (asset: StandaloneAutoTagAsset | null) => {
-  const assetId = Number(asset?.id ?? 0);
-  if (!assetId) return;
-
-  void new StandaloneAutoTagRepository().predictAssetTags(assetId, 0.4).catch((error) => {
-    console.error(`Failed to predict standalone AutoTags for asset ${assetId}:`, error);
-  });
-};
+const stackRepository = new StandaloneStackRepository();
+const libraryRepository = new StandaloneLibraryRepository();
+const autoTagRepository = new StandaloneAutoTagRepository();
+const colorRepository = new StandaloneColorRepository();
 
 const PaginatedQuerySchema = z.object({
   dataSetId: z.coerce.number().int().positive(),
-  // Basic filters (legacy params from client)
   collection: z.coerce.number().int().positive().optional(),
   mediaType: z.enum(['image', 'comic', 'video']).optional(),
   tag: z.union([z.array(z.string()), z.string()]).optional(),
@@ -87,9 +47,7 @@ const PaginatedQuerySchema = z.object({
   liked: z.enum(['0', '1']).optional(),
   hasNoTags: z.coerce.boolean().optional(),
   hasNoAuthor: z.coerce.boolean().optional(),
-  // Freeword search (unified search)
   search: z.string().optional(),
-  // Color filter params (from client)
   hueCategories: z.union([z.array(z.string()), z.string()]).optional(),
   toneSaturation: z.coerce.number().int().min(0).max(100).optional(),
   toneLightness: z.coerce.number().int().min(0).max(100).optional(),
@@ -99,24 +57,13 @@ const PaginatedQuerySchema = z.object({
     .string()
     .regex(/^#[0-9A-Fa-f]{6}$/)
     .optional(),
-  // Sorting / paging
   sort: z
-    .enum(['recommended', 'dateAdded', 'name', 'likes', 'updated'])
+    .enum(['recommended', 'dateAdded', 'name', 'likes', 'updated', 'id'])
     .optional()
     .default('recommended'),
   order: z.enum(['asc', 'desc']).optional().default('desc'),
   limit: z.coerce.number().int().min(1).max(100).optional().default(50),
   offset: z.coerce.number().int().min(0).optional().default(0),
-});
-
-const ImportFromUrlsSchema = z.object({
-  urls: z.array(z.string().url()).min(1).max(20),
-  dataSetId: z.number().int().positive().optional(),
-  stackId: z.number().int().positive().optional(),
-  mediaType: z.enum(['image', 'comic', 'video']).optional(),
-  collectionId: z.number().int().positive().optional(),
-  author: z.string().min(1).max(200).optional(),
-  tags: z.array(z.string().min(1)).optional(),
 });
 
 const FavoriteListQuerySchema = z.object({
@@ -131,16 +78,105 @@ const DownloadOriginalsQuerySchema = z.object({
   assetIds: z.union([z.string(), z.array(z.string())]).optional(),
 });
 
-export const stacksRoute = new Hono();
+const AutoTagSearchQuerySchema = z.object({
+  dataSetId: z.coerce.number().int().positive(),
+  autoTag: z.union([z.array(z.string()), z.string()]),
+  limit: z.coerce.number().int().min(1).max(100).optional().default(50),
+  offset: z.coerce.number().int().min(0).optional().default(0),
+  search: z.string().optional(),
+  mediaType: z.enum(['image', 'comic', 'video']).optional(),
+  author: z.union([z.array(z.string()), z.string()]).optional(),
+  tag: z.union([z.array(z.string()), z.string()]).optional(),
+  fav: z.enum(['0', '1']).optional(),
+  liked: z.enum(['0', '1']).optional(),
+  hasNoTags: z.coerce.boolean().optional(),
+  hasNoAuthor: z.coerce.boolean().optional(),
+});
+
+const BulkTagsSchema = z.object({
+  stackIds: z.array(z.number().int().positive()),
+  tags: z.array(z.string().min(1)),
+});
+const BulkAuthorSchema = z.object({
+  stackIds: z.array(z.number().int().positive()),
+  author: z.string().min(1),
+});
+const BulkMediaTypeSchema = z.object({
+  stackIds: z.array(z.number().int().positive()),
+  mediaType: z.enum(['image', 'comic', 'video']),
+});
+const BulkFavoriteSchema = z.object({
+  stackIds: z.array(z.number().int().positive()),
+  favorited: z.boolean(),
+});
+const BulkRefreshThumbsSchema = z.object({ stackIds: z.array(z.number().int().positive()) });
+const BulkRemoveSchema = z.object({ stackIds: z.array(z.number().int().positive()) });
+const MergeStacksSchema = z.object({
+  targetId: z.number().int().positive(),
+  sourceIds: z.array(z.number().int().positive()).min(1),
+});
+
+const ImportFromUrlsSchema = z.object({
+  urls: z.array(z.string().url()).min(1).max(20),
+  dataSetId: z.number().int().positive().optional(),
+  stackId: z.number().int().positive().optional(),
+  mediaType: z.enum(['image', 'comic', 'video']).optional(),
+  collectionId: z.number().int().positive().optional(),
+  author: z.string().min(1).max(200).optional(),
+  tags: z.array(z.string().min(1)).optional(),
+});
 
 const normalizeStringArray = (value: string | string[] | undefined) => {
   if (value === undefined) return undefined;
   return Array.isArray(value) ? value : [value];
 };
 
+const isUploadedFile = (value: unknown): value is UploadedFile => {
+  if (typeof value !== 'object' || value === null) return false;
+  const candidate = value as Partial<UploadedFile> & { arrayBuffer?: unknown };
+  return (
+    typeof candidate.name === 'string' &&
+    typeof candidate.type === 'string' &&
+    typeof candidate.size === 'number' &&
+    typeof candidate.arrayBuffer === 'function'
+  );
+};
+
+const getQueryObject = (c: Context): Record<string, string | string[]> => {
+  const searchParams = new URL(c.req.url).searchParams;
+  const result: Record<string, string | string[]> = {};
+  for (const [key, value] of searchParams.entries()) {
+    if (result[key] === undefined) {
+      result[key] = value;
+    } else {
+      result[key] = Array.isArray(result[key])
+        ? [...result[key], value]
+        : [result[key] as string, value];
+    }
+  }
+  return result;
+};
+
+const parseIds = (value: string | string[]) => {
+  const rawValues = Array.isArray(value) ? value : [value];
+  const ids: number[] = [];
+  const seen = new Set<number>();
+
+  for (const rawValue of rawValues) {
+    for (const part of rawValue.split(',')) {
+      const parsed = Number.parseInt(part.trim(), 10);
+      if (!Number.isFinite(parsed) || parsed <= 0 || seen.has(parsed)) continue;
+      seen.add(parsed);
+      ids.push(parsed);
+    }
+  }
+
+  return ids;
+};
+
 const getStandaloneColorStackIds = (options: {
   dataSetId: number;
-  mediaType?: 'image' | 'comic' | 'video';
+  mediaType?: MediaType;
   hueCategories?: string | string[];
   toneSaturation?: number;
   toneLightness?: number;
@@ -158,7 +194,7 @@ const getStandaloneColorStackIds = (options: {
 
   if (!hasColorFilter) return undefined;
 
-  return new StandaloneColorRepository().getMatchingStackIdsByFilter({
+  return colorRepository.getMatchingStackIdsByFilter({
     dataSetId: options.dataSetId,
     mediaType: options.mediaType,
     hueCategories,
@@ -210,15 +246,14 @@ const getDownloadFilename = (originalName: string | null | undefined, file: stri
   return sanitized || 'download';
 };
 
-const getUniqueFilename = (filename: string, usedNames: Map<string, number>) => {
+const getUniqueFilename = (filename: string, usedNames: Map<string, number>): string => {
   const usedCount = usedNames.get(filename) ?? 0;
   usedNames.set(filename, usedCount + 1);
   if (usedCount === 0) return filename;
 
   const ext = path.extname(filename);
   const base = path.basename(filename, ext);
-  const candidate = `${base} (${usedCount + 1})${ext}`;
-  return getUniqueFilename(candidate, usedNames);
+  return getUniqueFilename(`${base} (${usedCount + 1})${ext}`, usedNames);
 };
 
 const getPdfProcessingErrorMessage = (error: unknown) => {
@@ -248,954 +283,7 @@ const resolveStoredFilePath = (
   return null;
 };
 
-const parseStackIds = (value: string | string[]) => {
-  const rawValues = Array.isArray(value) ? value : [value];
-  const ids: number[] = [];
-  const seen = new Set<number>();
-
-  for (const rawValue of rawValues) {
-    for (const part of rawValue.split(',')) {
-      const parsed = Number.parseInt(part.trim(), 10);
-      if (!Number.isFinite(parsed) || parsed <= 0 || seen.has(parsed)) continue;
-      seen.add(parsed);
-      ids.push(parsed);
-    }
-  }
-
-  return ids;
-};
-
-const parseAssetIds = parseStackIds;
-
-// Helper: build plain object from search params
-function getQueryObject(c: Context): Record<string, string | string[]> {
-  const sp = new URL(c.req.url).searchParams;
-  const obj: Record<string, string | string[]> = {};
-  for (const [k, v] of sp.entries()) {
-    if (obj[k] === undefined) obj[k] = v;
-    else obj[k] = Array.isArray(obj[k]) ? [...obj[k], v] : [obj[k] as string, v];
-  }
-  return obj;
-}
-
-// GET /stacks/download-originals
-stacksRoute.get('/download-originals', async (c) => {
-  const queryObj = getQueryObject(c);
-  const parse = DownloadOriginalsQuerySchema.safeParse(queryObj);
-  if (!parse.success) return c.json({ error: 'Invalid query', details: parse.error }, 400);
-
-  const { dataSetId } = parse.data;
-  const stackIds = parse.data.stackIds ? parseStackIds(parse.data.stackIds) : [];
-  const assetIds = parse.data.assetIds ? parseAssetIds(parse.data.assetIds) : [];
-  if (stackIds.length === 0 && assetIds.length === 0) {
-    return c.json({ error: 'No stack or asset ids specified' }, 400);
-  }
-
-  const auth = await ensureDatasetAuthorizedForCurrentStore(c, dataSetId);
-  if (auth) return auth;
-
-  const dataStorage = useDataStorage(c);
-  const orderedAssets = isStandaloneSqliteEnabled()
-    ? new StandaloneStackRepository().getOriginalAssets(dataSetId, { stackIds, assetIds })
-    : await (async () => {
-        const prisma = usePrisma(c);
-        const stacks =
-          stackIds.length > 0
-            ? await prisma.stack.findMany({
-                where: { id: { in: stackIds }, dataSetId },
-                select: {
-                  id: true,
-                  meta: true,
-                  assets: {
-                    orderBy: { orderInStack: 'asc' },
-                    select: {
-                      id: true,
-                      stackId: true,
-                      file: true,
-                      fileType: true,
-                      originalName: true,
-                    },
-                  },
-                },
-              })
-            : [];
-        const selectedAssets =
-          assetIds.length > 0
-            ? await prisma.asset.findMany({
-                where: { id: { in: assetIds }, stack: { dataSetId } },
-                select: {
-                  id: true,
-                  stackId: true,
-                  file: true,
-                  fileType: true,
-                  originalName: true,
-                },
-              })
-            : [];
-        const assetMap = new Map(selectedAssets.map((asset) => [asset.id, asset]));
-        const stackMap = new Map(stacks.map((stack) => [stack.id, stack]));
-        const ordered: Array<{
-          id: number;
-          stackId: number;
-          file: string;
-          fileType: string | null;
-          originalName: string | null;
-        }> = [];
-
-        for (const assetId of assetIds) {
-          const asset = assetMap.get(assetId);
-          if (!asset) continue;
-          ordered.push(asset);
-        }
-
-        for (const stackId of stackIds) {
-          const stack = stackMap.get(stackId);
-          if (!stack) continue;
-          for (const asset of stack.assets) {
-            ordered.push(asset);
-          }
-          for (const pdf of extractPdfOriginalsFromMeta(stack.meta)) {
-            ordered.push({
-              id: -stack.id,
-              stackId: stack.id,
-              file: pdf.file,
-              fileType: pdf.mimeType,
-              originalName: pdf.originalName,
-            });
-          }
-        }
-
-        return ordered;
-      })();
-
-  if (orderedAssets.length === 0) {
-    return c.json({ error: 'Original files not found' }, 404);
-  }
-
-  const downloadableAssets: Array<(typeof orderedAssets)[number] & { filePath: string }> = [];
-  for (const asset of orderedAssets) {
-    const filePath = resolveStoredFilePath(asset.file, dataStorage);
-    if (!filePath) {
-      return c.json({ error: 'Original file missing', assetId: asset.id }, 404);
-    }
-    downloadableAssets.push({ ...asset, filePath });
-  }
-
-  if (downloadableAssets.length === 1) {
-    const asset = downloadableAssets[0];
-    const filename = getDownloadFilename(asset.originalName, asset.file);
-    const data = fs.readFileSync(asset.filePath);
-    return new Response(toResponseBody(data), {
-      headers: {
-        'Content-Type': getContentType(filename, asset.fileType),
-        'Content-Disposition': getAttachmentDisposition(filename),
-        'Content-Length': data.length.toString(),
-        'Cache-Control': 'no-store',
-      },
-    });
-  }
-
-  const usedNames = new Map<string, number>();
-  const zipEntries = downloadableAssets.map((asset) => {
-    const filename = getUniqueFilename(
-      getDownloadFilename(asset.originalName, asset.file),
-      usedNames
-    );
-    return {
-      name: filename,
-      data: fs.readFileSync(asset.filePath),
-    };
-  });
-  const zip = createZipArchive(zipEntries);
-  const zipFilename =
-    stackIds.length === 1 && assetIds.length === 0
-      ? `stack-${stackIds[0]}-originals.zip`
-      : 'originals.zip';
-
-  return new Response(toResponseBody(zip), {
-    headers: {
-      'Content-Type': 'application/zip',
-      'Content-Disposition': getAttachmentDisposition(zipFilename),
-      'Content-Length': zip.length.toString(),
-      'Cache-Control': 'no-store',
-    },
-  });
-});
-
-// GET /stacks/paginated
-stacksRoute.get('/paginated', async (c) => {
-  const queryObj = getQueryObject(c);
-  const parse = PaginatedQuerySchema.safeParse(queryObj);
-  if (!parse.success) return c.json({ error: 'Invalid query', details: parse.error }, 400);
-
-  const {
-    dataSetId,
-    collection,
-    mediaType,
-    tag,
-    author,
-    fav,
-    liked,
-    hasNoTags,
-    hasNoAuthor,
-    search,
-    hueCategories,
-    toneSaturation,
-    toneLightness,
-    toneTolerance,
-    similarityThreshold,
-    customColor,
-    sort,
-    order,
-    limit,
-    offset,
-  } = parse.data;
-
-  // Enforce dataset protection
-  const auth = await ensureDatasetAuthorizedForCurrentStore(c, dataSetId);
-  if (auth) return auth;
-
-  if (isStandaloneSqliteEnabled()) {
-    const stackIds = getStandaloneColorStackIds({
-      dataSetId,
-      mediaType,
-      hueCategories,
-      toneSaturation,
-      toneLightness,
-      toneTolerance,
-      similarityThreshold,
-      customColor,
-    });
-    const result = new StandaloneStackRepository().getPaginated({
-      dataSetId,
-      collection,
-      mediaType,
-      tag,
-      author,
-      fav,
-      liked,
-      hasNoTags,
-      hasNoAuthor,
-      search,
-      stackIds,
-      sort,
-      order,
-      limit,
-      offset,
-    });
-    return c.json(result);
-  }
-
-  // Build filters compatible with the feature search service
-  const filters: SearchFilters = {};
-
-  if (typeof collection === 'number') filters.collectionId = collection;
-  if (mediaType) filters.mediaType = mediaType;
-
-  if (author) {
-    const authors = Array.isArray(author) ? author : [author];
-    filters.author = { includeAny: authors };
-  }
-
-  if (tag) {
-    const tags = Array.isArray(tag) ? tag : [tag];
-    filters.tags = { includeAny: tags };
-  }
-
-  if (fav === '1') filters.favorites = 'is-fav';
-  if (fav === '0') filters.favorites = 'not-fav';
-  if (liked === '1') filters.likes = 'is-liked';
-  if (liked === '0') filters.likes = 'not-liked';
-  if (hasNoTags) {
-    filters.tags = { ...(filters.tags || {}), includeNotSet: true };
-  }
-  if (hasNoAuthor) {
-    filters.author = { ...(filters.author || {}), includeNotSet: true };
-  }
-
-  // Map color filter (new style) to SearchFilters.color
-  const color: ColorFilter = {};
-  if (typeof hueCategories === 'string') color.hueCategories = [hueCategories];
-  else if (Array.isArray(hueCategories)) color.hueCategories = hueCategories;
-  if (typeof toneSaturation === 'number' && typeof toneLightness === 'number') {
-    color.tonePoint = { saturation: toneSaturation, lightness: toneLightness };
-  }
-  if (typeof toneTolerance === 'number') color.toneTolerance = toneTolerance;
-  if (typeof similarityThreshold === 'number') color.similarityThreshold = similarityThreshold;
-  if (customColor) color.customColor = customColor;
-  if (
-    color.hueCategories ||
-    color.tonePoint ||
-    color.toneTolerance !== undefined ||
-    color.similarityThreshold !== undefined ||
-    color.customColor
-  ) {
-    filters.color = color;
-  }
-
-  const sortOptions: SortOptions = {
-    by: sort || 'recommended',
-    order: order || 'desc',
-  };
-
-  // Compose services per dataset
-  const prisma = usePrisma(c);
-  const colorSearch = createColorSearchService({ prisma, dataSetId });
-  const tagStats = createTagStatsService({ prisma, dataSetId });
-  const searchService = createSearchService({ prisma, colorSearch, tagStats, dataSetId });
-
-  const result = await searchService.search({
-    mode: search && search.trim().length > 0 ? SearchMode.UNIFIED : SearchMode.ALL,
-    datasetId: dataSetId,
-    query: search && search.trim().length > 0 ? search.trim() : undefined,
-    filters,
-    sort: sortOptions,
-    pagination: { limit, offset },
-  });
-
-  // Enrich with asset counts in a single query
-  const searchStacks = result.stacks as SearchStack[];
-  const ids = searchStacks.map((stack) => stack.id);
-  let assetCountMap = new Map<number, number>();
-  let favoriteSet = new Set<number>();
-
-  if (ids.length > 0) {
-    const counts = await prisma.asset.groupBy({
-      by: ['stackId'],
-      where: { stackId: { in: ids } },
-      _count: { stackId: true },
-    });
-    assetCountMap = new Map(counts.map((count) => [count.stackId, count._count.stackId]));
-
-    try {
-      const userId = await ensureSuperUser(prisma);
-      const favorites = await prisma.stackFavorite.findMany({
-        where: {
-          userId,
-          stackId: { in: ids },
-        },
-        select: { stackId: true },
-      });
-      favoriteSet = new Set(favorites.map((row) => row.stackId));
-    } catch (error) {
-      console.error('[stacks/paginated] Failed to resolve favorites', error);
-    }
-  }
-
-  // Ensure thumbnail paths are under /files, and attach assetCount / favorite flags
-  const stacks = searchStacks.map((stack) => {
-    const assets = withPublicAssetArray(stack.assets ?? [], stack.dataSetId);
-    const thumbnail = toPublicAssetPath(assets[0]?.thumbnail || stack.thumbnail, stack.dataSetId);
-    const isFavorite = favoriteSet.has(stack.id);
-    const likeCount = typeof stack.liked === 'number' ? stack.liked : Number(stack.liked ?? 0);
-
-    return {
-      ...stack,
-      assets,
-      thumbnail,
-      assetCount: assetCountMap.get(stack.id) ?? 0,
-      assetsCount: assetCountMap.get(stack.id) ?? 0,
-      favorited: isFavorite,
-      isFavorite,
-      liked: likeCount,
-      likeCount,
-    };
-  });
-
-  return c.json({ stacks, total: result.total, limit: result.limit, offset: result.offset });
-});
-
-// GET /stacks/favorites/list
-// Favorites ページ専用: 検索/フィルタ用の stack favorite とは分けて、asset favorite も混ぜて返す。
-stacksRoute.get('/favorites/list', async (c) => {
-  const queryObj = getQueryObject(c);
-  const parse = FavoriteListQuerySchema.safeParse(queryObj);
-  if (!parse.success) return c.json({ error: 'Invalid query', details: parse.error }, 400);
-
-  const { dataSetId, limit, offset } = parse.data;
-  const auth = await ensureDatasetAuthorizedForCurrentStore(c, dataSetId);
-  if (auth) return auth;
-
-  if (isStandaloneSqliteEnabled()) {
-    return c.json(new StandaloneStackRepository().getFavoriteItems(dataSetId, limit, offset));
-  }
-
-  const prisma = usePrisma(c);
-  const userId = await ensureSuperUser(prisma);
-
-  const [stackFavorites, assetFavorites] = await Promise.all([
-    prisma.stackFavorite.findMany({
-      where: {
-        userId,
-        stack: { dataSetId },
-      },
-      include: {
-        stack: {
-          include: {
-            assets: {
-              take: 1,
-              orderBy: { orderInStack: 'asc' },
-            },
-            _count: {
-              select: { assets: true },
-            },
-          },
-        },
-      },
-    }),
-    prisma.assetFavorite.findMany({
-      where: {
-        userId,
-        asset: {
-          stack: { dataSetId },
-        },
-      },
-      include: {
-        asset: {
-          include: {
-            stack: {
-              include: {
-                _count: {
-                  select: { assets: true },
-                },
-              },
-            },
-          },
-        },
-      },
-    }),
-  ]);
-
-  const stackFavoriteSet = new Set(stackFavorites.map((favorite) => favorite.stackId));
-  const combined = [
-    ...stackFavorites.map((favorite) => {
-      const stack = favorite.stack;
-      const leadAsset = stack.assets[0];
-      const thumbnail = toPublicAssetPath(leadAsset?.thumbnail || stack.thumbnail, dataSetId);
-      const likeCount = typeof stack.liked === 'number' ? stack.liked : Number(stack.liked ?? 0);
-      return {
-        id: stack.id,
-        stackId: stack.id,
-        favoriteKind: 'stack' as const,
-        favoriteId: favorite.id,
-        favoriteCreatedAt: favorite.createdAt,
-        name: stack.name,
-        mediaType: stack.mediaType,
-        thumbnail,
-        favorited: true,
-        isFavorite: true,
-        liked: likeCount,
-        likeCount,
-        assetCount: stack._count.assets,
-        assetsCount: stack._count.assets,
-        createdAt: stack.createdAt,
-        updatedAt: stack.updateAt,
-      };
-    }),
-    ...assetFavorites.map((favorite) => {
-      const asset = favorite.asset;
-      const stack = asset.stack;
-      const thumbnail = toPublicAssetPath(asset.thumbnail || asset.file, dataSetId);
-      const likeCount = typeof stack.liked === 'number' ? stack.liked : Number(stack.liked ?? 0);
-      return {
-        id: `asset:${asset.id}`,
-        stackId: stack.id,
-        favoriteKind: 'asset' as const,
-        favoriteId: favorite.id,
-        favoriteCreatedAt: favorite.createdAt,
-        assetId: asset.id,
-        favoritePage: asset.orderInStack + 1,
-        name: stack.name,
-        mediaType: stack.mediaType,
-        thumbnail,
-        favorited: true,
-        isFavorite: true,
-        stackFavorited: stackFavoriteSet.has(stack.id),
-        liked: likeCount,
-        likeCount,
-        assetCount: stack._count.assets,
-        assetsCount: stack._count.assets,
-        createdAt: stack.createdAt,
-        updatedAt: stack.updateAt,
-      };
-    }),
-  ].sort((left, right) => right.favoriteCreatedAt.getTime() - left.favoriteCreatedAt.getTime());
-
-  return c.json({
-    stacks: combined.slice(offset, offset + limit),
-    total: combined.length,
-    limit,
-    offset,
-  });
-});
-
-// GET /stacks/search/autotag?autoTag=xxx&dataSetId=1&limit=50&offset=0
-// Backward-compatible endpoint to fetch stacks matching AutoTag aggregate keys
-// Extended to support common filters (mediaType/fav/liked/author/tag/hasNo*)
-const AutoTagSearchQuerySchema = z.object({
-  dataSetId: z.coerce.number().int().positive(),
-  autoTag: z.union([z.array(z.string()), z.string()]),
-  limit: z.coerce.number().int().min(1).max(100).optional().default(50),
-  offset: z.coerce.number().int().min(0).optional().default(0),
-  search: z.string().optional(),
-  mediaType: z.enum(['image', 'comic', 'video']).optional(),
-  author: z.union([z.array(z.string()), z.string()]).optional(),
-  tag: z.union([z.array(z.string()), z.string()]).optional(),
-  fav: z.enum(['0', '1']).optional(),
-  liked: z.enum(['0', '1']).optional(),
-  hasNoTags: z.coerce.boolean().optional(),
-  hasNoAuthor: z.coerce.boolean().optional(),
-});
-
-stacksRoute.get('/search/autotag', async (c) => {
-  const queryObj = getQueryObject(c);
-  const parsed = AutoTagSearchQuerySchema.safeParse(queryObj);
-  if (!parsed.success) {
-    return c.json({ error: 'Invalid query', details: parsed.error }, 400);
-  }
-
-  const {
-    dataSetId,
-    autoTag,
-    limit,
-    offset,
-    search,
-    mediaType,
-    author,
-    tag,
-    fav,
-    liked,
-    hasNoTags,
-    hasNoAuthor,
-  } = parsed.data;
-  const auth = await ensureDatasetAuthorizedForCurrentStore(c, dataSetId);
-  if (auth) return auth;
-  const tags = Array.isArray(autoTag) ? autoTag : [autoTag];
-  const lowered = tags.map((t) => t.toLowerCase());
-
-  if (isStandaloneSqliteEnabled()) {
-    const stackIds = new StandaloneAutoTagRepository().getMatchingStackIds(dataSetId, tags);
-    return c.json(
-      new StandaloneStackRepository().getPaginated({
-        dataSetId,
-        stackIds,
-        limit,
-        offset,
-        search,
-        mediaType,
-        author,
-        tag,
-        fav,
-        liked,
-        hasNoTags,
-        hasNoAuthor,
-        sort: 'id',
-        order: 'desc',
-      })
-    );
-  }
-
-  // Use raw SQL for efficient JSONB search on topTags array
-  // Match any of the requested AutoTag keys (case-insensitive), with default threshold 0.4
-  const whereSql = `s."dataSetId" = $1 AND EXISTS (
-    SELECT 1 FROM jsonb_array_elements(agg."topTags"::jsonb) elem
-    WHERE lower(elem->>'tag') = ANY($2)
-      AND (elem->>'score')::float >= 0.4
-  )`;
-
-  try {
-    // Total count
-    const countRows = await prisma.$queryRawUnsafe<Array<{ count: bigint }>>(
-      `SELECT COUNT(*) ::bigint AS count
-       FROM "Stack" s
-           JOIN "StackAutoTagAggregate" agg
-       ON agg."stackId" = s.id
-       WHERE ${whereSql}`,
-      dataSetId,
-      lowered
-    );
-    let total = Number(countRows[0]?.count ?? 0);
-
-    if (total === 0) {
-      return c.json({ stacks: [], total: 0, limit, offset });
-    }
-
-    // Optional: intersect with unified search results for 'search'
-    let allowedIds: number[] | null = null;
-    if (search?.trim()) {
-      const colorSearch = createColorSearchService({ prisma, dataSetId });
-      const tagStats = createTagStatsService({ prisma, dataSetId });
-      const searchService = createSearchService({ prisma, colorSearch, tagStats, dataSetId });
-      const unified = await searchService.search({
-        mode: SearchMode.UNIFIED,
-        datasetId: dataSetId,
-        query: search.trim(),
-        filters: {},
-        sort: { by: 'recommended', order: 'desc' },
-        pagination: { limit: 1000, offset: 0 },
-      });
-      allowedIds = unified.stacks.map((stack) => stack.id);
-      if (allowedIds.length === 0) {
-        return c.json({ stacks: [], total: 0, limit, offset });
-      }
-    }
-
-    // Build base ID set (AutoTag ∩ unified-search?)
-    const userId = await ensureSuperUser(prisma);
-
-    const baseIdRows: Array<{ id: number }> = await prisma.$queryRawUnsafe<Array<{ id: number }>>(
-      allowedIds
-        ? `SELECT s.id
-           FROM "Stack" s
-                    JOIN "StackAutoTagAggregate" agg ON agg."stackId" = s.id
-           WHERE ${whereSql}
-             AND s.id = ANY ($3::int[])
-           ORDER BY s.id DESC`
-        : `SELECT s.id
-           FROM "Stack" s
-                    JOIN "StackAutoTagAggregate" agg ON agg."stackId" = s.id
-           WHERE ${whereSql}
-           ORDER BY s.id DESC`,
-      ...(allowedIds ? [dataSetId, lowered, allowedIds] : [dataSetId, lowered])
-    );
-    const baseIds = baseIdRows.map((r) => r.id);
-
-    // Apply additional filters via Prisma where, intersecting with baseIds
-    const where: Prisma.StackWhereInput = { id: { in: baseIds }, dataSetId };
-    if (mediaType) where.mediaType = mediaType;
-    if (fav === '1') where.favorites = { some: { userId } };
-    if (fav === '0') where.favorites = { none: { userId } };
-    if (liked === '1') where.liked = { gt: 0 };
-    if (liked === '0') where.liked = 0;
-    if (hasNoAuthor) where.authorId = null;
-    if (hasNoTags) where.tags = { none: {} };
-    if (author) {
-      const authors = Array.isArray(author) ? author : [author];
-      where.author = { name: { in: authors } };
-    }
-    if (tag) {
-      const tags = Array.isArray(tag) ? tag : [tag];
-      where.tags = {
-        ...(where.tags ?? {}),
-        some: { tag: { title: { in: tags } } },
-      };
-    }
-
-    // Count with all filters
-    total = await prisma.stack.count({ where });
-
-    // Page IDs with all filters applied
-    const paged = await prisma.stack.findMany({
-      where,
-      select: { id: true },
-      orderBy: { id: 'desc' },
-      take: limit,
-      skip: offset,
-    });
-    const ids = paged.map((r) => r.id);
-
-    // Fetch stacks by IDs preserving order
-    const allStacks = await usePrisma(c).stack.findMany({
-      where: { id: { in: ids }, dataSetId },
-      include: {
-        assets: {
-          orderBy: { orderInStack: 'asc' },
-          select: { id: true, file: true, thumbnail: true, preview: true },
-        },
-      },
-    });
-    const stackMap = new Map<number, SearchStack>(
-      allStacks.map((stack) => [stack.id, stack as SearchStack])
-    );
-    const favoriteRows = await prisma.stackFavorite.findMany({
-      where: {
-        userId,
-        stackId: { in: ids },
-      },
-      select: { stackId: true },
-    });
-    const favoriteSet = new Set(favoriteRows.map((row) => row.stackId));
-
-    const stacks = ids
-      .map((id) => stackMap.get(id))
-      .filter((stack): stack is SearchStack => Boolean(stack))
-      .map((stack) => ({
-        ...stack,
-        assets: withPublicAssetArray(stack.assets ?? [], dataSetId),
-        thumbnail: toPublicAssetPath(stack.thumbnail, dataSetId),
-        favorited: favoriteSet.has(stack.id),
-        isFavorite: favoriteSet.has(stack.id),
-      }));
-
-    return c.json({ stacks, total, limit, offset });
-  } catch (error) {
-    console.error('Error searching stacks by AutoTag:', error);
-    return c.json({ error: 'Failed to search stacks by AutoTag' }, 500);
-  }
-});
-
-// POST /stacks/:id/like
-stacksRoute.post('/:id{[0-9]+}/like', async (c) => {
-  const id = Number.parseInt(c.req.param('id'), 10);
-  if (isStandaloneSqliteEnabled()) {
-    const result = new StandaloneStackRepository().likeStack(id);
-    if (!result) return c.json({ error: 'Stack not found' }, 404);
-    return c.json({ success: true, liked: result.liked });
-  }
-  const prisma = usePrisma(c);
-  const ds = await resolveDatasetId(prisma, id);
-  const colorSearch = createColorSearchService({ prisma, dataSetId: ds });
-  const stackService = createStackService({ prisma, colorSearch, dataSetId: ds });
-  await stackService.like(id);
-  const updated = await prisma.stack.findUnique({ where: { id }, select: { liked: true } });
-  return c.json({ success: true, liked: updated?.liked ?? 0 });
-});
-
-// PUT /stacks/:id/favorite
-stacksRoute.put('/:id{[0-9]+}/favorite', async (c) => {
-  const id = Number.parseInt(c.req.param('id'), 10);
-  const body = await c.req.json().catch(() => ({}));
-  const favorited = Boolean(body?.favorited);
-  if (isStandaloneSqliteEnabled()) {
-    const ok = new StandaloneStackRepository().toggleStackFavorite(id, favorited);
-    if (!ok) return c.json({ error: 'Stack not found' }, 404);
-    return c.json({ success: true });
-  }
-  const prisma = usePrisma(c);
-  const ds = await resolveDatasetId(prisma, id);
-  const colorSearch = createColorSearchService({ prisma, dataSetId: ds });
-  const stackService = createStackService({ prisma, colorSearch, dataSetId: ds });
-  await stackService.setFavorite(id, favorited);
-  return c.json({ success: true });
-});
-
-// POST /stacks/:id/refresh-thumbnail
-stacksRoute.post('/:id{[0-9]+}/refresh-thumbnail', async (c) => {
-  const id = Number.parseInt(c.req.param('id'), 10);
-  if (isStandaloneSqliteEnabled()) {
-    const ok = new StandaloneStackRepository().refreshStackThumbnail(id);
-    if (!ok) return c.json({ error: 'Stack not found' }, 404);
-    return c.json({ success: true, message: 'Thumbnail refreshed successfully' });
-  }
-  const prisma = usePrisma(c);
-  const ds = await resolveDatasetId(prisma, id);
-  const colorSearch = createColorSearchService({ prisma, dataSetId: ds });
-  const stackService = createStackService({ prisma, colorSearch, dataSetId: ds });
-  const result = await stackService.refreshThumbnail(id);
-  return c.json(result);
-});
-
-// POST /stacks/:id/aggregate-tags
-stacksRoute.post('/:id{[0-9]+}/aggregate-tags', async (c) => {
-  const id = Number.parseInt(c.req.param('id'), 10);
-  if (isStandaloneSqliteEnabled()) {
-    try {
-      const body = (await c.req.json().catch(() => null)) as { threshold?: number } | null;
-      const threshold = typeof body?.threshold === 'number' ? body.threshold : 0.4;
-      const result = new StandaloneAutoTagRepository().aggregateStackTags(id, threshold);
-      return c.json(result);
-    } catch (error) {
-      console.error('Error aggregating stack tags:', error);
-      return c.json({ error: 'Failed to aggregate tags' }, 500);
-    }
-  }
-  const prisma = usePrisma(c);
-  try {
-    const body = (await c.req.json().catch(() => null)) as { threshold?: number } | null;
-    const threshold = typeof body?.threshold === 'number' ? body.threshold : 0.4;
-    const autoTagService = new AutoTagService(prisma);
-    const result = await autoTagService.aggregateStackTags(id, threshold);
-    return c.json(result);
-  } catch (error) {
-    console.error('Error aggregating stack tags:', error);
-    return c.json({ error: 'Failed to aggregate tags' }, 500);
-  }
-});
-
-// POST /stacks/:id/refresh-autotags
-stacksRoute.post('/:id{[0-9]+}/refresh-autotags', async (c) => {
-  const id = Number.parseInt(c.req.param('id'), 10);
-  const body = (await c.req.json().catch(() => null)) as {
-    threshold?: number;
-    forceRegenerate?: boolean;
-  } | null;
-  const threshold = typeof body?.threshold === 'number' ? body.threshold : 0.4;
-  const forceRegenerate = typeof body?.forceRegenerate === 'boolean' ? body.forceRegenerate : true;
-
-  if (isStandaloneSqliteEnabled()) {
-    try {
-      const result = await new StandaloneAutoTagRepository().refreshStackTags(id, {
-        threshold,
-        forceRegenerate,
-      });
-      return c.json(result);
-    } catch (error) {
-      console.error('Error refreshing stack AutoTags:', error);
-      return c.json({ error: 'Failed to refresh AutoTags' }, 500);
-    }
-  }
-
-  const prisma = usePrisma(c);
-  try {
-    const autoTagService = new AutoTagService(prisma);
-    const aggregate = await autoTagService.aggregateStackTags(id, threshold);
-    return c.json({
-      stackId: id,
-      candidateAssets: aggregate.assetCount + aggregate.skippedAssets,
-      predictedAssets: aggregate.assetCount,
-      skippedAssets: aggregate.skippedAssets,
-      failedAssets: 0,
-      aggregate,
-    });
-  } catch (error) {
-    console.error('Error refreshing stack AutoTags:', error);
-    return c.json({ error: 'Failed to refresh AutoTags' }, 500);
-  }
-});
-
-// POST /stacks/:id/tags - add a tag to stack
-stacksRoute.post('/:id{[0-9]+}/tags', async (c) => {
-  const id = Number.parseInt(c.req.param('id'), 10);
-  if (isStandaloneSqliteEnabled()) {
-    const body = await c.req.json().catch(() => ({}));
-    const tag = String((body as { tag?: unknown })?.tag || '').trim();
-    if (!tag) return c.json({ error: 'Tag is required' }, 400);
-    const result = new StandaloneStackRepository().addTag(id, tag);
-    if (!result) return c.json({ error: 'Stack not found' }, 404);
-    return c.json(result);
-  }
-  const prisma = usePrisma(c);
-  try {
-    const body = await c.req.json();
-    const tag = String(body?.tag || '').trim();
-    if (!tag) return c.json({ error: 'Tag is required' }, 400);
-    const ds = await resolveDatasetId(prisma, id);
-    const stacksService = createStacksService({ prisma });
-    const res = await stacksService.addTag(id, ds, tag);
-    return c.json(res);
-  } catch (error) {
-    console.error('Error adding tag:', error);
-    return c.json({ error: 'Failed to add tag' }, 500);
-  }
-});
-
-// DELETE /stacks/:id/tags/:tag - remove a tag from stack
-stacksRoute.delete('/:id{[0-9]+}/tags/:tag', async (c) => {
-  const id = Number.parseInt(c.req.param('id'), 10);
-  const tag = c.req.param('tag');
-  if (isStandaloneSqliteEnabled()) {
-    const result = new StandaloneStackRepository().removeTag(id, decodeURIComponent(tag));
-    if (!result) return c.json({ error: 'Stack not found' }, 404);
-    return c.json(result);
-  }
-  const prisma = usePrisma(c);
-  try {
-    const ds = await resolveDatasetId(prisma, id);
-    const stacksService = createStacksService({ prisma });
-    const res = await stacksService.removeTag(id, ds, decodeURIComponent(tag));
-    return c.json(res);
-  } catch (error) {
-    console.error('Error removing tag:', error);
-    return c.json({ error: 'Failed to remove tag' }, 500);
-  }
-});
-
-// POST /stacks/:id/assets - add asset to existing stack
-stacksRoute.post('/:id{[0-9]+}/assets', async (c) => {
-  try {
-    const id = Number.parseInt(c.req.param('id'), 10);
-    const formData = await c.req.formData();
-    const fileEntry = formData.get('file');
-    if (!isUploadedFile(fileEntry)) return c.json({ error: 'File is required' }, 400);
-    const file = fileEntry;
-
-    if (isStandaloneSqliteEnabled()) {
-      const repository = new StandaloneStackRepository();
-      const stack = repository.getById(id);
-      if (!stack) return c.json({ error: 'Stack not found' }, 404);
-      const auth = await ensureDatasetAuthorizedForCurrentStore(c, stack.dataSetId);
-      if (auth) return auth;
-
-      const buf = new Uint8Array(await file.arrayBuffer());
-      const storageRoot = process.env.FILES_STORAGE || path.resolve('./data');
-      const tmpDir = path.join(storageRoot, 'tmp');
-      if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
-      const tmpPath = path.join(tmpDir, `${Date.now()}-${file.name || 'upload'}`);
-      fs.writeFileSync(tmpPath, buf);
-
-      const asset = await repository.addAssetWithFile(id, {
-        path: tmpPath,
-        originalname: file.name,
-        mimetype: file.type,
-        size: file.size,
-      });
-      if (!asset) return c.json({ error: 'Stack not found' }, 404);
-      scheduleStandaloneAutoTagPrediction(asset);
-      return c.json(asset, 201);
-    }
-
-    const prisma = usePrisma(c);
-    const ds = await resolveDatasetId(prisma, id);
-    const assetService = createAssetService({
-      prisma,
-      dataStorage: useDataStorage(c),
-      dataSetId: ds,
-    });
-
-    const buf = new Uint8Array(await file.arrayBuffer());
-    const storageRoot2 = process.env.FILES_STORAGE || path.resolve('./data');
-    const tmpDir = path.join(storageRoot2, 'tmp');
-    if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
-    const tmpPath = path.join(tmpDir, `${Date.now()}-${file.name || 'upload'}`);
-    fs.writeFileSync(tmpPath, buf);
-
-    const asset = await assetService.createWithFile(id, {
-      path: tmpPath,
-      originalname: file.name,
-      mimetype: file.type,
-      size: file.size,
-    });
-
-    return c.json(asset, 201);
-  } catch (error: unknown) {
-    if (error instanceof DuplicateAssetError) {
-      const msg =
-        error.details?.scope === 'same-stack'
-          ? 'このスタックに同一画像が既に存在します'
-          : '重複画像のため追加できません';
-      return c.json(
-        {
-          error: msg,
-          code: error.code,
-          details: error.details,
-        },
-        409
-      );
-    }
-    const pdfErrorMessage = getPdfProcessingErrorMessage(error);
-    if (pdfErrorMessage) {
-      return c.json({ error: pdfErrorMessage }, 400);
-    }
-    console.error('Error adding asset to stack:', error);
-    return c.json({ error: 'Failed to add asset' }, 500);
-  }
-});
-
-// GET /stacks/:id/collections
-stacksRoute.get('/:id{[0-9]+}/collections', async (c) => {
-  const id = Number.parseInt(c.req.param('id'), 10);
-  if (isStandaloneSqliteEnabled()) {
-    return c.json(new StandaloneStackRepository().getCollectionIdsByStackId(id));
-  }
-  const prisma = usePrisma(c);
-  const ds = await resolveDatasetId(prisma, id);
-  const colorSearch = createColorSearchService({ prisma, dataSetId: ds });
-  const stackService = createStackService({ prisma, colorSearch, dataSetId: ds });
-  const result = await stackService.getCollectionsByStackId(id);
-  return c.json(result);
-});
-
-function sanitizeFileNameForStorage(name: string): string {
+const sanitizeFileNameForStorage = (name: string) => {
   const withoutControl = Array.from(name)
     .filter((char) => {
       const code = char.charCodeAt(0);
@@ -1207,9 +295,9 @@ function sanitizeFileNameForStorage(name: string): string {
     return sanitized.length > 200 ? sanitized.slice(-200) : sanitized;
   }
   return `remote-${Date.now()}`;
-}
+};
 
-function resolveFileNameFromHeaders(urlString: string, contentDisposition: string | null): string {
+const resolveFileNameFromHeaders = (urlString: string, contentDisposition: string | null) => {
   if (contentDisposition) {
     const encodedMatch = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
     if (encodedMatch?.[1]) {
@@ -1234,28 +322,22 @@ function resolveFileNameFromHeaders(urlString: string, contentDisposition: strin
   } catch {
     return `remote-${Date.now()}`;
   }
-}
+};
 
-function inferMediaTypeFromMime(
+const inferMediaTypeFromMime = (
   mime: string | null | undefined,
   originalName: string
-): 'image' | 'comic' | 'video' {
-  if (mime?.startsWith('video/')) {
-    return 'video';
-  }
-  if (mime === 'application/pdf') {
-    return 'comic';
-  }
+): MediaType => {
+  if (mime?.startsWith('video/')) return 'video';
+  if (mime === 'application/pdf') return 'comic';
 
   const ext = path.extname(originalName).toLowerCase();
   if (ext === '.pdf') return 'comic';
-  if (['.mp4', '.mov', '.avi', '.mkv', '.webm', '.mpeg', '.mpg'].includes(ext)) {
-    return 'video';
-  }
+  if (['.mp4', '.mov', '.avi', '.mkv', '.webm', '.mpeg', '.mpg'].includes(ext)) return 'video';
   return 'image';
-}
+};
 
-function lookupMimeFromExtension(originalName: string): string | null {
+const lookupMimeFromExtension = (originalName: string): string | null => {
   const ext = path.extname(originalName).toLowerCase();
   if (!ext) return null;
   const mapping: Record<string, string> = {
@@ -1278,9 +360,9 @@ function lookupMimeFromExtension(originalName: string): string | null {
     '.pdf': 'application/pdf',
   };
   return mapping[ext] ?? null;
-}
+};
 
-async function downloadRemoteAsset(url: string, tmpDir: string) {
+const downloadRemoteAsset = async (url: string, tmpDir: string): Promise<ImportedFile> => {
   const targetUrl = new URL(url);
   const headers: Record<string, string> = {
     'User-Agent':
@@ -1296,8 +378,7 @@ async function downloadRemoteAsset(url: string, tmpDir: string) {
     throw new Error(`HTTP ${response.status}で取得に失敗しました`);
   }
 
-  const arrayBuffer = await response.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
+  const buffer = Buffer.from(await response.arrayBuffer());
   if (buffer.length === 0) {
     throw new Error('空のファイルが返却されました');
   }
@@ -1323,12 +404,10 @@ async function downloadRemoteAsset(url: string, tmpDir: string) {
     mimetype,
     size: buffer.length,
   };
-}
+};
 
-function copyLocalAssetFromFileUrl(url: string, tmpDir: string) {
-  const targetUrl = new URL(url);
-  const sourcePath = fileURLToPath(targetUrl);
-
+const copyLocalAssetFromFileUrl = (url: string, tmpDir: string): ImportedFile => {
+  const sourcePath = fileURLToPath(new URL(url));
   let stat: fs.Stats;
   try {
     stat = fs.statSync(sourcePath);
@@ -1353,9 +432,9 @@ function copyLocalAssetFromFileUrl(url: string, tmpDir: string) {
     mimetype: lookupMimeFromExtension(originalname) ?? 'application/octet-stream',
     size: stat.size,
   };
-}
+};
 
-async function importAssetFromUrl(url: string, tmpDir: string) {
+const importAssetFromUrl = async (url: string, tmpDir: string) => {
   const targetUrl = new URL(url);
 
   if (targetUrl.protocol === 'file:') {
@@ -1367,304 +446,371 @@ async function importAssetFromUrl(url: string, tmpDir: string) {
   }
 
   return downloadRemoteAsset(url, tmpDir);
-}
+};
 
-// Helper: resolve datasetId for a stack or for a list of stackIds
-function sanitizeStackIds(stackIds: number[] | number) {
-  const raw = Array.isArray(stackIds) ? stackIds : [stackIds];
-  if (raw.length === 0) {
-    throw new Error('Stack IDs required');
+const scheduleStandaloneAutoTagPrediction = (asset: { id?: number } | null) => {
+  const assetId = Number(asset?.id ?? 0);
+  if (!assetId) return;
+  void autoTagRepository.predictAssetTags(assetId, 0.4).catch((error) => {
+    console.error(`Failed to predict standalone AutoTags for asset ${assetId}:`, error);
+  });
+};
+
+stacksRoute.get('/download-originals', async (c) => {
+  const parse = DownloadOriginalsQuerySchema.safeParse(getQueryObject(c));
+  if (!parse.success) return c.json({ error: 'Invalid query', details: parse.error }, 400);
+
+  const { dataSetId } = parse.data;
+  const stackIds = parse.data.stackIds ? parseIds(parse.data.stackIds) : [];
+  const assetIds = parse.data.assetIds ? parseIds(parse.data.assetIds) : [];
+  if (stackIds.length === 0 && assetIds.length === 0) {
+    return c.json({ error: 'No stack or asset ids specified' }, 400);
   }
 
-  const normalized = raw.map((value) => {
-    const num = typeof value === 'string' ? Number(value) : value;
-    if (
-      typeof num !== 'number' ||
-      Number.isNaN(num) ||
-      !Number.isFinite(num) ||
-      !Number.isInteger(num) ||
-      num <= 0
-    ) {
-      console.error('[bulk-stacks] sanitizeStackIds invalid value', value);
-      throw new Error('Invalid stack id');
+  const auth = await ensureDatasetAuthorizedForCurrentStore(c, dataSetId);
+  if (auth) return auth;
+
+  const orderedAssets = stackRepository.getOriginalAssets(dataSetId, { stackIds, assetIds });
+  if (orderedAssets.length === 0) {
+    return c.json({ error: 'Original files not found' }, 404);
+  }
+
+  const dataStorage = useDataStorage(c);
+  const downloadableAssets: Array<(typeof orderedAssets)[number] & { filePath: string }> = [];
+  for (const asset of orderedAssets) {
+    const filePath = resolveStoredFilePath(asset.file, dataStorage);
+    if (!filePath) {
+      return c.json({ error: 'Original file missing', assetId: asset.id }, 404);
     }
-    return num;
-  });
-
-  return normalized;
-}
-
-async function resolveDatasetId(
-  prisma: Pick<PrismaClient, 'stack'>,
-  stackIds: number[] | number
-): Promise<number> {
-  const ids = sanitizeStackIds(stackIds);
-  const rows = await prisma.stack.findMany({
-    where: { id: { in: ids } },
-    select: { id: true, dataSetId: true },
-  });
-  if (rows.length === 0) throw new Error('Stack not found');
-  const ds = rows[0].dataSetId;
-  if (rows.some((r) => r.dataSetId !== ds)) throw new Error('Stacks belong to multiple datasets');
-  return ds;
-}
-
-// Bulk schemas
-const BulkTagsSchema = z.object({
-  stackIds: z.array(z.number().int().positive()),
-  tags: z.array(z.string().min(1)),
-});
-const BulkAuthorSchema = z.object({
-  stackIds: z.array(z.number().int().positive()),
-  author: z.string().min(1),
-});
-const BulkMediaTypeSchema = z.object({
-  stackIds: z.array(z.number().int().positive()),
-  mediaType: z.enum(['image', 'comic', 'video']),
-});
-const BulkFavoriteSchema = z.object({
-  stackIds: z.array(z.number().int().positive()),
-  favorited: z.boolean(),
-});
-const BulkRefreshThumbsSchema = z.object({ stackIds: z.array(z.number().int().positive()) });
-const BulkRemoveSchema = z.object({ stackIds: z.array(z.number().int().positive()) });
-const MergeStacksSchema = z.object({
-  targetId: z.number().int().positive(),
-  sourceIds: z.array(z.number().int().positive()).min(1),
-});
-
-async function withStackServiceForIds(c: Context, ids: number[] | number) {
-  const sanitizedIds = sanitizeStackIds(ids);
-  const prisma = usePrisma(c);
-  const ds = await resolveDatasetId(prisma, sanitizedIds);
-  const colorSearch = createColorSearchService({ prisma, dataSetId: ds });
-  const stackService = createStackService({ prisma, colorSearch, dataSetId: ds });
-  return { prisma, stackService, sanitizedIds, dataSetId: ds };
-}
-
-// POST /stacks/bulk/tags
-stacksRoute.post('/bulk/tags', async (c) => {
-  const body: unknown = await c.req.json().catch(() => ({}));
-  const parse = BulkTagsSchema.safeParse(body);
-  if (!parse.success) return c.json({ error: 'Invalid body', details: parse.error }, 400);
-  if (isStandaloneSqliteEnabled()) {
-    return c.json(
-      new StandaloneStackRepository().bulkAddTags(parse.data.stackIds, parse.data.tags)
-    );
+    downloadableAssets.push({ ...asset, filePath });
   }
-  const { stackService, sanitizedIds } = await withStackServiceForIds(c, parse.data.stackIds);
-  const res = await stackService.bulkAddTags(sanitizedIds, parse.data.tags);
-  return c.json(res);
-});
 
-// PUT /stacks/bulk/author
-stacksRoute.put('/bulk/author', async (c) => {
-  const body: unknown = await c.req.json().catch(() => ({}));
-  const parse = BulkAuthorSchema.safeParse(body);
-  if (!parse.success) return c.json({ error: 'Invalid body', details: parse.error }, 400);
-  if (isStandaloneSqliteEnabled()) {
-    return c.json(
-      new StandaloneStackRepository().bulkSetAuthor(parse.data.stackIds, parse.data.author)
-    );
-  }
-  const { stackService, sanitizedIds } = await withStackServiceForIds(c, parse.data.stackIds);
-  const res = await stackService.bulkSetAuthor(sanitizedIds, parse.data.author);
-  return c.json(res);
-});
-
-// PUT /stacks/bulk/media-type
-stacksRoute.put('/bulk/media-type', async (c) => {
-  const body: unknown = await c.req.json().catch(() => ({}));
-  const parse = BulkMediaTypeSchema.safeParse(body);
-  if (!parse.success) return c.json({ error: 'Invalid body', details: parse.error }, 400);
-  if (isStandaloneSqliteEnabled()) {
-    return c.json(
-      new StandaloneStackRepository().bulkSetMediaType(parse.data.stackIds, parse.data.mediaType)
-    );
-  }
-  const { stackService, sanitizedIds } = await withStackServiceForIds(c, parse.data.stackIds);
-  const res = await stackService.bulkSetMediaType(sanitizedIds, parse.data.mediaType);
-  return c.json(res);
-});
-
-// PUT /stacks/bulk/favorite
-stacksRoute.put('/bulk/favorite', async (c) => {
-  const body: unknown = await c.req.json().catch(() => ({}));
-  const parse = BulkFavoriteSchema.safeParse(body);
-  if (!parse.success) return c.json({ error: 'Invalid body', details: parse.error }, 400);
-  if (isStandaloneSqliteEnabled()) {
-    return c.json(
-      new StandaloneStackRepository().bulkSetFavorite(parse.data.stackIds, parse.data.favorited)
-    );
-  }
-  const { stackService, sanitizedIds } = await withStackServiceForIds(c, parse.data.stackIds);
-  const res = await stackService.bulkSetFavorite(sanitizedIds, parse.data.favorited);
-  return c.json(res);
-});
-
-// POST /stacks/bulk/refresh-thumbnails
-stacksRoute.post('/bulk/refresh-thumbnails', async (c) => {
-  const body: unknown = await c.req.json().catch(() => ({}));
-  const parse = BulkRefreshThumbsSchema.safeParse(body);
-  if (!parse.success) return c.json({ error: 'Invalid body', details: parse.error }, 400);
-  if (isStandaloneSqliteEnabled()) {
-    return c.json(new StandaloneStackRepository().bulkRefreshThumbnails(parse.data.stackIds));
-  }
-  const { stackService, sanitizedIds } = await withStackServiceForIds(c, parse.data.stackIds);
-  const res = await stackService.bulkRefreshThumbnails(sanitizedIds);
-  return c.json(res);
-});
-
-// POST /stacks/merge - merge source stacks into target
-stacksRoute.post('/merge', async (c) => {
-  const body: unknown = await c.req.json().catch(() => ({}));
-  const parse = MergeStacksSchema.safeParse(body);
-  if (!parse.success) return c.json({ error: 'Invalid body', details: parse.error }, 400);
-  const { targetId, sourceIds } = parse.data;
-  const sanitized = sanitizeStackIds([targetId, ...sourceIds]);
-  const [sanitizedTarget, ...sanitizedSources] = sanitized;
-  if (isStandaloneSqliteEnabled()) {
-    const stack = new StandaloneStackRepository().mergeStacks(sanitizedTarget, sanitizedSources);
-    if (!stack) return c.json({ error: 'Stack not found' }, 404);
-    return c.json({
-      success: true,
-      targetId: sanitizedTarget,
-      merged: sanitizedSources.length,
-      stack,
+  if (downloadableAssets.length === 1) {
+    const asset = downloadableAssets[0];
+    const filename = getDownloadFilename(asset.originalName, asset.file);
+    const data = fs.readFileSync(asset.filePath);
+    return new Response(toResponseBody(data), {
+      headers: {
+        'Content-Type': getContentType(filename, asset.fileType),
+        'Content-Disposition': getAttachmentDisposition(filename),
+        'Content-Length': data.length.toString(),
+        'Cache-Control': 'no-store',
+      },
     });
   }
-  const { stackService, prisma } = await withStackServiceForIds(c, sanitized);
-  const updated = await stackService.mergeStacks(sanitizedTarget, sanitizedSources);
-  const assetCount = await prisma.asset.count({ where: { stackId: sanitizedTarget } });
-  return c.json({
-    success: true,
-    targetId: sanitizedTarget,
-    merged: sanitizedSources.length,
-    stack: { ...updated, assetCount },
+
+  const usedNames = new Map<string, number>();
+  const zipEntries = downloadableAssets.map((asset) => ({
+    name: getUniqueFilename(getDownloadFilename(asset.originalName, asset.file), usedNames),
+    data: fs.readFileSync(asset.filePath),
+  }));
+  const zip = createZipArchive(zipEntries);
+  const zipFilename =
+    stackIds.length === 1 && assetIds.length === 0
+      ? `stack-${stackIds[0]}-originals.zip`
+      : 'originals.zip';
+
+  return new Response(toResponseBody(zip), {
+    headers: {
+      'Content-Type': 'application/zip',
+      'Content-Disposition': getAttachmentDisposition(zipFilename),
+      'Content-Length': zip.length.toString(),
+      'Cache-Control': 'no-store',
+    },
   });
 });
 
-// DELETE /stacks/bulk/remove
-stacksRoute.delete('/bulk/remove', async (c) => {
-  const body: unknown = await c.req.json().catch(() => ({}));
-  const parse = BulkRemoveSchema.safeParse(body);
-  if (!parse.success) return c.json({ error: 'Invalid body', details: parse.error }, 400);
-  if (isStandaloneSqliteEnabled()) {
-    return c.json(new StandaloneStackRepository().bulkRemoveStacks(parse.data.stackIds));
-  }
-  const { stackService, sanitizedIds } = await withStackServiceForIds(c, parse.data.stackIds);
-  const res = await stackService.bulkRemoveStacks(sanitizedIds);
-  return c.json(res);
+stacksRoute.get('/paginated', async (c) => {
+  const parse = PaginatedQuerySchema.safeParse(getQueryObject(c));
+  if (!parse.success) return c.json({ error: 'Invalid query', details: parse.error }, 400);
+
+  const query = parse.data;
+  const stackListParams: StandaloneStackListParams = {
+    dataSetId: query.dataSetId,
+    collection: query.collection,
+    mediaType: query.mediaType,
+    tag: query.tag,
+    author: query.author,
+    fav: query.fav,
+    liked: query.liked,
+    hasNoTags: query.hasNoTags,
+    hasNoAuthor: query.hasNoAuthor,
+    search: query.search,
+    sort: query.sort,
+    order: query.order,
+    limit: query.limit,
+    offset: query.offset,
+  };
+
+  const auth = await ensureDatasetAuthorizedForCurrentStore(c, stackListParams.dataSetId);
+  if (auth) return auth;
+
+  const stackIds = getStandaloneColorStackIds({
+    dataSetId: stackListParams.dataSetId,
+    mediaType: stackListParams.mediaType,
+    hueCategories: query.hueCategories,
+    toneSaturation: query.toneSaturation,
+    toneLightness: query.toneLightness,
+    toneTolerance: query.toneTolerance,
+    similarityThreshold: query.similarityThreshold,
+    customColor: query.customColor,
+  });
+  const result = stackRepository.getPaginated({
+    ...stackListParams,
+    stackIds,
+  });
+  return c.json(result);
 });
 
-// DELETE /stacks/:id
+stacksRoute.get('/favorites/list', async (c) => {
+  const parse = FavoriteListQuerySchema.safeParse(getQueryObject(c));
+  if (!parse.success) return c.json({ error: 'Invalid query', details: parse.error }, 400);
+
+  const { dataSetId, limit, offset } = parse.data;
+  const auth = await ensureDatasetAuthorizedForCurrentStore(c, dataSetId);
+  if (auth) return auth;
+
+  return c.json(stackRepository.getFavoriteItems(dataSetId, limit, offset));
+});
+
+stacksRoute.get('/search/autotag', async (c) => {
+  const parsed = AutoTagSearchQuerySchema.safeParse(getQueryObject(c));
+  if (!parsed.success) {
+    return c.json({ error: 'Invalid query', details: parsed.error }, 400);
+  }
+
+  const {
+    dataSetId,
+    autoTag,
+    limit,
+    offset,
+    search,
+    mediaType,
+    author,
+    tag,
+    fav,
+    liked,
+    hasNoTags,
+    hasNoAuthor,
+  } = parsed.data;
+  const auth = await ensureDatasetAuthorizedForCurrentStore(c, dataSetId);
+  if (auth) return auth;
+  const tags = Array.isArray(autoTag) ? autoTag : [autoTag];
+  const stackIds = autoTagRepository.getMatchingStackIds(dataSetId, tags);
+  return c.json(
+    stackRepository.getPaginated({
+      dataSetId,
+      stackIds,
+      limit,
+      offset,
+      search,
+      mediaType,
+      author,
+      tag,
+      fav,
+      liked,
+      hasNoTags,
+      hasNoAuthor,
+      sort: 'id',
+      order: 'desc',
+    })
+  );
+});
+
+stacksRoute.post('/:id{[0-9]+}/like', async (c) => {
+  const id = Number.parseInt(c.req.param('id'), 10);
+  const result = stackRepository.likeStack(id);
+  if (!result) return c.json({ error: 'Stack not found' }, 404);
+  return c.json({ success: true, liked: result.liked });
+});
+
+stacksRoute.put('/:id{[0-9]+}/favorite', async (c) => {
+  const id = Number.parseInt(c.req.param('id'), 10);
+  const body = await c.req.json().catch(() => ({}));
+  const favorited =
+    typeof body === 'object' &&
+    body !== null &&
+    'favorited' in body &&
+    typeof body.favorited === 'boolean'
+      ? body.favorited
+      : false;
+  const ok = stackRepository.toggleStackFavorite(id, favorited);
+  if (!ok) return c.json({ error: 'Stack not found' }, 404);
+  return c.json({ success: true, favorited });
+});
+
+stacksRoute.post('/:id{[0-9]+}/refresh-thumbnail', async (c) => {
+  const id = Number.parseInt(c.req.param('id'), 10);
+  const stack = stackRepository.refreshStackThumbnail(id);
+  if (!stack) return c.json({ error: 'Stack not found' }, 404);
+  return c.json(stack);
+});
+
+stacksRoute.post('/:id{[0-9]+}/aggregate-tags', async (c) => {
+  const id = Number.parseInt(c.req.param('id'), 10);
+  try {
+    const result = autoTagRepository.aggregateStackTags(id, 0.4);
+    return c.json(result);
+  } catch (error) {
+    console.error('Error aggregating AutoTags:', error);
+    return c.json({ error: 'Failed to aggregate AutoTags' }, 500);
+  }
+});
+
+stacksRoute.post('/:id{[0-9]+}/refresh-autotags', async (c) => {
+  const id = Number.parseInt(c.req.param('id'), 10);
+  try {
+    const result = await autoTagRepository.refreshStackTags(id, {
+      threshold: 0.4,
+      forceRegenerate: true,
+    });
+    return c.json(result);
+  } catch (error) {
+    console.error('Error refreshing AutoTags:', error);
+    return c.json({ error: 'Failed to refresh AutoTags' }, 500);
+  }
+});
+
+stacksRoute.post('/:id{[0-9]+}/tags', async (c) => {
+  const id = Number.parseInt(c.req.param('id'), 10);
+  const body = await c.req.json().catch(() => ({}));
+  const tag =
+    typeof body === 'object' && body !== null && 'tag' in body && typeof body.tag === 'string'
+      ? body.tag
+      : '';
+  if (!tag) return c.json({ error: 'Tag is required' }, 400);
+  stackRepository.addTag(id, tag);
+  return c.json({ success: true });
+});
+
+stacksRoute.delete('/:id{[0-9]+}/tags/:tag', async (c) => {
+  const id = Number.parseInt(c.req.param('id'), 10);
+  const tag = c.req.param('tag');
+  stackRepository.removeTag(id, tag);
+  return c.json({ success: true });
+});
+
+stacksRoute.post('/:id{[0-9]+}/assets', async (c) => {
+  const stackId = Number.parseInt(c.req.param('id'), 10);
+  const formData = await c.req.formData();
+  const fileEntry = formData.get('file');
+  if (!isUploadedFile(fileEntry)) return c.json({ error: 'File is required' }, 400);
+  const file = fileEntry;
+
+  const stack = stackRepository.getById(stackId);
+  if (!stack) return c.json({ error: 'Stack not found' }, 404);
+  const auth = await ensureDatasetAuthorizedForCurrentStore(c, stack.dataSetId);
+  if (auth) return auth;
+
+  const storageRoot = process.env.FILES_STORAGE || path.resolve('./data');
+  const tmpDir = path.join(storageRoot, 'tmp');
+  if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
+  const tmpPath = path.join(tmpDir, `${Date.now()}-${file.name || 'upload'}`);
+  fs.writeFileSync(tmpPath, new Uint8Array(await file.arrayBuffer()));
+
+  try {
+    const asset = await stackRepository.addAssetWithFile(stackId, {
+      path: tmpPath,
+      originalname: file.name,
+      mimetype: file.type,
+      size: file.size,
+    });
+    scheduleStandaloneAutoTagPrediction(asset);
+    return c.json(asset, 201);
+  } catch (error) {
+    if (error instanceof DuplicateAssetError) {
+      return c.json({ error: error.message, code: error.code, details: error.details }, 409);
+    }
+    throw error;
+  }
+});
+
+stacksRoute.get('/:id{[0-9]+}/collections', async (c) => {
+  const id = Number.parseInt(c.req.param('id'), 10);
+  return c.json({ collectionIds: stackRepository.getCollectionIdsByStackId(id) });
+});
+
+stacksRoute.post('/bulk/tags', async (c) => {
+  const parse = BulkTagsSchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!parse.success) return c.json({ error: 'Invalid body', details: parse.error }, 400);
+  const updated = stackRepository.bulkAddTags(parse.data.stackIds, parse.data.tags);
+  return c.json({ success: true, updated });
+});
+
+stacksRoute.put('/bulk/author', async (c) => {
+  const parse = BulkAuthorSchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!parse.success) return c.json({ error: 'Invalid body', details: parse.error }, 400);
+  const updated = stackRepository.bulkSetAuthor(parse.data.stackIds, parse.data.author);
+  return c.json({ success: true, updated });
+});
+
+stacksRoute.put('/bulk/media-type', async (c) => {
+  const parse = BulkMediaTypeSchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!parse.success) return c.json({ error: 'Invalid body', details: parse.error }, 400);
+  const updated = stackRepository.bulkSetMediaType(parse.data.stackIds, parse.data.mediaType);
+  return c.json({ success: true, updated });
+});
+
+stacksRoute.put('/bulk/favorite', async (c) => {
+  const parse = BulkFavoriteSchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!parse.success) return c.json({ error: 'Invalid body', details: parse.error }, 400);
+  const updated = stackRepository.bulkSetFavorite(parse.data.stackIds, parse.data.favorited);
+  return c.json({ success: true, updated });
+});
+
+stacksRoute.post('/bulk/refresh-thumbnails', async (c) => {
+  const parse = BulkRefreshThumbsSchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!parse.success) return c.json({ error: 'Invalid body', details: parse.error }, 400);
+  const updated = stackRepository.bulkRefreshThumbnails(parse.data.stackIds);
+  return c.json({ success: true, updated });
+});
+
+stacksRoute.post('/merge', async (c) => {
+  const parse = MergeStacksSchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!parse.success) return c.json({ error: 'Invalid body', details: parse.error }, 400);
+  const stack = stackRepository.mergeStacks(parse.data.targetId, parse.data.sourceIds);
+  if (!stack) return c.json({ error: 'Stack not found' }, 404);
+  return c.json(stack);
+});
+
+stacksRoute.delete('/bulk/remove', async (c) => {
+  const parse = BulkRemoveSchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!parse.success) return c.json({ error: 'Invalid body', details: parse.error }, 400);
+  const deleted = stackRepository.bulkRemoveStacks(parse.data.stackIds);
+  return c.json({ success: true, deleted });
+});
+
 stacksRoute.delete('/:id{[0-9]+}', async (c) => {
   const id = Number.parseInt(c.req.param('id'), 10);
-  if (isStandaloneSqliteEnabled()) {
-    const ok = new StandaloneStackRepository().deleteStack(id);
-    if (!ok) return c.json({ error: 'Stack not found' }, 404);
-    return c.json({ message: 'Stack deleted successfully' });
-  }
-  const prisma = usePrisma(c);
-  const ds = await resolveDatasetId(prisma, id);
-  const colorSearch = createColorSearchService({ prisma, dataSetId: ds });
-  const stackService = createStackService({ prisma, colorSearch, dataSetId: ds });
-  await stackService.delete(id);
-  return c.json({ message: 'Stack deleted successfully' });
+  const ok = stackRepository.deleteStack(id);
+  if (!ok) return c.json({ error: 'Stack not found' }, 404);
+  return c.json({ success: true });
 });
 
-// PUT /stacks/:id/author - update author name
 stacksRoute.put('/:id{[0-9]+}/author', async (c) => {
   const id = Number.parseInt(c.req.param('id'), 10);
-  if (isStandaloneSqliteEnabled()) {
-    const body = (await c.req.json().catch(() => null)) as Partial<{
-      author: string;
-      name: string;
-    }> | null;
-    const name = String(body?.author ?? body?.name ?? '').trim();
-    if (!name) return c.json({ error: 'Author name is required' }, 400);
-    const result = new StandaloneStackRepository().updateAuthor(id, name);
-    if (!result) return c.json({ error: 'Stack not found' }, 404);
-    return c.json(result);
-  }
-  const prisma = usePrisma(c);
-  try {
-    const body = (await c.req.json().catch(() => null)) as Partial<{
-      author: string;
-      name: string;
-    }> | null;
-    const name = String(body?.author ?? body?.name ?? '').trim();
-    if (!name) return c.json({ error: 'Author name is required' }, 400);
-    const ds = await resolveDatasetId(prisma, id);
-    const stacksService = createStacksService({ prisma });
-    const res = await stacksService.updateAuthor(id, ds, name);
-    return c.json(res);
-  } catch (error) {
-    console.error('Error updating author:', error);
-    return c.json({ error: 'Failed to update author' }, 500);
-  }
+  const body = await c.req.json().catch(() => ({}));
+  const author =
+    typeof body === 'object' && body !== null && 'author' in body && typeof body.author === 'string'
+      ? body.author
+      : '';
+  stackRepository.updateAuthor(id, author);
+  return c.json({ success: true });
 });
 
-// GET /stacks/:id
 stacksRoute.get('/:id{[0-9]+}', async (c) => {
   const id = Number.parseInt(c.req.param('id'), 10);
-  const dataSetId = Number.parseInt(c.req.query('dataSetId') || '', 10);
-  if (isStandaloneSqliteEnabled()) {
-    const repository = new StandaloneStackRepository();
-    const stack = repository.getById(id, Number.isNaN(dataSetId) ? undefined : dataSetId);
-    if (!stack) return c.json({ error: 'Stack not found' }, 404);
-    const auth = await ensureDatasetAuthorizedForCurrentStore(c, Number(stack.dataSetId));
-    if (auth) return auth;
-    return c.json(stack);
-  }
-  const prisma = usePrisma(c);
-  const effectiveDs = Number.isNaN(dataSetId) ? await resolveDatasetId(prisma, id) : dataSetId;
-  const auth = await (await import('../utils/dataset-protection')).ensureDatasetAuthorized(
-    c,
-    effectiveDs
-  );
-  if (auth) return auth;
-  const colorSearch = createColorSearchService({ prisma, dataSetId: effectiveDs });
-  const stackService = createStackService({ prisma, colorSearch, dataSetId: effectiveDs });
-  const stack = await stackService.getById(id, { assets: true, tags: true, author: true });
+  const dataSetIdRaw = c.req.query('dataSetId') || c.req.query('datasetId');
+  const dataSetId = dataSetIdRaw ? Number.parseInt(dataSetIdRaw, 10) : undefined;
+  const stack = stackRepository.getById(id, dataSetId);
   if (!stack) return c.json({ error: 'Stack not found' }, 404);
-  const assets = withPublicAssetArray(stack.assets ?? [], effectiveDs);
-  const assetRows =
-    assets.length > 0
-      ? await prisma.asset.findMany({
-          where: { stackId: id },
-          orderBy: { orderInStack: 'asc' },
-          select: { id: true },
-        })
-      : [];
-  let assetFavoriteSet = new Set<number>();
-  if (assetRows.length > 0) {
-    const userId = await ensureSuperUser(prisma);
-    const favorites = await prisma.assetFavorite.findMany({
-      where: {
-        userId,
-        assetId: {
-          in: assetRows.map((asset) => asset.id),
-        },
-      },
-      select: { assetId: true },
-    });
-    assetFavoriteSet = new Set(favorites.map((favorite) => favorite.assetId));
+  if (dataSetId) {
+    const auth = await ensureDatasetAuthorizedForCurrentStore(c, dataSetId);
+    if (auth) return auth;
   }
-  const sanitized = {
-    ...stack,
-    assets: assets.map((asset, index) => ({
-      ...asset,
-      id: assetRows[index]?.id,
-      favorited: assetFavoriteSet.has(assetRows[index]?.id ?? -1),
-      isFavorite: assetFavoriteSet.has(assetRows[index]?.id ?? -1),
-    })),
-    thumbnail: toPublicAssetPath(stack.thumbnail, effectiveDs),
-  };
-  return c.json(sanitized);
+  return c.json(stack);
 });
 
-// POST /stacks - create stack with file upload
 stacksRoute.post('/', async (c) => {
   try {
     const formData = await c.req.formData();
@@ -1672,105 +818,51 @@ stacksRoute.post('/', async (c) => {
     if (!isUploadedFile(fileEntry)) return c.json({ error: 'File is required' }, 400);
     const file = fileEntry;
 
-    // dataset id (accept multiple keys for robustness)
-    const dsRaw = (formData.get('dataSetId') ||
-      formData.get('datasetId') ||
-      formData.get('dataSetID')) as string | null;
-    const dataSetId = dsRaw ? Number.parseInt(dsRaw, 10) : Number.NaN;
-    if (Number.isNaN(dataSetId) || dataSetId <= 0)
+    const dataSetIdRaw =
+      formData.get('dataSetId') || formData.get('datasetId') || formData.get('dataSetID');
+    const dataSetId = typeof dataSetIdRaw === 'string' ? Number.parseInt(dataSetIdRaw, 10) : NaN;
+    if (Number.isNaN(dataSetId) || dataSetId <= 0) {
       return c.json({ error: 'dataSetId is required' }, 400);
+    }
 
-    const name = (formData.get('name') as string | null) || file.name || 'untitled';
-    const explicitMediaType = (formData.get('mediaType') as string | null) || undefined;
-    const author = (formData.get('author') as string | null) || undefined;
-    const tags = formData.getAll('tags[]').map((t) => String(t));
-    const collectionRaw = formData.get('collectionId') as string | null;
-    const collectionId = collectionRaw ? Number.parseInt(collectionRaw, 10) : undefined;
+    const auth = await ensureDatasetAuthorizedForCurrentStore(c, dataSetId);
+    if (auth) return auth;
+
+    const collectionRaw = formData.get('collectionId');
+    const collectionId =
+      typeof collectionRaw === 'string' ? Number.parseInt(collectionRaw, 10) : undefined;
     if (collectionRaw && (!collectionId || collectionId <= 0)) {
       return c.json({ error: 'collectionId must be a positive integer' }, 400);
     }
-
-    const finalMediaType = (() => {
-      if (explicitMediaType && explicitMediaType.length > 0) {
-        return explicitMediaType;
-      }
-      const mimeType = (file.type || '').toLowerCase();
-      if (mimeType.startsWith('video/')) return 'video';
-      if (mimeType === 'application/pdf') return 'comic';
-      return 'image';
-    })();
-
-    if (isStandaloneSqliteEnabled()) {
-      const auth = await ensureDatasetAuthorizedForCurrentStore(c, dataSetId);
-      if (auth) return auth;
-
-      const libraryRepository = new StandaloneLibraryRepository();
-      if (collectionId) {
-        const collection = libraryRepository.getCollection(collectionId);
-        if (!collection) return c.json({ error: 'Collection not found' }, 404);
-        if (collection.dataSetId !== dataSetId) {
-          return c.json({ error: 'Collection does not belong to provided dataset' }, 400);
-        }
-      }
-
-      const buf = new Uint8Array(await file.arrayBuffer());
-      const storageRoot = process.env.FILES_STORAGE || path.resolve('./data');
-      const tmpDir = path.join(storageRoot, 'tmp');
-      if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
-      const tmpPath = path.join(tmpDir, `${Date.now()}-${file.name || 'upload'}`);
-      fs.writeFileSync(tmpPath, buf);
-
-      const stack = await new StandaloneStackRepository().createStackWithFile({
-        dataSetId,
-        name,
-        mediaType: finalMediaType as 'image' | 'comic' | 'video',
-        tags: tags.length ? tags : undefined,
-        author,
-        file: {
-          path: tmpPath,
-          originalname: file.name,
-          mimetype: file.type,
-          size: file.size,
-        },
-      });
-      if (!stack) return c.json({ error: 'Failed to create stack' }, 500);
-      if (collectionId) {
-        libraryRepository.addStackToCollection(collectionId, Number(stack.id));
-      }
-      scheduleStandaloneAutoTagPrediction(stack.assets?.[0] ?? null);
-      return c.json(stack, 201);
-    }
-
-    // Prepare temp file
-    const buf = new Uint8Array(await file.arrayBuffer());
-    const storageRoot = process.env.FILES_STORAGE || path.resolve('./data');
-    const tmpDir = path.join(storageRoot, 'tmp');
-    if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
-    const tmpPath = path.join(tmpDir, `${Date.now()}-${file.name || 'upload'}`);
-    fs.writeFileSync(tmpPath, buf);
-
-    // Compose services
-    const prisma = usePrisma(c);
     if (collectionId) {
-      const collection = await prisma.collection.findUnique({
-        where: { id: collectionId },
-        select: { dataSetId: true },
-      });
+      const collection = libraryRepository.getCollection(collectionId);
       if (!collection) return c.json({ error: 'Collection not found' }, 404);
       if (collection.dataSetId !== dataSetId) {
         return c.json({ error: 'Collection does not belong to provided dataset' }, 400);
       }
     }
 
-    const colorSearch = createColorSearchService({ prisma, dataSetId });
-    const stackService = createStackService({ prisma, colorSearch, dataSetId });
+    const nameValue = formData.get('name');
+    const mediaTypeValue = formData.get('mediaType');
+    const authorValue = formData.get('author');
+    const tags = formData.getAll('tags[]').map((tag) => String(tag));
+    const mediaType = inferMediaTypeFromMime(
+      typeof mediaTypeValue === 'string' ? mediaTypeValue : file.type,
+      file.name
+    );
 
-    // Create stack with file
-    const stack = await stackService.createWithFile({
-      name,
-      mediaType: finalMediaType,
+    const storageRoot = process.env.FILES_STORAGE || path.resolve('./data');
+    const tmpDir = path.join(storageRoot, 'tmp');
+    if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
+    const tmpPath = path.join(tmpDir, `${Date.now()}-${file.name || 'upload'}`);
+    fs.writeFileSync(tmpPath, new Uint8Array(await file.arrayBuffer()));
+
+    const stack = await stackRepository.createStackWithFile({
+      dataSetId,
+      name: typeof nameValue === 'string' && nameValue.length > 0 ? nameValue : file.name,
+      mediaType,
       tags: tags.length ? tags : undefined,
-      author,
+      author: typeof authorValue === 'string' ? authorValue : undefined,
       file: {
         path: tmpPath,
         originalname: file.name,
@@ -1778,176 +870,41 @@ stacksRoute.post('/', async (c) => {
         size: file.size,
       },
     });
-
+    if (!stack) return c.json({ error: 'Failed to create stack' }, 500);
     if (collectionId) {
-      try {
-        await new CollectionService(prisma).addStackToCollection(collectionId, Number(stack.id));
-      } catch (collectionError) {
-        console.warn('Failed to add uploaded stack to collection', collectionError);
-      }
+      libraryRepository.addStackToCollection(collectionId, Number(stack.id));
     }
-
+    scheduleStandaloneAutoTagPrediction(stack.assets?.[0] ?? null);
     return c.json(stack, 201);
-  } catch (error: unknown) {
+  } catch (error) {
     if (error instanceof DuplicateAssetError) {
-      return c.json(
-        {
-          error: '重複画像のため作成できません',
-          code: error.code,
-          details: error.details,
-        },
-        409
-      );
+      return c.json({ error: error.message, code: error.code, details: error.details }, 409);
     }
     const pdfErrorMessage = getPdfProcessingErrorMessage(error);
-    if (pdfErrorMessage) {
-      return c.json({ error: pdfErrorMessage }, 400);
-    }
+    if (pdfErrorMessage) return c.json({ error: pdfErrorMessage }, 400);
     console.error('Error creating stack with file:', error);
     return c.json({ error: 'Failed to create stack' }, 500);
   }
 });
 
 stacksRoute.post('/import-from-urls', async (c) => {
-  const body = await c.req.json().catch(() => null);
-  const parse = ImportFromUrlsSchema.safeParse(body);
+  const parse = ImportFromUrlsSchema.safeParse(await c.req.json().catch(() => null));
   if (!parse.success) {
     return c.json({ error: 'Invalid body', details: parse.error }, 400);
   }
 
   const { urls, dataSetId, stackId, mediaType, collectionId, author, tags } = parse.data;
-
   if (!stackId && !dataSetId) {
     return c.json({ error: 'stackId or dataSetId is required' }, 400);
   }
 
   try {
-    if (isStandaloneSqliteEnabled()) {
-      const stackRepository = new StandaloneStackRepository();
-      const libraryRepository = new StandaloneLibraryRepository();
-      let effectiveDatasetId = dataSetId ?? null;
-
-      if (stackId) {
-        const stack = stackRepository.getById(stackId);
-        if (!stack) return c.json({ error: 'Stack not found' }, 404);
-        effectiveDatasetId = stack.dataSetId;
-        if (dataSetId && effectiveDatasetId !== dataSetId) {
-          return c.json({ error: 'Stack does not belong to provided dataset' }, 400);
-        }
-      }
-
-      if (!effectiveDatasetId) {
-        return c.json({ error: 'dataSetId is required' }, 400);
-      }
-
-      const auth = await ensureDatasetAuthorizedForCurrentStore(c, effectiveDatasetId);
-      if (auth) {
-        return auth;
-      }
-
-      if (collectionId) {
-        const collection = libraryRepository.getCollection(collectionId);
-        if (!collection) return c.json({ error: 'Collection not found' }, 404);
-        if (collection.dataSetId !== effectiveDatasetId) {
-          return c.json({ error: 'Collection does not belong to provided dataset' }, 400);
-        }
-      }
-
-      const storageRoot = process.env.FILES_STORAGE || path.resolve('./data');
-      const tmpDir = path.join(storageRoot, 'tmp');
-      if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
-
-      const results: Array<{
-        url: string;
-        status: 'created' | 'added' | 'skipped' | 'error';
-        stackId?: number;
-        assetId?: number;
-        message?: string;
-      }> = [];
-
-      for (const url of urls) {
-        let downloaded: {
-          path: string;
-          originalname: string;
-          mimetype: string;
-          size: number;
-        } | null = null;
-        try {
-          downloaded = await importAssetFromUrl(url, tmpDir);
-
-          if (stackId) {
-            const asset = await stackRepository.addAssetWithFile(stackId, downloaded);
-            results.push({
-              url,
-              status: 'added',
-              stackId,
-              assetId: asset ? Number(asset.id) : undefined,
-            });
-            scheduleStandaloneAutoTagPrediction(asset);
-            continue;
-          }
-
-          const createdStack = await stackRepository.createStackWithFile({
-            dataSetId: effectiveDatasetId,
-            name: downloaded.originalname,
-            mediaType:
-              mediaType ?? inferMediaTypeFromMime(downloaded.mimetype, downloaded.originalname),
-            tags,
-            author,
-            file: downloaded,
-          });
-          const createdStackId = Number(createdStack?.id ?? 0);
-          const firstAssetId = Number(createdStack?.assets?.[0]?.id ?? 0);
-
-          if (collectionId && createdStackId) {
-            libraryRepository.addStackToCollection(collectionId, createdStackId);
-          }
-
-          results.push({
-            url,
-            status: 'created',
-            stackId: createdStackId || undefined,
-            assetId: firstAssetId || undefined,
-          });
-          scheduleStandaloneAutoTagPrediction(createdStack?.assets?.[0] ?? null);
-        } catch (error) {
-          if (downloaded) {
-            try {
-              fs.rmSync(downloaded.path, { force: true });
-            } catch (cleanupError) {
-              console.warn('Failed to clean up temp file after URL import error', cleanupError);
-            }
-          }
-
-          let message = 'URLの取得に失敗しました';
-          if (error instanceof DuplicateAssetError) {
-            message = error.message;
-            results.push({
-              url,
-              status: 'skipped',
-              stackId: error.details?.stackId,
-              assetId: error.details?.assetId,
-              message,
-            });
-            continue;
-          }
-
-          if (error instanceof Error) {
-            message = error.message;
-          }
-
-          results.push({ url, status: 'error', message });
-        }
-      }
-
-      return c.json({ results });
-    }
-
-    const prisma = usePrisma(c);
     let effectiveDatasetId = dataSetId ?? null;
 
     if (stackId) {
-      effectiveDatasetId = await resolveDatasetId(prisma, stackId);
+      const stack = stackRepository.getById(stackId);
+      if (!stack) return c.json({ error: 'Stack not found' }, 404);
+      effectiveDatasetId = stack.dataSetId;
       if (dataSetId && effectiveDatasetId !== dataSetId) {
         return c.json({ error: 'Stack does not belong to provided dataset' }, 400);
       }
@@ -1957,20 +914,16 @@ stacksRoute.post('/import-from-urls', async (c) => {
       return c.json({ error: 'dataSetId is required' }, 400);
     }
 
-    const { ensureDatasetAuthorized } = await import('../utils/dataset-protection');
-    const auth = await ensureDatasetAuthorized(c, effectiveDatasetId);
-    if (auth) {
-      return auth;
-    }
+    const auth = await ensureDatasetAuthorizedForCurrentStore(c, effectiveDatasetId);
+    if (auth) return auth;
 
-    const colorSearch = createColorSearchService({ prisma, dataSetId: effectiveDatasetId });
-    const stackService = createStackService({ prisma, colorSearch, dataSetId: effectiveDatasetId });
-    const assetService = createAssetService({
-      prisma,
-      dataStorage: useDataStorage(c),
-      dataSetId: effectiveDatasetId,
-    });
-    const collectionService = collectionId ? new CollectionService(prisma) : null;
+    if (collectionId) {
+      const collection = libraryRepository.getCollection(collectionId);
+      if (!collection) return c.json({ error: 'Collection not found' }, 404);
+      if (collection.dataSetId !== effectiveDatasetId) {
+        return c.json({ error: 'Collection does not belong to provided dataset' }, 400);
+      }
+    }
 
     const storageRoot = process.env.FILES_STORAGE || path.resolve('./data');
     const tmpDir = path.join(storageRoot, 'tmp');
@@ -1985,27 +938,24 @@ stacksRoute.post('/import-from-urls', async (c) => {
     }> = [];
 
     for (const url of urls) {
-      let downloaded: {
-        path: string;
-        originalname: string;
-        mimetype: string;
-        size: number;
-      } | null = null;
+      let downloaded: ImportedFile | null = null;
       try {
         downloaded = await importAssetFromUrl(url, tmpDir);
 
         if (stackId) {
-          const asset = await assetService.createWithFile(stackId, downloaded);
+          const asset = await stackRepository.addAssetWithFile(stackId, downloaded);
           results.push({
             url,
             status: 'added',
             stackId,
             assetId: asset ? Number(asset.id) : undefined,
           });
+          scheduleStandaloneAutoTagPrediction(asset);
           continue;
         }
 
-        const createdStack = await stackService.createWithFile({
+        const createdStack = await stackRepository.createStackWithFile({
+          dataSetId: effectiveDatasetId,
           name: downloaded.originalname,
           mediaType:
             mediaType ?? inferMediaTypeFromMime(downloaded.mimetype, downloaded.originalname),
@@ -2013,17 +963,11 @@ stacksRoute.post('/import-from-urls', async (c) => {
           author,
           file: downloaded,
         });
+        const createdStackId = Number(createdStack?.id ?? 0);
+        const firstAssetId = Number(createdStack?.assets?.[0]?.id ?? 0);
 
-        const createdStackRecord = createdStack as SearchStack | null;
-        const createdStackId = Number(createdStackRecord?.id ?? 0);
-        const firstAssetId = Number(createdStackRecord?.assets?.[0]?.id ?? 0);
-
-        if (collectionService && collectionId && createdStackId) {
-          try {
-            await collectionService.addStackToCollection(collectionId, createdStackId);
-          } catch (collectionError) {
-            console.warn('Failed to add imported stack to collection', collectionError);
-          }
+        if (collectionId && createdStackId) {
+          libraryRepository.addStackToCollection(collectionId, createdStackId);
         }
 
         results.push({
@@ -2032,6 +976,7 @@ stacksRoute.post('/import-from-urls', async (c) => {
           stackId: createdStackId || undefined,
           assetId: firstAssetId || undefined,
         });
+        scheduleStandaloneAutoTagPrediction(createdStack?.assets?.[0] ?? null);
       } catch (error) {
         if (downloaded) {
           try {
@@ -2064,7 +1009,7 @@ stacksRoute.post('/import-from-urls', async (c) => {
 
     return c.json({ results });
   } catch (error) {
-    console.error('Error importing assets from URLs:', error);
-    return c.json({ error: 'Failed to import from URLs' }, 500);
+    console.error('Error importing URLs:', error);
+    return c.json({ error: 'Failed to import URLs' }, 500);
   }
 });

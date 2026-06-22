@@ -1,6 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { toPublicAssetPath } from '../../utils/assetPath';
-import { getStandaloneSqlite } from './sqlite';
+import { getStandaloneSqlite, type SqliteBindValue } from './sqlite';
 import { StandaloneStackRepository } from './stack-repository';
 
 export interface PaginationOptions {
@@ -112,7 +112,10 @@ export class StandaloneActivityRepository {
   }
 
   getLikesByYear({ year, datasetId, search }: YearlyLikesOptions) {
-    const params: unknown[] = [`${year}-01-01T00:00:00.000Z`, `${year + 1}-01-01T00:00:00.000Z`];
+    const params: SqliteBindValue[] = [
+      `${year}-01-01T00:00:00.000Z`,
+      `${year + 1}-01-01T00:00:00.000Z`,
+    ];
     const where = ['la.created_at >= ?', 'la.created_at < ?'];
 
     if (datasetId) {
@@ -208,7 +211,7 @@ export class StandaloneActivityRepository {
     offset,
   }: {
     whereSql: string;
-    params: unknown[];
+    params: SqliteBindValue[];
     limit?: number;
     offset?: number;
   }) {

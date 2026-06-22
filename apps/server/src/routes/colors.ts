@@ -1,15 +1,38 @@
 import { zValidator } from '@hono/zod-validator';
-import type { Prisma } from '@prisma/client';
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { getPrisma } from '../lib/Repository.js';
 import { StandaloneColorRepository } from '../repositories/sqlite/color-repository';
-import { isStandaloneSqliteEnabled } from '../repositories/sqlite/sqlite';
-import { ColorSearchService } from '../shared/services/ColorSearchService-fix';
 import { useResponse } from '../utils/useResponse.js';
 
 const app = new Hono();
-const colorSearchService = new ColorSearchService(getPrisma());
+const colorRepository = new StandaloneColorRepository();
+
+type RgbColor = {
+  r: number;
+  g: number;
+  b: number;
+};
+
+type ColorSearchRequest = z.infer<typeof ColorSearchSchema> & {
+  color: RgbColor;
+  threshold: number;
+  limit: number;
+  offset: number;
+};
+
+type MultiColorSearchRequest = z.infer<typeof MultiColorSearchSchema> & {
+  colors: RgbColor[];
+  threshold: number;
+  limit: number;
+  offset: number;
+};
+
+type ColorFilterRequest = z.infer<typeof ColorFilterSchema> & {
+  saturationRange?: { min: number; max: number };
+  lightnessRange?: { min: number; max: number };
+  limit: number;
+  offset: number;
+};
 
 // 色検索のスキーマ
 const ColorSearchSchema = z.object({
@@ -66,12 +89,8 @@ const ColorFilterSchema = z.object({
 // 単色で検索
 app.post('/search', zValidator('json', ColorSearchSchema), async (c) => {
   try {
-    const params = c.req.valid('json');
-    if (isStandaloneSqliteEnabled()) {
-      const result = new StandaloneColorRepository().searchByColor(params);
-      return useResponse(c, result);
-    }
-    const result = await colorSearchService.searchByColor(params);
+    const params = c.req.valid('json') as ColorSearchRequest;
+    const result = colorRepository.searchByColor(params);
     return useResponse(c, result);
   } catch (error) {
     console.error('Color search error:', error);
@@ -82,15 +101,11 @@ app.post('/search', zValidator('json', ColorSearchSchema), async (c) => {
 // 複数色で検索（OR条件）
 app.post('/search-multi', zValidator('json', MultiColorSearchSchema), async (c) => {
   try {
-    const { colors, ...options } = c.req.valid('json');
-    if (isStandaloneSqliteEnabled()) {
-      const result = new StandaloneColorRepository().searchByMultipleColors({
-        colors,
-        ...options,
-      });
-      return useResponse(c, result);
-    }
-    const result = await colorSearchService.searchByMultipleColors(colors, options);
+    const { colors, ...options } = c.req.valid('json') as MultiColorSearchRequest;
+    const result = colorRepository.searchByMultipleColors({
+      colors,
+      ...options,
+    });
     return useResponse(c, result);
   } catch (error) {
     console.error('Multi-color search error:', error);
@@ -101,12 +116,8 @@ app.post('/search-multi', zValidator('json', MultiColorSearchSchema), async (c) 
 // 色域フィルタで検索
 app.post('/filter', zValidator('json', ColorFilterSchema), async (c) => {
   try {
-    const params = c.req.valid('json');
-    if (isStandaloneSqliteEnabled()) {
-      const result = new StandaloneColorRepository().searchByColorFilter(params);
-      return useResponse(c, result);
-    }
-    const result = await colorSearchService.searchByColorFilter(params);
+    const params = c.req.valid('json') as ColorFilterRequest;
+    const result = colorRepository.searchByColorFilter(params);
     return useResponse(c, result);
   } catch (error) {
     console.error('Color filter search error:', error);
@@ -121,25 +132,7 @@ app.post(
   async (c) => {
     try {
       const { stackId } = c.req.valid('param');
-      if (isStandaloneSqliteEnabled()) {
-        const colors = new StandaloneColorRepository().updateStackColors(stackId);
-        if (!colors) {
-          return useResponse(c, {
-            success: false,
-            colors: null,
-            reason: 'STACK_ASSET_COLORS_MISSING',
-            message: 'スタックに画像アセットが見つからないか、色情報が未生成です',
-          });
-        }
-        return useResponse(c, {
-          success: true,
-          colors,
-          message: `スタック ${stackId} の色情報を更新しました`,
-        });
-      }
-      const colors = await colorSearchService.updateStackColors(stackId, {
-        forceRegenerate: true,
-      });
+      const colors = colorRepository.updateStackColors(stackId);
 
       if (!colors) {
         return useResponse(c, {
@@ -169,44 +162,8 @@ app.post(
   async (c) => {
     try {
       const { datasetId } = c.req.valid('param');
-      if (isStandaloneSqliteEnabled()) {
-        const totalStacks = new StandaloneColorRepository().getDatasetUpdateCandidateCount(
-          datasetId
-        );
-        if (totalStacks === 0) {
-          return useResponse(
-            c,
-            {
-              success: false,
-              message: 'データセットに画像・動画スタックが見つかりません',
-            },
-            404
-          );
-        }
-        return useResponse(c, {
-          success: true,
-          message: `データセット ${datasetId} の ${totalStacks} 個のスタックは既存色情報を利用できます`,
-          totalStacks,
-        });
-      }
-      const prisma = getPrisma();
-
-      // データセット内の画像や動画を含むスタックを取得
-      const stacks = await prisma.stack.findMany({
-        where: {
-          dataSetId: datasetId,
-          assets: {
-            some: {
-              fileType: {
-                in: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'mp4', 'mov', 'avi', 'mkv', 'webm'],
-              },
-            },
-          },
-        },
-        select: { id: true },
-      });
-
-      if (stacks.length === 0) {
+      const totalStacks = colorRepository.getDatasetUpdateCandidateCount(datasetId);
+      if (totalStacks === 0) {
         return useResponse(
           c,
           {
@@ -216,36 +173,10 @@ app.post(
           404
         );
       }
-
-      console.log(`Starting bulk color update for dataset ${datasetId}: ${stacks.length} stacks`);
-
-      // 非同期で処理を開始（レスポンスは即座に返す）
-      setImmediate(async () => {
-        let processedCount = 0;
-        let errorCount = 0;
-
-        for (const stack of stacks) {
-          try {
-            await colorSearchService.updateStackColors(stack.id, {
-              forceRegenerate: true,
-            });
-            processedCount++;
-            console.log(`Progress: ${processedCount}/${stacks.length} stacks processed`);
-          } catch (error) {
-            errorCount++;
-            console.error(`Failed to update colors for stack ${stack.id}:`, error);
-          }
-        }
-
-        console.log(
-          `Bulk color update completed for dataset ${datasetId}: ${processedCount} successful, ${errorCount} errors`
-        );
-      });
-
       return useResponse(c, {
         success: true,
-        message: `データセット ${datasetId} の ${stacks.length} 個のスタックの色情報更新を開始しました`,
-        totalStacks: stacks.length,
+        message: `データセット ${datasetId} の ${totalStacks} 個のスタックは既存色情報を利用できます`,
+        totalStacks,
       });
     } catch (error) {
       console.error('Bulk color update error:', error);
@@ -261,56 +192,8 @@ app.get(
   async (c) => {
     try {
       const { dataSetId } = c.req.valid('query');
-      if (isStandaloneSqliteEnabled()) {
-        const stats = new StandaloneColorRepository().getStats(dataSetId);
-        return useResponse(c, stats);
-      }
-      const prisma = getPrisma();
-
-      console.log(`Getting color stats for dataSetId: ${dataSetId}`);
-
-      // 段階的にクエリを追加してテスト
-      const where: Prisma.StackWhereInput = {};
-      if (dataSetId) {
-        where.dataSetId = dataSetId;
-      }
-
-      // 基本的なカウント
-      const totalStacks = await prisma.stack.count({ where });
-
-      // 生のSQLクエリで色情報のカウントをテスト
-      const statsRows = dataSetId
-        ? await prisma.$queryRaw<Array<{ with_colors: bigint; without_colors: bigint }>>`
-          SELECT 
-            COUNT(CASE WHEN "dominantColors" IS NOT NULL THEN 1 END) as with_colors,
-            COUNT(CASE WHEN "dominantColors" IS NULL THEN 1 END) as without_colors
-          FROM "Stack" 
-          WHERE "dataSetId" = ${dataSetId}
-        `
-        : await prisma.$queryRaw<Array<{ with_colors: bigint; without_colors: bigint }>>`
-          SELECT 
-            COUNT(CASE WHEN "dominantColors" IS NOT NULL THEN 1 END) as with_colors,
-            COUNT(CASE WHEN "dominantColors" IS NULL THEN 1 END) as without_colors
-          FROM "Stack"
-        `;
-      const stats = statsRows[0] ?? { with_colors: 0n, without_colors: 0n };
-      const totalWithColors = Number(stats.with_colors);
-      const totalWithoutColors = Number(stats.without_colors);
-      const colorCoverage = totalStacks > 0 ? (totalWithColors / totalStacks) * 100 : 0;
-
-      console.log(
-        `Total stacks: ${totalStacks}, With colors: ${totalWithColors}, Coverage: ${colorCoverage.toFixed(
-          1
-        )}%`
-      );
-
-      return useResponse(c, {
-        totalStacks,
-        totalWithColors,
-        totalWithoutColors,
-        totalAssets: 0,
-        colorCoverage,
-      });
+      const stats = colorRepository.getStats(dataSetId);
+      return useResponse(c, stats);
     } catch (error) {
       console.error('Color stats error:', error);
       return useResponse(c, { error: '統計情報の取得に失敗しました' }, 500);

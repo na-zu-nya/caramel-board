@@ -1,6 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { ColorExtractor, type DominantColor } from '../../utils/colorExtractor';
-import { getStandaloneSqlite } from './sqlite';
+import { getStandaloneSqlite, type SqliteBindValue } from './sqlite';
 import { StandaloneStackRepository } from './stack-repository';
 
 interface CountRow {
@@ -294,7 +294,7 @@ export class StandaloneColorRepository {
   }
 
   getStats(dataSetId?: number) {
-    const params: unknown[] = [];
+    const params: SqliteBindValue[] = [];
     const where = dataSetId ? 'WHERE dataset_id = ?' : '';
     if (dataSetId) params.push(dataSetId);
 
@@ -342,7 +342,7 @@ export class StandaloneColorRepository {
 
   private getCandidateRows(options: { dataSetId?: number; mediaType?: string }) {
     const where: string[] = ['s.dominant_colors_json IS NOT NULL', "s.dominant_colors_json <> ''"];
-    const params: unknown[] = [];
+    const params: SqliteBindValue[] = [];
     if (options.dataSetId) {
       where.push('s.dataset_id = ?');
       params.push(options.dataSetId);

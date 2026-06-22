@@ -10,10 +10,6 @@ export interface AppSettings {
   basicAuthEnabled: boolean;
   basicAuthUsername: string;
   basicAuthPassword: string;
-  dockerDatabaseUrl: string;
-  dockerStorageRoot: string;
-  dockerDatasetId: string;
-  dockerVerifyFiles: boolean;
   autoTagEnabled: boolean;
   autoTagPort: number;
   autoTagRepoDir: string;
@@ -30,35 +26,6 @@ export interface SidecarStatus {
   url: string;
   pid: number | null;
   startedAt: number | null;
-}
-
-export interface DockerMigrationProgress {
-  running: boolean;
-  completed: boolean;
-  phase: string;
-  message: string;
-  percent: number;
-  lastLog: string;
-  exportDir: string | null;
-  dbPath: string | null;
-  error: string | null;
-}
-
-export interface DockerDatasetSummary {
-  id: number;
-  name: string;
-}
-
-export interface DockerSourceDetection {
-  available: boolean;
-  databaseUrl: string;
-  storageRoot: string;
-  storageRootExists: boolean;
-  datasetCount: number;
-  stackCount: number;
-  assetCount: number;
-  datasets: DockerDatasetSummary[];
-  message: string;
 }
 
 export interface AutoTagStatus {
@@ -128,13 +95,9 @@ export type TextSettingKey =
   | 'autoTagRepoDir'
   | 'autoTagModelDir'
   | 'ffmpegPath'
-  | 'pdfRasterizerPath'
-  | 'dockerDatabaseUrl'
-  | 'dockerStorageRoot'
-  | 'dockerDatasetId';
+  | 'pdfRasterizerPath';
 export type BooleanSettingKey =
   | 'allowExternalNetwork'
   | 'basicAuthEnabled'
-  | 'dockerVerifyFiles'
   | 'autoTagEnabled'
   | 'launchOnStartup';

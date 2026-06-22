@@ -8,7 +8,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
-      exclude: ['node_modules/', 'dist/', 'src/**/*.test.ts', 'src/types/', 'prisma/'],
+      exclude: ['node_modules/', 'dist/', 'src/**/*.test.ts', 'src/types/'],
     },
   },
 });

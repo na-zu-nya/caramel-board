@@ -36,11 +36,6 @@ const run = (command, args, options = {}) => {
   });
 };
 
-const packageBin = (root, name) =>
-  process.platform === 'win32'
-    ? path.join(root, 'node_modules/.bin', `${name}.cmd`)
-    : path.join(root, 'node_modules/.bin', name);
-
 const ensureEmptyDir = (dir) => {
   fs.rmSync(dir, { recursive: true, force: true });
   fs.mkdirSync(dir, { recursive: true });
@@ -349,31 +344,6 @@ const installServerRuntimeDependencies = () => {
   console.log(`Copied ${copiedPackagePaths.size} runtime packages from root node_modules`);
 };
 
-const generateServerPrismaClient = () => {
-  run(
-    packageBin(repoRoot, 'prisma'),
-    ['generate', '--schema', path.join(serverRoot, 'prisma/schema.prisma')],
-    {
-      cwd: repoRoot,
-      env: {
-        ...process.env,
-        PRISMA_GENERATE_SKIP_AUTOINSTALL: '1',
-      },
-    }
-  );
-};
-
-const installGeneratedPrismaClient = () => {
-  const source = path.join(repoRoot, 'node_modules/.prisma/client');
-  if (!fs.existsSync(source)) {
-    throw new Error(`Generated Prisma client was not found: ${source}`);
-  }
-
-  const target = path.join(serverResource, 'node_modules/.prisma/client');
-  fs.mkdirSync(path.dirname(target), { recursive: true });
-  fs.cpSync(source, target, { recursive: true, force: true });
-};
-
 const removeIfExists = (target) => {
   fs.rmSync(target, { recursive: true, force: true });
 };
@@ -393,7 +363,6 @@ const removeFilesByExtension = (root, extensions) => {
 const pruneServerRuntime = () => {
   const nodeModules = path.join(serverResource, 'node_modules');
   removeIfExists(path.join(nodeModules, '.bin'));
-  removeIfExists(path.join(nodeModules, '@prisma/client/generator-build'));
   removeFilesByExtension(nodeModules, ['.map', '.d.ts', '.d.mts']);
 };
 
@@ -404,7 +373,7 @@ const prepareServerRuntime = () => {
     recursive: true,
     force: true,
   });
-  fs.cpSync(path.join(serverRoot, 'prisma'), path.join(serverResource, 'prisma'), {
+  fs.cpSync(path.join(serverRoot, 'sqlite'), path.join(serverResource, 'sqlite'), {
     recursive: true,
     force: true,
   });
@@ -415,27 +384,12 @@ const prepareServerRuntime = () => {
   writeRuntimeServerPackageJson();
 
   installServerRuntimeDependencies();
-  generateServerPrismaClient();
-  installGeneratedPrismaClient();
   pruneServerRuntime();
 };
 
 const prepareClientRuntime = () => {
   ensureEmptyDir(clientResource);
   copyDir(path.join(clientRoot, 'dist'), path.join(clientResource, 'dist'));
-};
-
-const prepareMigrationRuntime = () => {
-  const migrationResource = path.join(resourcesRoot, 'migration');
-  ensureEmptyDir(migrationResource);
-  fs.cpSync(path.join(serverRoot, 'scripts'), path.join(migrationResource, 'scripts'), {
-    recursive: true,
-    force: true,
-  });
-  fs.cpSync(path.join(serverRoot, 'prisma'), path.join(migrationResource, 'prisma'), {
-    recursive: true,
-    force: true,
-  });
 };
 
 const prepareAutoTagBridge = () => {
@@ -458,7 +412,6 @@ const main = async () => {
   await installUvRuntime();
   prepareServerRuntime();
   prepareClientRuntime();
-  prepareMigrationRuntime();
   prepareAutoTagBridge();
 };
 

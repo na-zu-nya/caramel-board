@@ -29,9 +29,6 @@ import {
 } from '../features/autotag/AutoTagSettingsSection';
 import type { AutoTagProgressCopy } from '../features/autotag/progressText';
 import { MediaDependencySection } from '../features/media/MediaDependencySection';
-import { DockerMigrationPanel } from '../features/migrations/docker/DockerMigrationPanel';
-import { DockerMigrationResetDialog } from '../features/migrations/docker/DockerMigrationResetDialog';
-import type { DockerMigrationCopy } from '../features/migrations/docker/types';
 import { StandaloneMigrationDialog } from '../features/migrations/standalone/StandaloneMigrationDialog';
 import { StandaloneMigrationPanel } from '../features/migrations/standalone/StandaloneMigrationPanel';
 import type {
@@ -53,13 +50,7 @@ import {
   getDesktopToolsGuideUrl,
   getPopplerOfficialUrl,
 } from './external-links';
-import {
-  isAppLanguage,
-  isBooleanSettingKey,
-  isDockerTextSettingKey,
-  isResidentMode,
-  isTextSettingKey,
-} from './guards';
+import { isAppLanguage, isBooleanSettingKey, isResidentMode, isTextSettingKey } from './guards';
 import { translations } from './translations';
 import type {
   AppLanguage,
@@ -68,8 +59,6 @@ import type {
   AutoTagInstallProgress,
   AutoTagInstallStep,
   AutoTagStatus,
-  DockerMigrationProgress,
-  DockerSourceDetection,
   FfmpegCandidate,
   PdfRasterizerCandidate,
   SidecarStatus,
@@ -77,10 +66,6 @@ import type {
 
 const getErrorMessage = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
-
-const isDockerMigrationResettableError = (message: string) =>
-  message.includes('移行先のSQLite DBが既に存在します') ||
-  message.includes('移行先のライブラリフォルダが空ではありません');
 
 const choosePath = async (directory: boolean) => {
   const selected = await open({ directory, multiple: false });
@@ -123,14 +108,6 @@ export default function App() {
     useState<AutoTagInstallMetadata | null>(null);
   const [autoTagInstallProgress, setAutoTagInstallProgress] =
     useState<AutoTagInstallProgress | null>(null);
-  const [dockerDetection, setDockerDetection] = useState<DockerSourceDetection | null>(null);
-  const [dockerDetectionAttempted, setDockerDetectionAttempted] = useState(false);
-  const [dockerMigrationProgress, setDockerMigrationProgress] =
-    useState<DockerMigrationProgress | null>(null);
-  const [dockerMigrationResetConfirmOpen, setDockerMigrationResetConfirmOpen] = useState(false);
-  const [dockerMigrationResetDismissedError, setDockerMigrationResetDismissedError] = useState<
-    string | null
-  >(null);
   const [standaloneMigrationStatus, setStandaloneMigrationStatus] =
     useState<StandaloneMigrationStatus | null>(null);
   const [standaloneMigrationProgress, setStandaloneMigrationProgress] =
@@ -288,31 +265,6 @@ export default function App() {
     }),
     [autoTagProgressCopy, t]
   );
-  const dockerMigrationCopy = useMemo<DockerMigrationCopy>(
-    () => ({
-      title: t.dockerMigration,
-      description: t.dockerMigrationDescription,
-      readyTitle: t.migrationReadyTitle,
-      waitingTitle: t.migrationWaitingTitle,
-      notFoundTitle: t.migrationNotFoundTitle,
-      waitingDescription: t.migrationWaitingDescription,
-      notFoundDescription: t.migrationNotFoundDescription,
-      readyDescription: t.migrationReadyDescription,
-      storageLocation: t.storageLocation,
-      storageRoot: t.dockerStorageRoot,
-      chooseStorageRoot: t.chooseDockerStorageRoot,
-      detect: t.detectOldDocker,
-      migrate: t.migrateFromDocker,
-      inProgress: t.dockerMigrationInProgress,
-      advancedSettings: t.advancedSettings,
-      advancedDescription: t.advancedSettingsDescription,
-      postgresDatabaseUrl: t.postgresDatabaseUrl,
-      datasetId: t.datasetId,
-      optional: t.optional,
-      verifyFileReferences: t.verifyFileReferences,
-    }),
-    [t]
-  );
   const standaloneMigrationRunning = standaloneMigrationProgress?.running ?? false;
   const settingsDisabled = busy || status.running || standaloneMigrationRunning;
   const shellSettingsDisabled = busy || standaloneMigrationRunning;
@@ -462,8 +414,6 @@ export default function App() {
       }
       const installProgress = await invoke<AutoTagInstallProgress>('autotag_install_progress');
       setAutoTagInstallProgress(installProgress);
-      const migrationProgress = await invoke<DockerMigrationProgress>('docker_migration_progress');
-      setDockerMigrationProgress(migrationProgress);
       const standaloneProgress = await invoke<StandaloneMigrationProgress>(
         'standalone_migration_progress'
       );
@@ -508,10 +458,6 @@ export default function App() {
     (event: ChangeEvent<HTMLInputElement>) => {
       const setting = event.currentTarget.dataset.setting;
       if (isTextSettingKey(setting)) {
-        if (isDockerTextSettingKey(setting)) {
-          setDockerDetection(null);
-          setDockerDetectionAttempted(false);
-        }
         patchSettings({ [setting]: event.currentTarget.value });
       }
     },
@@ -718,22 +664,6 @@ export default function App() {
     }, t.pdfSelected);
   }, [patchSettings, refreshPdfRasterizerCandidates, runAction, settings, t]);
 
-  const handleChooseDockerStorage = useCallback(() => {
-    void runAction(async () => {
-      const path = await choosePath(true);
-      if (!path) return;
-      try {
-        const resolved = await invoke<{ resolved: string; adjusted: boolean; matched: boolean }>(
-          'resolve_docker_storage_root',
-          { path }
-        );
-        patchSettings({ dockerStorageRoot: resolved.resolved });
-      } catch {
-        patchSettings({ dockerStorageRoot: path });
-      }
-    }, t.dockerStorageRootSelected);
-  }, [patchSettings, runAction, t]);
-
   const handleChooseAutoTagCode = useCallback(() => {
     void runAction(async () => {
       const path = await choosePath(true);
@@ -869,26 +799,6 @@ export default function App() {
     return next;
   }, [refreshAutoTagStatus, t.autoTagInstallCompleted]);
 
-  const refreshDockerMigrationProgress = useCallback(async () => {
-    const next = await invoke<DockerMigrationProgress>('docker_migration_progress');
-    setDockerMigrationProgress(next);
-    if (next.completed && !next.error) {
-      const loaded = await invoke<AppSettings>('load_settings');
-      settingsRef.current = loaded;
-      setSettings(loaded);
-      setMessage(t.dockerMigrationCompleted(next.dbPath ?? '', next.exportDir ?? ''));
-    } else if (next.error) {
-      setMessage(next.error);
-      if (
-        isDockerMigrationResettableError(next.error) &&
-        next.error !== dockerMigrationResetDismissedError
-      ) {
-        setDockerMigrationResetConfirmOpen(true);
-      }
-    }
-    return next;
-  }, [dockerMigrationResetDismissedError, t]);
-
   const handleOpenStandaloneMigrationDialog = useCallback(() => {
     setMessage('');
     setStandaloneMigrationDialogOpen(true);
@@ -973,77 +883,6 @@ export default function App() {
   const handleDismissAutoTagProgress = useCallback(() => {
     setAutoTagInstallStep(null);
   }, []);
-
-  const detectDockerSource = useCallback(async () => {
-    if (!settings) return null;
-    setDockerDetectionAttempted(true);
-    const result = await invoke<DockerSourceDetection>('detect_docker_source', { settings });
-    setDockerDetection(result);
-    if (result.storageRoot.trim() && result.storageRoot !== settings.dockerStorageRoot) {
-      patchSettings({ dockerStorageRoot: result.storageRoot });
-    }
-    return result;
-  }, [patchSettings, settings]);
-
-  const handleDetectDockerSource = useCallback(() => {
-    void runAction(async () => {
-      const result = await detectDockerSource();
-      if (!result) return;
-      if (!result.available) return t.dockerNotDetectedMessage;
-      return t.dockerDetectedMessage(result.datasetCount, result.stackCount, result.assetCount);
-    }, t.dockerDetectionCompleted);
-  }, [detectDockerSource, runAction, t]);
-
-  const startDockerMigration = useCallback(
-    (resetTarget = false) => {
-      void runAction(async () => {
-        const saved = await saveSettings();
-        if (!saved) return;
-        setDockerMigrationResetDismissedError(null);
-        setDockerMigrationProgress({
-          running: true,
-          completed: false,
-          phase: 'starting',
-          message: t.dockerMigrationInProgress,
-          percent: 0,
-          lastLog: '',
-          exportDir: null,
-          dbPath: saved.dbPath,
-          error: null,
-        });
-        try {
-          const progress = await invoke<DockerMigrationProgress>('start_docker_migration', {
-            settings: saved,
-            resetTarget,
-          });
-          setDockerMigrationProgress(progress);
-          return t.dockerMigrationInProgress;
-        } catch (error) {
-          await refreshDockerMigrationProgress().catch(() => undefined);
-          const message = getErrorMessage(error);
-          if (isDockerMigrationResettableError(message)) {
-            setDockerMigrationResetConfirmOpen(true);
-          }
-          throw error;
-        }
-      }, t.dockerMigrationCompletedSummary);
-    },
-    [refreshDockerMigrationProgress, runAction, saveSettings, t]
-  );
-
-  const handleMigrateFromDocker = useCallback(() => {
-    startDockerMigration(false);
-  }, [startDockerMigration]);
-
-  const handleCancelDockerMigrationReset = useCallback(() => {
-    setDockerMigrationResetDismissedError(dockerMigrationProgress?.error ?? message);
-    setDockerMigrationResetConfirmOpen(false);
-  }, [dockerMigrationProgress?.error, message]);
-
-  const handleConfirmDockerMigrationReset = useCallback(() => {
-    setDockerMigrationResetConfirmOpen(false);
-    startDockerMigration(true);
-  }, [startDockerMigration]);
 
   const navJumpItems = useMemo(
     () => [
@@ -1175,18 +1014,6 @@ export default function App() {
       window.clearInterval(timer);
     };
   }, [autoTagStatus?.starting, refreshAutoTagStatus]);
-
-  useEffect(() => {
-    if (!dockerMigrationProgress?.running) return;
-
-    const timer = window.setInterval(() => {
-      void refreshDockerMigrationProgress();
-    }, 1000);
-
-    return () => {
-      window.clearInterval(timer);
-    };
-  }, [dockerMigrationProgress?.running, refreshDockerMigrationProgress]);
 
   useEffect(() => {
     if (!standaloneMigrationProgress?.running) return;
@@ -1450,20 +1277,6 @@ export default function App() {
             onRefresh={handleRefreshStandaloneMigration}
             onOpenDialog={handleOpenStandaloneMigrationDialog}
           />
-
-          <DockerMigrationPanel
-            settings={settings}
-            disabled={settingsDisabled}
-            detection={dockerDetection}
-            detectionAttempted={dockerDetectionAttempted}
-            progress={dockerMigrationProgress}
-            copy={dockerMigrationCopy}
-            onChooseStorage={handleChooseDockerStorage}
-            onDetect={handleDetectDockerSource}
-            onMigrate={handleMigrateFromDocker}
-            onTextSettingChange={handleTextSettingChange}
-            onBooleanSettingChange={handleBooleanSettingChange}
-          />
         </div>
 
         <footer className="settings-footer">
@@ -1480,22 +1293,6 @@ export default function App() {
           canApply={standaloneMigrationCanApply}
           onApply={handleApplyStandaloneMigration}
           onClose={handleCloseStandaloneMigrationDialog}
-        />
-      ) : null}
-
-      {dockerMigrationResetConfirmOpen ? (
-        <DockerMigrationResetDialog
-          title={t.dockerMigrationResetConfirmTitle}
-          body={t.dockerMigrationResetConfirmBody}
-          dbLabel={t.sqliteDb}
-          libraryLabel={t.libraryPath}
-          dbPath={settings.dbPath}
-          libraryPath={settings.libraryPath}
-          cancelLabel={t.cancel}
-          confirmLabel={t.dockerMigrationResetConfirmAction}
-          busy={busy}
-          onCancel={handleCancelDockerMigrationReset}
-          onConfirm={handleConfirmDockerMigrationReset}
         />
       ) : null}
 

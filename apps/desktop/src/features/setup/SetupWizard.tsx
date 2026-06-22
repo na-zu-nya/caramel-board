@@ -35,8 +35,6 @@ interface AppSettingsLike {
   libraryPath: string;
   setupCompleted: boolean;
   language: string;
-  dockerDatabaseUrl: string;
-  dockerStorageRoot: string;
   allowExternalNetwork: boolean;
   basicAuthEnabled: boolean;
   basicAuthUsername: string;
@@ -57,35 +55,6 @@ interface DataStoreInspection {
   hasDatabase: boolean;
   hasLibrary: boolean;
   isEmpty: boolean;
-}
-
-interface DockerSourceDetection {
-  available: boolean;
-  databaseUrl: string;
-  storageRoot: string;
-  storageRootExists: boolean;
-  datasetCount: number;
-  stackCount: number;
-  assetCount: number;
-  message: string;
-}
-
-interface DockerStorageResolution {
-  resolved: string;
-  adjusted: boolean;
-  matched: boolean;
-}
-
-interface DockerMigrationProgress {
-  running: boolean;
-  completed: boolean;
-  phase: string;
-  message: string;
-  percent: number;
-  lastLog: string;
-  exportDir: string | null;
-  dbPath: string | null;
-  error: string | null;
 }
 
 interface FfmpegCandidate {
@@ -146,16 +115,11 @@ type FullSettings = AppSettingsLike & {
   autoTagEnabled: boolean;
 };
 
-type WizardMode = 'new' | 'existing' | 'migrate';
+type WizardMode = 'new' | 'existing';
 type WizardStep =
   | 'intro'
   | 'new-location'
   | 'existing-location'
-  | 'migrate-detect'
-  | 'migrate-location'
-  | 'migrate-confirm'
-  | 'migrate-running'
-  | 'migrate-complete'
   | 'database-setup'
   | 'sharing-setup'
   | 'ffmpeg-setup'
@@ -175,8 +139,6 @@ const wizardCopy = {
     chooseNewBody: 'Create an empty library on this computer.',
     chooseExistingTitle: 'Open an existing data store',
     chooseExistingBody: 'Use a Caramel Board folder you already have.',
-    chooseMigrateTitle: 'Move from the previous version',
-    chooseMigrateBody: 'Migrate data from the older command line version.',
     locationTitle: 'Where should your data live?',
     locationBody:
       'Caramel Board keeps the database and your files in one folder. You can change it later.',
@@ -203,24 +165,6 @@ const wizardCopy = {
     existingMissing:
       'No caramel-board.sqlite was found in the folder. Choose the folder that holds your data.',
     existingReady: 'Caramel Board data was found here.',
-    migrateDetectTitle: 'Connect to the previous version',
-    migrateDetectBody:
-      'Start the previous Caramel Board (the command line version), then we will connect to it automatically.',
-    migrateDetectChecking: 'Looking for the previous version…',
-    migrateDetectFound: (datasets: number, stacks: number, assets: number) =>
-      `Found ${datasets} libraries / ${stacks} stacks / ${assets} assets.`,
-    migrateDetectNotFound: 'Could not find the previous version. Start it, then click Retry.',
-    migrateLocationTitle: 'Where to put the migrated data?',
-    migrateLocationBody:
-      'A new SQLite data store will be created here. Existing asset files will stay in the selected asset folder and be reused.',
-    migrateConfirmTitle: 'Ready to migrate',
-    migrateConfirmBody:
-      'Database records from the previous version will be imported into the new data store. Existing asset files will not be copied.',
-    migrateRunningTitle: 'Migrating…',
-    migrateRunningBody:
-      'Importing database records. Please leave the previous version running until this finishes.',
-    migrateCompleteTitle: 'Import complete',
-    migrateCompleteBody: 'Import is complete. You can quit the command line version now.',
     doneTitle: 'All set',
     doneBody: 'Setup is complete. Start Caramel Board now?',
     launchNetworkNote:
@@ -239,21 +183,7 @@ const wizardCopy = {
     next: 'Next',
     back: 'Back',
     retry: 'Retry',
-    startMigration: 'Start migration',
     chooseExistingFolder: 'Open data store',
-    advancedSourceTitle: 'Advanced source settings',
-    advancedSourceBody: 'Only needed if the previous version used a custom database URL.',
-    sourceDatabaseUrl: 'Database URL',
-    sourceStorageRoot: 'Asset folder',
-    sourceStorageRootTitle: 'Confirm the asset folder',
-    sourceStorageRootBody:
-      'Choose the existing asset folder from the previous version. Caramel Board will reuse this folder after migration.',
-    sourceStorageRootMissing: 'Choose the asset folder before continuing.',
-    chooseSourceStorageRoot: 'Choose asset folder',
-    storageRootAdjustedInfo: (path: string) =>
-      `Asset folder was adjusted to a likely library location: ${path}`,
-    storageRootCheckHint:
-      'Choose the folder that contains numbered library folders such as 1/assets/, 2/thumbnails/, or 2/files/.',
     databaseSetupTitle: 'Prepare the database',
     databaseSetupBody:
       'The selected data store must match this app version before media setup continues.',
@@ -342,8 +272,6 @@ const wizardCopy = {
     chooseNewBody: 'このコンピュータに空のライブラリを作ります。',
     chooseExistingTitle: '既存のデータストアを開く',
     chooseExistingBody: '今お持ちの Caramel Board のフォルダを開きます。',
-    chooseMigrateTitle: '以前の版から引き継ぐ',
-    chooseMigrateBody: '以前のコマンドライン版のデータを取り込みます。',
     locationTitle: 'データの保存先を選びましょう',
     locationBody:
       'Caramel Board はデータベースとファイルを 1 つのフォルダにまとめて保管します。後から変更できます。',
@@ -368,25 +296,6 @@ const wizardCopy = {
     existingMissing:
       'フォルダ内に caramel-board.sqlite が見つかりませんでした。データが入っているフォルダを選んでください。',
     existingReady: 'データを見つけました。',
-    migrateDetectTitle: '以前の版に接続する',
-    migrateDetectBody:
-      '以前の Caramel Board(コマンドライン版)を起動してください。自動的に接続します。',
-    migrateDetectChecking: '接続を確認しています…',
-    migrateDetectFound: (datasets: number, stacks: number, assets: number) =>
-      `ライブラリ ${datasets} 件 / スタック ${stacks} 件 / アセット ${assets} 件 を見つけました。`,
-    migrateDetectNotFound:
-      '以前の版に接続できませんでした。起動してから「もう一度確認」を押してください。',
-    migrateLocationTitle: '引き継いだデータの保存先',
-    migrateLocationBody:
-      'この場所に新しい SQLite データストアを作ります。既存のアセットファイルは選択したアセットフォルダに残し、そのまま再利用します。',
-    migrateConfirmTitle: '引き継ぎの準備ができました',
-    migrateConfirmBody:
-      '以前の版のデータベース情報を新しいデータストアに取り込みます。既存のアセットファイルはコピーしません。',
-    migrateRunningTitle: '引き継ぎ中…',
-    migrateRunningBody:
-      'データベース情報を取り込んでいます。完了するまで以前の版は起動したままにしてください。',
-    migrateCompleteTitle: '取り込みが完了しました',
-    migrateCompleteBody: '取り込み完了しました。コマンドライン版は終了できます。',
     doneTitle: '準備ができました',
     doneBody: 'セットアップが完了しました。Caramel Board を起動しますか?',
     launchNetworkNote:
@@ -405,20 +314,7 @@ const wizardCopy = {
     next: '次へ',
     back: '戻る',
     retry: 'もう一度確認',
-    startMigration: '引き継ぎを開始',
     chooseExistingFolder: 'データストアを開く',
-    advancedSourceTitle: '取り込み元の詳細設定',
-    advancedSourceBody: '以前の版で接続先 URL を変えていた場合のみ使います。',
-    sourceDatabaseUrl: 'データベース URL',
-    sourceStorageRoot: 'アセットフォルダ',
-    sourceStorageRootTitle: 'アセットフォルダを確認',
-    sourceStorageRootBody:
-      '以前の版で取り込んだ画像や動画ファイルが入っている既存フォルダを選んでください。移行後もこのフォルダを再利用します。',
-    sourceStorageRootMissing: '続ける前にアセットフォルダを選んでください。',
-    chooseSourceStorageRoot: 'アセットフォルダを選ぶ',
-    storageRootAdjustedInfo: (path: string) => `アセットフォルダを自動で補正しました: ${path}`,
-    storageRootCheckHint:
-      '1/assets/、2/thumbnails/、2/files/ などの番号付きフォルダがある階層を選んでください。',
     databaseSetupTitle: 'データベースを準備',
     databaseSetupBody:
       '選択したデータストアを確認し、このアプリで使える状態にしてから次へ進みます。',
@@ -562,12 +458,6 @@ export function SetupWizard({
   const [customPath, setCustomPath] = useState('');
   const [existingPath, setExistingPath] = useState('');
   const [inspection, setInspection] = useState<DataStoreInspection | null>(null);
-  const [detection, setDetection] = useState<DockerSourceDetection | null>(null);
-  const [detectionAttempted, setDetectionAttempted] = useState(false);
-  const [sourceDatabaseUrl, setSourceDatabaseUrl] = useState(initialSettings.dockerDatabaseUrl);
-  const [sourceStorageRoot, setSourceStorageRoot] = useState(initialSettings.dockerStorageRoot);
-  const [sourceStorageRootTouched, setSourceStorageRootTouched] = useState(false);
-  const [storageRootAdjusted, setStorageRootAdjusted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [appliedSettings, setAppliedSettings] = useState<FullSettings | null>(null);
@@ -591,8 +481,6 @@ export function SetupWizard({
   const [autoTagPhase, setAutoTagPhase] = useState<AutoTagInstallPhase>('idle');
   const [autoTagMetadata, setAutoTagMetadata] = useState<AutoTagInstallMetadata | null>(null);
   const [autoTagProgress, setAutoTagProgress] = useState<AutoTagInstallProgress | null>(null);
-  const [dockerMigrationProgress, setDockerMigrationProgress] =
-    useState<DockerMigrationProgress | null>(null);
   const [standaloneMigrationStatus, setStandaloneMigrationStatus] =
     useState<StandaloneMigrationStatus | null>(null);
   const [standaloneMigrationProgress, setStandaloneMigrationProgress] =
@@ -612,11 +500,6 @@ export function SetupWizard({
         return 1;
       case 'new-location':
       case 'existing-location':
-      case 'migrate-detect':
-      case 'migrate-location':
-      case 'migrate-confirm':
-      case 'migrate-running':
-      case 'migrate-complete':
         return 2;
       case 'database-setup':
         return 3;
@@ -654,7 +537,7 @@ export function SetupWizard({
   }, []);
 
   useEffect(() => {
-    if (step === 'new-location' || step === 'migrate-location') {
+    if (step === 'new-location') {
       void inspectTarget(targetPath);
     }
   }, [step, targetPath, inspectTarget]);
@@ -675,55 +558,6 @@ export function SetupWizard({
     await inspectTarget(selected);
   }, [inspectTarget]);
 
-  const handleChooseSourceStorageRoot = useCallback(async () => {
-    setError('');
-    const selected = await open({ directory: true, multiple: false });
-    if (typeof selected !== 'string') return;
-    try {
-      const resolved = await invoke<DockerStorageResolution>('resolve_docker_storage_root', {
-        path: selected,
-      });
-      setSourceStorageRoot(resolved.resolved);
-      setSourceStorageRootTouched(true);
-      setStorageRootAdjusted(resolved.adjusted);
-    } catch (err) {
-      setSourceStorageRoot(selected);
-      setSourceStorageRootTouched(true);
-      setStorageRootAdjusted(false);
-      setError(errorMessage(err));
-    }
-  }, []);
-
-  const runDetect = useCallback(async () => {
-    setBusy(true);
-    setError('');
-    setDetectionAttempted(true);
-    try {
-      const next = await invoke<DockerSourceDetection>('detect_docker_source', {
-        settings: {
-          ...initialSettings,
-          dockerDatabaseUrl: sourceDatabaseUrl,
-          dockerStorageRoot: sourceStorageRoot,
-        },
-      });
-      setDetection(next);
-      if (!sourceStorageRootTouched && next.storageRoot.trim()) {
-        setSourceStorageRoot(next.storageRoot);
-        setStorageRootAdjusted(false);
-      }
-    } catch (err) {
-      setDetection(null);
-      setError(errorMessage(err));
-    } finally {
-      setBusy(false);
-    }
-  }, [initialSettings, sourceDatabaseUrl, sourceStorageRoot, sourceStorageRootTouched]);
-
-  useEffect(() => {
-    if (step !== 'migrate-detect' || detectionAttempted) return;
-    void runDetect();
-  }, [step, detectionAttempted, runDetect]);
-
   const handleSelectMode = useCallback((next: WizardMode) => {
     setError('');
     setMode(next);
@@ -737,12 +571,6 @@ export function SetupWizard({
       setStep('existing-location');
       setExistingPath('');
       setInspection(null);
-    } else {
-      setStep('migrate-detect');
-      setDetectionAttempted(false);
-      setDetection(null);
-      setSourceStorageRootTouched(false);
-      setStorageRootAdjusted(false);
     }
   }, []);
 
@@ -834,10 +662,8 @@ export function SetupWizard({
     setStandaloneMigrationProgress(null);
     if (mode === 'new') {
       setStep('new-location');
-    } else if (mode === 'existing') {
-      setStep('existing-location');
     } else {
-      setStep('migrate-complete');
+      setStep('existing-location');
     }
   }, [mode]);
 
@@ -918,120 +744,6 @@ export function SetupWizard({
       setBusy(false);
     }
   }, [existingPath, handleApplyDataStore, proceedAfterDataStoreSelected]);
-
-  const handleClearMigrationTarget = useCallback(async () => {
-    if (!targetPath.trim()) return;
-    setBusy(true);
-    setError('');
-    try {
-      const applied = await handleApplyDataStore(targetPath, {
-        resetExisting: true,
-        setupCompleted: false,
-        carryExistingData: false,
-      });
-      setAppliedSettings(applied as FullSettings);
-      await inspectTarget(targetPath);
-      setStep('migrate-confirm');
-    } catch (err) {
-      setError(errorMessage(err));
-    } finally {
-      setBusy(false);
-    }
-  }, [targetPath, handleApplyDataStore, inspectTarget]);
-
-  const refreshDockerMigrationProgress = useCallback(async () => {
-    const next = await invoke<DockerMigrationProgress>('docker_migration_progress');
-    setDockerMigrationProgress(next);
-    if (next.completed && !next.error) {
-      const loaded = await invoke<FullSettings>('load_settings');
-      setAppliedSettings({ ...loaded, language });
-    }
-    return next;
-  }, [language]);
-
-  const handleConfirmMigrate = useCallback(async () => {
-    if (!targetPath.trim() || !sourceStorageRoot.trim()) return;
-    setStep('migrate-running');
-    setBusy(true);
-    setError('');
-    try {
-      const applied = await handleApplyDataStore(targetPath, {
-        setupCompleted: false,
-        carryExistingData: false,
-      });
-      const settingsForMigration = {
-        ...applied,
-        dockerDatabaseUrl: sourceDatabaseUrl,
-        dockerStorageRoot: sourceStorageRoot,
-      };
-      setDockerMigrationProgress({
-        running: true,
-        completed: false,
-        phase: 'starting',
-        message: t.migrateRunningTitle,
-        percent: 0,
-        lastLog: '',
-        exportDir: null,
-        dbPath: applied.dbPath,
-        error: null,
-      });
-      let completedImmediately = false;
-      try {
-        const progress = await invoke<DockerMigrationProgress>('start_docker_migration', {
-          settings: settingsForMigration,
-          resetTarget: true,
-        });
-        setDockerMigrationProgress(progress);
-        if (progress.completed && !progress.error) {
-          completedImmediately = true;
-          const loaded = await invoke<FullSettings>('load_settings');
-          setAppliedSettings({ ...loaded, language });
-          setStep('migrate-complete');
-        } else if (progress.error) {
-          setError(progress.error);
-          setStep('migrate-confirm');
-        }
-      } catch (err) {
-        await refreshDockerMigrationProgress().catch(() => undefined);
-        throw err;
-      }
-      if (!completedImmediately) {
-        setAppliedSettings(applied as FullSettings);
-      }
-    } catch (err) {
-      setError(errorMessage(err));
-      setStep('migrate-confirm');
-    } finally {
-      setBusy(false);
-    }
-  }, [
-    targetPath,
-    handleApplyDataStore,
-    sourceDatabaseUrl,
-    sourceStorageRoot,
-    refreshDockerMigrationProgress,
-    language,
-    t.migrateRunningTitle,
-  ]);
-
-  const handleProceedFromMigrateComplete = useCallback(async () => {
-    if (!appliedSettings) return;
-    setBusy(true);
-    setError('');
-    try {
-      const loaded = await invoke<FullSettings>('load_settings');
-      const merged = { ...loaded, language };
-      setAppliedSettings(merged);
-      setDatabaseSetupIncluded(false);
-      setStandaloneMigrationStatus(null);
-      setStandaloneMigrationProgress(null);
-      setStep('sharing-setup');
-    } catch (err) {
-      setError(errorMessage(err));
-    } finally {
-      setBusy(false);
-    }
-  }, [appliedSettings, language]);
 
   const completeWizard = useCallback(async () => {
     const completed = await invoke<FullSettings>('complete_setup');
@@ -1324,31 +1036,6 @@ export function SetupWizard({
     return () => window.clearInterval(timer);
   }, [step, autoTagPhase, autoTagProgress, appliedSettings, refreshAutoTagStatus]);
 
-  useEffect(() => {
-    if (step !== 'migrate-running') return;
-    if (!dockerMigrationProgress?.running) return;
-
-    const timer = window.setInterval(async () => {
-      try {
-        const next = await refreshDockerMigrationProgress();
-        if (next.completed && !next.error) {
-          setStep('migrate-complete');
-          window.clearInterval(timer);
-        } else if (next.error) {
-          setError(next.error);
-          setStep('migrate-confirm');
-          window.clearInterval(timer);
-        }
-      } catch (err) {
-        setError(errorMessage(err));
-        setStep('migrate-confirm');
-        window.clearInterval(timer);
-      }
-    }, 1000);
-
-    return () => window.clearInterval(timer);
-  }, [step, dockerMigrationProgress?.running, refreshDockerMigrationProgress]);
-
   const handleProceedFromAutoTag = useCallback(() => {
     setStep('done');
   }, []);
@@ -1416,32 +1103,15 @@ export function SetupWizard({
             <span>{t.chooseExistingBody}</span>
           </span>
         </button>
-        <button type="button" className="wizard-choice" onClick={() => handleSelectMode('migrate')}>
-          <span className="wizard-choice-icon">
-            <Download size={18} />
-          </span>
-          <span className="wizard-choice-body">
-            <strong>{t.chooseMigrateTitle}</strong>
-            <span>{t.chooseMigrateBody}</span>
-          </span>
-        </button>
       </div>
     </>
   );
 
-  const renderLocationBody = (forMigration: boolean) => {
+  const renderLocationBody = () => {
     const inspectionHint = (() => {
       if (!targetPath.trim()) return null;
       if (!inspection) return null;
-      if (forMigration && dataStoreHasContents(inspection)) {
-        return (
-          <div className="wizard-path-card warn">
-            <strong>{t.detectExistingResettable}</strong>
-            <span>{inspection.path}</span>
-          </div>
-        );
-      }
-      if (!forMigration && dataStoreHasContents(inspection)) {
+      if (dataStoreHasContents(inspection)) {
         return (
           <div className="wizard-path-card warn">
             <strong>{t.detectExistingResettable}</strong>
@@ -1473,14 +1143,13 @@ export function SetupWizard({
       );
     })();
 
-    const canClearForMigration = forMigration && dataStoreHasContents(inspection);
     const blocked = !targetPath.trim();
 
     return (
       <>
         <div className="wizard-heading">
-          <h1>{forMigration ? t.migrateLocationTitle : t.locationTitle}</h1>
-          <p>{forMigration ? t.migrateLocationBody : t.locationBody}</p>
+          <h1>{t.locationTitle}</h1>
+          <p>{t.locationBody}</p>
         </div>
         <div className="wizard-choice-list">
           <label className="wizard-choice" style={{ cursor: 'pointer' }}>
@@ -1528,19 +1197,11 @@ export function SetupWizard({
             className="primary-button"
             disabled={busy || blocked}
             onClick={() => {
-              if (canClearForMigration) {
-                setResetDataStoreConfirmOpen(true);
-                return;
-              }
-              if (forMigration) {
-                setStep('migrate-confirm');
-              } else {
-                void handleConfirmNew();
-              }
+              void handleConfirmNew();
             }}
           >
-            {canClearForMigration ? <AlertCircle size={15} /> : <ArrowRight size={15} />}
-            {canClearForMigration ? t.resetDataStoreContinue : t.next}
+            <ArrowRight size={15} />
+            {t.next}
           </button>
         </div>
       </>
@@ -1584,190 +1245,6 @@ export function SetupWizard({
       </>
     );
   };
-
-  const renderMigrateDetect = () => {
-    const ready = detection?.available ?? false;
-    const detectedStorageIsSelected = detection?.storageRoot === sourceStorageRoot;
-    const sourceStorageExists =
-      !detectedStorageIsSelected || detection?.storageRootExists !== false;
-    const sourceStorageReady = sourceStorageRoot.trim().length > 0 && sourceStorageExists;
-    return (
-      <>
-        <div className="wizard-heading">
-          <h1>{t.migrateDetectTitle}</h1>
-          <p>{t.migrateDetectBody}</p>
-        </div>
-        {busy ? (
-          <div className="wizard-progress-card spinner">
-            <span>{t.migrateDetectChecking}</span>
-          </div>
-        ) : ready && detection ? (
-          <div className="wizard-path-card">
-            <strong>
-              {t.migrateDetectFound(
-                detection.datasetCount,
-                detection.stackCount,
-                detection.assetCount
-              )}
-            </strong>
-            <span>{detection.databaseUrl}</span>
-          </div>
-        ) : (
-          <div className="wizard-path-card warn">
-            <strong>{t.migrateDetectNotFound}</strong>
-            <span>{detection?.message ?? ''}</span>
-          </div>
-        )}
-        <div className={sourceStorageReady ? 'wizard-path-card' : 'wizard-path-card warn'}>
-          <strong>
-            {sourceStorageReady ? t.sourceStorageRootTitle : t.sourceStorageRootMissing}
-          </strong>
-          <span>{sourceStorageRoot.trim() ? sourceStorageRoot : t.sourceStorageRootBody}</span>
-        </div>
-        <div className="wizard-actions" style={{ justifyContent: 'flex-start' }}>
-          <button type="button" onClick={handleChooseSourceStorageRoot} disabled={busy}>
-            <Folder size={15} />
-            {t.chooseSourceStorageRoot}
-          </button>
-        </div>
-        {storageRootAdjusted ? (
-          <p className="muted">{t.storageRootAdjustedInfo(sourceStorageRoot)}</p>
-        ) : (
-          <p className="muted">{t.storageRootCheckHint}</p>
-        )}
-        <details className="advanced-settings">
-          <summary>{t.advancedSourceTitle}</summary>
-          <p>{t.advancedSourceBody}</p>
-          <label className="field">
-            <span>{t.sourceDatabaseUrl}</span>
-            <input
-              value={sourceDatabaseUrl}
-              onChange={(event) => setSourceDatabaseUrl(event.currentTarget.value)}
-            />
-          </label>
-        </details>
-        <div className="wizard-actions between wizard-step-footer">
-          <button type="button" onClick={() => setStep('intro')} disabled={busy}>
-            {t.back}
-          </button>
-          <span style={{ display: 'flex', gap: 8 }}>
-            <button type="button" onClick={() => void runDetect()} disabled={busy}>
-              <RefreshCcw size={15} />
-              {t.retry}
-            </button>
-            <button
-              type="button"
-              className="primary-button"
-              disabled={busy || !ready || !sourceStorageReady}
-              onClick={() => setStep('migrate-location')}
-            >
-              <ArrowRight size={15} />
-              {t.next}
-            </button>
-          </span>
-        </div>
-      </>
-    );
-  };
-
-  const renderMigrateConfirm = () => (
-    <>
-      <div className="wizard-heading">
-        <h1>{t.migrateConfirmTitle}</h1>
-        <p>{t.migrateConfirmBody}</p>
-      </div>
-      <div className="wizard-path-card">
-        <strong>{t.selectedFolder}</strong>
-        <span>{targetPath}</span>
-      </div>
-      <div className="wizard-path-card">
-        <strong>{t.sourceStorageRoot}</strong>
-        <span>{sourceStorageRoot}</span>
-      </div>
-      {detection ? (
-        <div className="wizard-path-card">
-          <strong>
-            {t.migrateDetectFound(
-              detection.datasetCount,
-              detection.stackCount,
-              detection.assetCount
-            )}
-          </strong>
-          <span>{detection.databaseUrl}</span>
-        </div>
-      ) : null}
-      <div className="wizard-actions between wizard-step-footer">
-        <button type="button" onClick={() => setStep('migrate-location')} disabled={busy}>
-          {t.back}
-        </button>
-        <button
-          type="button"
-          className="primary-button"
-          disabled={busy}
-          onClick={() => void handleConfirmMigrate()}
-        >
-          <Database size={15} />
-          {t.startMigration}
-        </button>
-      </div>
-    </>
-  );
-
-  const renderMigrateRunning = () => (
-    <>
-      <div className="wizard-heading">
-        <h1>{t.migrateRunningTitle}</h1>
-        <p>{t.migrateRunningBody}</p>
-      </div>
-      <div
-        className={
-          dockerMigrationProgress?.running ? 'wizard-progress-card spinner' : 'wizard-progress-card'
-        }
-      >
-        <span>{dockerMigrationProgress?.message || t.migrateRunningTitle}</span>
-        <div className="progress-track">
-          <div
-            className="progress-fill"
-            style={{ width: `${Math.round(dockerMigrationProgress?.percent ?? 0)}%` }}
-          />
-        </div>
-        <span className="muted">{Math.round(dockerMigrationProgress?.percent ?? 0)}%</span>
-        {dockerMigrationProgress?.lastLog ? (
-          <span className="muted">{dockerMigrationProgress.lastLog}</span>
-        ) : null}
-      </div>
-    </>
-  );
-
-  const renderMigrateComplete = () => (
-    <>
-      <div className="wizard-heading">
-        <h1>{t.migrateCompleteTitle}</h1>
-        <p>{t.migrateCompleteBody}</p>
-      </div>
-      <div className="wizard-path-card">
-        <strong>{t.selectedFolder}</strong>
-        <span>{targetPath}</span>
-      </div>
-      {sourceStorageRoot.trim() ? (
-        <div className="wizard-path-card">
-          <strong>{t.sourceStorageRoot}</strong>
-          <span>{sourceStorageRoot}</span>
-        </div>
-      ) : null}
-      <div className="wizard-actions wizard-step-footer" style={{ justifyContent: 'flex-end' }}>
-        <button
-          type="button"
-          className="primary-button"
-          onClick={() => void handleProceedFromMigrateComplete()}
-          disabled={busy}
-        >
-          <ArrowRight size={15} />
-          {t.next}
-        </button>
-      </div>
-    </>
-  );
 
   const renderDatabaseSetup = () => {
     const status = standaloneMigrationStatus;
@@ -2334,13 +1811,8 @@ export function SetupWizard({
             <span>{t.stepLabel(currentStepIndex, totalSteps)}</span>
           </div>
           {step === 'intro' ? renderIntro() : null}
-          {step === 'new-location' ? renderLocationBody(false) : null}
+          {step === 'new-location' ? renderLocationBody() : null}
           {step === 'existing-location' ? renderExistingLocation() : null}
-          {step === 'migrate-detect' ? renderMigrateDetect() : null}
-          {step === 'migrate-location' ? renderLocationBody(true) : null}
-          {step === 'migrate-confirm' ? renderMigrateConfirm() : null}
-          {step === 'migrate-running' ? renderMigrateRunning() : null}
-          {step === 'migrate-complete' ? renderMigrateComplete() : null}
           {step === 'database-setup' ? renderDatabaseSetup() : null}
           {step === 'sharing-setup' ? renderSharingSetup() : null}
           {step === 'ffmpeg-setup' ? renderFfmpegSetup() : null}
@@ -2379,15 +1851,11 @@ export function SetupWizard({
                 className="primary-button"
                 onClick={() => {
                   setResetDataStoreConfirmOpen(false);
-                  if (mode === 'migrate') {
-                    void handleClearMigrationTarget();
-                    return;
-                  }
                   void handleConfirmNew(true);
                 }}
                 disabled={busy}
               >
-                {mode === 'migrate' ? t.resetDataStoreContinue : t.resetDataStoreConfirm}
+                {t.resetDataStoreConfirm}
               </button>
             </div>
           </div>
