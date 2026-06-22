@@ -79,7 +79,7 @@ Caramel Boardアプリ
 クライアントアプリ
 
 - 各種最新のバージョンのブラウザを推奨します
-- 動作検証済み: Safari / Chrome 
+- 動作検証済み: Safari / Chrome
 
 ## プロジェクト情報
 
