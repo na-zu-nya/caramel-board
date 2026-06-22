@@ -1,0 +1,46 @@
+name: Release Discord Notification
+
+on:
+  release:
+    types:
+      - published
+
+permissions:
+  contents: read
+
+jobs:
+  notify-discord:
+    name: Notify Discord
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      DISCORD_RELEASE_WEBHOOK_URL: ${{ secrets.DISCORD_RELEASE_WEBHOOK_URL }}
+      REPOSITORY_NAME: ${{ github.event.repository.name }}
+      TAG_NAME: ${{ github.event.release.tag_name }}
+      RELEASE_DESCRIPTION: ${{ github.event.release.body || '' }}
+      RELEASE_URL: ${{ github.event.release.html_url }}
+
+    steps:
+      - name: Post release notification
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -z "$DISCORD_RELEASE_WEBHOOK_URL" ]; then
+            echo "::error::DISCORD_RELEASE_WEBHOOK_URL secret is not configured."
+            exit 1
+          fi
+
+          content=$(printf ">>> **%s [%s]** がリリースされました！\n%s\nURL: %s" \
+            "$REPOSITORY_NAME" \
+            "$TAG_NAME" \
+            "${RELEASE_DESCRIPTION:-}" \
+            "$RELEASE_URL")
+          payload=$(jq -n \
+            --arg content "$content" \
+            '{content: $content, allowed_mentions: {parse: []}}')
+
+          curl --fail-with-body --show-error --silent \
+            -H 'Content-Type: application/json' \
+            -d "$payload" \
+            "$DISCORD_RELEASE_WEBHOOK_URL"
