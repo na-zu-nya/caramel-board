@@ -25,6 +25,7 @@ const MIME_BY_EXTENSION: Record<string, string> = {
   jpg: 'image/jpeg',
   png: 'image/png',
   svg: 'image/svg+xml',
+  svgz: 'image/svg+xml',
   webp: 'image/webp',
 };
 

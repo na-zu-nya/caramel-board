@@ -164,12 +164,12 @@ function AuthorDetailPage() {
       typeof item.id === 'string' ? Number.parseInt(item.id as string, 10) : (item.id as number);
     const currentIndex = Math.max(0, ids.indexOf(clickedId));
 
-    const mediaType = (item as any).mediaType as string | undefined;
+    const mediaType = item.mediaType;
     const token = genListToken({ datasetId, mediaType, filters: authorFilter });
     saveViewContext({
       token,
       datasetId,
-      mediaType: mediaType as any,
+      mediaType,
       filters: authorFilter,
       ids,
       currentIndex,

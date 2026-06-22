@@ -1262,6 +1262,12 @@ function appendFilterParams(target: URLSearchParams, filter: StackFilter) {
   if (filter.isFavorite !== undefined) {
     target.append('isFavorite', filter.isFavorite.toString());
   }
+  if (filter.mediaCategory) {
+    target.append('mediaCategory', filter.mediaCategory);
+  }
+  if (filter.mediaType) {
+    target.append('mediaType', filter.mediaType);
+  }
   if (filter.search) {
     target.append('search', filter.search);
   }

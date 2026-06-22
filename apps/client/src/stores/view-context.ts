@@ -1,10 +1,10 @@
 import { atom } from 'jotai';
-import type { MediaType, StackFilter } from '@/types';
+import type { MediaCategory, StackFilter } from '@/types';
 
 export type ViewContext = {
   token: string;
   datasetId: string;
-  mediaType?: MediaType;
+  mediaType?: MediaCategory;
   filters?: StackFilter;
   sort?: { field: string; order: 'asc' | 'desc' };
   collectionId?: string;

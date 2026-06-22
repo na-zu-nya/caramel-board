@@ -326,6 +326,7 @@ class ApiClient {
       limit: params.limit,
       offset: params.offset,
       collection: params.collection,
+      mediaCategory: params.mediaCategory,
       mediaType: params.mediaType,
       tag: params.tag,
       author: params.author,
@@ -1231,6 +1232,7 @@ class ApiClient {
     // Map additional filters
     const f = params.filter;
     if (f) {
+      if (f.mediaCategory) query.append('mediaCategory', f.mediaCategory);
       if (f.mediaType) query.append('mediaType', f.mediaType);
       if (f.isFavorite === true) query.append('fav', '1');
       if (f.isFavorite === false) query.append('fav', '0');
@@ -1279,12 +1281,16 @@ class ApiClient {
 
     // Auto-detect mediaType from file type if not provided
     if (!options?.mediaType) {
+      const extension = file.name.match(/\.([a-z0-9]+)$/i)?.[1]?.toLowerCase() ?? '';
       const mimeType = file.type.toLowerCase();
-      const inferredMediaType = mimeType.startsWith('video/')
-        ? 'video'
-        : mimeType === 'application/pdf'
-          ? 'comic'
-          : 'image';
+      const inferredMediaType = ['ai', 'svg', 'svgz'].includes(extension)
+        ? 'image'
+        : ['mp4', 'mov', 'avi', 'mkv', 'webm', 'mpeg', 'mpg', 'm4v', 'wmv'].includes(extension) ||
+            mimeType.startsWith('video/')
+          ? 'video'
+          : extension === 'pdf' || mimeType === 'application/pdf'
+            ? 'comic'
+            : 'image';
       formData.append('mediaType', inferredMediaType);
     }
 

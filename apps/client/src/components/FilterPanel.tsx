@@ -5,6 +5,7 @@ import {
   ArrowUpDown,
   Calendar,
   Heart,
+  Images,
   Monitor,
   Palette,
   PlusCircle,
@@ -40,7 +41,7 @@ import { apiClient } from '@/lib/api-client';
 import { useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { customColorAtom, filterOpenAtom, selectionModeAtom } from '@/stores/ui';
-import type { HueCategory, StackFilter } from '@/types';
+import type { HueCategory, MediaCategory, MediaType, StackFilter } from '@/types';
 
 // 色味カテゴリの定義（7色、ブライト-ライト間のトーン）
 const HUE_CATEGORIES: { id: HueCategory; name: string; color: string }[] = [
@@ -55,6 +56,10 @@ const HUE_CATEGORIES: { id: HueCategory; name: string; color: string }[] = [
 
 const FILTER_CHOICE_BUTTON_CLASS =
   'px-1.5 py-3 rounded-md text-[11px] font-medium leading-none whitespace-nowrap transition-colors';
+
+function isMediaCategory(value: unknown): value is MediaCategory {
+  return value === 'image' || value === 'comic' || value === 'video';
+}
 
 interface FilterPanelProps {
   currentFilter: StackFilter;
@@ -92,7 +97,11 @@ export default function FilterPanel({
   // Ref for the Search input to focus when panel opens
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const params = useParams({ strict: false });
-  const datasetId = (params as { datasetId?: string }).datasetId;
+  const routeParams = params as { datasetId?: string; mediaType?: string };
+  const datasetId = routeParams.datasetId;
+  const routeMediaCategory = isMediaCategory(routeParams.mediaType)
+    ? routeParams.mediaType
+    : undefined;
   const queryClient = useQueryClient();
 
   // Smart collection dialog state
@@ -134,6 +143,7 @@ export default function FilterPanel({
     if (filter.authors) config.authorNames = filter.authors;
     if (filter.hasNoTags) config.hasNoTags = filter.hasNoTags;
     if (filter.hasNoAuthor) config.hasNoAuthor = filter.hasNoAuthor;
+    if (filter.mediaCategory) config.mediaCategory = filter.mediaCategory;
     if (filter.mediaType) config.mediaType = filter.mediaType;
     if (filter.colorFilter) config.colorFilter = filter.colorFilter;
 
@@ -243,7 +253,10 @@ export default function FilterPanel({
       if (originalFilterConfig.hasNoTags) restoredFilter.hasNoTags = originalFilterConfig.hasNoTags;
       if (originalFilterConfig.hasNoAuthor)
         restoredFilter.hasNoAuthor = originalFilterConfig.hasNoAuthor;
-      if (originalFilterConfig.mediaType) restoredFilter.mediaType = originalFilterConfig.mediaType;
+      if (originalFilterConfig.mediaCategory)
+        restoredFilter.mediaCategory = originalFilterConfig.mediaCategory as MediaCategory;
+      if (originalFilterConfig.mediaType)
+        restoredFilter.mediaType = originalFilterConfig.mediaType as MediaType;
       if (originalFilterConfig.colorFilter)
         restoredFilter.colorFilter = originalFilterConfig.colorFilter;
 
@@ -251,8 +264,10 @@ export default function FilterPanel({
       onFilterChange(restoredFilter);
     } else {
       // For regular views and manual collections, clear all filters
-      const { datasetId, mediaType } = localFilter;
-      const clearedFilter = { datasetId, mediaType };
+      const clearedFilter: StackFilter = {
+        datasetId: localFilter.datasetId,
+        mediaCategory: routeMediaCategory,
+      };
       setLocalFilter(clearedFilter);
       onFilterChange(clearedFilter);
     }
@@ -261,10 +276,15 @@ export default function FilterPanel({
   const hasActiveFilters =
     isSmartCollection && isFilterModified
       ? true // For smart collections, show "Clear all" when filter is modified
-      : Object.keys(localFilter).some(
-          (key) =>
-            key !== 'datasetId' && key !== 'mediaType' && localFilter[key as keyof StackFilter]
-        );
+      : Object.keys(localFilter).some((key) => {
+          if (key === 'datasetId') return false;
+          if (key === 'mediaCategory') {
+            return Boolean(
+              localFilter.mediaCategory && localFilter.mediaCategory !== routeMediaCategory
+            );
+          }
+          return Boolean(localFilter[key as keyof StackFilter]);
+        });
 
   // Handle smart collection update
   const handleUpdateSmartCollection = async () => {
@@ -769,19 +789,18 @@ export default function FilterPanel({
               )}
             </div>
 
-            {/* Media Type */}
+            {/* Media Category */}
             <div className="space-y-2">
               <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
                 <Monitor size={16} />
-                {t.filter.mediaType}
+                {t.filter.mediaCategory}
               </label>
               <Select
-                value={localFilter.mediaType || 'all'}
+                value={localFilter.mediaCategory || 'all'}
                 onValueChange={(value) =>
                   updateFilter(
                     {
-                      mediaType:
-                        value === 'all' ? undefined : (value as 'image' | 'comic' | 'video'),
+                      mediaCategory: value === 'all' ? undefined : (value as MediaCategory),
                     },
                     true
                   )
@@ -791,10 +810,39 @@ export default function FilterPanel({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">{t.filter.allTypes}</SelectItem>
+                  <SelectItem value="all">{t.filter.allCategories}</SelectItem>
                   <SelectItem value="image">{t.filter.images}</SelectItem>
                   <SelectItem value="comic">{t.filter.comics}</SelectItem>
                   <SelectItem value="video">{t.filter.videos}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Media Type */}
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                <Images size={16} />
+                {t.filter.mediaType}
+              </label>
+              <Select
+                value={localFilter.mediaType || 'all'}
+                onValueChange={(value) =>
+                  updateFilter(
+                    {
+                      mediaType: value === 'all' ? undefined : (value as MediaType),
+                    },
+                    true
+                  )
+                }
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{t.filter.allMediaTypes}</SelectItem>
+                  <SelectItem value="image">{t.filter.images}</SelectItem>
+                  <SelectItem value="video">{t.filter.videos}</SelectItem>
+                  <SelectItem value="multipleImages">{t.filter.multipleImages}</SelectItem>
                 </SelectContent>
               </Select>
             </div>

@@ -26,17 +26,25 @@ const metadataRepository = new StandaloneMetadataRepository();
 const colorRepository = new StandaloneColorRepository();
 const autoTagRepository = new StandaloneAutoTagRepository();
 
-type MediaType = 'image' | 'comic' | 'video';
+type MediaCategory = 'image' | 'comic' | 'video';
 
-const isMediaType = (value: string): value is MediaType =>
+const isMediaType = (value: string): value is MediaCategory =>
   value === 'image' || value === 'comic' || value === 'video';
 
-const toMediaType = (value: string, file: File): MediaType => {
+const toMediaType = (value: string, file: File): MediaCategory => {
   if (isMediaType(value)) return value;
+  const extension = path.extname(file.name).toLowerCase();
+  if (extension === '.ai' || extension === '.svg' || extension === '.svgz') return 'image';
+  if (extension === '.pdf') return 'comic';
   const mimeType = (file.type || '').toLowerCase();
   if (mimeType.startsWith('video/')) return 'video';
   if (mimeType === 'application/pdf') return 'comic';
   return 'image';
+};
+
+const getPdfProcessingErrorMessage = (error: unknown) => {
+  if (!(error instanceof Error)) return null;
+  return error.message.includes('PDF') ? error.message : null;
 };
 
 const scheduleStandaloneAutoTagPrediction = (asset: { id?: number } | null) => {
@@ -50,7 +58,7 @@ const scheduleStandaloneAutoTagPrediction = (asset: { id?: number } | null) => {
 
 const getStandaloneColorStackIds = (
   dataSetId: number,
-  mediaType: MediaType | undefined,
+  mediaCategory: MediaCategory | undefined,
   colorFilter:
     | {
         hue?: number;
@@ -73,7 +81,7 @@ const getStandaloneColorStackIds = (
 
   return colorRepository.getMatchingStackIdsByFilter({
     dataSetId,
-    mediaType,
+    mediaType: mediaCategory,
     hue: colorFilter.hue,
     hex: colorFilter.hex,
     saturationRange:
@@ -130,12 +138,17 @@ app.get(
 
       const filters = queryParams.filters || {};
       const sort = queryParams.sort || { by: 'recommended', order: 'desc' };
+      const mediaCategory =
+        filters.mediaCategory && filters.mediaCategory !== 'all'
+          ? filters.mediaCategory
+          : undefined;
       const mediaType =
         filters.mediaType && filters.mediaType !== 'all' ? filters.mediaType : undefined;
-      const stackIds = getStandaloneColorStackIds(dataSetId, mediaType, filters.color);
+      const stackIds = getStandaloneColorStackIds(dataSetId, mediaCategory, filters.color);
       const result = stackRepository.getPaginated({
         dataSetId,
         collection: filters.collectionId,
+        mediaCategory,
         mediaType,
         tag: filters.tags?.includeAny ?? filters.tags?.include,
         author: filters.author?.includeAny ?? filters.author?.include,
@@ -350,6 +363,8 @@ app.post('/:dataSetId/stacks', async (c) => {
     scheduleStandaloneAutoTagPrediction(stack.assets?.[0] ?? null);
     return c.json(stack, 201);
   } catch (error) {
+    const pdfErrorMessage = getPdfProcessingErrorMessage(error);
+    if (pdfErrorMessage) return c.json({ error: pdfErrorMessage }, 400);
     console.error('Error creating stack:', error);
     return c.json({ error: 'Failed to create stack' }, 500);
   }

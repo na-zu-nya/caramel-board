@@ -10,7 +10,7 @@ import { useT } from '@/lib/i18n';
 import { navigationStateAtom } from '@/stores/navigation';
 import { currentFilterAtom } from '@/stores/ui';
 import { genListToken, saveViewContext } from '@/stores/view-context';
-import type { MediaGridItem, MediaType, StackFilter } from '@/types';
+import type { MediaCategory, MediaGridItem, StackFilter } from '@/types';
 
 export const Route = createFileRoute('/library/$datasetId/tag/$tagName')({
   component: TagDetailPage,
@@ -233,6 +233,6 @@ function toNumericId(value: string | number): number {
   return typeof value === 'number' ? value : Number.parseInt(value, 10);
 }
 
-function isMediaType(value: unknown): value is MediaType {
+function isMediaType(value: unknown): value is MediaCategory {
   return value === 'image' || value === 'comic' || value === 'video';
 }

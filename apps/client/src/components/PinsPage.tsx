@@ -26,7 +26,7 @@ import { apiClient } from '@/lib/api-client';
 import { getDefaultPinDisplayName, getMediaTypeLabel, useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { currentDatasetAtom, sidebarOpenAtom } from '@/stores/ui';
-import type { AvailableIcon, Collection, MediaType, Pin, PinType } from '@/types';
+import type { AvailableIcon, Collection, MediaCategory, Pin, PinType } from '@/types';
 import { AVAILABLE_ICONS } from '@/types';
 
 interface DragItem {
@@ -34,7 +34,7 @@ interface DragItem {
   index: number;
 }
 
-const MEDIA_TYPE_ICON_MAP: Record<MediaType, AvailableIcon> = {
+const MEDIA_TYPE_ICON_MAP: Record<MediaCategory, AvailableIcon> = {
   image: 'Image',
   comic: 'BookOpen',
   video: 'Film',
@@ -85,7 +85,7 @@ export default function PinsPage() {
   const [selectedType, setSelectedType] = useState<
     'COLLECTION' | 'MEDIA_TYPE' | 'OVERVIEW' | 'FAVORITES' | 'LIKES' | 'SCRATCH'
   >('MEDIA_TYPE');
-  const [selectedMediaType, setSelectedMediaType] = useState<MediaType>('image');
+  const [selectedMediaType, setSelectedMediaType] = useState<MediaCategory>('image');
   const [selectedIcon, setSelectedIcon] = useState<AvailableIcon>('Image');
   const [collections, setCollections] = useState<Array<{ id: number; name: string }>>([]);
   const [selectedCollectionId, setSelectedCollectionId] = useState<number | null>(null);
@@ -163,7 +163,7 @@ export default function PinsPage() {
 
   const resolveFixedIconForPin = (pin: Pin): AvailableIcon | null => {
     if (pin.type === 'MEDIA_TYPE' && pin.mediaType) {
-      return MEDIA_TYPE_ICON_MAP[pin.mediaType as MediaType];
+      return MEDIA_TYPE_ICON_MAP[pin.mediaType as MediaCategory];
     }
     if (pin.type === 'OVERVIEW') {
       return FIXED_TYPE_ICONS.OVERVIEW;
@@ -554,7 +554,7 @@ export default function PinsPage() {
               <div className="space-y-2">
                 <Label>{t.pins.mediaType}</Label>
                 <div className="grid grid-cols-3 gap-2">
-                  {(['image', 'comic', 'video'] as MediaType[]).map((type) => (
+                  {(['image', 'comic', 'video'] as MediaCategory[]).map((type) => (
                     <Button
                       key={type}
                       type="button"

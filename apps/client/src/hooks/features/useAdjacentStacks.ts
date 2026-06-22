@@ -1,6 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
-import type { Stack } from '@/types';
+import type { MediaCategory, Stack, StackFilter } from '@/types';
+
+function isMediaCategory(value: string | undefined): value is MediaCategory {
+  return value === 'image' || value === 'comic' || value === 'video';
+}
 
 interface UseAdjacentStacksOptions {
   datasetId: string;
@@ -24,9 +28,9 @@ export function useAdjacentStacks({
   const { data: stacksData } = useQuery({
     queryKey: ['stacks', 'paginated', { datasetId, mediaType, limit: 1000 }],
     queryFn: async () => {
-      const filter: any = { datasetId };
-      if (mediaType) {
-        filter.mediaType = mediaType;
+      const filter: StackFilter = { datasetId };
+      if (isMediaCategory(mediaType)) {
+        filter.mediaCategory = mediaType;
       }
 
       return await apiClient.getStacks({

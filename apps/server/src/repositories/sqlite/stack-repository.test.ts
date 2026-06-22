@@ -24,8 +24,18 @@ describe('StandaloneStackRepository search', () => {
       `INSERT INTO stacks (id, dataset_id, name, thumbnail, media_type, created_at, updated_at)
        VALUES
          (1, 1, 'Landscape Reference', '', 'image', ?, ?),
-         (2, 1, 'Portrait Reference', '', 'image', ?, ?)`
-    ).run(now, now, now, now);
+         (2, 1, 'Portrait Reference', '', 'image', ?, ?),
+         (3, 1, 'Motion Reference', '', 'comic', ?, ?)`
+    ).run(now, now, now, now, now, now);
+    db.prepare(
+      `INSERT INTO assets
+         (id, stack_id, file, thumbnail, file_type, original_name, hash, order_in_stack, created_at, updated_at)
+       VALUES
+         (1, 1, '/tmp/landscape.png', '', 'image/png', 'landscape.png', 'hash-1', 0, ?, ?),
+         (2, 2, '/tmp/portrait-1.png', '', 'image/png', 'portrait-1.png', 'hash-2', 0, ?, ?),
+         (3, 2, '/tmp/portrait-2.jpg', '', 'image/jpeg', 'portrait-2.jpg', 'hash-3', 1, ?, ?),
+         (4, 3, '/tmp/motion.mp4', '', 'video/mp4', 'motion.mp4', 'hash-4', 0, ?, ?)`
+    ).run(now, now, now, now, now, now, now, now);
     db.prepare(
       `INSERT INTO stack_auto_tag_aggregates
          (id, stack_id, aggregated_tags_json, top_tags_json, asset_count, threshold, created_at, updated_at)
@@ -84,5 +94,40 @@ describe('StandaloneStackRepository search', () => {
     });
 
     expect(result.total).toBe(0);
+  });
+
+  it('filters by actual media type independently from media category', () => {
+    const singleImage = repository.getPaginated({
+      dataSetId: 1,
+      mediaType: 'image',
+      limit: 50,
+      offset: 0,
+    });
+    const multipleImages = repository.getPaginated({
+      dataSetId: 1,
+      mediaType: 'multipleImages',
+      limit: 50,
+      offset: 0,
+    });
+    const categoryVideo = repository.getPaginated({
+      dataSetId: 1,
+      mediaCategory: 'comic',
+      mediaType: 'video',
+      limit: 50,
+      offset: 0,
+    });
+
+    expect(singleImage.stacks.map((stack) => [stack.id, stack.actualMediaType])).toEqual([
+      [1, 'image'],
+    ]);
+    expect(multipleImages.stacks.map((stack) => [stack.id, stack.actualMediaType])).toEqual([
+      [2, 'multipleImages'],
+    ]);
+    expect(categoryVideo.stacks.map((stack) => [stack.id, stack.mediaType])).toEqual([
+      [3, 'comic'],
+    ]);
+    expect(categoryVideo.stacks.map((stack) => [stack.id, stack.actualMediaType])).toEqual([
+      [3, 'video'],
+    ]);
   });
 });

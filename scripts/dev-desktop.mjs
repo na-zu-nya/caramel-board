@@ -1,8 +1,17 @@
 #!/usr/bin/env node
 
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 
 const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+
+const preflight = spawnSync(npmCommand, ['run', '-w', '@caramelboard/server', 'build'], {
+  env: process.env,
+  stdio: 'inherit',
+});
+
+if (preflight.status !== 0) {
+  process.exit(preflight.status ?? 1);
+}
 
 const commands = [
   {
@@ -12,6 +21,10 @@ const commands = [
   {
     name: 'client',
     args: ['run', '-w', '@caramelboard/client', 'dev:standalone'],
+  },
+  {
+    name: 'storybook',
+    args: ['run', '-w', '@caramelboard/client', 'dev:storybook'],
   },
 ];
 

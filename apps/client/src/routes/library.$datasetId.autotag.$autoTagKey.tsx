@@ -85,6 +85,7 @@ function AutoTagStacksPage() {
   const _filterKey = useMemo(() => {
     const f = currentFilter || ({} as any);
     const key = {
+      mediaCategory: f.mediaCategory ?? undefined,
       mediaType: f.mediaType ?? undefined,
       search: f.search ?? undefined,
       authors: Array.isArray(f.authors) ? [...f.authors].sort() : undefined,
@@ -236,12 +237,12 @@ function AutoTagStacksPage() {
       typeof item.id === 'string' ? Number.parseInt(item.id as string, 10) : (item.id as number);
     const currentIndex = Math.max(0, ids.indexOf(clickedId));
 
-    const mediaType = (item as any).mediaType as string | undefined;
+    const mediaType = item.mediaType;
     const token = genListToken({ datasetId, mediaType });
     saveViewContext({
       token,
       datasetId,
-      mediaType: mediaType as any,
+      mediaType,
       ids,
       currentIndex,
       createdAt: Date.now(),

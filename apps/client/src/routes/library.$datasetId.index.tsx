@@ -15,7 +15,7 @@ import { useStackTile } from '@/hooks/useStackTile';
 import { apiClient } from '@/lib/api-client';
 import { getMediaTypeLabel, useT } from '@/lib/i18n';
 import { currentFilterAtom } from '@/stores/ui';
-import type { MediaType, Stack } from '@/types';
+import type { MediaCategory, Stack } from '@/types';
 
 type StackCardItem = {
   id: string | number;
@@ -90,7 +90,7 @@ function DatasetHome() {
     setCurrentFilter({ datasetId });
   }, [datasetId, setCurrentFilter]);
 
-  const mediaTypeConfig: Record<MediaType, { label: string; Icon: LucideIcon }> = {
+  const mediaTypeConfig: Record<MediaCategory, { label: string; Icon: LucideIcon }> = {
     image: { label: getMediaTypeLabel(t, 'image'), Icon: Image },
     comic: { label: getMediaTypeLabel(t, 'comic'), Icon: BookOpen },
     video: { label: getMediaTypeLabel(t, 'video'), Icon: Film },
@@ -190,7 +190,7 @@ function DatasetHome() {
           <SectionHeader title={t.overview.mediaTypes} />
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {overview?.mediaTypes.map((media) => {
-              const config = mediaTypeConfig[media.mediaType as MediaType];
+              const config = mediaTypeConfig[media.mediaType as MediaCategory];
               return (
                 <EntityCard
                   key={media.mediaType}

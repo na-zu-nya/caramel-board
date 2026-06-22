@@ -17,7 +17,7 @@ import { createZipArchive } from '../utils/zip';
 
 export const stacksRoute = new Hono();
 
-type MediaType = 'image' | 'comic' | 'video';
+type MediaCategory = 'image' | 'comic' | 'video';
 type ImportedFile = {
   path: string;
   originalname: string;
@@ -40,7 +40,8 @@ const colorRepository = new StandaloneColorRepository();
 const PaginatedQuerySchema = z.object({
   dataSetId: z.coerce.number().int().positive(),
   collection: z.coerce.number().int().positive().optional(),
-  mediaType: z.enum(['image', 'comic', 'video']).optional(),
+  mediaCategory: z.enum(['image', 'comic', 'video']).optional(),
+  mediaType: z.enum(['image', 'video', 'multipleImages']).optional(),
   tag: z.union([z.array(z.string()), z.string()]).optional(),
   author: z.union([z.array(z.string()), z.string()]).optional(),
   fav: z.enum(['0', '1']).optional(),
@@ -84,7 +85,8 @@ const AutoTagSearchQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).optional().default(50),
   offset: z.coerce.number().int().min(0).optional().default(0),
   search: z.string().optional(),
-  mediaType: z.enum(['image', 'comic', 'video']).optional(),
+  mediaCategory: z.enum(['image', 'comic', 'video']).optional(),
+  mediaType: z.enum(['image', 'video', 'multipleImages']).optional(),
   author: z.union([z.array(z.string()), z.string()]).optional(),
   tag: z.union([z.array(z.string()), z.string()]).optional(),
   fav: z.enum(['0', '1']).optional(),
@@ -176,7 +178,7 @@ const parseIds = (value: string | string[]) => {
 
 const getStandaloneColorStackIds = (options: {
   dataSetId: number;
-  mediaType?: MediaType;
+  mediaCategory?: MediaCategory;
   hueCategories?: string | string[];
   toneSaturation?: number;
   toneLightness?: number;
@@ -196,7 +198,7 @@ const getStandaloneColorStackIds = (options: {
 
   return colorRepository.getMatchingStackIdsByFilter({
     dataSetId: options.dataSetId,
-    mediaType: options.mediaType,
+    mediaType: options.mediaCategory,
     hueCategories,
     tonePoint,
     toneTolerance: options.toneTolerance,
@@ -225,8 +227,11 @@ const getContentType = (filename: string, fileType?: string | null) => {
     '.gif': 'image/gif',
     '.avif': 'image/avif',
     '.bmp': 'image/bmp',
+    '.svg': 'image/svg+xml',
+    '.svgz': 'image/svg+xml',
     '.tif': 'image/tiff',
     '.tiff': 'image/tiff',
+    '.ai': 'application/pdf',
   };
   return types[ext] ?? fileType ?? 'application/octet-stream';
 };
@@ -327,13 +332,13 @@ const resolveFileNameFromHeaders = (urlString: string, contentDisposition: strin
 const inferMediaTypeFromMime = (
   mime: string | null | undefined,
   originalName: string
-): MediaType => {
-  if (mime?.startsWith('video/')) return 'video';
-  if (mime === 'application/pdf') return 'comic';
-
+): MediaCategory => {
   const ext = path.extname(originalName).toLowerCase();
+  if (ext === '.ai' || ext === '.svg' || ext === '.svgz') return 'image';
   if (ext === '.pdf') return 'comic';
   if (['.mp4', '.mov', '.avi', '.mkv', '.webm', '.mpeg', '.mpg'].includes(ext)) return 'video';
+  if (mime?.startsWith('video/')) return 'video';
+  if (mime === 'application/pdf') return 'comic';
   return 'image';
 };
 
@@ -347,6 +352,7 @@ const lookupMimeFromExtension = (originalName: string): string | null => {
     '.gif': 'image/gif',
     '.webp': 'image/webp',
     '.svg': 'image/svg+xml',
+    '.svgz': 'image/svg+xml',
     '.bmp': 'image/bmp',
     '.avif': 'image/avif',
     '.heic': 'image/heic',
@@ -358,6 +364,7 @@ const lookupMimeFromExtension = (originalName: string): string | null => {
     '.mpeg': 'video/mpeg',
     '.mpg': 'video/mpeg',
     '.pdf': 'application/pdf',
+    '.ai': 'application/pdf',
   };
   return mapping[ext] ?? null;
 };
@@ -528,6 +535,7 @@ stacksRoute.get('/paginated', async (c) => {
   const stackListParams: StandaloneStackListParams = {
     dataSetId: query.dataSetId,
     collection: query.collection,
+    mediaCategory: query.mediaCategory,
     mediaType: query.mediaType,
     tag: query.tag,
     author: query.author,
@@ -547,7 +555,7 @@ stacksRoute.get('/paginated', async (c) => {
 
   const stackIds = getStandaloneColorStackIds({
     dataSetId: stackListParams.dataSetId,
-    mediaType: stackListParams.mediaType,
+    mediaCategory: stackListParams.mediaCategory,
     hueCategories: query.hueCategories,
     toneSaturation: query.toneSaturation,
     toneLightness: query.toneLightness,
@@ -585,6 +593,7 @@ stacksRoute.get('/search/autotag', async (c) => {
     limit,
     offset,
     search,
+    mediaCategory,
     mediaType,
     author,
     tag,
@@ -604,6 +613,7 @@ stacksRoute.get('/search/autotag', async (c) => {
       limit,
       offset,
       search,
+      mediaCategory,
       mediaType,
       author,
       tag,
@@ -721,6 +731,8 @@ stacksRoute.post('/:id{[0-9]+}/assets', async (c) => {
     if (error instanceof DuplicateAssetError) {
       return c.json({ error: error.message, code: error.code, details: error.details }, 409);
     }
+    const pdfErrorMessage = getPdfProcessingErrorMessage(error);
+    if (pdfErrorMessage) return c.json({ error: pdfErrorMessage }, 400);
     throw error;
   }
 });

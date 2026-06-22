@@ -96,7 +96,7 @@ const toNumber = (value: unknown) => (typeof value === 'number' ? value : undefi
 const getSmartCollectionColorStackIds = (
   repository: StandaloneColorRepository,
   dataSetId: number,
-  mediaType: 'image' | 'comic' | 'video' | undefined,
+  mediaCategory: 'image' | 'comic' | 'video' | undefined,
   colorFilter: unknown
 ) => {
   if (!isRecord(colorFilter)) return undefined;
@@ -118,7 +118,7 @@ const getSmartCollectionColorStackIds = (
 
   return repository.getMatchingStackIdsByFilter({
     dataSetId,
-    mediaType,
+    mediaType: mediaCategory,
     hueCategories,
     tonePoint,
     toneTolerance: toNumber(colorFilter.toneTolerance),
@@ -555,20 +555,27 @@ export class StandaloneLibraryRepository {
     const collection = this.getCollectionRow(collectionId);
     if (!collection || collection.type !== 'SMART') return null;
     const filterConfig = parseJsonRecord(collection.filter_config_json);
+    const mediaCategory =
+      filterConfig.mediaCategory === 'image' ||
+      filterConfig.mediaCategory === 'comic' ||
+      filterConfig.mediaCategory === 'video'
+        ? filterConfig.mediaCategory
+        : undefined;
     const mediaType =
       filterConfig.mediaType === 'image' ||
-      filterConfig.mediaType === 'comic' ||
-      filterConfig.mediaType === 'video'
+      filterConfig.mediaType === 'video' ||
+      filterConfig.mediaType === 'multipleImages'
         ? filterConfig.mediaType
         : undefined;
     const stackIds = getSmartCollectionColorStackIds(
       this.colorRepository,
       collection.dataset_id,
-      mediaType,
+      mediaCategory,
       filterConfig.colorFilter
     );
     const params: StandaloneStackListParams = {
       dataSetId: collection.dataset_id,
+      mediaCategory,
       mediaType,
       tag: Array.isArray(filterConfig.tagIds)
         ? filterConfig.tagIds.map((value) => String(value))

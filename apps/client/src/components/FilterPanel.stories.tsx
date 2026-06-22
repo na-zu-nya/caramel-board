@@ -20,6 +20,8 @@ function FilterPanelStory() {
   const [filter, setFilter] = useState<StackFilter>({
     datasetId: '1',
     search: 'blue reference',
+    mediaCategory: 'comic',
+    mediaType: 'multipleImages',
   });
   const queryClient = useMemo(() => new QueryClient(), []);
   const jotaiStore = useMemo(() => {

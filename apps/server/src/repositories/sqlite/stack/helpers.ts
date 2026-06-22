@@ -40,6 +40,8 @@ const IMAGE_EXTENSIONS = new Set([
   'avif',
   'heic',
   'heif',
+  'svg',
+  'svgz',
   'tif',
   'tiff',
 ]);

@@ -88,7 +88,9 @@ function FavoritesPage() {
     const items = favoriteItems?.stacks ?? [];
     const search = currentFilter.search?.trim().toLowerCase();
     const filtered = items.filter((item) => {
-      if (currentFilter.mediaType && item.mediaType !== currentFilter.mediaType) return false;
+      if (currentFilter.mediaCategory && item.mediaType !== currentFilter.mediaCategory)
+        return false;
+      if (currentFilter.mediaType && item.actualMediaType !== currentFilter.mediaType) return false;
       if (
         search &&
         !String(item.name ?? '')
@@ -124,7 +126,13 @@ function FavoritesPage() {
           );
       }
     });
-  }, [currentFilter.mediaType, currentFilter.search, currentSort, favoriteItems?.stacks]);
+  }, [
+    currentFilter.mediaCategory,
+    currentFilter.mediaType,
+    currentFilter.search,
+    currentSort,
+    favoriteItems?.stacks,
+  ]);
 
   const total = stableLoadedItems.length;
   const allItems = stableLoadedItems;

@@ -143,7 +143,7 @@ export default function StackGrid({
         ? currentFilter.authors[0]
         : undefined;
 
-    let targetMediaType = currentFilter.mediaType || undefined;
+    let targetMediaType = currentFilter.mediaCategory || undefined;
     const collectionMatch = window.location.pathname.match(/(?:collections|scratch)\/(\d+)/);
     const inCollectionView = Boolean(collectionMatch);
     const collectionId = collectionMatch ? Number.parseInt(collectionMatch[1], 10) : undefined;
@@ -884,7 +884,7 @@ export default function StackGrid({
           ? currentFilter.authors[0]
           : undefined;
 
-      let targetMediaType = currentFilter.mediaType || undefined;
+      let targetMediaType = currentFilter.mediaCategory || undefined;
       const collectionMatch = window.location.pathname.match(/(?:collections|scratch)\/(\d+)/);
       const inCollectionView = Boolean(collectionMatch);
       const collectionId = collectionMatch ? Number.parseInt(collectionMatch[1], 10) : undefined;

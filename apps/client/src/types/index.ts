@@ -13,8 +13,12 @@ export interface Dataset {
   isDefault?: boolean;
 }
 
-// Media types
-export type MediaType = 'image' | 'comic' | 'video';
+// Media categories are user-facing stack buckets. They do not necessarily
+// describe the actual files contained in the stack.
+export type MediaCategory = 'image' | 'comic' | 'video';
+
+// Media types describe the actual file composition of a stack.
+export type MediaType = 'image' | 'video' | 'multipleImages';
 
 // Color types
 export interface DominantColor {
@@ -56,7 +60,8 @@ export interface Stack {
   id: string | number;
   datasetId: string;
   name: string;
-  mediaType: MediaType;
+  mediaType: MediaCategory;
+  actualMediaType?: MediaType;
   thumbnailUrl?: string;
   thumbnail?: string; // Legacy support
   assetCount: number;
@@ -268,7 +273,7 @@ export interface Pin {
   updatedAt: string;
   // References
   collectionId?: number; // For COLLECTION type
-  mediaType?: MediaType; // For MEDIA_TYPE type
+  mediaType?: MediaCategory; // For MEDIA_TYPE type
   // Relations (populated when fetched)
   collection?: Collection;
 }
@@ -347,6 +352,7 @@ export interface StackPaginatedResponse {
 export interface StackFilter {
   datasetId?: string;
   collectionId?: string;
+  mediaCategory?: MediaCategory;
   mediaType?: MediaType;
   tags?: string[];
   authors?: string[];
@@ -379,7 +385,8 @@ export interface MediaGridItem {
   stackId?: string | number;
   assetId?: string | number;
   name: string;
-  mediaType?: MediaType;
+  mediaType?: MediaCategory;
+  actualMediaType?: MediaType;
   thumbnail?: string;
   thumbnailUrl?: string;
   favorited?: boolean;

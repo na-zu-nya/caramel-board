@@ -30,7 +30,7 @@ import { apiClient } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 import { infoSidebarOpenAtom } from '@/stores/ui';
 import { genListToken, saveViewContext } from '@/stores/view-context';
-import type { MediaType } from '@/types';
+import type { MediaCategory } from '@/types';
 
 const HELP_URL = 'https://github.com/na-zu-nya/caramel-board';
 const MAX_FILES_PER_DROP = 4;
@@ -400,7 +400,7 @@ export function SetupPageContainer({ preview = false }: SetupPageContainerProps)
       saveViewContext({
         token,
         datasetId: createdDatasetId,
-        mediaType: 'image' as MediaType,
+        mediaType: 'image' as MediaCategory,
         ids,
         currentIndex: currentIndex >= 0 ? currentIndex : 0,
         createdAt: 0,

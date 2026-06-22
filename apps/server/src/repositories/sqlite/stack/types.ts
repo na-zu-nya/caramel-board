@@ -1,7 +1,11 @@
+export type StackMediaCategory = 'image' | 'comic' | 'video';
+export type StackMediaType = 'image' | 'video' | 'multipleImages';
+
 export interface StandaloneStackListParams {
   dataSetId: number;
   collection?: number;
-  mediaType?: 'image' | 'comic' | 'video';
+  mediaCategory?: StackMediaCategory;
+  mediaType?: StackMediaType;
   tag?: string | string[];
   author?: string | string[];
   fav?: '0' | '1';
@@ -99,7 +103,7 @@ export interface AddAssetWithFileOptions {
 export interface CreateStackWithFileInput {
   dataSetId: number;
   name: string;
-  mediaType: 'image' | 'comic' | 'video';
+  mediaType: StackMediaCategory;
   author?: string;
   tags?: string[];
   file: StandaloneFileInput;

@@ -51,9 +51,24 @@ export function LibrarySection({
       const [fav, liked, img, com, vid, scr] = await Promise.all([
         apiClient.getStacks({ datasetId, filter: { isFavorite: true }, limit: 1, offset: 0 }),
         apiClient.getStacks({ datasetId, filter: { isLiked: true }, limit: 1, offset: 0 }),
-        apiClient.getStacks({ datasetId, filter: { mediaType: 'image' }, limit: 1, offset: 0 }),
-        apiClient.getStacks({ datasetId, filter: { mediaType: 'comic' }, limit: 1, offset: 0 }),
-        apiClient.getStacks({ datasetId, filter: { mediaType: 'video' }, limit: 1, offset: 0 }),
+        apiClient.getStacks({
+          datasetId,
+          filter: { mediaCategory: 'image' },
+          limit: 1,
+          offset: 0,
+        }),
+        apiClient.getStacks({
+          datasetId,
+          filter: { mediaCategory: 'comic' },
+          limit: 1,
+          offset: 0,
+        }),
+        apiClient.getStacks({
+          datasetId,
+          filter: { mediaCategory: 'video' },
+          limit: 1,
+          offset: 0,
+        }),
         scratch?.id
           ? apiClient.getStacks({
               datasetId,

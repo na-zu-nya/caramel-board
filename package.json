@@ -8,22 +8,13 @@
     "apps/*"
   ],
   "scripts": {
-    "sync:version": "node scripts/sync-version.mjs",
-    "build": "npm run sync:version && turbo run build",
-    "dev": "turbo run dev --parallel",
-    "dev:desktop": "node scripts/dev-desktop.mjs",
-    "dev:next": "turbo run dev:next --parallel",
+    "dev": "node scripts/dev-desktop.mjs",
+    "build": "npm run -w @caramelboard/desktop build:app",
     "lint": "turbo run lint",
     "format": "turbo run format",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
-    "test:watch": "turbo run test:watch",
-    "clean": "turbo run clean --parallel && rm -rf node_modules/.cache node_modules/.vite .turbo",
-    "clean:all": "npm run clean && rm -rf node_modules apps/*/node_modules",
-    "desktop:prepare": "npm run -w @caramelboard/desktop prepare:sidecar",
-    "desktop:dev": "npm run -w @caramelboard/desktop dev",
-    "desktop:build": "npm run -w @caramelboard/desktop build:app",
-    "update:icon": "node scripts/update-icons.mjs"
+    "clean": "turbo run clean --parallel && rm -rf node_modules/.cache node_modules/.vite .turbo"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.2.4",

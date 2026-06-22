@@ -20,10 +20,11 @@ interface PageData {
 
 function stableFilterKey(filter: StackFilter): string {
   try {
-    const f = filter || ({} as StackFilter);
+    const f = filter || {};
     const key = {
-      datasetId: (f as any).datasetId ?? undefined,
-      mediaType: (f as any).mediaType ?? undefined,
+      datasetId: f.datasetId ?? undefined,
+      mediaCategory: f.mediaCategory ?? undefined,
+      mediaType: f.mediaType ?? undefined,
       search: f.search ?? undefined,
       tags: Array.isArray(f.tags) ? [...f.tags].sort() : undefined,
       authors: Array.isArray(f.authors) ? [...f.authors].sort() : undefined,

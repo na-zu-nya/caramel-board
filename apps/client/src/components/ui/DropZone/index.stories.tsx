@@ -35,7 +35,8 @@ export const Default: Story = {
         <div className="border border-dashed border-gray-400 rounded-xl px-8 py-10 text-center space-y-4 bg-white">
           <p className="text-lg font-semibold text-gray-800">ここにファイルや画像URLをドロップ</p>
           <p className="text-sm text-gray-500">
-            Finderやローカルファイルはもちろん、X / Pixiv などからの画像ドロップもテストできます。
+            Finderやローカルファイルはもちろん、SVG / PDF互換AI /
+            画像URLのドロップもテストできます。
           </p>
           <p className="text-xs text-gray-400">
             ファイルが取得できる場合はファイルを優先し、取得できないときだけ複数URLを処理します。

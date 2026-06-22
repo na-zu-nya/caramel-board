@@ -11,7 +11,7 @@ import { useT } from '@/lib/i18n';
 import { navigationStateAtom } from '@/stores/navigation';
 import { currentFilterAtom } from '@/stores/ui';
 import { genListToken, saveViewContext } from '@/stores/view-context';
-import type { MediaGridItem, MediaType, StackFilter } from '@/types';
+import type { MediaCategory, MediaGridItem, StackFilter } from '@/types';
 
 export const Route = createFileRoute('/library/$datasetId/media-type/$mediaType')({
   component: MediaTypeList,
@@ -29,6 +29,7 @@ function MediaTypeList() {
     authors?: string[];
     hasNoTags?: boolean;
     hasNoAuthor?: boolean;
+    mediaType?: StackFilter['mediaType'];
     colorFilter?: string;
   };
   const { data: dataset } = useDataset(datasetId);
@@ -75,7 +76,8 @@ function MediaTypeList() {
     // Otherwise, initialize from URL params
     const newFilter: StackFilter = {
       datasetId,
-      mediaType: mediaType as MediaType,
+      mediaCategory: mediaType as MediaCategory,
+      mediaType: search.mediaType,
       // Preserve explicit false/empty values correctly; avoid `|| undefined` which drops false
       tags: search.tags ?? undefined,
       search: search.search ?? undefined,
@@ -97,6 +99,7 @@ function MediaTypeList() {
     search.authors,
     search.hasNoTags,
     search.hasNoAuthor,
+    search.mediaType,
     search.colorFilter,
     setCurrentFilter,
     navigationState,
@@ -148,7 +151,7 @@ function MediaTypeList() {
       saveViewContext({
         token,
         datasetId,
-        mediaType: mediaType as any,
+        mediaType: mediaType as MediaCategory,
         filters: currentFilter,
         sort: currentSort,
         ids,
@@ -311,6 +314,9 @@ function MediaTypeList() {
       if (newFilter.hasNoAuthor !== undefined) {
         searchParams.hasNoAuthor = newFilter.hasNoAuthor;
       }
+      if (newFilter.mediaType) {
+        searchParams.mediaType = newFilter.mediaType;
+      }
       if (newFilter.colorFilter) {
         searchParams.colorFilter = JSON.stringify(newFilter.colorFilter);
       }
@@ -381,7 +387,7 @@ function MediaTypeList() {
       saveViewContext({
         token,
         datasetId,
-        mediaType: mediaType as any,
+        mediaType: mediaType as MediaCategory,
         filters: currentFilter,
         sort: currentSort,
         ids: loadedIds,

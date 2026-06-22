@@ -1,4 +1,4 @@
-import type { MediaType } from '@/types';
+import type { MediaCategory } from '@/types';
 
 // Common props for all sidebar sections
 export interface SidebarSectionProps {
@@ -12,12 +12,12 @@ export interface NavigationPinHandlers {
   isPinned: (
     type: 'COLLECTION' | 'MEDIA_TYPE' | 'OVERVIEW',
     id?: number,
-    mediaType?: MediaType
+    mediaType?: MediaCategory
   ) => boolean;
   onPinCollection: (collection: { id: number; name?: string }, iconName: string) => void;
   onUnpinCollection: (collection: { id: number }) => void;
-  onPinMediaType: (mediaType: MediaType, iconName: string) => void;
-  onUnpinMediaType: (mediaType: MediaType) => void;
+  onPinMediaType: (mediaType: MediaCategory, iconName: string) => void;
+  onUnpinMediaType: (mediaType: MediaCategory) => void;
   onPinOverview: (iconName: string) => void;
   onUnpinOverview: () => void;
 }
