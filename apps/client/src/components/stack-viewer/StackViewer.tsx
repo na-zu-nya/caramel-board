@@ -4,6 +4,7 @@ import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import {
   Download,
   GalleryVerticalEnd,
+  ImagePlus,
   Info,
   NotebookText,
   PenTool,
@@ -97,6 +98,11 @@ const getAssetCreatedAtValue = (asset: Asset) => {
   return Number.isFinite(numericId) ? numericId : 0;
 };
 
+const toPositiveNumericId = (value: string | number) => {
+  const id = typeof value === 'string' ? Number.parseInt(value, 10) : value;
+  return Number.isFinite(id) && id > 0 ? id : null;
+};
+
 const sortAssetsByPreset = (assets: Asset[], preset: AssetSortPreset) => {
   const sorted = [...assets];
   sorted.sort((left, right) => {
@@ -144,7 +150,7 @@ function ViewerShell({
     <FullPageDropZone
       onDrop={onDrop}
       onUrlDrop={onUrlDrop}
-      accept="image/*,video/*,application/pdf"
+      accept="image/*,video/*,application/pdf,.pdf,.ai,.svg,.svgz"
       multiple
       disabled={isPenMode || isNativeInteractionMode}
     >
@@ -552,6 +558,60 @@ export default function StackViewer({
     closeViewerContextMenu();
     void handleDownloadCurrentVideoFrame();
   }, [closeViewerContextMenu, handleDownloadCurrentVideoFrame]);
+  const handleContextMenuSetThumbnailSource = useCallback(async () => {
+    if (!stack || !currentAsset) return;
+    closeViewerContextMenu();
+
+    const numericStackId = toPositiveNumericId(stack.id);
+    const numericAssetId = toPositiveNumericId(currentAsset.id);
+    if (numericStackId === null || numericAssetId === null) {
+      addNotification({ type: 'error', message: t.viewer.thumbnailSourceSaveFailed });
+      return;
+    }
+
+    const carousel = imageCarouselRef.current;
+    const isVideo = isVideoAsset(currentAsset);
+    const currentTime = isVideo ? Number(carousel?.getCurrentTime() ?? 0) : undefined;
+    const playback =
+      isVideo && carousel?.isCurrentVideo()
+        ? { time: Number(currentTime ?? 0) || 0, wasPlaying: carousel.getIsPlaying() }
+        : null;
+
+    try {
+      await apiClient.setStackThumbnailSource({
+        datasetId,
+        stackId: numericStackId,
+        assetId: numericAssetId,
+        pageNumber: currentPage + 1,
+        timeSeconds: currentTime,
+      });
+      await refetch();
+      if (playback) {
+        imageCarouselRef.current?.requestRestorePlayback(playback);
+      }
+      await queryClient.invalidateQueries({ queryKey: ['stacks'] });
+      await queryClient.invalidateQueries({ queryKey: ['favorite-items', datasetId] });
+      await queryClient.invalidateQueries({ queryKey: ['dataset-overview', datasetId] });
+      addNotification({ type: 'success', message: t.viewer.thumbnailSourceSaved });
+    } catch (error) {
+      console.error('Failed to set stack thumbnail source:', error);
+      if (playback) {
+        imageCarouselRef.current?.requestRestorePlayback(playback);
+      }
+      addNotification({ type: 'error', message: t.viewer.thumbnailSourceSaveFailed });
+    }
+  }, [
+    addNotification,
+    closeViewerContextMenu,
+    currentAsset,
+    currentPage,
+    datasetId,
+    imageCarouselRef,
+    queryClient,
+    refetch,
+    stack,
+    t,
+  ]);
   const handleContextMenuFindSimilar = useCallback(async () => {
     if (!stack) return;
     closeViewerContextMenu();
@@ -1353,7 +1413,7 @@ export default function StackViewer({
           {isViewerContextMenuOpen && !isListMode && (
             <div
               ref={viewerContextMenuRef}
-              className="fixed z-50 w-48 overflow-hidden rounded-md border border-gray-200 bg-white p-1 text-gray-700 shadow-md"
+              className="fixed z-50 w-60 overflow-hidden rounded-md border border-gray-200 bg-white p-1 text-gray-700 shadow-md"
               style={{
                 left: viewerContextMenuPosition.x,
                 top: viewerContextMenuPosition.y,
@@ -1387,6 +1447,17 @@ export default function StackViewer({
                 >
                   <Download className="w-4 h-4 mr-2" />
                   {t.viewer.downloadFrame}
+                </button>
+              )}
+              {currentAsset && (
+                <button
+                  type="button"
+                  className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-left text-[13px] outline-none transition-colors hover:bg-gray-100 hover:text-gray-700"
+                  onClick={() => void handleContextMenuSetThumbnailSource()}
+                  role="menuitem"
+                >
+                  <ImagePlus className="w-4 h-4 mr-2" />
+                  {isCurrentVideoAsset ? t.viewer.useFrameAsThumbnail : t.viewer.usePageAsThumbnail}
                 </button>
               )}
               <button

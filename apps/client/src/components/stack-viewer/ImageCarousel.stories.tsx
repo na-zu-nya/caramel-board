@@ -29,6 +29,17 @@ const makeVideoAsset = (id: number): Asset => ({
   createdAt: '2026-01-01T00:00:00.000Z',
 });
 
+const makeSvgAsset = (id: number): Asset => ({
+  id,
+  stackId: 1,
+  file: '/files/vector-reference.svg',
+  originalName: 'vector-reference.svg',
+  mimeType: 'image/svg+xml',
+  preview: sampleImage,
+  thumbnail: sampleImage,
+  createdAt: '2026-01-01T00:00:00.000Z',
+});
+
 const meta: Meta<typeof ImageCarousel> = {
   title: 'StackViewer/ImageCarousel',
   component: ImageCarousel,
@@ -70,5 +81,11 @@ export const Video: Story = {
   args: {
     currentAsset: makeVideoAsset(2),
     uiInsets: { top: 16, left: 16, right: 16 },
+  },
+};
+
+export const SvgPreview: Story = {
+  args: {
+    currentAsset: makeSvgAsset(3),
   },
 };

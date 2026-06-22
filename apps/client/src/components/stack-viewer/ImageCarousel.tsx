@@ -13,7 +13,7 @@ import { createPortal } from 'react-dom';
 import VideoSeekBar from '@/components/ui/SeekBar/VideoSeekBar';
 import { VideoTransportControls } from '@/components/ui/VideoTransportControls';
 import { useVideoPausedSeekFrameFlush } from '@/hooks/features/useVideoPausedSeekFrameFlush';
-import { isVideoAsset } from '@/lib/media';
+import { getImageDisplaySource, isVideoAsset } from '@/lib/media';
 import { cn } from '@/lib/utils';
 import {
   cycleViewerFps,
@@ -120,6 +120,16 @@ const stripUrlParams = (src: string): string => {
   return src.slice(0, Math.min(...cuts));
 };
 
+const withImageRefreshKey = (src: string, refreshKey?: string | number | null): string => {
+  if (!src || refreshKey === undefined || refreshKey === null || refreshKey === '') return src;
+  if (/^(data|blob):/i.test(src)) return src;
+  const hashIndex = src.indexOf('#');
+  const base = hashIndex >= 0 ? src.slice(0, hashIndex) : src;
+  const hash = hashIndex >= 0 ? src.slice(hashIndex) : '';
+  const separator = base.includes('?') ? '&' : '?';
+  return `${base}${separator}cb=${encodeURIComponent(String(refreshKey))}${hash}`;
+};
+
 const getAssetFilenameBase = (asset?: Asset | null) => {
   const source = asset?.originalName || asset?.file || asset?.url || 'video-frame';
   const clean = stripUrlParams(source);
@@ -220,7 +230,8 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
           asset.thumbnail || asset.thumbnailUrl || asset.preview || asset.file || asset.url || null
         );
       }
-      return asset.file || asset.url || null;
+      const source = getImageDisplaySource(asset);
+      return source ? withImageRefreshKey(source, asset.updatedAt) : null;
     }, []);
 
     const clearResumeAfterSeekTimer = useCallback(() => {
@@ -1090,7 +1101,9 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
 
       const style = getImageStyle(position);
       const isVideo = isVideoAsset(asset);
-      const source = getVideoSource(asset);
+      const source = isVideo
+        ? getVideoSource(asset)
+        : withImageRefreshKey(getImageDisplaySource(asset), asset.updatedAt);
       const dragStyle: DragImageStyle | undefined = !isVideo
         ? {
             cursor: nativeDragEnabled ? 'grab' : 'default',
