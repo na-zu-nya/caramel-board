@@ -4,10 +4,10 @@ import { z } from 'zod';
 import { createAssetService } from '../features/datasets/services/asset-service';
 import { createColorSearchService } from '../features/datasets/services/color-search-service';
 import { createStackService } from '../features/datasets/services/stack-service';
+import { isStandaloneSqliteEnabled } from '../repositories/sqlite/sqlite';
+import { StandaloneStackRepository } from '../repositories/sqlite/stack-repository';
 import { useDataStorage, usePrisma } from '../shared/di';
 import { ensureSuperUser } from '../shared/services/UserService';
-import { isStandaloneSqliteEnabled } from '../standalone/sqlite';
-import { StandaloneStackRepository } from '../standalone/stack-repository';
 
 export const assetsLiteRoute = new Hono();
 

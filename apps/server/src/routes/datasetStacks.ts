@@ -10,6 +10,13 @@ import { createSearchService, SearchMode } from '../features/datasets/services/s
 import { createStackService } from '../features/datasets/services/stack-service';
 import { createTagStatsService } from '../features/datasets/services/tag-stats-service';
 import { getPrisma } from '../lib/Repository.js';
+import { StandaloneAutoTagRepository } from '../repositories/sqlite/auto-tag-repository';
+import { StandaloneColorRepository } from '../repositories/sqlite/color-repository';
+import { StandaloneDatasetRepository } from '../repositories/sqlite/dataset-repository';
+import { StandaloneLibraryRepository } from '../repositories/sqlite/library-repository';
+import { StandaloneMetadataRepository } from '../repositories/sqlite/metadata-repository';
+import { isStandaloneSqliteEnabled } from '../repositories/sqlite/sqlite';
+import { StandaloneStackRepository } from '../repositories/sqlite/stack-repository';
 import {
   DatasetIdParamSchema,
   IdParamSchema,
@@ -21,13 +28,6 @@ import { AutoTagService } from '../shared/services/AutoTagService';
 import { CollectionService } from '../shared/services/CollectionService';
 import { DataSetService } from '../shared/services/DataSetService';
 import { ensureSuperUser } from '../shared/services/UserService';
-import { StandaloneAutoTagRepository } from '../standalone/auto-tag-repository';
-import { StandaloneColorRepository } from '../standalone/color-repository';
-import { StandaloneDatasetRepository } from '../standalone/dataset-repository';
-import { StandaloneLibraryRepository } from '../standalone/library-repository';
-import { StandaloneMetadataRepository } from '../standalone/metadata-repository';
-import { isStandaloneSqliteEnabled } from '../standalone/sqlite';
-import { StandaloneStackRepository } from '../standalone/stack-repository';
 import { toPublicAssetPath, withPublicAssetArray } from '../utils/assetPath';
 
 const app = new Hono();

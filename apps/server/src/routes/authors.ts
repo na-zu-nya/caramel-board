@@ -2,12 +2,12 @@ import { zValidator } from '@hono/zod-validator';
 import type { Context } from 'hono';
 import { Hono } from 'hono';
 import { z } from 'zod';
+import { ensureDatasetAuthorizedForCurrentStore } from '../repositories/sqlite/auth';
+import { StandaloneMetadataRepository } from '../repositories/sqlite/metadata-repository';
+import { isStandaloneSqliteEnabled } from '../repositories/sqlite/sqlite';
 import { IdParamSchema, ManagementPaginationSchema } from '../schemas/index.js';
 import type { AuthorLinkInput } from '../shared/author-links';
 import { AuthorService, type AuthorUpdateInput } from '../shared/services/AuthorService';
-import { ensureDatasetAuthorizedForCurrentStore } from '../standalone/auth';
-import { StandaloneMetadataRepository } from '../standalone/metadata-repository';
-import { isStandaloneSqliteEnabled } from '../standalone/sqlite';
 
 export const authorsRoute = new Hono();
 const authorService = new AuthorService();

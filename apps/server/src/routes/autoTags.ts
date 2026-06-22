@@ -3,10 +3,10 @@ import type { Context } from 'hono';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { getAutoTagClient } from '../lib/AutoTagClient';
+import { ensureDatasetAuthorizedForCurrentStore } from '../repositories/sqlite/auth';
+import { StandaloneAutoTagRepository } from '../repositories/sqlite/auto-tag-repository';
+import { isStandaloneSqliteEnabled } from '../repositories/sqlite/sqlite';
 import { prisma } from '../shared/di';
-import { ensureDatasetAuthorizedForCurrentStore } from '../standalone/auth';
-import { StandaloneAutoTagRepository } from '../standalone/auto-tag-repository';
-import { isStandaloneSqliteEnabled } from '../standalone/sqlite';
 
 export const autoTagsRoute = new Hono();
 

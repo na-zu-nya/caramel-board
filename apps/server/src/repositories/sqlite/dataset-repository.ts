@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
-import { toPublicAssetPath } from '../utils/assetPath';
+import { toPublicAssetPath } from '../../utils/assetPath';
 import { getStandaloneSqlite, nowIso, parseJsonObject, stringifyJsonObject } from './sqlite';
 
 export interface StandaloneDataset {

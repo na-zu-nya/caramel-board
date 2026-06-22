@@ -3,6 +3,15 @@ import { Hono } from 'hono';
 import { createColorSearchService } from '../features/datasets/services/color-search-service';
 import { createFileService } from '../features/datasets/services/file-service';
 import { getPrisma } from '../lib/Repository.js';
+import {
+  ensureDatasetAuthorizedForCurrentStore,
+  isDatasetAuthorizedForCurrentStore,
+} from '../repositories/sqlite/auth';
+import { StandaloneAutoTagRepository } from '../repositories/sqlite/auto-tag-repository';
+import { StandaloneColorRepository } from '../repositories/sqlite/color-repository';
+import { StandaloneDatasetRepository } from '../repositories/sqlite/dataset-repository';
+import { isStandaloneSqliteEnabled } from '../repositories/sqlite/sqlite';
+import { StandaloneStackRepository } from '../repositories/sqlite/stack-repository';
 import { useDataStorage } from '../shared/di';
 import { AutoTagService } from '../shared/services/AutoTagService';
 import {
@@ -10,15 +19,6 @@ import {
   DatasetIsDefaultError,
   DatasetNotFoundError,
 } from '../shared/services/DataSetService';
-import {
-  ensureDatasetAuthorizedForCurrentStore,
-  isDatasetAuthorizedForCurrentStore,
-} from '../standalone/auth';
-import { StandaloneAutoTagRepository } from '../standalone/auto-tag-repository';
-import { StandaloneColorRepository } from '../standalone/color-repository';
-import { StandaloneDatasetRepository } from '../standalone/dataset-repository';
-import { isStandaloneSqliteEnabled } from '../standalone/sqlite';
-import { StandaloneStackRepository } from '../standalone/stack-repository';
 import { hashPassword, setDatasetAuthCookie, verifyPassword } from '../utils/dataset-protection';
 
 // Minimal datasets router to satisfy client needs without heavy deps

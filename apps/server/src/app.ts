@@ -9,10 +9,10 @@ import { loggerMiddleware } from './middlewares/logger';
 import { memMonitor } from './middlewares/memory-monitor';
 import { requestOriginGuard } from './middlewares/request-origin-guard';
 import { staticServer } from './middlewares/static';
+import { StandaloneMigrationRequiredError } from './repositories/sqlite/migrations';
+import { getStandaloneSqlite, isStandaloneSqliteEnabled } from './repositories/sqlite/sqlite';
 import { apiRoutes } from './routes';
 import { diMiddleware } from './shared/di';
-import { StandaloneMigrationRequiredError } from './standalone/migrations';
-import { getStandaloneSqlite, isStandaloneSqliteEnabled } from './standalone/sqlite';
 
 if (process.env.NODE_ENV !== 'production') {
   dotenv.config();

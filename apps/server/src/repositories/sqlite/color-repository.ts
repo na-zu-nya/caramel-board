@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
-import { ColorExtractor, type DominantColor } from '../utils/colorExtractor';
+import { ColorExtractor, type DominantColor } from '../../utils/colorExtractor';
 import { getStandaloneSqlite } from './sqlite';
 import { StandaloneStackRepository } from './stack-repository';
 

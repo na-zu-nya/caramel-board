@@ -1,10 +1,10 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
+import { StandaloneLibraryRepository } from '../repositories/sqlite/library-repository';
+import { isStandaloneSqliteEnabled } from '../repositories/sqlite/sqlite';
 import { usePrisma } from '../shared/di';
 import { NavigationPinService } from '../shared/services/NavigationPinService';
 import { ensureSuperUser } from '../shared/services/UserService';
-import { StandaloneLibraryRepository } from '../standalone/library-repository';
-import { isStandaloneSqliteEnabled } from '../standalone/sqlite';
 
 // リクエストボディのスキーマ定義
 const createNavigationPinSchema = z.object({

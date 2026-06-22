@@ -1,10 +1,10 @@
 import { zValidator } from '@hono/zod-validator';
 import { Hono } from 'hono';
 import { z } from 'zod';
+import { StandaloneActivityRepository } from '../repositories/sqlite/activity-repository';
+import { isStandaloneSqliteEnabled } from '../repositories/sqlite/sqlite';
 import { PaginationSchema } from '../schemas/index.js';
 import { ActivityService } from '../shared/services/ActivityService';
-import { StandaloneActivityRepository } from '../standalone/activity-repository';
-import { isStandaloneSqliteEnabled } from '../standalone/sqlite';
 
 export const activitiesRoute = new Hono();
 const activityService = new ActivityService();

@@ -4,12 +4,12 @@ import type {
   CreateCollectionFolderInput,
   FolderTreeQuery,
   UpdateCollectionFolderInput,
-} from '../models/CollectionFolderModel';
+} from '../../models/CollectionFolderModel';
 import type {
   CollectionQuery,
   CreateCollectionInput,
   UpdateCollectionInput,
-} from '../models/CollectionModel';
+} from '../../models/CollectionModel';
 import { StandaloneColorRepository } from './color-repository';
 import { getStandaloneSqlite, nowIso, parseJsonObject } from './sqlite';
 import { type StandaloneStackListParams, StandaloneStackRepository } from './stack-repository';

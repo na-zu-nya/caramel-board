@@ -1,9 +1,9 @@
 import type { Prisma } from '@prisma/client';
 import { Hono } from 'hono';
 import { createAssetService } from '../features/datasets/services/asset-service';
+import { isStandaloneSqliteEnabled } from '../repositories/sqlite/sqlite';
+import { StandaloneStackRepository } from '../repositories/sqlite/stack-repository';
 import { useDataStorage, usePrisma } from '../shared/di';
-import { isStandaloneSqliteEnabled } from '../standalone/sqlite';
-import { StandaloneStackRepository } from '../standalone/stack-repository';
 
 export const datasetAssetsRoute = new Hono();
 

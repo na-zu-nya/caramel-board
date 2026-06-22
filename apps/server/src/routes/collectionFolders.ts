@@ -9,10 +9,10 @@ import {
   FolderTreeQuerySchema,
   UpdateCollectionFolderSchema,
 } from '../models/CollectionFolderModel.js';
+import { ensureDatasetAuthorizedForCurrentStore } from '../repositories/sqlite/auth';
+import { StandaloneLibraryRepository } from '../repositories/sqlite/library-repository';
+import { isStandaloneSqliteEnabled } from '../repositories/sqlite/sqlite';
 import { CollectionFolderService } from '../shared/services/CollectionFolderService';
-import { ensureDatasetAuthorizedForCurrentStore } from '../standalone/auth';
-import { StandaloneLibraryRepository } from '../standalone/library-repository';
-import { isStandaloneSqliteEnabled } from '../standalone/sqlite';
 import { useResponse } from '../utils/useResponse.js';
 
 const app = new Hono();

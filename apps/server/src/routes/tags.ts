@@ -2,6 +2,9 @@ import { zValidator } from '@hono/zod-validator';
 import type { Context } from 'hono';
 import { Hono } from 'hono';
 import { createTagService } from '../features/datasets/services/tag-service';
+import { ensureDatasetAuthorizedForCurrentStore } from '../repositories/sqlite/auth';
+import { StandaloneMetadataRepository } from '../repositories/sqlite/metadata-repository';
+import { isStandaloneSqliteEnabled } from '../repositories/sqlite/sqlite';
 import {
   CreateTagSchema,
   IdParamSchema,
@@ -10,9 +13,6 @@ import {
   TagStackSchema,
 } from '../schemas/index.js';
 import { usePrisma } from '../shared/di';
-import { ensureDatasetAuthorizedForCurrentStore } from '../standalone/auth';
-import { StandaloneMetadataRepository } from '../standalone/metadata-repository';
-import { isStandaloneSqliteEnabled } from '../standalone/sqlite';
 
 export const tagsRoute = new Hono();
 

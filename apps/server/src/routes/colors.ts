@@ -3,9 +3,9 @@ import type { Prisma } from '@prisma/client';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { getPrisma } from '../lib/Repository.js';
+import { StandaloneColorRepository } from '../repositories/sqlite/color-repository';
+import { isStandaloneSqliteEnabled } from '../repositories/sqlite/sqlite';
 import { ColorSearchService } from '../shared/services/ColorSearchService-fix';
-import { StandaloneColorRepository } from '../standalone/color-repository';
-import { isStandaloneSqliteEnabled } from '../standalone/sqlite';
 import { useResponse } from '../utils/useResponse.js';
 
 const app = new Hono();

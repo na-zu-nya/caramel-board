@@ -8,10 +8,10 @@ import {
   CreateCollectionSchema,
   UpdateCollectionSchema,
 } from '../models/CollectionModel.js';
+import { ensureDatasetAuthorizedForCurrentStore } from '../repositories/sqlite/auth';
+import { StandaloneLibraryRepository } from '../repositories/sqlite/library-repository';
+import { isStandaloneSqliteEnabled } from '../repositories/sqlite/sqlite';
 import { CollectionService } from '../shared/services/CollectionService';
-import { ensureDatasetAuthorizedForCurrentStore } from '../standalone/auth';
-import { StandaloneLibraryRepository } from '../standalone/library-repository';
-import { isStandaloneSqliteEnabled } from '../standalone/sqlite';
 import { useResponse } from '../utils/useResponse.js';
 
 const app = new Hono();

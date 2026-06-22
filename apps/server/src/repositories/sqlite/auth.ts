@@ -3,7 +3,7 @@ import {
   ensureDatasetAuthorized,
   isDatasetAuthorized,
   isDatasetAuthorizedFromState,
-} from '../utils/dataset-protection';
+} from '../../utils/dataset-protection';
 import { StandaloneDatasetRepository } from './dataset-repository';
 import { isStandaloneSqliteEnabled } from './sqlite';
 

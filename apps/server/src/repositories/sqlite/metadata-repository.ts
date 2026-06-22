@@ -5,7 +5,7 @@ import {
   type NormalizedAuthorLink,
   normalizeAuthorLinkProvider,
   normalizeAuthorLinks,
-} from '../shared/author-links';
+} from '../../shared/author-links';
 import { getStandaloneSqlite } from './sqlite';
 import { StandaloneStackRepository } from './stack-repository';
 

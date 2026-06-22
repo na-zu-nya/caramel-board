@@ -1,5 +1,5 @@
 import { createFactory } from 'hono/factory';
-import { StandaloneMigrationRequiredError } from '../standalone/migrations';
+import { StandaloneMigrationRequiredError } from '../repositories/sqlite/migrations';
 
 export const errorBoundary = createFactory().createMiddleware(
   async (c, next): Promise<Response | undefined> => {

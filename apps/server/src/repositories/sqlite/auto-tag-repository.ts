@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
-import { getAutoTagClient } from '../lib/AutoTagClient';
+import { getAutoTagClient } from '../../lib/AutoTagClient';
 import { getStandaloneSqlite, nowIso } from './sqlite';
 
 export interface AutoTagStats {
