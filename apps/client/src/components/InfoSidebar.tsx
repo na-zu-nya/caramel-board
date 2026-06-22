@@ -43,7 +43,7 @@ import { apiClient } from '@/lib/api-client';
 import { getAuthorLinkLabel, MAX_AUTHOR_LINKS } from '@/lib/author-links';
 import { copyText } from '@/lib/clipboard';
 import { downloadStackOriginals } from '@/lib/download-originals';
-import { useT } from '@/lib/i18n';
+import { getMediaTypeLabel, useT } from '@/lib/i18n';
 import { removeStackFromCache } from '@/lib/stack-cache';
 import { cn, hexForCopy } from '@/lib/utils';
 import {
@@ -835,20 +835,20 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
               </div>
             )}
 
-            {/* Media Type */}
+            {/* Media Category */}
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
                 <Image size={16} />
-                {t.info.mediaType}
+                {t.info.mediaCategory}
               </div>
               <Select value={selectedItem.mediaType || ''} onValueChange={handleMediaTypeChange}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder={t.info.selectMediaType} />
+                  <SelectValue placeholder={t.info.selectMediaCategory} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="image">{t.info.image}</SelectItem>
-                  <SelectItem value="comic">{t.info.comic}</SelectItem>
-                  <SelectItem value="video">{t.info.video}</SelectItem>
+                  <SelectItem value="image">{getMediaTypeLabel(t, 'image')}</SelectItem>
+                  <SelectItem value="comic">{getMediaTypeLabel(t, 'comic')}</SelectItem>
+                  <SelectItem value="video">{getMediaTypeLabel(t, 'video')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>

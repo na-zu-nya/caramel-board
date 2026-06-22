@@ -577,11 +577,8 @@ const en = {
   },
   info: {
     selectItem: 'Select an item to view details',
-    mediaType: 'Media Type',
-    selectMediaType: 'Select media type',
-    image: 'Image',
-    comic: 'Comic',
-    video: 'Video',
+    mediaCategory: 'Media Category',
+    selectMediaCategory: 'Select media category',
     author: 'Author',
     typeAuthorEnter: 'Type author and Enter',
     recentAuthors: 'Recent Authors',
@@ -1343,11 +1340,8 @@ const ja: Translations = {
   },
   info: {
     selectItem: '詳細を表示するアイテムを選んでください',
-    mediaType: 'メディアタイプ',
-    selectMediaType: 'メディアタイプを選択',
-    image: '画像',
-    comic: '漫画',
-    video: '動画',
+    mediaCategory: 'メディアカテゴリ',
+    selectMediaCategory: 'メディアカテゴリを選択',
     author: '作者',
     typeAuthorEnter: '作者を入力して Enter',
     recentAuthors: '最近の作者',
@@ -1603,9 +1597,9 @@ export function isScratchLike(value?: CollectionLike | PinLike | null): boolean 
 }
 
 export function getMediaTypeLabel(t: Translations, mediaType?: string | null): string {
-  if (mediaType === 'image') return t.pins.images;
-  if (mediaType === 'comic') return t.pins.comics;
-  if (mediaType === 'video') return t.pins.videos;
+  if (mediaType === 'image') return t.sidebar.images;
+  if (mediaType === 'comic') return t.sidebar.comics;
+  if (mediaType === 'video') return t.sidebar.videos;
   return mediaType ?? '';
 }
 
