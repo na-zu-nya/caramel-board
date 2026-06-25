@@ -16,6 +16,7 @@ import MersenneTwister from 'mersenne-twister';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { FullPageDropZone } from '@/components/ui/DropZone';
+import { FloatingUploadAction } from '@/components/ui/FloatingUploadAction';
 import { HeaderIconButton } from '@/components/ui/Header/HeaderIconButton';
 import MarkerEditorDialog from '@/components/ui/SeekBar/MarkerEditorDialog';
 import { useStackNavigation } from '@/hooks/features/useStackNavigation';
@@ -29,6 +30,7 @@ import { useStackViewerZoom } from '@/hooks/features/useStackViewerZoom';
 import { useViewerContextMenu } from '@/hooks/features/useViewerContextMenu';
 import { useHeaderActions } from '@/hooks/useHeaderActions';
 import { useScratch } from '@/hooks/useScratch';
+import { useSidebarPushesContent } from '@/hooks/useSidebarLayoutMode';
 import { useViewContext } from '@/hooks/useViewContext';
 import { apiClient } from '@/lib/api-client';
 import { buildComicReadingModel, normalizeComicReadingSettings } from '@/lib/comic-reading';
@@ -206,6 +208,8 @@ export default function StackViewer({
   const [rawSidebarOpen] = useAtom(sidebarOpenAtom);
   // 埋め込み時はアプリのサイドバーが存在しないため、レイアウト連動を無効化する
   const sidebarOpen = embedded ? false : rawSidebarOpen;
+  const sidebarPushesContent = useSidebarPushesContent(sidebarOpen);
+  const sidebarLeftInset = sidebarPushesContent ? 320 : 0;
   const setSelectionMode = useSetAtom(selectionModeAtom);
   const addFilesToQueue = useSetAtom(addFilesToQueueAtom);
   const uploadNotifications = useAtomValue(uploadNotificationsAtom);
@@ -1329,10 +1333,13 @@ export default function StackViewer({
   }, [uploadNotifications, refetch]);
 
   // Drop to add assets
-  const handleFileDrop = (files: File[]) => {
-    if (!stack) return;
-    addFilesToQueue({ files, type: 'add-to-stack', stackId: Number(stack.id) });
-  };
+  const handleFileDrop = useCallback(
+    (files: File[]) => {
+      if (!stack) return;
+      addFilesToQueue({ files, type: 'add-to-stack', stackId: Number(stack.id) });
+    },
+    [addFilesToQueue, stack]
+  );
 
   const handleUrlDrop = useCallback(
     async (urls: string[]) => {
@@ -1475,7 +1482,7 @@ export default function StackViewer({
         <div
           className={cn(
             'stack-content fixed top-14 bottom-0 transition-all duration-300 ease-in-out',
-            sidebarOpen ? 'left-80' : 'left-0',
+            sidebarPushesContent ? 'left-80' : 'left-0',
             isInfoSidebarOpen ? 'right-80' : 'right-0'
           )}
         >
@@ -1532,7 +1539,7 @@ export default function StackViewer({
                 zoomTransform={zoomTransform}
                 uiInsets={{
                   top: 56,
-                  left: sidebarOpen ? 320 : 0,
+                  left: sidebarLeftInset,
                   right: isInfoSidebarOpen ? 320 : 0,
                 }}
                 className="w-full h-full"
@@ -1542,7 +1549,7 @@ export default function StackViewer({
                 // Leave safe area at bottom so toolbar remains clickable
                 contentArea={{
                   top: 14,
-                  left: sidebarOpen ? 320 : 0,
+                  left: sidebarLeftInset,
                   right: isInfoSidebarOpen ? 320 : 0,
                   bottom: 96,
                 }}
@@ -1868,6 +1875,15 @@ export default function StackViewer({
                 ? undefined
                 : handleDisplayModeToggle
             }
+            leadingAction={
+              <FloatingUploadAction
+                variant="toolbar"
+                onFiles={handleFileDrop}
+                onUrls={handleUrlDrop}
+                disabled={isReorderMode || isPenMode || isNativeInteractionMode}
+                closeOnOutsidePointerDown
+              />
+            }
           />
         </div>
       </div>
@@ -1875,7 +1891,7 @@ export default function StackViewer({
       {/* Pen overlay (draws above content, below header) */}
       {isPenMode && (
         <PenOverlay
-          leftInset={sidebarOpen ? 320 : 0}
+          leftInset={sidebarLeftInset}
           rightInset={isInfoSidebarOpen ? 320 : 0}
           topInset={56}
           docKey={`${datasetId}:${stackId}:${currentAsset?.id ?? 'na'}`}

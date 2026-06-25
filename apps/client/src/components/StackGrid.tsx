@@ -6,11 +6,13 @@ import { createPortal } from 'react-dom';
 import { StackGridItem } from '@/components/grid/StackGridItem.tsx';
 import { FolderDropDialog } from '@/components/modals/FolderDropDialog.tsx';
 import { DropZone } from '@/components/ui/DropZone';
+import { FloatingUploadAction } from '@/components/ui/FloatingUploadAction';
 import { GridColumnSlider } from '@/components/ui/GridColumnSlider';
 import { HeaderIconButton } from '@/components/ui/Header/HeaderIconButton';
 import { SelectionActionBar } from '@/components/ui/selection-action-bar';
 import { useStackGrid } from '@/hooks/features/useStackGrid';
 import { useScratch } from '@/hooks/useScratch';
+import { useSidebarPushesContent } from '@/hooks/useSidebarLayoutMode';
 import { useStackCollectionMenu } from '@/hooks/useStackCollectionMenu';
 import { apiClient } from '@/lib/api-client';
 import {
@@ -217,6 +219,7 @@ export default function StackGrid({
 
   // Use external containerRef if provided, otherwise use internal
   const containerRef = externalContainerRef || internalContainerRef;
+  const sidebarPushesContent = useSidebarPushesContent(sidebarOpen);
 
   // Wrap handleItemClick with onItemClick parameter
   const lastClickedIndexRef = useRef<number | null>(null);
@@ -946,7 +949,7 @@ export default function StackGrid({
       className="min-h-screen"
       overlayClassName={cn(
         'fixed z-50 pointer-events-none',
-        sidebarOpen ? 'left-80' : 'left-0',
+        sidebarPushesContent ? 'left-80' : 'left-0',
         infoSidebarOpen || isEditPanelOpen ? 'right-80' : 'right-0',
         'top-14 bottom-0' // Exclude header height
       )}
@@ -1102,6 +1105,21 @@ export default function StackGrid({
         showRemoveFromCollection={allowRemoveFromCollection}
         actions={selectionActions}
       />
+
+      {!isSelectionMode && !reorderMode && (!sidebarOpen || sidebarPushesContent) && (
+        <FloatingUploadAction
+          className={cn(
+            'coarse-pointer-only fixed bottom-[calc(env(safe-area-inset-bottom)+1rem)] z-[70]',
+            sidebarPushesContent ? 'list-upload-action--sidebar-open' : 'left-4',
+            (infoSidebarOpen || isEditPanelOpen) && 'list-upload-action--right-panel-open',
+            sidebarOpen &&
+              (infoSidebarOpen || isEditPanelOpen) &&
+              'list-upload-action--sidebar-and-panel-open'
+          )}
+          onFiles={handleFileDrop}
+          onUrls={handleUrlDrop}
+        />
+      )}
 
       {createPortal(
         <GridColumnSlider

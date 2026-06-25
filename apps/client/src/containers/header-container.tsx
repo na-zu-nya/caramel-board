@@ -15,6 +15,7 @@ import { AppHeader } from '@/components/ui/Header/AppHeader';
 import { HeaderIconButton } from '@/components/ui/Header/HeaderIconButton';
 import { useDatasets } from '@/hooks/useDatasets';
 import { isScratchCollection } from '@/hooks/useScratch';
+import { useSidebarPushesContent } from '@/hooks/useSidebarLayoutMode';
 import { apiClient } from '@/lib/api-client';
 import { getDefaultPinDisplayName, useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
@@ -33,6 +34,7 @@ import type { Pin } from '@/types';
 export default function HeaderContainer() {
   const t = useT();
   const [withSidebar, setSidebarOpen] = useAtom(sidebarOpenAtom);
+  const sidebarPushesContent = useSidebarPushesContent(withSidebar);
   const [currentDataset] = useAtom(currentDatasetAtom);
   const [filterOpen, setFilterOpen] = useAtom(filterOpenAtom);
   const [selectionMode, setSelectionMode] = useAtom(selectionModeAtom);
@@ -125,7 +127,7 @@ export default function HeaderContainer() {
   const [isCompactMode, setIsCompactMode] = useState(false);
   useEffect(() => {
     const checkCompactMode = () => {
-      const headerWidth = window.innerWidth - (withSidebar ? 320 : 0);
+      const headerWidth = window.innerWidth - (sidebarPushesContent ? 320 : 0);
       const pinButtonWidth = 40;
       const pinGap = 8;
       const horizontalPadding = 32;
@@ -141,7 +143,7 @@ export default function HeaderContainer() {
     checkCompactMode();
     window.addEventListener('resize', checkCompactMode);
     return () => window.removeEventListener('resize', checkCompactMode);
-  }, [navigationPins.length, withSidebar]);
+  }, [navigationPins.length, sidebarPushesContent]);
 
   const left = (
     <>
@@ -288,7 +290,7 @@ export default function HeaderContainer() {
 
   return (
     <AppHeader
-      withSidebar={withSidebar}
+      withSidebar={sidebarPushesContent}
       backgroundColor={backgroundColor}
       left={left}
       center={center}

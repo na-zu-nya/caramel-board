@@ -53,6 +53,18 @@ const makeSvgAsset = (id: number): Asset => ({
   createdAt: '2026-01-01T00:00:00.000Z',
 });
 
+const makeRawAsset = (id: number): Asset => ({
+  id,
+  stackId: 1,
+  file: '/files/raw-reference.dng',
+  originalName: 'raw-reference.dng',
+  fileType: 'dng',
+  mimeType: 'image/x-adobe-dng',
+  preview: sampleImage,
+  thumbnail: sampleImage,
+  createdAt: '2026-01-01T00:00:00.000Z',
+});
+
 const meta: Meta<typeof ImageCarousel> = {
   title: 'StackViewer/ImageCarousel',
   component: ImageCarousel,
@@ -100,6 +112,12 @@ export const Video: Story = {
 export const SvgPreview: Story = {
   args: {
     currentAsset: makeSvgAsset(3),
+  },
+};
+
+export const RawPreview: Story = {
+  args: {
+    currentAsset: makeRawAsset(4),
   },
 };
 

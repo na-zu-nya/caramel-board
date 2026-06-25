@@ -8,9 +8,26 @@ import { buildPreviewKey } from './assetPath';
 import { getFFMPEGPath, probeHasAudioStream } from './ffmpeg';
 
 const VIDEO_PREVIEW_EXTENSIONS = new Set(['gif', 'mov', 'mp4', 'avi', 'mkv', 'webm', 'm4v']);
-const IMAGE_PREVIEW_EXTENSIONS = new Set(['svg', 'svgz']);
-const VECTOR_PREVIEW_MAX_SIZE = 2048;
-const VECTOR_PREVIEW_DENSITY = 192;
+const IMAGE_PREVIEW_EXTENSIONS = new Set([
+  '3fr',
+  'arw',
+  'cr2',
+  'cr3',
+  'dng',
+  'erf',
+  'nef',
+  'nrw',
+  'orf',
+  'pef',
+  'raf',
+  'rw2',
+  'sr2',
+  'srf',
+  'svg',
+  'svgz',
+]);
+const IMAGE_PREVIEW_MAX_SIZE = 2048;
+const IMAGE_PREVIEW_DENSITY = 192;
 
 interface GeneratePreviewOptions {
   dataSetId?: number;
@@ -48,13 +65,13 @@ const generateImagePreview = async (
 
   try {
     await sharp(inputPath, {
-      density: VECTOR_PREVIEW_DENSITY,
+      density: IMAGE_PREVIEW_DENSITY,
       failOnError: false,
       sequentialRead: true,
     })
       .rotate()
       .flatten({ background: '#ffffff' })
-      .resize(VECTOR_PREVIEW_MAX_SIZE, VECTOR_PREVIEW_MAX_SIZE, {
+      .resize(IMAGE_PREVIEW_MAX_SIZE, IMAGE_PREVIEW_MAX_SIZE, {
         fit: 'inside',
         withoutEnlargement: false,
       })

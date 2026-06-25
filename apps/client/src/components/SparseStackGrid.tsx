@@ -794,16 +794,18 @@ export default function SparseStackGrid({
           return (
             <div
               key={notification.id}
-              className="fixed bottom-4 right-4 bg-blue-500 text-white p-4 rounded-lg shadow-lg z-[120]"
+              className="fixed left-3 right-3 bottom-[calc(env(safe-area-inset-bottom)+0.75rem)] z-[120] rounded-lg bg-blue-500 p-3 text-white shadow-lg sm:left-auto sm:right-4 sm:w-80 lg:bottom-4 lg:w-96 lg:p-4"
             >
               <div className="flex items-center gap-2">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span>{notification.message}</span>
+                <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+                <span className="min-w-0 text-xs font-medium leading-snug lg:text-sm">
+                  {notification.message}
+                </span>
               </div>
               {progress !== undefined && (
-                <div className="mt-2 w-full bg-blue-400 rounded-full h-2">
+                <div className="mt-2 h-2 w-full rounded-full bg-blue-400">
                   <div
-                    className="bg-white h-2 rounded-full transition-all duration-300"
+                    className="h-2 rounded-full bg-white transition-all duration-300"
                     style={{ width: `${progress}%` }}
                   />
                 </div>

@@ -70,6 +70,7 @@ export const fileServer = factory.createMiddleware(async (c) => {
         '.gif': 'image/gif',
         '.svg': 'image/svg+xml',
         '.svgz': 'image/svg+xml',
+        '.dng': 'image/x-adobe-dng',
         '.tif': 'image/tiff',
         '.tiff': 'image/tiff',
         '.avif': 'image/avif',

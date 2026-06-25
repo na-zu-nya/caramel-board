@@ -14,6 +14,7 @@ import {
 import { HeaderIconButton } from '@/components/ui/Header/HeaderIconButton';
 import { useDatasets } from '@/hooks/useDatasets';
 import { isScratchCollection } from '@/hooks/useScratch';
+import { useSidebarPushesContent } from '@/hooks/useSidebarLayoutMode';
 import { apiClient } from '@/lib/api-client';
 import { getDefaultPinDisplayName, useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
@@ -32,6 +33,7 @@ import type { Pin } from '@/types';
 export default function Header() {
   const t = useT();
   const [sidebarOpen, setSidebarOpen] = useAtom(sidebarOpenAtom);
+  const sidebarPushesContent = useSidebarPushesContent(sidebarOpen);
   const [currentDataset] = useAtom(currentDatasetAtom);
   const [filterOpen, setFilterOpen] = useAtom(filterOpenAtom);
   const [selectionMode, setSelectionMode] = useAtom(selectionModeAtom);
@@ -127,7 +129,7 @@ export default function Header() {
   // Check if we need to use compact mode
   useEffect(() => {
     const checkCompactMode = () => {
-      const headerWidth = window.innerWidth - (sidebarOpen ? 320 : 0);
+      const headerWidth = window.innerWidth - (sidebarPushesContent ? 320 : 0);
       const pinButtonWidth = 40;
       const pinGap = 8;
       const horizontalPadding = 32;
@@ -144,13 +146,13 @@ export default function Header() {
     checkCompactMode();
     window.addEventListener('resize', checkCompactMode);
     return () => window.removeEventListener('resize', checkCompactMode);
-  }, [navigationPins.length, sidebarOpen]);
+  }, [navigationPins.length, sidebarPushesContent]);
 
   return (
     <header
       className={cn(
         'fixed top-0 right-0 z-50 backdrop-blur supports-[backdrop-filter]:backdrop-blur text-white transition-all duration-300 ease-in-out',
-        sidebarOpen ? 'left-80' : 'left-0'
+        sidebarPushesContent ? 'left-80' : 'left-0'
       )}
       style={{
         backgroundColor: selectedDataset?.themeColor

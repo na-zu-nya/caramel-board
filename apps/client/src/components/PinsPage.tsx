@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Label } from '@/components/ui/label';
 import { isScratchCollection, useScratch } from '@/hooks/useScratch';
+import { useSidebarPushesContent } from '@/hooks/useSidebarLayoutMode';
 import { apiClient } from '@/lib/api-client';
 import { getDefaultPinDisplayName, getMediaTypeLabel, useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
@@ -64,6 +65,7 @@ export default function PinsPage() {
   const [currentDataset] = useAtom(currentDatasetAtom);
   const datasetId = (params as { datasetId?: string }).datasetId || currentDataset || '1';
   const [sidebarOpen] = useAtom(sidebarOpenAtom);
+  const sidebarPushesContent = useSidebarPushesContent(sidebarOpen);
 
   // const selectedDataset = datasets.find((d) => String(d.id) === String(datasetId))
 
@@ -371,7 +373,7 @@ export default function PinsPage() {
     <div
       className={cn(
         'fixed top-0 bottom-0 overflow-auto transition-all duration-300 ease-in-out pt-14 bg-background',
-        sidebarOpen ? 'left-80' : 'left-0',
+        sidebarPushesContent ? 'left-80' : 'left-0',
         'right-0'
       )}
     >

@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react';
+import { FloatingUploadAction } from '@/components/ui/FloatingUploadAction';
 import StackToolbar from './StackToolbar';
 
 const baseStack = {
@@ -23,7 +24,7 @@ const meta: Meta<typeof StackToolbar> = {
   },
   decorators: [
     (Story) => (
-      <div className="relative h-40 w-80 rounded-xl bg-slate-900 p-6">
+      <div className="relative h-44 w-[44rem] rounded-xl bg-slate-900 p-6">
         <Story />
       </div>
     ),
@@ -39,6 +40,13 @@ const meta: Meta<typeof StackToolbar> = {
     onListModeToggle: () => console.log('list'),
     displayMode: 'single',
     onDisplayModeToggle: () => console.log('display mode'),
+    leadingAction: (
+      <FloatingUploadAction
+        variant="toolbar"
+        onFiles={(files) => console.log('files', files)}
+        onUrls={(urls) => console.log('urls', urls)}
+      />
+    ),
   },
 };
 

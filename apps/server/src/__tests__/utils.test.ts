@@ -89,3 +89,10 @@ describe('SVGプレビュー生成', () => {
     }
   });
 });
+
+describe('RAWプレビュー生成', () => {
+  it('DNGをPNGプレビュー対象として扱う', async () => {
+    expect(shouldGeneratePreview('dng')).toBe(true);
+    expect(shouldGeneratePreview('.DNG')).toBe(true);
+  });
+});

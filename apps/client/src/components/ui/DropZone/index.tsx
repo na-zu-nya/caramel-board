@@ -52,17 +52,31 @@ interface DropZoneProps {
   disabled?: boolean;
 }
 
-const DEFAULT_ACCEPT = 'image/*,video/*,application/pdf,.pdf,.ai,.svg,.svgz';
+export const DEFAULT_ACCEPT = 'image/*,video/*,application/pdf,.pdf,.ai,.svg,.svgz,.dng';
 const ACCEPT_EXTENSION_GROUPS: Record<string, Set<string>> = {
   image: new Set([
+    '.3fr',
+    '.arw',
     '.avif',
     '.bmp',
+    '.cr2',
+    '.cr3',
+    '.dng',
+    '.erf',
     '.gif',
     '.heic',
     '.heif',
     '.jpeg',
     '.jpg',
+    '.nef',
+    '.nrw',
+    '.orf',
+    '.pef',
     '.png',
+    '.raf',
+    '.rw2',
+    '.sr2',
+    '.srf',
     '.svg',
     '.svgz',
     '.tif',
@@ -128,6 +142,15 @@ const matchesAcceptToken = (file: File, token: string) => {
 
 const acceptsFile = (file: File, acceptedTypes: string[]) =>
   acceptedTypes.length === 0 || acceptedTypes.some((type) => matchesAcceptToken(file, type));
+
+export function filterAcceptedFiles(files: File[], accept = DEFAULT_ACCEPT): File[] {
+  const acceptedTypes = accept
+    .split(',')
+    .map((type) => type.trim())
+    .filter((type) => type.length > 0);
+
+  return files.filter((file) => acceptsFile(file, acceptedTypes));
+}
 
 type CandidateInfo = {
   url: URL;
@@ -246,7 +269,7 @@ function extractRawUrlStrings(value: string): string[] {
   return extracted;
 }
 
-function extractUrlsFromDataTransfer(dataTransfer: DataTransfer | null): string[] {
+export function extractUrlsFromDataTransfer(dataTransfer: DataTransfer | null): string[] {
   if (!dataTransfer) return [];
 
   const rawUrls: string[] = [];
@@ -495,7 +518,7 @@ async function traverseFileSystemEntry(
   return files;
 }
 
-async function extractFilesFromDataTransfer(
+export async function extractFilesFromDataTransfer(
   dataTransfer: DataTransfer | null,
   onScanProgress: (progress: DropZoneFileScanProgress) => void
 ): Promise<File[]> {
@@ -666,11 +689,6 @@ export function DropZone({
       setIsDragActive(false);
       dragCounter.current = 0;
 
-      const acceptedTypes = accept
-        .split(',')
-        .map((type) => type.trim())
-        .filter((type) => type.length > 0);
-
       void (async () => {
         if (hasFileHandler) {
           setInternalScanProgress({
@@ -684,7 +702,7 @@ export function DropZone({
           setInternalScanProgress(null);
 
           if (resolvedFiles.length > 0) {
-            const filteredFiles = resolvedFiles.filter((file) => acceptsFile(file, acceptedTypes));
+            const filteredFiles = filterAcceptedFiles(resolvedFiles, accept);
 
             if (filteredFiles.length > 0) {
               if (multiple) {

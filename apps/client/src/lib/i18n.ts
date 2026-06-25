@@ -734,6 +734,16 @@ const en = {
     ariaLabel: 'Similar stacks',
   },
   upload: {
+    addMedia: 'Add media',
+    chooseFiles: 'Choose files',
+    pasteAreaLabel: 'Paste image or URL',
+    pasteAreaPlaceholder: 'Tap here, then paste an image or URL',
+    pasteAreaHint: 'The panel stays open for repeated additions.',
+    selectedFiles: (count: number) => `Added ${count.toLocaleString()} selected file(s).`,
+    pastedFiles: (count: number) => `Added ${count.toLocaleString()} pasted file(s).`,
+    pastedUrls: (count: number) => `Added ${count.toLocaleString()} pasted URL(s).`,
+    noSupportedFiles: 'No supported files were found.',
+    noPasteItems: 'No image or URL was found in the paste data.',
     unableToResolveFolderDefaults: 'Unable to resolve upload defaults for this folder.',
     queuedFiles: (count: number, name: string) =>
       `Queued ${count.toLocaleString()} file(s) from "${name}" for upload.`,
@@ -1509,6 +1519,16 @@ const ja: Translations = {
     ariaLabel: '類似スタック',
   },
   upload: {
+    addMedia: 'メディアを追加',
+    chooseFiles: 'ファイルを選択',
+    pasteAreaLabel: '画像または URL をペースト',
+    pasteAreaPlaceholder: 'タップして画像または URL をペースト',
+    pasteAreaHint: '閉じるまで開いたまま連続で追加できます。',
+    selectedFiles: (count: number) => `${count.toLocaleString()} 件のファイルを追加しました。`,
+    pastedFiles: (count: number) => `${count.toLocaleString()} 件のペースト画像を追加しました。`,
+    pastedUrls: (count: number) => `${count.toLocaleString()} 件の URL を追加しました。`,
+    noSupportedFiles: '対応しているファイルが見つかりませんでした。',
+    noPasteItems: 'ペースト内容に画像または URL が見つかりませんでした。',
     unableToResolveFolderDefaults: 'このフォルダのアップロード既定値を解決できませんでした。',
     queuedFiles: (count: number, name: string) =>
       `「${name}」から ${count.toLocaleString()} 件のファイルをアップロードキューに追加しました。`,

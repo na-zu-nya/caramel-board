@@ -372,6 +372,7 @@ const lookupMimeFromExtension = (originalName: string): string | null => {
     '.bmp': 'image/bmp',
     '.avif': 'image/avif',
     '.heic': 'image/heic',
+    '.dng': 'image/x-adobe-dng',
     '.mp4': 'video/mp4',
     '.mov': 'video/quicktime',
     '.webm': 'video/webm',

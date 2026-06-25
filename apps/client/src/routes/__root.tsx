@@ -17,6 +17,7 @@ import Header from '@/containers/header-container';
 import Sidebar from '@/containers/sidebar-container';
 import { DragProvider } from '@/contexts/DragContext';
 import { useDatasets } from '@/hooks/useDatasets';
+import { useSidebarPushesContent } from '@/hooks/useSidebarLayoutMode';
 import { useThemeColor } from '@/hooks/useThemeColor';
 import { useUploadQueue } from '@/hooks/useUploadQueue';
 import { useKeyboardShortcuts as useGenericKeyboardShortcuts } from '@/hooks/utils/useKeyboardShortcut';
@@ -35,6 +36,7 @@ function RootLayout() {
   // Run upload queue globally (single runner)
   useUploadQueue();
   const [sidebarOpen, setSidebarOpen] = useAtom(sidebarOpenAtom);
+  const sidebarPushesContent = useSidebarPushesContent(sidebarOpen);
   const [currentDataset, setCurrentDataset] = useAtom(currentDatasetAtom);
   const [, setSelectionMode] = useAtom(selectionModeAtom);
   const { data: datasets = [] } = useDatasets();
@@ -113,7 +115,7 @@ function RootLayout() {
         <main
           className={cn(
             'flex-1 transition-all duration-300 ease-in-out',
-            isSetupRoute ? 'pt-0 ml-0' : ['pt-14', sidebarOpen ? 'ml-80' : 'ml-0']
+            isSetupRoute ? 'pt-0 ml-0' : ['pt-14', sidebarPushesContent ? 'ml-80' : 'ml-0']
           )}
         >
           {protectionLoading ? (

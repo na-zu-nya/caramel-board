@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getImageDisplaySource, isSvgAsset, isVideoAsset } from '@/lib/media';
+import { getImageDisplaySource, isRawAsset, isSvgAsset, isVideoAsset } from '@/lib/media';
 import type { Asset } from '@/types';
 
 const makeAsset = (overrides: Partial<Asset>): Asset => ({
@@ -56,5 +56,27 @@ describe('media helpers', () => {
         })
       )
     ).toBe('/files/reference.png');
+  });
+
+  it('uses generated previews for raw assets instead of direct originals', () => {
+    const rawAsset = makeAsset({
+      file: '/files/raw-reference.dng',
+      fileType: 'dng',
+      mimeType: 'image/x-adobe-dng',
+      preview: '/files/preview/raw-reference.png',
+      thumbnail: '/files/thumbnails/raw-reference.jpg',
+    });
+
+    expect(isRawAsset(rawAsset)).toBe(true);
+    expect(getImageDisplaySource(rawAsset)).toBe('/files/preview/raw-reference.png');
+
+    expect(
+      getImageDisplaySource(
+        makeAsset({
+          file: '/files/raw-reference.dng',
+          thumbnail: '/files/thumbnails/raw-reference.jpg',
+        })
+      )
+    ).toBe('/files/thumbnails/raw-reference.jpg');
   });
 });
