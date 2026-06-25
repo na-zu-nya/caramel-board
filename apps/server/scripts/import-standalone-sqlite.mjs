@@ -1,10 +1,9 @@
 #!/usr/bin/env node
 
-import { spawn } from 'node:child_process';
-import { once } from 'node:events';
 import fs, { createReadStream, promises as fsp } from 'node:fs';
 import path from 'node:path';
 import { createInterface } from 'node:readline';
+import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -311,22 +310,15 @@ const requireFile = async (filePath, label) => {
 
 const sqlIdentifier = (name) => `"${name.replaceAll('"', '""')}"`;
 
-const sqlLiteral = (value) => {
-  if (value === null || value === undefined) return 'NULL';
-  if (typeof value === 'number') {
-    if (!Number.isFinite(value)) return 'NULL';
-    return String(value);
+const sqliteValue = (value) => {
+  if (value === undefined) return null;
+  if (typeof value === 'boolean') return value ? 1 : 0;
+  if (typeof value === 'number' && !Number.isFinite(value)) return null;
+  if (typeof value === 'object' && value !== null && !Buffer.isBuffer(value)) {
+    return JSON.stringify(value);
   }
-  if (typeof value === 'boolean') return value ? '1' : '0';
-  const text = typeof value === 'string' ? value : JSON.stringify(value);
-  return `'${text.replaceAll("'", "''")}'`;
+  return value;
 };
-
-const writeSql = async (stdin, sql) => {
-  if (!stdin.write(sql)) await once(stdin, 'drain');
-};
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const compactErrorMessage = (error) => {
   if (error instanceof Error) return error.message;
@@ -342,59 +334,6 @@ const formatWriteContext = (context) => {
   if (context?.rowId !== undefined && context?.rowId !== null)
     parts.push(`row.id=${context.rowId}`);
   return parts.join(', ');
-};
-
-const countSqlInputLines = (sql) => {
-  const newlineCount = sql.match(/\n/g)?.length ?? 0;
-  if (newlineCount > 0) return newlineCount;
-  return sql.length > 0 ? 1 : 0;
-};
-
-const summarizeWriteContext = (context) => ({
-  phase: context?.phase,
-  table: context?.table,
-  file: context?.file,
-  lineNumber: context?.lineNumber,
-  rowId: context?.rowId,
-});
-
-const trackSqlWrite = (context, sql) => {
-  const tracker = context?.sqlLineTracker;
-  if (!tracker) return null;
-
-  const lineCount = countSqlInputLines(sql);
-  if (lineCount === 0) return null;
-
-  const start = tracker.lineNumber + 1;
-  const end = tracker.lineNumber + lineCount;
-  tracker.lineNumber = end;
-  tracker.ranges.push({
-    start,
-    end,
-    context: summarizeWriteContext(context),
-  });
-
-  return { start, end };
-};
-
-const findSqlLineContext = (tracker, lineNumber) => {
-  if (!tracker || !Number.isInteger(lineNumber)) return null;
-
-  for (let index = tracker.ranges.length - 1; index >= 0; index -= 1) {
-    const range = tracker.ranges[index];
-    if (range.start <= lineNumber && lineNumber <= range.end) {
-      return range;
-    }
-  }
-
-  return null;
-};
-
-const extractSqliteErrorLine = (output) => {
-  const match = output.match(/near line (\d+)/);
-  if (!match) return null;
-  const lineNumber = Number(match[1]);
-  return Number.isInteger(lineNumber) ? lineNumber : null;
 };
 
 const sqliteNoCaseKey = (value) =>
@@ -511,31 +450,15 @@ const formatTableImportSummary = (table, count, importContext) => {
   return `[standalone-import] ${table}: ${count}`;
 };
 
-const writeSqlWithContext = async (stdin, sql, context = {}) => {
-  const sqlRange = trackSqlWrite(context, sql);
+const execSqlWithContext = (db, sql, context = {}) => {
   try {
-    await writeSql(stdin, sql);
+    db.exec(sql);
   } catch (error) {
-    if (typeof context.waitForClose === 'function') {
-      await Promise.race([context.waitForClose(), sleep(250)]).catch(() => undefined);
-    }
-
-    const processOutput =
-      typeof context.processOutput === 'function' ? context.processOutput().trim() : '';
     const writeContext = formatWriteContext(context);
-    const sqlLine =
-      sqlRange && sqlRange.start === sqlRange.end
-        ? `SQL line ${sqlRange.start}`
-        : sqlRange
-          ? `SQL lines ${sqlRange.start}-${sqlRange.end}`
-          : '';
     const details = [
       `SQLite import への書き込みに失敗しました: ${compactErrorMessage(error)}`,
-      sqlLine,
       writeContext ? `直前の書き込み: ${writeContext}` : '',
-      processOutput ? `sqlite3 output:\n${processOutput}` : '',
     ].filter(Boolean);
-
     throw new Error(details.join('\n'), { cause: error });
   }
 };
@@ -545,130 +468,77 @@ const runSqliteImport = async () => {
   await fsp.rm(tmpDbPath, { force: true });
   await fsp.mkdir(path.dirname(dbPath), { recursive: true });
 
-  const child = spawn('sqlite3', [tmpDbPath], {
-    stdio: ['pipe', 'pipe', 'pipe'],
-  });
+  const db = new DatabaseSync(tmpDbPath);
+  let transactionStarted = false;
 
-  let stdout = '';
-  let stderr = '';
-  let stdinError = null;
-  let closeCode = null;
-  child.stdout.setEncoding('utf8');
-  child.stderr.setEncoding('utf8');
-  child.stdout.on('data', (chunk) => {
-    stdout += chunk;
-  });
-  child.stderr.on('data', (chunk) => {
-    stderr += chunk;
-  });
-  child.stdin.on('error', (error) => {
-    stdinError = error;
-  });
+  try {
+    execSqlWithContext(db, 'PRAGMA foreign_keys = OFF;', { phase: 'sqlite setup' });
+    execSqlWithContext(db, 'PRAGMA journal_mode = OFF;', { phase: 'sqlite setup' });
+    execSqlWithContext(db, 'PRAGMA synchronous = OFF;', { phase: 'sqlite setup' });
+    execSqlWithContext(db, await fsp.readFile(schemaPath, 'utf8'), { phase: 'schema' });
+    execSqlWithContext(db, 'PRAGMA foreign_keys = OFF;\nBEGIN IMMEDIATE;', {
+      phase: 'transaction start',
+    });
+    transactionStarted = true;
 
-  const closePromise = once(child, 'close').then(([code]) => {
-    closeCode = code;
-    return code;
-  });
-  const sqlLineTracker = {
-    lineNumber: 0,
-    ranges: [],
-  };
-  const sqliteContext = {
-    processOutput: () => [stderr, stdout].filter(Boolean).join('\n'),
-    waitForClose: () => closePromise,
-    sqlLineTracker,
-  };
+    const counts = {};
+    const importContext = createImportContext();
 
-  await writeSqlWithContext(child.stdin, '.bail on\n', {
-    ...sqliteContext,
-    phase: 'sqlite setup',
-  });
-  await writeSqlWithContext(child.stdin, 'PRAGMA foreign_keys = OFF;\n', {
-    ...sqliteContext,
-    phase: 'sqlite setup',
-  });
-  await writeSqlWithContext(child.stdin, 'PRAGMA journal_mode = OFF;\n', {
-    ...sqliteContext,
-    phase: 'sqlite setup',
-  });
-  await writeSqlWithContext(child.stdin, 'PRAGMA synchronous = OFF;\n', {
-    ...sqliteContext,
-    phase: 'sqlite setup',
-  });
-  await writeSqlWithContext(child.stdin, await fsp.readFile(schemaPath, 'utf8'), {
-    ...sqliteContext,
-    phase: 'schema',
-  });
-  await writeSqlWithContext(child.stdin, '\nPRAGMA foreign_keys = OFF;\nBEGIN IMMEDIATE;\n', {
-    ...sqliteContext,
-    phase: 'transaction start',
-  });
-
-  const counts = {};
-  const importContext = createImportContext();
-
-  for (const definition of tableImports) {
-    const filePath = path.join(dataDir, definition.file);
-    await requireFile(filePath, definition.file);
-    const count = await importNdjsonTable(
-      child.stdin,
-      filePath,
-      definition,
-      sqliteContext,
-      importContext
-    );
-    counts[definition.table] = count;
-    console.log(formatTableImportSummary(definition.table, count, importContext));
-  }
-
-  await writeSqlWithContext(child.stdin, 'COMMIT;\nPRAGMA foreign_keys = ON;\n', {
-    ...sqliteContext,
-    phase: 'commit',
-  });
-  child.stdin.end();
-
-  const code = closeCode ?? (await closePromise);
-  if (code !== 0) {
-    await fsp.rm(tmpDbPath, { force: true });
-    const pipeMessage = stdinError ? `\nstdin: ${compactErrorMessage(stdinError)}` : '';
-    const sqliteOutput = stderr || stdout;
-    const errorLine = extractSqliteErrorLine(sqliteOutput);
-    const errorRange = errorLine ? findSqlLineContext(sqlLineTracker, errorLine) : null;
-    const contextMessage = errorRange
-      ? `\nSQLite error location: SQL line ${errorLine} (${formatWriteContext(errorRange.context)})`
-      : '';
-    throw new Error(
-      `sqlite3 import failed (${code})${pipeMessage}${contextMessage}\n${sqliteOutput}`
-    );
-  }
-
-  const fkErrors = await runSqliteScalarList(tmpDbPath, 'PRAGMA foreign_key_check;');
-  if (fkErrors.length > 0) {
-    await fsp.rm(tmpDbPath, { force: true });
-    throw new Error(`foreign_key_check failed:\n${fkErrors.join('\n')}`);
-  }
-
-  if (fs.existsSync(dbPath)) {
-    if (!force) {
-      await fsp.rm(tmpDbPath, { force: true });
-      throw new Error(`DB出力先が既に存在します: ${dbPath} (--force で上書きできます)`);
+    for (const definition of tableImports) {
+      const filePath = path.join(dataDir, definition.file);
+      await requireFile(filePath, definition.file);
+      const count = await importNdjsonTable(db, filePath, definition, importContext);
+      counts[definition.table] = count;
+      console.log(formatTableImportSummary(definition.table, count, importContext));
     }
-    await fsp.rm(dbPath, { force: true });
-  }
 
-  await fsp.rename(tmpDbPath, dbPath);
-  return {
-    ...counts,
-    _merged_duplicate_authors: importContext.duplicateAuthors,
-    _merged_duplicate_tags: importContext.duplicateTags,
-    _skipped_duplicate_stack_tags: importContext.duplicateStackTags,
-  };
+    execSqlWithContext(db, 'COMMIT;\nPRAGMA foreign_keys = ON;', { phase: 'commit' });
+    transactionStarted = false;
+
+    const fkErrors = runSqliteScalarList(db, 'PRAGMA foreign_key_check;');
+    if (fkErrors.length > 0) {
+      throw new Error(`foreign_key_check failed:\n${fkErrors.join('\n')}`);
+    }
+
+    db.close();
+
+    if (fs.existsSync(dbPath)) {
+      if (!force) {
+        await fsp.rm(tmpDbPath, { force: true });
+        throw new Error(`DB出力先が既に存在します: ${dbPath} (--force で上書きできます)`);
+      }
+      await fsp.rm(dbPath, { force: true });
+    }
+
+    await fsp.rename(tmpDbPath, dbPath);
+    return {
+      ...counts,
+      _merged_duplicate_authors: importContext.duplicateAuthors,
+      _merged_duplicate_tags: importContext.duplicateTags,
+      _skipped_duplicate_stack_tags: importContext.duplicateStackTags,
+    };
+  } catch (error) {
+    if (transactionStarted) {
+      try {
+        db.exec('ROLLBACK;');
+      } catch {
+        // Keep the original import failure.
+      }
+    }
+    db.close();
+    await fsp.rm(tmpDbPath, { force: true });
+    throw error;
+  }
 };
 
-const importNdjsonTable = async (stdin, filePath, definition, sqliteContext, importContext) => {
+const importNdjsonTable = async (db, filePath, definition, importContext) => {
   const input = createReadStream(filePath, { encoding: 'utf8' });
   const lines = createInterface({ input, crlfDelay: Infinity });
   const columnSql = definition.columns.map(sqlIdentifier).join(', ');
+  const placeholders = definition.columns.map(() => '?').join(', ');
+  const statement = db.prepare(
+    `INSERT INTO ${sqlIdentifier(definition.table)} (${columnSql}) VALUES (${placeholders})`
+  );
   let count = 0;
   let lineNumber = 0;
 
@@ -686,19 +556,24 @@ const importNdjsonTable = async (stdin, filePath, definition, sqliteContext, imp
     const preparedRow = prepareRowForImport(row, definition, importContext);
     if (!preparedRow) continue;
 
-    const values = definition.columns.map((column) => sqlLiteral(preparedRow[column])).join(', ');
-    await writeSqlWithContext(
-      stdin,
-      `INSERT INTO ${sqlIdentifier(definition.table)} (${columnSql}) VALUES (${values});\n`,
-      {
-        ...sqliteContext,
-        phase: 'table import',
-        table: definition.table,
-        file: definition.file,
-        lineNumber,
-        rowId: preparedRow.id,
-      }
-    );
+    const values = definition.columns.map((column) => sqliteValue(preparedRow[column]));
+    try {
+      statement.run(...values);
+    } catch (error) {
+      throw new Error(
+        [
+          `SQLite import への書き込みに失敗しました: ${compactErrorMessage(error)}`,
+          `直前の書き込み: ${formatWriteContext({
+            phase: 'table import',
+            table: definition.table,
+            file: definition.file,
+            lineNumber,
+            rowId: preparedRow.id,
+          })}`,
+        ].join('\n'),
+        { cause: error }
+      );
+    }
     count += 1;
     if (progressInterval > 0 && count % progressInterval === 0) {
       console.log(`[standalone-import] ${definition.table}: ${count}...`);
@@ -708,30 +583,11 @@ const importNdjsonTable = async (stdin, filePath, definition, sqliteContext, imp
   return count;
 };
 
-const runSqliteScalarList = async (targetDbPath, sql) => {
-  const child = spawn('sqlite3', ['-batch', targetDbPath, sql], {
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
-
-  let stdout = '';
-  let stderr = '';
-  child.stdout.setEncoding('utf8');
-  child.stderr.setEncoding('utf8');
-  child.stdout.on('data', (chunk) => {
-    stdout += chunk;
-  });
-  child.stderr.on('data', (chunk) => {
-    stderr += chunk;
-  });
-
-  const [code] = await once(child, 'close');
-  if (code !== 0) {
-    throw new Error(`sqlite3 failed (${code}): ${stderr || stdout}`);
-  }
-
-  return stdout
-    .split('\n')
-    .map((line) => line.trim())
+const runSqliteScalarList = (db, sql) => {
+  return db
+    .prepare(sql)
+    .all()
+    .map((row) => Object.values(row).join('|'))
     .filter(Boolean);
 };
 

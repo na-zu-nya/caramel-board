@@ -1,9 +1,12 @@
 @echo off
-set CHECKPOINT_REF=release/v1.0.8
-echo Caramel Board CLI / Docker backup is available only on the frozen checkpoint.
-echo.
-echo Switch to:
-echo   git fetch origin %CHECKPOINT_REF%
-echo   git checkout %CHECKPOINT_REF%
-echo   backup.bat
-exit /b 1
+REM Windows wrapper: WSL only (cmd.exe not supported)
+
+where wsl >NUL 2>NUL
+IF %ERRORLEVEL% NEQ 0 (
+  echo [backup] WSL not found. Please enable WSL:  wsl --install
+  echo After install, open Ubuntu ^(WSL^) ^and run:  ./serve.sh backup
+  exit /B 1
+)
+
+wsl.exe bash -lc "cd \"$(wslpath -u '%cd%')\" && dos2unix ./serve.sh && ./serve.sh backup %*"
+exit /B %ERRORLEVEL%

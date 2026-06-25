@@ -57,7 +57,7 @@ Caramel Board は、参考画像、素材、イラストや漫画、動画をア
 CLI / Docker 版は `release/v1.0.8` をチェックポイントとして凍結し、現在の mainline では運用対象から外しています。通常利用は Desktop 版を利用してください。
 
 - CLI / Docker 版の凍結について: [CLI / Docker 版セットアップ](./docs/cli-installation.md)
-- 旧 Docker 版から Desktop 版への移行: [スタンドアロン移行メモ](./docs/standalone-migration.md)
+- 旧 Docker 版から Desktop 版への移行: [Docker 版から Desktop 版へ移行する](./docs/docker-to-desktop-migration.md)
 
 ### オプション設定ガイド
 
@@ -79,7 +79,7 @@ Caramel Boardアプリ
 クライアントアプリ
 
 - 各種最新のバージョンのブラウザを推奨します
-- 動作検証済み: Safari / Chrome 
+- 動作検証済み: Safari / Chrome
 
 ## プロジェクト情報
 

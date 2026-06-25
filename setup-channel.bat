@@ -1,9 +1,12 @@
 @echo off
-set CHECKPOINT_REF=release/v1.0.8
-echo Caramel Board CLI / Docker channels are frozen at %CHECKPOINT_REF%.
-echo This branch is now for the Desktop / SQLite edition.
-echo.
-echo To use the legacy Docker edition:
-echo   git fetch origin %CHECKPOINT_REF%
-echo   git checkout %CHECKPOINT_REF%
-exit /b 1
+REM Windows wrapper: WSL only (cmd.exe not supported)
+
+where wsl >NUL 2>NUL
+IF %ERRORLEVEL% NEQ 0 (
+  echo [setup-channel] WSL not found. Please enable WSL:  wsl --install
+  echo After install, open Ubuntu ^(WSL^) ^and run:  ./setup.sh channel
+  exit /B 1
+)
+
+wsl.exe bash -lc "cd \"$(wslpath -u '%cd%')\" && if ! command -v dos2unix >/dev/null 2>&1; then sudo apt-get update; sudo apt-get install -y dos2unix; fi && dos2unix ./setup.sh && ./setup.sh channel %*"
+exit /B %ERRORLEVEL%

@@ -30,6 +30,7 @@ import {
 import type { AutoTagProgressCopy } from '../features/autotag/progressText';
 import { MediaDependencySection } from '../features/media/MediaDependencySection';
 import { DockerMigrationPanel } from '../features/migrations/docker/DockerMigrationPanel';
+import { DockerMigrationResetDialog } from '../features/migrations/docker/DockerMigrationResetDialog';
 import type { DockerMigrationCopy } from '../features/migrations/docker/types';
 import { StandaloneMigrationDialog } from '../features/migrations/standalone/StandaloneMigrationDialog';
 import { StandaloneMigrationPanel } from '../features/migrations/standalone/StandaloneMigrationPanel';
@@ -77,6 +78,10 @@ import type {
 const getErrorMessage = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
 
+const isDockerMigrationResettableError = (message: string) =>
+  message.includes('移行先のSQLite DBが既に存在します') ||
+  message.includes('移行先のライブラリフォルダが空ではありません');
+
 const choosePath = async (directory: boolean) => {
   const selected = await open({ directory, multiple: false });
   return typeof selected === 'string' ? selected : null;
@@ -122,6 +127,10 @@ export default function App() {
   const [dockerDetectionAttempted, setDockerDetectionAttempted] = useState(false);
   const [dockerMigrationProgress, setDockerMigrationProgress] =
     useState<DockerMigrationProgress | null>(null);
+  const [dockerMigrationResetConfirmOpen, setDockerMigrationResetConfirmOpen] = useState(false);
+  const [dockerMigrationResetDismissedError, setDockerMigrationResetDismissedError] = useState<
+    string | null
+  >(null);
   const [standaloneMigrationStatus, setStandaloneMigrationStatus] =
     useState<StandaloneMigrationStatus | null>(null);
   const [standaloneMigrationProgress, setStandaloneMigrationProgress] =
@@ -870,9 +879,15 @@ export default function App() {
       setMessage(t.dockerMigrationCompleted(next.dbPath ?? '', next.exportDir ?? ''));
     } else if (next.error) {
       setMessage(next.error);
+      if (
+        isDockerMigrationResettableError(next.error) &&
+        next.error !== dockerMigrationResetDismissedError
+      ) {
+        setDockerMigrationResetConfirmOpen(true);
+      }
     }
     return next;
-  }, [t]);
+  }, [dockerMigrationResetDismissedError, t]);
 
   const handleOpenStandaloneMigrationDialog = useCallback(() => {
     setMessage('');
@@ -979,33 +994,56 @@ export default function App() {
     }, t.dockerDetectionCompleted);
   }, [detectDockerSource, runAction, t]);
 
-  const handleMigrateFromDocker = useCallback(() => {
-    void runAction(async () => {
-      const saved = await saveSettings();
-      if (!saved) return;
-      setDockerMigrationProgress({
-        running: true,
-        completed: false,
-        phase: 'starting',
-        message: t.dockerMigrationInProgress,
-        percent: 0,
-        lastLog: '',
-        exportDir: null,
-        dbPath: saved.dbPath,
-        error: null,
-      });
-      try {
-        const progress = await invoke<DockerMigrationProgress>('start_docker_migration', {
-          settings: saved,
+  const startDockerMigration = useCallback(
+    (resetTarget = false) => {
+      void runAction(async () => {
+        const saved = await saveSettings();
+        if (!saved) return;
+        setDockerMigrationResetDismissedError(null);
+        setDockerMigrationProgress({
+          running: true,
+          completed: false,
+          phase: 'starting',
+          message: t.dockerMigrationInProgress,
+          percent: 0,
+          lastLog: '',
+          exportDir: null,
+          dbPath: saved.dbPath,
+          error: null,
         });
-        setDockerMigrationProgress(progress);
-        return t.dockerMigrationInProgress;
-      } catch (error) {
-        await refreshDockerMigrationProgress().catch(() => undefined);
-        throw error;
-      }
-    }, t.dockerMigrationCompletedSummary);
-  }, [refreshDockerMigrationProgress, runAction, saveSettings, t]);
+        try {
+          const progress = await invoke<DockerMigrationProgress>('start_docker_migration', {
+            settings: saved,
+            resetTarget,
+          });
+          setDockerMigrationProgress(progress);
+          return t.dockerMigrationInProgress;
+        } catch (error) {
+          await refreshDockerMigrationProgress().catch(() => undefined);
+          const message = getErrorMessage(error);
+          if (isDockerMigrationResettableError(message)) {
+            setDockerMigrationResetConfirmOpen(true);
+          }
+          throw error;
+        }
+      }, t.dockerMigrationCompletedSummary);
+    },
+    [refreshDockerMigrationProgress, runAction, saveSettings, t]
+  );
+
+  const handleMigrateFromDocker = useCallback(() => {
+    startDockerMigration(false);
+  }, [startDockerMigration]);
+
+  const handleCancelDockerMigrationReset = useCallback(() => {
+    setDockerMigrationResetDismissedError(dockerMigrationProgress?.error ?? message);
+    setDockerMigrationResetConfirmOpen(false);
+  }, [dockerMigrationProgress?.error, message]);
+
+  const handleConfirmDockerMigrationReset = useCallback(() => {
+    setDockerMigrationResetConfirmOpen(false);
+    startDockerMigration(true);
+  }, [startDockerMigration]);
 
   const navJumpItems = useMemo(
     () => [
@@ -1442,6 +1480,22 @@ export default function App() {
           canApply={standaloneMigrationCanApply}
           onApply={handleApplyStandaloneMigration}
           onClose={handleCloseStandaloneMigrationDialog}
+        />
+      ) : null}
+
+      {dockerMigrationResetConfirmOpen ? (
+        <DockerMigrationResetDialog
+          title={t.dockerMigrationResetConfirmTitle}
+          body={t.dockerMigrationResetConfirmBody}
+          dbLabel={t.sqliteDb}
+          libraryLabel={t.libraryPath}
+          dbPath={settings.dbPath}
+          libraryPath={settings.libraryPath}
+          cancelLabel={t.cancel}
+          confirmLabel={t.dockerMigrationResetConfirmAction}
+          busy={busy}
+          onCancel={handleCancelDockerMigrationReset}
+          onConfirm={handleConfirmDockerMigrationReset}
         />
       ) : null}
 

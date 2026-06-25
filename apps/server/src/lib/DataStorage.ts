@@ -45,6 +45,27 @@ const resolveStoragePath = (key: string): string => {
   return path.join(root, safeKey);
 };
 
+const copyFilePortableSync = (sourcePath: string, targetPath: string) => {
+  const sourceFd = fs.openSync(sourcePath, 'r');
+  try {
+    const targetFd = fs.openSync(targetPath, 'w');
+    try {
+      const buffer = Buffer.allocUnsafe(1024 * 1024);
+      let bytesRead = 0;
+      do {
+        bytesRead = fs.readSync(sourceFd, buffer, 0, buffer.length, null);
+        if (bytesRead > 0) {
+          fs.writeSync(targetFd, buffer, 0, bytesRead);
+        }
+      } while (bytesRead > 0);
+    } finally {
+      fs.closeSync(targetFd);
+    }
+  } finally {
+    fs.closeSync(sourceFd);
+  }
+};
+
 export class DataStorage {
   // データセットIDを含むパスを生成
   private static buildPath(key: string, dataSetId?: number): string {
@@ -140,7 +161,16 @@ export class DataStorage {
     const targetPath = DataStorage.getPath(finalKey);
     // 移動先のディレクトリを確実に作成
     mkdirpSync(path.dirname(targetPath));
-    fs.copyFileSync(oldPath, targetPath);
+    try {
+      fs.renameSync(oldPath, targetPath);
+      return;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== 'EXDEV' && code !== 'EPERM') {
+        throw error;
+      }
+    }
+    copyFilePortableSync(oldPath, targetPath);
     fs.rmSync(oldPath);
   }
 

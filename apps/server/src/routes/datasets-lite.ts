@@ -68,7 +68,7 @@ app.get('/:id', async (c) => {
   const ds = await dataSetService.getById(id, includePins);
   if (!ds) return c.json({ error: 'DataSet not found' }, 404);
   // Include authorized flag for client gating
-  const authorized = await isDatasetAuthorized(c, id);
+  const authorized = await isDatasetAuthorizedForCurrentStore(c, id);
   return c.json({ ...ds, authorized });
 });
 
@@ -216,7 +216,7 @@ app.get('/:id/protection-status', async (c) => {
   }
   const ds = await dataSetService.getById(id);
   if (!ds) return c.json({ error: 'DataSet not found' }, 404);
-  const authorized = await isDatasetAuthorized(c, id);
+  const authorized = await isDatasetAuthorizedForCurrentStore(c, id);
   return c.json({ isProtected: ds.isProtected, authorized });
 });
 
