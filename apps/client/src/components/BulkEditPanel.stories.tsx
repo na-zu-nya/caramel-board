@@ -70,3 +70,31 @@ export const WithObjectValues: Story = {
     </div>
   ),
 };
+
+export const MobileFloating: Story = {
+  parameters: {
+    viewport: {
+      defaultViewport: 'mobile2',
+    },
+  },
+  render: () => (
+    <div className="min-h-screen bg-slate-100 p-4">
+      <div className="grid gap-3">
+        {['stack-1', 'stack-2', 'stack-3', 'stack-4'].map((itemId) => (
+          <div key={itemId} className="h-20 rounded-lg border border-slate-200 bg-white" />
+        ))}
+      </div>
+      <BulkEditPanel
+        isOpen
+        onClose={() => console.log('close panel')}
+        selectedItems={selectedItems}
+        onSave={(updates) => console.log('apply bulk updates', updates)}
+        items={[
+          { id: 1, tags: ['landscape', 'sunset'], author: 'Alice' },
+          { id: 2, tags: ['portrait'], author: 'Bob' },
+          { id: 3, tags: ['travel'], author: 'Charlie' },
+        ]}
+      />
+    </div>
+  ),
+};

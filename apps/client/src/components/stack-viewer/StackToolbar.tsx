@@ -40,7 +40,7 @@ export default function StackToolbar({
   return (
     <div
       className={cn(
-        'pointer-events-none absolute bottom-4 left-4 right-4 z-50 flex items-end justify-between gap-4 transition-opacity',
+        'pointer-events-none absolute bottom-[calc(env(safe-area-inset-bottom)+1rem)] left-4 right-4 z-50 flex items-end justify-between gap-4 transition-opacity',
         isGesturing ? 'opacity-0' : 'opacity-100'
       )}
     >

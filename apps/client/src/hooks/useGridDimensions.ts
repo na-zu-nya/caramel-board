@@ -1,8 +1,9 @@
 import { useCallback, useState } from 'react';
-import { useSidebarLayoutMode } from './useSidebarLayoutMode';
+import { useRightPanelLayoutMode, useSidebarLayoutMode } from './useSidebarLayoutMode';
 
 export function useGridDimensions() {
   const { isFloating: sidebarIsFloating } = useSidebarLayoutMode();
+  const { isFloating: rightPanelIsFloating } = useRightPanelLayoutMode();
   const [itemSize, setItemSize] = useState(200); // Default item size in pixels
   const [columnsPerRow, setColumnsPerRow] = useState(5);
 
@@ -31,13 +32,13 @@ export function useGridDimensions() {
       const containerWidth =
         fullViewportWidth -
         (sidebarOpen && !sidebarIsFloating ? 320 : 0) -
-        (infoSidebarOpen || isSelectionMode ? 320 : 0);
+        ((infoSidebarOpen || isSelectionMode) && !rightPanelIsFloating ? 320 : 0);
       const actualItemSize = containerWidth / calculatedColumns;
 
       setItemSize(actualItemSize);
       setColumnsPerRow(calculatedColumns);
     },
-    [sidebarIsFloating]
+    [rightPanelIsFloating, sidebarIsFloating]
   );
 
   return {

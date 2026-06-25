@@ -256,11 +256,16 @@ export function useStackGrid({
   });
 
   const updateBounds = useCallback(() => {
-    if (!onLoadRange || isCurrentlyAnimating || disableVirtualization) {
+    if (!onLoadRange || disableVirtualization) {
       setRangeStart(0);
       setRangeEnd(Math.max(total, items.length));
       return;
     }
+
+    if (isCurrentlyAnimating) {
+      return;
+    }
+
     // When there are zero results, avoid repeatedly issuing loadRange requests.
     // Callers should explicitly trigger initial fetch; here we suppress further requests.
     if (total === 0) {

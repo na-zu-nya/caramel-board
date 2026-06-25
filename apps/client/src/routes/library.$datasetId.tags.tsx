@@ -42,6 +42,7 @@ import {
 } from '@/components/ui/select';
 import { SelectionActionBar } from '@/components/ui/selection-action-bar';
 import { useHeaderActions } from '@/hooks/useHeaderActions';
+import { useRightPanelPushesContent } from '@/hooks/useSidebarLayoutMode';
 import { useStackTile } from '@/hooks/useStackTile';
 import { apiClient } from '@/lib/api-client';
 import { downloadStackOriginals } from '@/lib/download-originals';
@@ -237,6 +238,9 @@ function TagsPage() {
   const effectiveFilter = filterScopeKey === routeFilterScopeKey ? currentFilter : tagsPageFilter;
   const [selectedStackItems, setSelectedStackItems] = useState<Set<string | number>>(new Set());
   const [isEditPanelOpen, setIsEditPanelOpen] = useState(false);
+  const rightPanelPushesContent = useRightPanelPushesContent(
+    (!selectionMode && infoSidebarOpen) || (selectionMode && isEditPanelOpen)
+  );
 
   // Stabilize body scrollbar gutter while this page is active
   useEffect(() => {
@@ -912,8 +916,15 @@ function TagsPage() {
         copy: {
           bulkEdit: t.grid.bulkEdit,
           downloadSelected: t.contextMenu.downloadSelected,
+          addToScratch: t.contextMenu.addToScratch,
+          addToCollection: t.contextMenu.addToCollection,
+          createNewCollection: t.contextMenu.createNewCollection,
+          collectionLoading: t.collection.loading,
+          noCollectionsAvailable: t.contextMenu.noCollectionsAvailable,
           mergeStacks: t.grid.mergeStacks,
           refresh: t.grid.refresh,
+          removeFromCollection: t.contextMenu.removeFromCollection,
+          removeFromScratch: t.contextMenu.removeFromScratch,
           deleteStacks: t.grid.deleteStacks,
           deleteStacksConfirm: t.grid.deleteStacksConfirm,
         },
@@ -1106,7 +1117,7 @@ function TagsPage() {
           ref={scrollContainerRef}
           className={cn(
             'flex-1 min-w-0 h-full overflow-y-auto bg-gray-50 transition-all duration-300 ease-in-out',
-            !selectionMode && infoSidebarOpen ? 'mr-80' : 'mr-0'
+            rightPanelPushesContent ? 'mr-80' : 'mr-0'
           )}
         >
           <div className="p-4">
@@ -1206,8 +1217,7 @@ function TagsPage() {
         <div
           className={cn(
             'flex-1 min-w-0 h-full flex items-center justify-center bg-gray-50 transition-all duration-300 ease-in-out',
-            !selectionMode && infoSidebarOpen ? 'mr-80' : 'mr-0',
-            isEditPanelOpen && selectionMode ? 'mr-80' : ''
+            rightPanelPushesContent ? 'mr-80' : 'mr-0'
           )}
         >
           <div className="text-center">

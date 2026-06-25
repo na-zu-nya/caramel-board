@@ -249,7 +249,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
   });
 
   // Save actions expanded state to sessionStorage
-  const _toggleActionsExpanded = () => {
+  const toggleActionsExpanded = () => {
     const newState = !actionsExpanded;
     setActionsExpanded(newState);
     try {
@@ -934,570 +934,609 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
   ) : null;
 
   return (
-    <div
-      ref={swipeRef}
-      className={cn(
-        // Lower z-index so dialogs and modals appear above the sidebar
-        'fixed top-14 bottom-0 right-0 w-80 bg-white/95 backdrop-blur-sm border-l border-gray-200 shadow-xl z-[40]',
-        // Use broad transition-all for compatibility (some setups strip arbitrary variants)
-        'transform-gpu will-change-[transform,opacity] transition-all duration-300 ease-in-out',
-        isOpen ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0 pointer-events-none'
+    <>
+      {isOpen && (
+        <button
+          type="button"
+          className="right-panel-floating-backdrop"
+          aria-label={t.viewer.closeInfo}
+          onClick={() => setIsOpen(false)}
+        />
       )}
-      style={{ touchAction: 'pan-y' }}
-    >
-      {!selectedItemId ? (
-        <div className="h-full flex items-center justify-center text-gray-400">
-          <div className="text-center">
-            <Image size={48} className="mx-auto mb-4 opacity-50" />
-            <p>{t.info.selectItem}</p>
-          </div>
-        </div>
-      ) : isLoading ? (
-        <div className="h-full flex items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
-        </div>
-      ) : selectedItem ? (
-        <div className="h-full flex flex-col">
-          {/* Header */}
-          <div className="p-4 border-b border-gray-200">
-            <div className="flex items-start justify-between">
-              <div className="flex-1 min-w-0">
-                <h2 className="text-lg font-semibold text-gray-900 truncate font-sans">
-                  {selectedItem.name}
-                </h2>
-                <p className="text-sm text-gray-500">ID: {selectedItem.id}</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleToggleFavorite}
-                  className={cn(
-                    'p-2 rounded-md transition-colors',
-                    selectedItem.favorited ? 'text-yellow-500' : 'text-gray-400 hover:text-gray-600'
-                  )}
-                  disabled={toggleFavoriteMutation.isPending}
-                >
-                  <Star size={20} className={selectedItem.favorited ? 'fill-current' : ''} />
-                </button>
-                <button
-                  type="button"
-                  onClick={handleLike}
-                  className="flex items-center gap-1 p-2 rounded-md transition-colors hover:bg-gray-100"
-                  disabled={likeMutation.isPending}
-                >
-                  <Heart
-                    size={20}
-                    className={cn(
-                      selectedItem.liked && selectedItem.liked > 0
-                        ? 'text-like fill-current'
-                        : 'text-gray-400'
-                    )}
-                  />
-                  <span className="text-sm font-medium text-gray-700">
-                    {selectedItem.liked || 0}
-                  </span>
-                </button>
-              </div>
+      <div
+        ref={swipeRef}
+        className={cn(
+          // Lower z-index so dialogs and modals appear above the sidebar
+          'app-right-panel fixed top-14 bottom-0 right-0 w-80 overflow-hidden bg-white/95 backdrop-blur-sm border-l border-gray-200 shadow-xl z-[40]',
+          // Use broad transition-all for compatibility (some setups strip arbitrary variants)
+          'transform-gpu will-change-[transform,opacity] transition-all duration-300 ease-in-out',
+          isOpen ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0 pointer-events-none'
+        )}
+        style={{ touchAction: 'pan-y' }}
+      >
+        {!selectedItemId ? (
+          <div className="flex h-full min-h-0 items-center justify-center text-gray-400">
+            <div className="text-center">
+              <Image size={48} className="mx-auto mb-4 opacity-50" />
+              <p>{t.info.selectItem}</p>
             </div>
           </div>
-
-          {/* Content */}
-          <div className="flex-1 overflow-auto p-4 space-y-6">
-            {/* Thumbnail */}
-            {(selectedItem.thumbnailUrl || selectedItem.thumbnail) && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-sm font-medium text-gray-700">
-                  <div className="flex items-center gap-2">
-                    <Image size={16} />
-                    Thumbnail
-                  </div>
-                  <button
-                    type="button"
-                    onClick={toggleThumbnailExpanded}
-                    className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 transition-colors"
-                  >
-                    {thumbnailExpanded ? 'Hide' : 'Show'}
-                    {thumbnailExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                  </button>
+        ) : isLoading ? (
+          <div className="flex h-full min-h-0 items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+          </div>
+        ) : selectedItem ? (
+          <div className="flex h-full min-h-0 flex-col">
+            {/* Header */}
+            <div className="shrink-0 p-4 border-b border-gray-200">
+              <div className="flex items-start justify-between">
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-lg font-semibold text-gray-900 truncate font-sans">
+                    {selectedItem.name}
+                  </h2>
+                  <p className="text-sm text-gray-500">ID: {selectedItem.id}</p>
                 </div>
-                <div
-                  className={cn(
-                    'overflow-hidden transition-all duration-300 ease-in-out',
-                    thumbnailExpanded ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
-                  )}
-                >
-                  <div className="aspect-square w-full rounded-lg overflow-hidden bg-gray-100 mt-2">
-                    <img
-                      src={selectedItem.thumbnailUrl || selectedItem.thumbnail || ''}
-                      alt={selectedItem.name}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Media Category */}
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                <Image size={16} />
-                {t.info.mediaCategory}
-              </div>
-              <Select value={selectedItem.mediaType || ''} onValueChange={handleMediaTypeChange}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder={t.info.selectMediaCategory} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="image">{getMediaTypeLabel(t, 'image')}</SelectItem>
-                  <SelectItem value="comic">{getMediaTypeLabel(t, 'comic')}</SelectItem>
-                  <SelectItem value="video">{getMediaTypeLabel(t, 'video')}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Author */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between gap-2">
-                <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                  <Calendar size={16} />
-                  {t.info.author}
-                </label>
-                {selectedAuthor && (
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-1 text-[11px] leading-4 text-gray-500 transition-colors hover:text-gray-700"
-                    onClick={handleOpenAuthorManagement}
-                  >
-                    <UserPen size={12} />
-                    {t.info.editAuthor}
-                  </button>
-                )}
-              </div>
-              {!authorEditing ? (
-                <button
-                  type="button"
-                  className="w-full rounded px-3 py-1 text-left text-sm leading-5 text-gray-900 transition-colors hover:bg-gray-50"
-                  onClick={handleStartAuthorEditing}
-                >
-                  {(typeof selectedItem.author === 'string'
-                    ? selectedItem.author
-                    : (selectedItem.author as Author)?.name) || '—'}
-                </button>
-              ) : (
-                <SuggestInput
-                  value={authorInput}
-                  onChange={setAuthorInput}
-                  onSelect={handleAuthorSuggestionSelect}
-                  onSearch={handleAuthorSearch}
-                  onCancel={handleCancelAuthorEditing}
-                  placeholder={t.info.typeAuthorEnter}
-                  suggestions={authorSuggestions}
-                  loading={authorLoading}
-                  autoFocus
-                />
-              )}
-              {!authorEditing && selectedAuthor && (
-                <div className="flex flex-wrap items-center gap-1 px-3">
-                  {selectedAuthorLinks.map((link) => (
-                    <a
-                      key={link.id}
-                      href={link.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className={cn(authorLinkStyles.pillBase, authorLinkStyles.pillCompact)}
-                      title={link.url}
-                    >
-                      <LinkIcon size={10} className={authorLinkStyles.icon} />
-                      <span className="truncate">{getAuthorLinkLabel(link)}</span>
-                    </a>
-                  ))}
-                  {canAddAuthorLink && (
-                    <AuthorLinkQuickAdd
-                      open={authorLinkQuickAddOpen}
-                      addLabel={t.info.addAuthorLink}
-                      urlLabel={t.info.authorLinkUrl}
-                      urlPlaceholder={t.info.authorLinkUrlPlaceholder}
-                      submitLabel={t.common.add}
-                      submitting={addAuthorLinkMutation.isPending}
-                      onOpenChange={setAuthorLinkQuickAddOpen}
-                      onSubmit={handleAddAuthorLink}
-                    />
-                  )}
-                </div>
-              )}
-              {/* Recent Authors */}
-              {recentAuthors.length > 0 && (
-                <div className="mt-2">
-                  <p className="text-xs text-gray-500 mb-1">{t.info.recentAuthors}</p>
-                  <div className="flex flex-wrap gap-1">
-                    {recentAuthors.map((author) => (
-                      <button
-                        key={author}
-                        type="button"
-                        onClick={() => {
-                          setAuthorInput(author);
-                          handleAuthorChange(author);
-                        }}
-                        className="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded transition-colors"
-                      >
-                        {author}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Tags */}
-            <div className="space-y-2">
-              <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                <Tag size={16} />
-                {t.info.tags}
-              </label>
-              <div className="space-y-2">
-                <SuggestInput
-                  value={tagInput}
-                  onChange={setTagInput}
-                  onSelect={handleAddTag}
-                  onSearch={async (query) => {
-                    setTagLoading(true);
-                    try {
-                      const results = await apiClient.searchTags(query, datasetId);
-                      const suggestions = results
-                        .map((tag) => (typeof tag === 'string' ? tag : tag.title))
-                        .filter((title): title is string => title !== undefined && title !== null);
-                      setTagSuggestions(suggestions);
-                    } catch (error) {
-                      console.error('Error searching tags:', error);
-                      setTagSuggestions([]);
-                    } finally {
-                      setTagLoading(false);
-                    }
-                  }}
-                  placeholder={t.info.addTag}
-                  suggestions={tagSuggestions}
-                  loading={tagLoading}
-                />
-                {selectedItem.tags && selectedItem.tags.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {selectedItem.tags.map((tag, index) => {
-                      const tagName = getStackTagName(tag);
-                      if (!tagName) return null;
-                      return (
-                        <Badge
-                          key={typeof tag === 'string' ? tag : `tag-${index}`}
-                          variant="default"
-                          className="cursor-pointer hover:bg-primary/90 transition-colors flex items-center gap-1.5 pr-1 px-2.5 py-1 text-sm font-semibold"
-                          onClick={() => {
-                            // Apply tag filter
-                            setCurrentFilter({
-                              ...currentFilter,
-                              tags: [tagName],
-                            });
-                          }}
-                        >
-                          <span>#{tagName}</span>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleRemoveTag(tagName);
-                            }}
-                            className="p-0.5 rounded hover:bg-white/20 transition-colors"
-                          >
-                            <X size={12} />
-                          </button>
-                        </Badge>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-              {/* Recent Tags */}
-              {recentTags.length > 0 && (
-                <div className="mt-2">
-                  <p className="text-xs text-gray-500 mb-1">{t.info.recentTags}</p>
-                  <div className="flex flex-wrap gap-1">
-                    {recentTags.map((tag) => (
-                      <button
-                        key={tag}
-                        type="button"
-                        onClick={() => handleAddTag(tag)}
-                        className="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded transition-colors"
-                      >
-                        {tag}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {suggestedTags.length > 0 && (
-                <div className="mt-2">
-                  <p className="text-xs text-gray-500 mb-1">{t.info.suggestedTags}</p>
-                  <div className="flex flex-wrap gap-1">
-                    {suggestedTags.map((tag) => (
-                      <button
-                        key={tag}
-                        type="button"
-                        onClick={() => handleAddTag(tag)}
-                        className="px-2 py-1 text-xs bg-blue-50 text-blue-700 hover:bg-blue-100 rounded transition-colors"
-                      >
-                        {tag}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* AutoTags */}
-            {selectedItem.autoTags && selectedItem.autoTags.length > 0 && (
-              <AutoTagDisplay
-                autoTags={selectedItem.autoTags}
-                datasetId={datasetId}
-                onAddTag={(tag) => {
-                  // Check if tag already exists before adding
-                  const tagExists = selectedItem.tags?.some((existingTag) => {
-                    const tagName =
-                      typeof existingTag === 'string' ? existingTag : existingTag.name;
-                    return tagName === tag;
-                  });
-
-                  if (!tagExists) {
-                    handleAddTag(tag);
-                  }
-                }}
-                sessionStorageKey="info-panel-autotags-expanded"
-              />
-            )}
-
-            {/* Dominant Colors */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-sm font-medium text-gray-700">
                 <div className="flex items-center gap-2">
-                  <Palette size={16} />
-                  {t.info.dominantColors}
-                </div>
-                {selectedItem.dominantColors && selectedItem.dominantColors.length > 0 && (
                   <button
                     type="button"
-                    onClick={() => setShowColorDetails(!showColorDetails)}
-                    className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 transition-colors"
+                    onClick={handleToggleFavorite}
+                    className={cn(
+                      'p-2 rounded-md transition-colors',
+                      selectedItem.favorited
+                        ? 'text-yellow-500'
+                        : 'text-gray-400 hover:text-gray-600'
+                    )}
+                    disabled={toggleFavoriteMutation.isPending}
                   >
-                    {t.info.detail}
-                    {showColorDetails ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                    <Star size={20} className={selectedItem.favorited ? 'fill-current' : ''} />
                   </button>
+                  <button
+                    type="button"
+                    onClick={handleLike}
+                    className="flex items-center gap-1 p-2 rounded-md transition-colors hover:bg-gray-100"
+                    disabled={likeMutation.isPending}
+                  >
+                    <Heart
+                      size={20}
+                      className={cn(
+                        selectedItem.liked && selectedItem.liked > 0
+                          ? 'text-like fill-current'
+                          : 'text-gray-400'
+                      )}
+                    />
+                    <span className="text-sm font-medium text-gray-700">
+                      {selectedItem.liked || 0}
+                    </span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 space-y-6">
+              {/* Thumbnail */}
+              {(selectedItem.thumbnailUrl || selectedItem.thumbnail) && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm font-medium text-gray-700">
+                    <div className="flex items-center gap-2">
+                      <Image size={16} />
+                      Thumbnail
+                    </div>
+                    <button
+                      type="button"
+                      onClick={toggleThumbnailExpanded}
+                      className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 transition-colors"
+                    >
+                      {thumbnailExpanded ? 'Hide' : 'Show'}
+                      {thumbnailExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                    </button>
+                  </div>
+                  <div
+                    className={cn(
+                      'overflow-hidden transition-all duration-300 ease-in-out',
+                      thumbnailExpanded ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
+                    )}
+                  >
+                    <div className="aspect-square w-full rounded-lg overflow-hidden bg-gray-100 mt-2">
+                      <img
+                        src={selectedItem.thumbnailUrl || selectedItem.thumbnail || ''}
+                        alt={selectedItem.name}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Media Category */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                  <Image size={16} />
+                  {t.info.mediaCategory}
+                </div>
+                <Select value={selectedItem.mediaType || ''} onValueChange={handleMediaTypeChange}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder={t.info.selectMediaCategory} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="image">{getMediaTypeLabel(t, 'image')}</SelectItem>
+                    <SelectItem value="comic">{getMediaTypeLabel(t, 'comic')}</SelectItem>
+                    <SelectItem value="video">{getMediaTypeLabel(t, 'video')}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Author */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                    <Calendar size={16} />
+                    {t.info.author}
+                  </label>
+                  {selectedAuthor && (
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1 text-[11px] leading-4 text-gray-500 transition-colors hover:text-gray-700"
+                      onClick={handleOpenAuthorManagement}
+                    >
+                      <UserPen size={12} />
+                      {t.info.editAuthor}
+                    </button>
+                  )}
+                </div>
+                {!authorEditing ? (
+                  <button
+                    type="button"
+                    className="w-full rounded px-3 py-1 text-left text-sm leading-5 text-gray-900 transition-colors hover:bg-gray-50"
+                    onClick={handleStartAuthorEditing}
+                  >
+                    {(typeof selectedItem.author === 'string'
+                      ? selectedItem.author
+                      : (selectedItem.author as Author)?.name) || '—'}
+                  </button>
+                ) : (
+                  <SuggestInput
+                    value={authorInput}
+                    onChange={setAuthorInput}
+                    onSelect={handleAuthorSuggestionSelect}
+                    onSearch={handleAuthorSearch}
+                    onCancel={handleCancelAuthorEditing}
+                    placeholder={t.info.typeAuthorEnter}
+                    suggestions={authorSuggestions}
+                    loading={authorLoading}
+                    autoFocus
+                  />
+                )}
+                {!authorEditing && selectedAuthor && (
+                  <div className="flex flex-wrap items-center gap-1 px-3">
+                    {selectedAuthorLinks.map((link) => (
+                      <a
+                        key={link.id}
+                        href={link.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className={cn(authorLinkStyles.pillBase, authorLinkStyles.pillCompact)}
+                        title={link.url}
+                      >
+                        <LinkIcon size={10} className={authorLinkStyles.icon} />
+                        <span className="truncate">{getAuthorLinkLabel(link)}</span>
+                      </a>
+                    ))}
+                    {canAddAuthorLink && (
+                      <AuthorLinkQuickAdd
+                        open={authorLinkQuickAddOpen}
+                        addLabel={t.info.addAuthorLink}
+                        urlLabel={t.info.authorLinkUrl}
+                        urlPlaceholder={t.info.authorLinkUrlPlaceholder}
+                        submitLabel={t.common.add}
+                        submitting={addAuthorLinkMutation.isPending}
+                        onOpenChange={setAuthorLinkQuickAddOpen}
+                        onSubmit={handleAddAuthorLink}
+                      />
+                    )}
+                  </div>
+                )}
+                {/* Recent Authors */}
+                {recentAuthors.length > 0 && (
+                  <div className="mt-2">
+                    <p className="text-xs text-gray-500 mb-1">{t.info.recentAuthors}</p>
+                    <div className="flex flex-wrap gap-1">
+                      {recentAuthors.map((author) => (
+                        <button
+                          key={author}
+                          type="button"
+                          onClick={() => {
+                            setAuthorInput(author);
+                            handleAuthorChange(author);
+                          }}
+                          className="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded transition-colors"
+                        >
+                          {author}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div>
-              <div className="space-y-3">
-                <ColorPalette
-                  colors={selectedItem.dominantColors || []}
-                  size="lg"
-                  onColorClick={handleColorClick}
-                  className="justify-start"
-                />
-                <div
-                  className={cn(
-                    'overflow-hidden transition-all duration-300 ease-in-out',
-                    showColorDetails ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
-                  )}
-                >
-                  {selectedItem.dominantColors && selectedItem.dominantColors.length > 0 && (
-                    <div className="space-y-3 text-xs text-gray-500 pt-2">
-                      {selectedItem.dominantColors.map((color, index) => (
-                        <div key={`${color.hex}-${index}`} className="space-y-2">
-                          <div className="flex justify-between items-center">
-                            <span className="flex items-center gap-2">
-                              <div
-                                className="w-3 h-3 rounded-full border border-gray-300"
-                                style={{ backgroundColor: color.hex }}
-                              />
-                              <button
-                                type="button"
-                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-gray-100 text-gray-800"
-                                onClick={async () => {
-                                  const copied = hexForCopy(color.hex);
-                                  const ok = await copyText(copied);
-                                  if (ok) {
-                                    addNotification({
-                                      type: 'success',
-                                      message: t.common.copiedToClipboard(copied),
-                                    });
-                                  } else {
-                                    addNotification({
-                                      type: 'error',
-                                      message: t.common.failedToCopy,
-                                    });
-                                  }
-                                }}
-                                title={t.info.copyHex}
-                              >
-                                <Copy size={12} />
-                                <span>{color.hex}</span>
-                              </button>
-                            </span>
-                            <span className="font-medium">
-                              {Math.round(color.percentage * 100)}%
-                            </span>
-                          </div>
-                          {color.lightness !== undefined && color.saturation !== undefined && (
-                            <div className="pl-5 space-y-2">
-                              <Progress
-                                value={color.lightness}
-                                max={100}
-                                label={t.info.brightness}
-                                size="sm"
-                                color="primary"
-                                className="text-gray-400"
-                              />
-                              <Progress
-                                value={color.saturation}
-                                max={100}
-                                label={t.info.saturation}
-                                size="sm"
-                                color="gray"
-                                className="text-gray-400"
-                              />
-                            </div>
-                          )}
-                        </div>
-                      ))}
+
+              {/* Tags */}
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                  <Tag size={16} />
+                  {t.info.tags}
+                </label>
+                <div className="space-y-2">
+                  <SuggestInput
+                    value={tagInput}
+                    onChange={setTagInput}
+                    onSelect={handleAddTag}
+                    onSearch={async (query) => {
+                      setTagLoading(true);
+                      try {
+                        const results = await apiClient.searchTags(query, datasetId);
+                        const suggestions = results
+                          .map((tag) => (typeof tag === 'string' ? tag : tag.title))
+                          .filter(
+                            (title): title is string => title !== undefined && title !== null
+                          );
+                        setTagSuggestions(suggestions);
+                      } catch (error) {
+                        console.error('Error searching tags:', error);
+                        setTagSuggestions([]);
+                      } finally {
+                        setTagLoading(false);
+                      }
+                    }}
+                    placeholder={t.info.addTag}
+                    suggestions={tagSuggestions}
+                    loading={tagLoading}
+                  />
+                  {selectedItem.tags && selectedItem.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {selectedItem.tags.map((tag, index) => {
+                        const tagName = getStackTagName(tag);
+                        if (!tagName) return null;
+                        return (
+                          <Badge
+                            key={typeof tag === 'string' ? tag : `tag-${index}`}
+                            variant="default"
+                            className="cursor-pointer hover:bg-primary/90 transition-colors flex items-center gap-1.5 pr-1 px-2.5 py-1 text-sm font-semibold"
+                            onClick={() => {
+                              // Apply tag filter
+                              setCurrentFilter({
+                                ...currentFilter,
+                                tags: [tagName],
+                              });
+                            }}
+                          >
+                            <span>#{tagName}</span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleRemoveTag(tagName);
+                              }}
+                              className="p-0.5 rounded hover:bg-white/20 transition-colors"
+                            >
+                              <X size={12} />
+                            </button>
+                          </Badge>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
+                {/* Recent Tags */}
+                {recentTags.length > 0 && (
+                  <div className="mt-2">
+                    <p className="text-xs text-gray-500 mb-1">{t.info.recentTags}</p>
+                    <div className="flex flex-wrap gap-1">
+                      {recentTags.map((tag) => (
+                        <button
+                          key={tag}
+                          type="button"
+                          onClick={() => handleAddTag(tag)}
+                          className="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded transition-colors"
+                        >
+                          {tag}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {suggestedTags.length > 0 && (
+                  <div className="mt-2">
+                    <p className="text-xs text-gray-500 mb-1">{t.info.suggestedTags}</p>
+                    <div className="flex flex-wrap gap-1">
+                      {suggestedTags.map((tag) => (
+                        <button
+                          key={tag}
+                          type="button"
+                          onClick={() => handleAddTag(tag)}
+                          className="px-2 py-1 text-xs bg-blue-50 text-blue-700 hover:bg-blue-100 rounded transition-colors"
+                        >
+                          {tag}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
 
-            {pageSettingsSection}
-
-            {/* Stats */}
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                <Hash size={16} />
-                {t.info.stats}
-              </div>
-              <div className="space-y-1 text-sm text-gray-600">
-                <div className="flex justify-between">
-                  <span>{t.info.assets}</span>
-                  <span className="font-medium">{selectedItem.assetCount || 0}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>{t.info.likes}</span>
-                  <span className="font-medium">{selectedItem.liked || 0}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>{t.info.optimized}</span>
-                  <span className="font-medium">
-                    {previewGenerated ? (
-                      <span className="text-green-600">{t.info.yes}</span>
-                    ) : (
-                      <span className="text-gray-400">{t.info.no}</span>
-                    )}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span>{t.info.created}</span>
-                  <span className="font-medium">
-                    {new Date(selectedItem.createdAt).toLocaleDateString()}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="border-t border-gray-200">
-            {/* Header with toggle button */}
-            <div className="p-4 pb-2">
-              <div className="w-full flex items-center justify-between text-sm font-medium text-gray-700">
-                <span>{t.info.actions}</span>
-              </div>
-            </div>
-
-            {/* Expandable buttons */}
-            <div>
-              <div className="px-4 pb-4 space-y-2">
-                <button
-                  type="button"
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
-                  onClick={async () => {
-                    if (!selectedItem) return;
-                    const id =
-                      typeof selectedItem.id === 'string'
-                        ? parseInt(selectedItem.id, 10)
-                        : Number(selectedItem.id);
-                    await navigate({
-                      to: '/library/$datasetId/stacks/$stackId/similar',
-                      params: { datasetId, stackId: String(id) },
+              {/* AutoTags */}
+              {selectedItem.autoTags && selectedItem.autoTags.length > 0 && (
+                <AutoTagDisplay
+                  autoTags={selectedItem.autoTags}
+                  datasetId={datasetId}
+                  onAddTag={(tag) => {
+                    // Check if tag already exists before adding
+                    const tagExists = selectedItem.tags?.some((existingTag) => {
+                      const tagName =
+                        typeof existingTag === 'string' ? existingTag : existingTag.name;
+                      return tagName === tag;
                     });
-                  }}
-                  disabled={!selectedItem}
-                >
-                  <GalleryVerticalEnd size={16} />
-                  Find similar
-                </button>
-                <button
-                  type="button"
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
-                  onClick={() => {
-                    if (!selectedItem) return;
-                    downloadStackOriginals(datasetId, [selectedItem.id]);
-                  }}
-                  disabled={!selectedItem}
-                >
-                  <Download size={16} />
-                  {t.info.downloadAll}
-                </button>
-                <button
-                  type="button"
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
-                  onClick={async () => {
-                    if (!selectedItem) return;
-                    try {
-                      const sc = await ensureScratch();
-                      await apiClient.addStackToCollection(sc.id, Number(selectedItem.id));
-                      await queryClient.invalidateQueries({ queryKey: ['stacks'] });
-                      await queryClient.invalidateQueries({
-                        queryKey: ['library-counts', datasetId],
-                      });
-                    } catch (e) {
-                      console.error('Failed to add to Scratch', e);
+
+                    if (!tagExists) {
+                      handleAddTag(tag);
                     }
                   }}
-                  disabled={!selectedItem}
-                >
-                  <NotebookText size={16} />
-                  {t.info.addToScratch}
-                </button>
-                <button
-                  type="button"
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
-                  onClick={() =>
-                    selectedItem && refreshAllMutation.mutate({ stackId: Number(selectedItem.id) })
-                  }
-                  disabled={!selectedItem || refreshAllMutation.isPending}
-                >
-                  {refreshAllMutation.isPending ? (
-                    <Loader2 size={16} className="animate-spin" />
-                  ) : (
-                    <RefreshCw size={16} />
+                  sessionStorageKey="info-panel-autotags-expanded"
+                />
+              )}
+
+              {/* Dominant Colors */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm font-medium text-gray-700">
+                  <div className="flex items-center gap-2">
+                    <Palette size={16} />
+                    {t.info.dominantColors}
+                  </div>
+                  {selectedItem.dominantColors && selectedItem.dominantColors.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowColorDetails(!showColorDetails)}
+                      className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 transition-colors"
+                    >
+                      {t.info.detail}
+                      {showColorDetails ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                    </button>
                   )}
-                  {t.info.refresh}
-                </button>
+                </div>
+                <div className="space-y-3">
+                  <ColorPalette
+                    colors={selectedItem.dominantColors || []}
+                    size="lg"
+                    onColorClick={handleColorClick}
+                    className="justify-start"
+                  />
+                  <div
+                    className={cn(
+                      'overflow-hidden transition-all duration-300 ease-in-out',
+                      showColorDetails ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
+                    )}
+                  >
+                    {selectedItem.dominantColors && selectedItem.dominantColors.length > 0 && (
+                      <div className="space-y-3 text-xs text-gray-500 pt-2">
+                        {selectedItem.dominantColors.map((color, index) => (
+                          <div key={`${color.hex}-${index}`} className="space-y-2">
+                            <div className="flex justify-between items-center">
+                              <span className="flex items-center gap-2">
+                                <div
+                                  className="w-3 h-3 rounded-full border border-gray-300"
+                                  style={{ backgroundColor: color.hex }}
+                                />
+                                <button
+                                  type="button"
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-gray-100 text-gray-800"
+                                  onClick={async () => {
+                                    const copied = hexForCopy(color.hex);
+                                    const ok = await copyText(copied);
+                                    if (ok) {
+                                      addNotification({
+                                        type: 'success',
+                                        message: t.common.copiedToClipboard(copied),
+                                      });
+                                    } else {
+                                      addNotification({
+                                        type: 'error',
+                                        message: t.common.failedToCopy,
+                                      });
+                                    }
+                                  }}
+                                  title={t.info.copyHex}
+                                >
+                                  <Copy size={12} />
+                                  <span>{color.hex}</span>
+                                </button>
+                              </span>
+                              <span className="font-medium">
+                                {Math.round(color.percentage * 100)}%
+                              </span>
+                            </div>
+                            {color.lightness !== undefined && color.saturation !== undefined && (
+                              <div className="pl-5 space-y-2">
+                                <Progress
+                                  value={color.lightness}
+                                  max={100}
+                                  label={t.info.brightness}
+                                  size="sm"
+                                  color="primary"
+                                  className="text-gray-400"
+                                />
+                                <Progress
+                                  value={color.saturation}
+                                  max={100}
+                                  label={t.info.saturation}
+                                  size="sm"
+                                  color="gray"
+                                  className="text-gray-400"
+                                />
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {pageSettingsSection}
+
+              {/* Stats */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                  <Hash size={16} />
+                  {t.info.stats}
+                </div>
+                <div className="space-y-1 text-sm text-gray-600">
+                  <div className="flex justify-between">
+                    <span>{t.info.assets}</span>
+                    <span className="font-medium">{selectedItem.assetCount || 0}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>{t.info.likes}</span>
+                    <span className="font-medium">{selectedItem.liked || 0}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>{t.info.optimized}</span>
+                    <span className="font-medium">
+                      {previewGenerated ? (
+                        <span className="text-green-600">{t.info.yes}</span>
+                      ) : (
+                        <span className="text-gray-400">{t.info.no}</span>
+                      )}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>{t.info.created}</span>
+                    <span className="font-medium">
+                      {new Date(selectedItem.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="min-w-0 shrink-0 border-t border-gray-200">
+              <div className="space-y-3 p-4">
+                <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+                  <span className="min-w-0 text-sm font-medium text-gray-700">
+                    {t.info.actions}
+                  </span>
+                  <div className="ml-auto flex shrink-0 items-center gap-2">
+                    <button
+                      type="button"
+                      className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-gray-300 bg-white text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                      onClick={() => {
+                        if (!selectedItem) return;
+                        downloadStackOriginals(datasetId, [selectedItem.id]);
+                      }}
+                      disabled={!selectedItem}
+                      title={t.info.downloadAll}
+                      aria-label={t.info.downloadAll}
+                    >
+                      <Download size={16} />
+                    </button>
+                    <button
+                      type="button"
+                      className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-gray-300 bg-white text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                      onClick={() =>
+                        selectedItem &&
+                        refreshAllMutation.mutate({ stackId: Number(selectedItem.id) })
+                      }
+                      disabled={!selectedItem || refreshAllMutation.isPending}
+                      title={t.info.refresh}
+                      aria-label={t.info.refresh}
+                    >
+                      {refreshAllMutation.isPending ? (
+                        <Loader2 size={16} className="animate-spin" />
+                      ) : (
+                        <RefreshCw size={16} />
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-red-300 bg-white text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                      onClick={handleRemoveStack}
+                      disabled={!selectedItem}
+                      title={t.info.removeStack}
+                      aria-label={t.info.removeStack}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </div>
+
                 <button
                   type="button"
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 bg-white border border-red-300 rounded-md hover:bg-red-50 transition-colors"
-                  onClick={handleRemoveStack}
-                  disabled={!selectedItem}
+                  className="flex w-full min-w-0 items-center justify-between gap-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100"
+                  onClick={toggleActionsExpanded}
+                  aria-expanded={actionsExpanded}
                 >
-                  <Trash2 size={16} />
-                  {t.info.removeStack}
+                  <span className="min-w-0">{t.info.moreActions}</span>
+                  {actionsExpanded ? (
+                    <ChevronUp size={16} className="shrink-0" />
+                  ) : (
+                    <ChevronDown size={16} className="shrink-0" />
+                  )}
                 </button>
+
+                <div
+                  className={cn(
+                    'overflow-hidden transition-all duration-300 ease-in-out',
+                    actionsExpanded ? 'max-h-40 opacity-100' : 'max-h-0 opacity-0'
+                  )}
+                >
+                  <div className="space-y-2 pt-1">
+                    <button
+                      type="button"
+                      className="flex w-full min-w-0 items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-left text-sm text-gray-700 transition-colors hover:bg-gray-50"
+                      onClick={async () => {
+                        if (!selectedItem) return;
+                        const id =
+                          typeof selectedItem.id === 'string'
+                            ? parseInt(selectedItem.id, 10)
+                            : Number(selectedItem.id);
+                        await navigate({
+                          to: '/library/$datasetId/stacks/$stackId/similar',
+                          params: { datasetId, stackId: String(id) },
+                        });
+                      }}
+                      disabled={!selectedItem}
+                    >
+                      <GalleryVerticalEnd size={16} className="shrink-0" />
+                      <span className="min-w-0 flex-1">{t.info.findSimilar}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="flex w-full min-w-0 items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-left text-sm text-gray-700 transition-colors hover:bg-gray-50"
+                      onClick={async () => {
+                        if (!selectedItem) return;
+                        try {
+                          const sc = await ensureScratch();
+                          await apiClient.addStackToCollection(sc.id, Number(selectedItem.id));
+                          await queryClient.invalidateQueries({ queryKey: ['stacks'] });
+                          await queryClient.invalidateQueries({
+                            queryKey: ['library-counts', datasetId],
+                          });
+                        } catch (e) {
+                          console.error('Failed to add to Scratch', e);
+                        }
+                      }}
+                      disabled={!selectedItem}
+                    >
+                      <NotebookText size={16} className="shrink-0" />
+                      <span className="min-w-0 flex-1">{t.info.addToScratch}</span>
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      ) : null}
-    </div>
+        ) : null}
+      </div>
+    </>
   );
 }

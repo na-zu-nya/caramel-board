@@ -33,6 +33,30 @@ export const Floating: Story = {
   },
 };
 
+export const NarrowMobile: Story = {
+  parameters: {
+    viewport: {
+      defaultViewport: 'mobile2',
+    },
+  },
+  render: () => {
+    const [message, setMessage] = useState('未追加');
+
+    return (
+      <div className="relative h-[32rem] w-full overflow-hidden bg-gray-100">
+        <FloatingUploadAction
+          className="absolute bottom-20 left-4"
+          onFiles={(files) => setMessage(`${files.length}件のファイル`)}
+          onUrls={(urls) => setMessage(`${urls.length}件のURL`)}
+        />
+        <div className="absolute left-5 top-5 rounded-md bg-white px-3 py-2 text-sm text-gray-700 shadow">
+          {message}
+        </div>
+      </div>
+    );
+  },
+};
+
 export const Toolbar: Story = {
   render: () => (
     <div className="relative h-48 w-96 rounded-lg bg-slate-900 p-6">

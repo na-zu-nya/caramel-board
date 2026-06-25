@@ -57,10 +57,13 @@ interface StackGridItemProps {
   ) => void | Promise<void>;
   onCreateCollectionWithStacks?: (stackIds: Array<string | number>) => void | Promise<void>;
   onAddToScratch?: (id: string | number) => void | Promise<void>;
+  onAddStacksToScratch?: (ids: Array<string | number>) => void | Promise<void>;
   allowRemoveFromCollection?: boolean;
   onRemoveFromCollection?: (id: string | number) => void | Promise<void>;
+  onRemoveStacksFromCollection?: (ids: Array<string | number>) => void | Promise<void>;
   allowRemoveFromScratch?: boolean;
   onRemoveFromScratch?: (id: string | number) => void | Promise<void>;
+  onRemoveStacksFromScratch?: (ids: Array<string | number>) => void | Promise<void>;
   datasetId?: string;
 }
 
@@ -85,10 +88,13 @@ function StackGridItemComponent({
   onAddStacksToCollection,
   onCreateCollectionWithStacks,
   onAddToScratch,
+  onAddStacksToScratch,
   allowRemoveFromCollection = false,
   onRemoveFromCollection,
+  onRemoveStacksFromCollection,
   allowRemoveFromScratch = false,
   onRemoveFromScratch,
+  onRemoveStacksFromScratch,
   datasetId: datasetIdProp = '1',
 }: StackGridItemProps) {
   const t = useT();
@@ -206,12 +212,22 @@ function StackGridItemComponent({
     });
   }, [datasetId, getStackId, navigate]);
   const handleAddToScratch = useCallback(async () => {
+    const stackIds = getContextActionStackIds();
+    if (stackIds.length === 0) return;
+
     try {
-      await onAddToScratch?.(item.id);
+      if (onAddStacksToScratch) {
+        await onAddStacksToScratch(stackIds);
+        return;
+      }
+
+      for (const stackId of stackIds) {
+        await onAddToScratch?.(stackId);
+      }
     } catch (e) {
       console.error('Failed to add to Scratch', e);
     }
-  }, [item.id, onAddToScratch]);
+  }, [getContextActionStackIds, onAddStacksToScratch, onAddToScratch]);
   const handleAddToCollection = useCallback(
     async (collectionId: number) => {
       await onAddStacksToCollection?.(collectionId, getContextActionStackIds());
@@ -238,19 +254,35 @@ function StackGridItemComponent({
     await onMergeStacks();
   }, [onMergeStacks, selectedStackIdsInOrder, t]);
   const handleRemoveFromCollectionItem = useCallback(async () => {
+    const stackIds = getContextActionStackIds();
+    if (stackIds.length === 0) return;
+
     try {
-      await onRemoveFromCollection?.(item.id);
+      if (onRemoveStacksFromCollection) {
+        await onRemoveStacksFromCollection(stackIds);
+        return;
+      }
+
+      await onRemoveFromCollection?.(stackIds[0]);
     } catch (e) {
       console.error('Failed to remove from collection', e);
     }
-  }, [item.id, onRemoveFromCollection]);
+  }, [getContextActionStackIds, onRemoveFromCollection, onRemoveStacksFromCollection]);
   const handleRemoveFromScratchItem = useCallback(async () => {
+    const stackIds = getContextActionStackIds();
+    if (stackIds.length === 0) return;
+
     try {
-      await onRemoveFromScratch?.(item.id);
+      if (onRemoveStacksFromScratch) {
+        await onRemoveStacksFromScratch(stackIds);
+        return;
+      }
+
+      await onRemoveFromScratch?.(stackIds[0]);
     } catch (e) {
       console.error('Failed to remove from scratch', e);
     }
-  }, [item.id, onRemoveFromScratch]);
+  }, [getContextActionStackIds, onRemoveFromScratch, onRemoveStacksFromScratch]);
   const enableNativeImageDrag = useCallback(() => {
     if (isSelectionMode) return;
     if (sourceImageUrl) {
@@ -320,6 +352,7 @@ function StackGridItemComponent({
   const handleContextRemove = canRemoveSelectedStacks
     ? handleRemoveSelectedStacks
     : handleRemoveStack;
+  const canRemoveStackInContext = !isSelectionContext || canRemoveSelectedStacks;
   const contextActionCount = getContextActionStackIds().length;
 
   return (
@@ -613,20 +646,20 @@ function StackGridItemComponent({
         <StackContextMenuContent
           isSelectionContext={isSelectionContext}
           selectedActionCount={contextActionCount}
-          onOpen={handleContextOpen}
+          onOpen={isSelectionContext ? undefined : handleContextOpen}
           onBulkEditSelected={isSelectionContext ? handleBulkEditSelected : undefined}
           onDownload={handleDownloadOriginals}
           onRefresh={onRefreshStacks ? handleRefreshStacks : undefined}
-          onInfo={handleInfo}
-          onFindSimilar={handleFindSimilar}
-          onAddToScratch={onAddToScratch ? handleAddToScratch : undefined}
+          onInfo={isSelectionContext ? undefined : handleInfo}
+          onFindSimilar={isSelectionContext ? undefined : handleFindSimilar}
+          onAddToScratch={onAddToScratch || onAddStacksToScratch ? handleAddToScratch : undefined}
           collectionMenu={collectionMenu}
           onMergeSelected={canMergeSelectedStacks ? handleMergeSelected : undefined}
           onRemoveFromCollection={
             allowRemoveFromCollection ? handleRemoveFromCollectionItem : undefined
           }
           onRemoveFromScratch={allowRemoveFromScratch ? handleRemoveFromScratchItem : undefined}
-          onRemoveStack={handleContextRemove}
+          onRemoveStack={canRemoveStackInContext ? handleContextRemove : undefined}
         />
       ) : null}
     </ContextMenu>

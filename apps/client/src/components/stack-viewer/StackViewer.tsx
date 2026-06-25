@@ -30,7 +30,7 @@ import { useStackViewerZoom } from '@/hooks/features/useStackViewerZoom';
 import { useViewerContextMenu } from '@/hooks/features/useViewerContextMenu';
 import { useHeaderActions } from '@/hooks/useHeaderActions';
 import { useScratch } from '@/hooks/useScratch';
-import { useSidebarPushesContent } from '@/hooks/useSidebarLayoutMode';
+import { useRightPanelPushesContent, useSidebarPushesContent } from '@/hooks/useSidebarLayoutMode';
 import { useViewContext } from '@/hooks/useViewContext';
 import { apiClient } from '@/lib/api-client';
 import { buildComicReadingModel, normalizeComicReadingSettings } from '@/lib/comic-reading';
@@ -210,6 +210,8 @@ export default function StackViewer({
   const sidebarOpen = embedded ? false : rawSidebarOpen;
   const sidebarPushesContent = useSidebarPushesContent(sidebarOpen);
   const sidebarLeftInset = sidebarPushesContent ? 320 : 0;
+  const infoSidebarPushesContent = useRightPanelPushesContent(isInfoSidebarOpen);
+  const infoSidebarRightInset = infoSidebarPushesContent ? 320 : 0;
   const setSelectionMode = useSetAtom(selectionModeAtom);
   const addFilesToQueue = useSetAtom(addFilesToQueueAtom);
   const uploadNotifications = useAtomValue(uploadNotificationsAtom);
@@ -1483,7 +1485,7 @@ export default function StackViewer({
           className={cn(
             'stack-content fixed top-14 bottom-0 transition-all duration-300 ease-in-out',
             sidebarPushesContent ? 'left-80' : 'left-0',
-            isInfoSidebarOpen ? 'right-80' : 'right-0'
+            infoSidebarPushesContent ? 'right-80' : 'right-0'
           )}
         >
           {!isListMode ? (
@@ -1540,7 +1542,7 @@ export default function StackViewer({
                 uiInsets={{
                   top: 56,
                   left: sidebarLeftInset,
-                  right: isInfoSidebarOpen ? 320 : 0,
+                  right: infoSidebarRightInset,
                 }}
                 className="w-full h-full"
               />
@@ -1550,7 +1552,7 @@ export default function StackViewer({
                 contentArea={{
                   top: 14,
                   left: sidebarLeftInset,
-                  right: isInfoSidebarOpen ? 320 : 0,
+                  right: infoSidebarRightInset,
                   bottom: 96,
                 }}
                 disableDrag={isZoomed || isColorPicker || isPenMode || isNativeInteractionMode}
@@ -1892,7 +1894,7 @@ export default function StackViewer({
       {isPenMode && (
         <PenOverlay
           leftInset={sidebarLeftInset}
-          rightInset={isInfoSidebarOpen ? 320 : 0}
+          rightInset={infoSidebarRightInset}
           topInset={56}
           docKey={`${datasetId}:${stackId}:${currentAsset?.id ?? 'na'}`}
           getImageEl={() => imageCarouselRef.current?.getCurrentImageElement() || null}

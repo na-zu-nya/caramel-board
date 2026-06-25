@@ -12,6 +12,7 @@ import { HeaderIconButton } from '@/components/ui/Header/HeaderIconButton';
 import { SelectionActionBar } from '@/components/ui/selection-action-bar';
 import { useSelectionMode } from '@/hooks/features/useSelectionMode';
 import { useHeaderActions } from '@/hooks/useHeaderActions';
+import { useRightPanelPushesContent } from '@/hooks/useSidebarLayoutMode';
 import { useStackTile } from '@/hooks/useStackTile';
 import { apiClient } from '@/lib/api-client';
 import { downloadStackOriginals } from '@/lib/download-originals';
@@ -59,6 +60,7 @@ function SimilarStacksRoute() {
   const [selectionMode, setSelectionMode] = useAtom(selectionModeAtom);
   const [_currentFilter, setCurrentFilter] = useAtom(currentFilterAtom);
   const [infoSidebarOpen, setInfoSidebarOpen] = useAtom(infoSidebarOpenAtom);
+  const infoSidebarPushesContent = useRightPanelPushesContent(!selectionMode && infoSidebarOpen);
   const [selectedItemId, setSelectedItemId] = useAtom(selectedItemIdAtom);
   const mtRef = useRef<MersenneTwister | null>(null);
   if (!mtRef.current) mtRef.current = new MersenneTwister();
@@ -410,8 +412,15 @@ function SimilarStacksRoute() {
         copy: {
           bulkEdit: t.grid.bulkEdit,
           downloadSelected: t.contextMenu.downloadSelected,
+          addToScratch: t.contextMenu.addToScratch,
+          addToCollection: t.contextMenu.addToCollection,
+          createNewCollection: t.contextMenu.createNewCollection,
+          collectionLoading: t.collection.loading,
+          noCollectionsAvailable: t.contextMenu.noCollectionsAvailable,
           mergeStacks: t.grid.mergeStacks,
           refresh: t.grid.refresh,
+          removeFromCollection: t.contextMenu.removeFromCollection,
+          removeFromScratch: t.contextMenu.removeFromScratch,
           deleteStacks: t.grid.deleteStacks,
           deleteStacksConfirm: t.grid.deleteStacksConfirm,
         },
@@ -454,7 +463,7 @@ function SimilarStacksRoute() {
         <StackTileGrid
           items={items}
           datasetId={datasetId}
-          className={!selectionMode && infoSidebarOpen ? 'mr-80' : 'mr-0'}
+          className={infoSidebarPushesContent ? 'mr-80' : 'mr-0'}
           gridClassName="grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2"
           role="list"
           ariaLabel={t.similar.ariaLabel}

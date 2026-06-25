@@ -159,7 +159,7 @@ export function FloatingUploadAction({
           'inline-flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 disabled:pointer-events-none disabled:opacity-50',
           variant === 'fab'
             ? 'h-14 w-14 rounded-full border border-primary/20 bg-white text-primary shadow-xl shadow-black/20 hover:bg-gray-50 active:bg-gray-100'
-            : 'rounded-full border border-primary/20 bg-white p-3 text-primary shadow-lg shadow-black/20 hover:bg-gray-50 active:bg-gray-100',
+            : 'rounded-full border border-white/20 bg-black/40 p-3 text-white hover:bg-black/60 active:bg-black/70',
           buttonClassName
         )}
       >
@@ -170,7 +170,7 @@ export function FloatingUploadAction({
         <div
           id={panelId}
           className={cn(
-            'absolute z-[90] w-72 overflow-hidden rounded-lg border border-gray-200 bg-white text-gray-900 shadow-2xl shadow-black/25',
+            'floating-upload-panel absolute z-[90] rounded-lg border border-gray-200 bg-white text-gray-900 shadow-2xl shadow-black/25',
             placementClassNames[placement],
             panelClassName
           )}
@@ -214,9 +214,9 @@ export function FloatingUploadAction({
               className="min-h-24 w-full resize-none rounded-md border border-dashed border-gray-300 bg-gray-50 px-3 py-3 text-[16px] leading-5 text-gray-700 outline-none transition-colors placeholder:text-gray-500 focus:border-primary focus:bg-white focus:ring-2 focus:ring-primary/20"
             />
 
-            <div className="flex items-center gap-2 text-xs text-gray-500">
-              <ClipboardPaste size={14} />
-              <span>{t.upload.pasteAreaHint}</span>
+            <div className="flex items-start gap-2 text-xs leading-4 text-gray-500">
+              <ClipboardPaste size={14} className="mt-0.5 shrink-0" />
+              <span className="min-w-0">{t.upload.pasteAreaHint}</span>
             </div>
 
             {feedback && <p className="text-xs font-medium text-gray-700">{feedback}</p>}
