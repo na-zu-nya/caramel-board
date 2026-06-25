@@ -2,8 +2,90 @@ import { useCallback, useRef } from 'react';
 import type { MediaGridItem } from '@/types';
 
 interface AnchorItem {
-  itemId: string | number;
-  offsetFromViewportTop: number; // ビューポートの上端からの相対位置
+  itemId: string;
+  offsetFromViewportTop: number;
+}
+
+interface ViewportBounds {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}
+
+const VISIBLE_EPSILON = 0.5;
+
+function getVisibleBounds(container: HTMLDivElement): ViewportBounds {
+  const containerRect = container.getBoundingClientRect();
+
+  return {
+    top: Math.max(0, containerRect.top),
+    right: Math.min(window.innerWidth, containerRect.right),
+    bottom: Math.min(window.innerHeight, containerRect.bottom),
+    left: Math.max(0, containerRect.left),
+  };
+}
+
+function isFullyVisible(rect: DOMRect, bounds: ViewportBounds) {
+  return (
+    rect.width > 0 &&
+    rect.height > 0 &&
+    rect.top >= bounds.top - VISIBLE_EPSILON &&
+    rect.left >= bounds.left - VISIBLE_EPSILON &&
+    rect.bottom <= bounds.bottom + VISIBLE_EPSILON &&
+    rect.right <= bounds.right + VISIBLE_EPSILON
+  );
+}
+
+function isPartiallyVisible(rect: DOMRect, bounds: ViewportBounds) {
+  return (
+    rect.width > 0 &&
+    rect.height > 0 &&
+    rect.bottom > bounds.top + VISIBLE_EPSILON &&
+    rect.top < bounds.bottom - VISIBLE_EPSILON &&
+    rect.right > bounds.left + VISIBLE_EPSILON &&
+    rect.left < bounds.right - VISIBLE_EPSILON
+  );
+}
+
+function isBeforeInReadingOrder(a: DOMRect, b: DOMRect) {
+  if (Math.abs(a.top - b.top) > VISIBLE_EPSILON) {
+    return a.top < b.top;
+  }
+
+  return a.left < b.left;
+}
+
+function findAnchorElement(
+  container: HTMLDivElement,
+  predicate: (rect: DOMRect, bounds: ViewportBounds) => boolean
+): { itemId: string; rect: DOMRect } | null {
+  const bounds = getVisibleBounds(container);
+  let anchor: { itemId: string; rect: DOMRect } | null = null;
+
+  for (const element of container.querySelectorAll('[data-item-id]')) {
+    const itemId = element.getAttribute('data-item-id');
+    if (!itemId) continue;
+
+    const rect = element.getBoundingClientRect();
+    if (!predicate(rect, bounds)) continue;
+
+    if (!anchor || isBeforeInReadingOrder(rect, anchor.rect)) {
+      anchor = { itemId, rect };
+    }
+  }
+
+  return anchor;
+}
+
+function findElementByItemId(container: HTMLDivElement, itemId: string) {
+  for (const element of container.querySelectorAll('[data-item-id]')) {
+    if (element.getAttribute('data-item-id') === itemId) {
+      return element as HTMLElement;
+    }
+  }
+
+  return null;
 }
 
 export function useScrollPreservation() {
@@ -21,121 +103,91 @@ export function useScrollPreservation() {
         return;
       }
 
-      // 現在表示されているDOM要素を全て取得
-      const gridElements = container.querySelectorAll('[data-item-id]');
+      const anchorElement =
+        findAnchorElement(container, isFullyVisible) ??
+        findAnchorElement(container, isPartiallyVisible);
 
-      // ビューポートの中央付近にあるアイテムを探す
-      const viewportHeight = window.innerHeight;
-      const viewportCenter = viewportHeight / 2;
-
-      let closestItem: AnchorItem | null = null;
-      let closestDistance = Infinity;
-
-      for (const element of gridElements) {
-        const id = Number(element.getAttribute('data-item-id') || 0);
-        const rect = element.getBoundingClientRect();
-
-        // 左端の最初のアイテムのみを対象にする（グリッドの場合）
-        if (rect.x !== 0 && id > 0) {
-          continue;
-        }
-
-        // ビューポート内に表示されているアイテムのみを考慮
-        if (rect.top >= 0 && rect.top <= viewportHeight) {
-          const distanceFromCenter = Math.abs(rect.top - viewportCenter);
-
-          if (distanceFromCenter < closestDistance) {
-            closestDistance = distanceFromCenter;
-            closestItem = {
-              itemId: id,
-              offsetFromViewportTop: rect.top,
-            };
+      preservedAnchorItemRef.current = anchorElement
+        ? {
+            itemId: anchorElement.itemId,
+            offsetFromViewportTop: anchorElement.rect.top,
           }
-        }
-      }
-
-      // 中央付近にアイテムがない場合は、最初の可視アイテムを使用
-      if (!closestItem) {
-        for (const element of gridElements) {
-          const id = Number(element.getAttribute('data-item-id') || 0);
-          const rect = element.getBoundingClientRect();
-
-          if (rect.x === 0 && rect.top >= 0) {
-            closestItem = {
-              itemId: id,
-              offsetFromViewportTop: rect.top,
-            };
-            break;
-          }
-        }
-      }
-
-      preservedAnchorItemRef.current = closestItem;
+        : null;
     },
     []
   );
 
-  // 現在アンカーされているアイテムによって、スクロール位置を保持する
+  const restoreAnchorItem = useCallback(
+    (containerRef: React.RefObject<HTMLDivElement | null>, useWindowScroll = true) => {
+      const container = containerRef.current;
+      const anchorItem = preservedAnchorItemRef.current;
+      if (!container || !anchorItem) {
+        return false;
+      }
+
+      const el = findElementByItemId(container, anchorItem.itemId);
+      if (!el) {
+        return false;
+      }
+
+      const currentRect = el.getBoundingClientRect();
+      const scrollAdjustment = currentRect.top - anchorItem.offsetFromViewportTop;
+
+      if (Math.abs(scrollAdjustment) <= 1) {
+        return false;
+      }
+
+      if (useWindowScroll) {
+        window.scrollBy({ top: scrollAdjustment, behavior: 'auto' });
+      } else {
+        const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
+        container.scrollTop = Math.min(
+          maxScrollTop,
+          Math.max(0, container.scrollTop + scrollAdjustment)
+        );
+      }
+
+      return true;
+    },
+    []
+  );
+
   const maintainScrollDuringAnimation = useCallback(
-    (containerRef: React.RefObject<HTMLDivElement | null>, isAnimating: boolean) => {
+    (
+      containerRef: React.RefObject<HTMLDivElement | null>,
+      isAnimating: boolean,
+      useWindowScroll = true
+    ) => {
       if (isAnimatingRef.current) {
         cancelAnimationFrame(isAnimatingRef.current);
         isAnimatingRef.current = 0;
       }
 
       const updateScrollPosition = () => {
-        const container = containerRef.current;
-        const anchorItem = preservedAnchorItemRef.current;
-        if (!anchorItem) {
-          return;
-        }
+        restoreAnchorItem(containerRef, useWindowScroll);
 
-        const _root: Document | HTMLElement = document;
-        const el = (container || document.body).querySelector?.(
-          `[data-item-id="${anchorItem.itemId}"]`
-        ) as HTMLElement | null;
-        if (!el) {
-          return;
-        }
-
-        const currentRect = el.getBoundingClientRect();
-        const scrollAdjustment = currentRect.top - anchorItem.offsetFromViewportTop;
-
-        // スクロール位置を調整（container がスクロール不可なら window を調整）
-        if (Math.abs(scrollAdjustment) > 1) {
-          // 1px以上のズレがある場合のみ調整
-          if (container && container.scrollHeight > container.clientHeight + 1) {
-            container.scrollTop = container.scrollTop + scrollAdjustment;
-          } else {
-            window.scrollBy({ top: scrollAdjustment, behavior: 'auto' });
-          }
-        }
-
-        // アニメーション中は継続的に更新
         if (isAnimating) {
           isAnimatingRef.current = window.requestAnimationFrame(updateScrollPosition);
         }
       };
 
       if (isAnimating) {
-        // アニメーション開始時
         isAnimatingRef.current = window.requestAnimationFrame(updateScrollPosition);
-      } else {
-        // アニメーション終了時 - 最終調整を複数回実行して確実に位置を合わせる
-        const finalAdjustments = [50, 100, 350]; // トランジション中と完了後に調整
-        finalAdjustments.forEach((delay) => {
-          setTimeout(() => {
-            updateScrollPosition();
-          }, delay);
-        });
+        return;
+      }
+
+      updateScrollPosition();
+      for (const delay of [50, 100, 350]) {
+        setTimeout(updateScrollPosition, delay);
       }
     },
-    []
+    [restoreAnchorItem]
   );
 
   return {
     preservedAnchorItemRef,
     preserveAnchorItem,
+    restoreAnchorItem,
     maintainScrollDuringAnimation,
   };
 }

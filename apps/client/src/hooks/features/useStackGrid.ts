@@ -82,13 +82,9 @@ export function useStackGrid({
     typeof window === 'undefined' ? 1 : window.innerWidth
   );
 
-  // Animation state
-  const isSidebarAnimating = useAnimationState(sidebarOpen);
-  const isRightPanelAnimating = useAnimationState([infoSidebarOpen, isSelectionMode]);
-  const isCurrentlyAnimating = isSidebarAnimating || isRightPanelAnimating;
-
   // Scroll preservation
-  const { preserveAnchorItem, maintainScrollDuringAnimation } = useScrollPreservation();
+  const { preserveAnchorItem, restoreAnchorItem, maintainScrollDuringAnimation } =
+    useScrollPreservation();
 
   // Selection mode
   const {
@@ -103,6 +99,15 @@ export function useStackGrid({
     exitSelectionMode,
   } = useSelectionMode(isSelectionMode);
 
+  // Animation state
+  const isSidebarAnimating = useAnimationState(sidebarOpen);
+  const isRightPanelAnimating = useAnimationState([
+    infoSidebarOpen,
+    isEditPanelOpen,
+    isSelectionMode,
+  ]);
+  const isCurrentlyAnimating = isSidebarAnimating || isRightPanelAnimating;
+
   // Calculate dynamic columns and item size
   const itemSize = containerWidth / Math.max(columnsPerRow, 1);
   const totalContentHeight = Math.ceil(total / Math.max(columnsPerRow, 1)) * itemSize;
@@ -112,32 +117,7 @@ export function useStackGrid({
     const nextWidth = getContainerContentWidth(container);
     if (Math.abs(containerWidth - nextWidth) < 0.5) return;
 
-    const rect = container?.getBoundingClientRect();
-    let visibleTopPx = 0;
-    let visibleHeightPx = window.innerHeight;
-
-    if (useWindowScroll) {
-      if (rect) {
-        const visibleTop = Math.max(rect.top, 0);
-        const visibleBottom = Math.min(rect.bottom, window.innerHeight);
-        visibleTopPx = Math.max(0, visibleTop - rect.top);
-        visibleHeightPx = Math.max(0, visibleBottom - visibleTop) || window.innerHeight;
-      }
-    } else if (container) {
-      visibleTopPx = Math.max(0, container.scrollTop);
-      visibleHeightPx = container.clientHeight;
-    }
-
-    const currentCenterPx = visibleTopPx + visibleHeightPx / 2;
-    const currentRow = Math.max(0, Math.floor(currentCenterPx / Math.max(itemSize, 1)));
-    const currentColumn = Math.min(
-      columnsPerRow - 1,
-      Math.max(0, Math.floor(containerWidth / 2 / Math.max(itemSize, 1)))
-    );
-    const anchorIndex = Math.min(
-      Math.max(0, total - 1),
-      currentRow * columnsPerRow + currentColumn
-    );
+    preserveAnchorItem(containerRef, items);
 
     setContainerWidth(nextWidth);
 
@@ -146,36 +126,16 @@ export function useStackGrid({
         const currentContainer = containerRef.current;
         if (!currentContainer) return;
 
-        const nextItemSize =
-          getContainerContentWidth(currentContainer) / Math.max(columnsPerRow, 1);
-        const nextRow = Math.max(0, Math.floor(anchorIndex / columnsPerRow));
-        const nextCenterPx = nextRow * nextItemSize + nextItemSize / 2;
-        const requestedVisibleTopPx = nextCenterPx - visibleHeightPx / 2;
-        const maxVisibleTopPx = Math.max(0, currentContainer.scrollHeight - visibleHeightPx);
-        const nextVisibleTopPx = Math.min(maxVisibleTopPx, Math.max(0, requestedVisibleTopPx));
-
+        restoreAnchorItem(containerRef, useWindowScroll);
         if (useWindowScroll) {
-          if (maxVisibleTopPx <= 0) return;
-          const nextRect = currentContainer.getBoundingClientRect();
-          const currentVisibleTopPx = Math.max(0, -nextRect.top);
-          const delta = nextVisibleTopPx - currentVisibleTopPx;
-          if (Math.abs(delta) > 0.5) {
-            window.scrollBy({ top: delta, behavior: 'auto' });
-          }
           window.dispatchEvent(new Event('scroll'));
           return;
         }
 
-        const maxScrollTop = Math.max(
-          0,
-          currentContainer.scrollHeight - currentContainer.clientHeight
-        );
-        if (maxScrollTop <= 0) return;
-        currentContainer.scrollTop = nextVisibleTopPx;
         currentContainer.dispatchEvent(new Event('scroll'));
       });
     });
-  }, [columnsPerRow, containerRef, containerWidth, itemSize, total, useWindowScroll]);
+  }, [containerRef, containerWidth, items, preserveAnchorItem, restoreAnchorItem, useWindowScroll]);
 
   // Create visible items array from the full sparse items array
   const finalVisibleItems: (MediaGridItem | undefined)[] = [];
@@ -341,7 +301,7 @@ export function useStackGrid({
       preserveAnchorItem(containerRef, items);
     }
     if (!disableVirtualization) {
-      maintainScrollDuringAnimation(containerRef, isCurrentlyAnimating);
+      maintainScrollDuringAnimation(containerRef, isCurrentlyAnimating, useWindowScroll);
     }
   }, [
     isCurrentlyAnimating,
@@ -350,6 +310,7 @@ export function useStackGrid({
     preserveAnchorItem,
     containerRef,
     disableVirtualization,
+    useWindowScroll,
   ]);
 
   useEffect(() => {
@@ -405,33 +366,7 @@ export function useStackGrid({
       const nextColumns = clampStackGridColumns(value);
       if (nextColumns === columnsPerRow) return;
 
-      const container = containerRef.current;
-      const rect = container?.getBoundingClientRect();
-      let visibleTopPx = 0;
-      let visibleHeightPx = window.innerHeight;
-
-      if (useWindowScroll) {
-        if (rect) {
-          const visibleTop = Math.max(rect.top, 0);
-          const visibleBottom = Math.min(rect.bottom, window.innerHeight);
-          visibleTopPx = Math.max(0, visibleTop - rect.top);
-          visibleHeightPx = Math.max(0, visibleBottom - visibleTop) || window.innerHeight;
-        }
-      } else if (container) {
-        visibleTopPx = Math.max(0, container.scrollTop);
-        visibleHeightPx = container.clientHeight;
-      }
-
-      const currentCenterPx = visibleTopPx + visibleHeightPx / 2;
-      const currentRow = Math.max(0, Math.floor(currentCenterPx / Math.max(itemSize, 1)));
-      const currentColumn = Math.min(
-        columnsPerRow - 1,
-        Math.max(0, Math.floor(containerWidth / 2 / Math.max(itemSize, 1)))
-      );
-      const anchorIndex = Math.min(
-        Math.max(0, total - 1),
-        currentRow * columnsPerRow + currentColumn
-      );
+      preserveAnchorItem(containerRef, items);
 
       setColumnsPerRowState(nextColumns);
       writeStackGridColumns(nextColumns);
@@ -441,40 +376,17 @@ export function useStackGrid({
           const currentContainer = containerRef.current;
           if (!currentContainer) return;
 
-          const nextContainerWidth = getContainerContentWidth(currentContainer);
-          const nextItemSize = nextContainerWidth / Math.max(nextColumns, 1);
-          const nextRow = Math.max(0, Math.floor(anchorIndex / nextColumns));
-          const nextCenterPx = nextRow * nextItemSize + nextItemSize / 2;
-          const requestedVisibleTopPx = nextCenterPx - visibleHeightPx / 2;
-          const maxVisibleTopPx = Math.max(0, currentContainer.scrollHeight - visibleHeightPx);
-          const nextVisibleTopPx = Math.min(maxVisibleTopPx, Math.max(0, requestedVisibleTopPx));
-
-          if (useWindowScroll) {
-            if (maxVisibleTopPx <= 0) return;
-            const nextRect = currentContainer.getBoundingClientRect();
-            const currentVisibleTopPx = Math.max(0, -nextRect.top);
-            const delta = nextVisibleTopPx - currentVisibleTopPx;
-            if (Math.abs(delta) > 0.5) {
-              window.scrollBy({ top: delta, behavior: 'auto' });
-            }
-          } else {
-            const maxScrollTop = Math.max(
-              0,
-              currentContainer.scrollHeight - currentContainer.clientHeight
-            );
-            if (maxScrollTop <= 0) return;
-            currentContainer.scrollTop = nextVisibleTopPx;
-          }
-
+          restoreAnchorItem(containerRef, useWindowScroll);
           if (useWindowScroll) {
             window.dispatchEvent(new Event('scroll'));
-          } else {
-            currentContainer.dispatchEvent(new Event('scroll'));
+            return;
           }
+
+          currentContainer.dispatchEvent(new Event('scroll'));
         });
       });
     },
-    [columnsPerRow, containerRef, containerWidth, itemSize, total, useWindowScroll]
+    [columnsPerRow, containerRef, items, preserveAnchorItem, restoreAnchorItem, useWindowScroll]
   );
 
   // Handlers
