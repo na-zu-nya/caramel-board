@@ -62,8 +62,35 @@ function UploadProgressStory() {
   );
 }
 
+function PendingUploadProgressStory() {
+  const store = useMemo(() => {
+    const storyStore = createStore();
+    storyStore.set(currentBatchAtom, {
+      id: 'story-pending-batch',
+      type: 'new-stack',
+      files: [
+        createUploadFile('pending-1', 'pending', 0),
+        createUploadFile('pending-2', 'pending', 0),
+        createUploadFile('pending-3', 'pending', 0),
+      ],
+    });
+    return storyStore;
+  }, []);
+
+  return (
+    <JotaiProvider store={store}>
+      <div className="min-h-screen bg-gray-100" />
+      <UploadProgress />
+    </JotaiProvider>
+  );
+}
+
 export const Default: Story = {
   render: () => <UploadProgressStory />,
+};
+
+export const Pending: Story = {
+  render: () => <PendingUploadProgressStory />,
 };
 
 export const Mobile: Story = {

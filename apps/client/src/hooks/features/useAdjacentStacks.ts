@@ -27,18 +27,21 @@ export function useAdjacentStacks({
   // Fetch stacks from the current dataset/media type
   const { data: stacksData } = useQuery({
     queryKey: ['stacks', 'paginated', { datasetId, mediaType, limit: 1000 }],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const filter: StackFilter = { datasetId };
       if (isMediaCategory(mediaType)) {
         filter.mediaCategory = mediaType;
       }
 
-      return await apiClient.getStacks({
-        datasetId,
-        filter,
-        limit: 1000,
-        offset: 0,
-      });
+      return await apiClient.getStacks(
+        {
+          datasetId,
+          filter,
+          limit: 1000,
+          offset: 0,
+        },
+        { signal }
+      );
     },
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
   });

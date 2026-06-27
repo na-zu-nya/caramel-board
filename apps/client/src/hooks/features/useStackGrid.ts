@@ -150,6 +150,7 @@ export function useStackGrid({
       finalVisibleItems.push(items[i]);
     }
   }
+  const hasVisibleItemGaps = total > 0 && finalVisibleItems.some((item) => item === undefined);
 
   const topSpacerHeight = disableVirtualization
     ? 0
@@ -177,6 +178,44 @@ export function useStackGrid({
       onLoadRange(startIndex, endIndex);
     }
   }, SCROLL_THROTTLE_MS);
+
+  useEffect(() => {
+    if (
+      !onLoadRange ||
+      disableVirtualization ||
+      !hasVisibleItemGaps ||
+      total === 0 ||
+      isCurrentlyAnimating
+    ) {
+      return;
+    }
+
+    const requestStartIndex = Math.max(0, rangeStart - PREFETCH_ROWS_ABOVE * columnsPerRow);
+    const requestEndInclusive = Math.min(
+      Math.max(0, total - 1),
+      rangeEnd - 1 + PREFETCH_ROWS_BELOW * columnsPerRow
+    );
+    const retryVisibleRange = () => {
+      onLoadRange(requestStartIndex, requestEndInclusive);
+    };
+
+    const timeoutId = window.setTimeout(retryVisibleRange, 1200);
+    const intervalId = window.setInterval(retryVisibleRange, 6000);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      window.clearInterval(intervalId);
+    };
+  }, [
+    columnsPerRow,
+    disableVirtualization,
+    hasVisibleItemGaps,
+    isCurrentlyAnimating,
+    onLoadRange,
+    rangeEnd,
+    rangeStart,
+    total,
+  ]);
 
   useEffect(() => {
     if (disableVirtualization) {

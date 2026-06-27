@@ -55,14 +55,17 @@ export function useSparseInfiniteScroll({
     isFetching: isCountFetching,
   } = useQuery({
     queryKey: ['stacks', 'count', datasetId, mediaType, filter, sort],
-    queryFn: async () => {
-      const result = await apiClient.getStacks({
-        datasetId,
-        filter,
-        sort,
-        limit: 1,
-        offset: 0,
-      });
+    queryFn: async ({ signal }) => {
+      const result = await apiClient.getStacks(
+        {
+          datasetId,
+          filter,
+          sort,
+          limit: 1,
+          offset: 0,
+        },
+        { signal }
+      );
       return { total: result.total };
     },
     staleTime: 5 * 60 * 1000,

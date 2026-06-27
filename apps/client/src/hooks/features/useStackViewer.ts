@@ -78,7 +78,7 @@ export function useStackViewer({
     refetch,
   } = useQuery({
     queryKey: ['stack', datasetId, stackId],
-    queryFn: () => apiClient.getStack(stackId, datasetId),
+    queryFn: ({ signal }) => apiClient.getStack(stackId, datasetId, { signal }),
   });
 
   // Set selected item ID when stack loads

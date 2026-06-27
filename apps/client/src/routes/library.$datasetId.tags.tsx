@@ -469,6 +469,10 @@ function TagsPage() {
   });
 
   const selectedTagId = selectedTag?.id;
+  const tagDataSetQuery = useMemo(
+    () => new URLSearchParams({ dataSetId: datasetId }).toString(),
+    [datasetId]
+  );
 
   // Handle infinite scroll within the asset list pane
   useEffect(() => {
@@ -498,7 +502,9 @@ function TagsPage() {
   // Mutations
   const renameMutation = useMutation({
     mutationFn: async ({ id, title }: { id: number; title: string }) => {
-      const response = await apiClient.put(`/api/v1/tags/${id}/rename`, { title });
+      const response = await apiClient.put(`/api/v1/tags/${id}/rename?${tagDataSetQuery}`, {
+        title,
+      });
       return response.data;
     },
     onSuccess: () => {
@@ -510,7 +516,7 @@ function TagsPage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (ids: number[]) => {
-      await Promise.all(ids.map((id) => apiClient.delete(`/api/v1/tags/${id}`)));
+      await Promise.all(ids.map((id) => apiClient.delete(`/api/v1/tags/${id}?${tagDataSetQuery}`)));
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tags', datasetId] });
@@ -524,7 +530,7 @@ function TagsPage() {
 
   const mergeMutation = useMutation({
     mutationFn: async ({ sourceIds, targetId }: { sourceIds: number[]; targetId: number }) => {
-      const response = await apiClient.post('/api/v1/tags/merge', {
+      const response = await apiClient.post(`/api/v1/tags/merge?${tagDataSetQuery}`, {
         sourceTagIds: sourceIds,
         targetTagId: targetId,
       });

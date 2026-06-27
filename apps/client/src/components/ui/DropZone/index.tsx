@@ -321,6 +321,10 @@ export function extractUrlsFromDataTransfer(dataTransfer: DataTransfer | null): 
 }
 
 function debugLogDroppedDataTransfer(dataTransfer: DataTransfer | null) {
+  if (!import.meta.env.DEV) {
+    return;
+  }
+
   if (!dataTransfer) {
     console.log('[DropZone] drop payload', { hasDataTransfer: false });
     return;

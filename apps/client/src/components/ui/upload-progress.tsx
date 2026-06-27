@@ -33,7 +33,11 @@ export function UploadProgress() {
 
             <div className="flex justify-between text-xs text-gray-500">
               <span>進行状況: {Math.round(progress.progress)}%</span>
-              {progress.isUploading && <span className="animate-pulse">アップロード中...</span>}
+              {progress.isUploading ? (
+                <span className="animate-pulse">アップロード中...</span>
+              ) : progress.pending > 0 ? (
+                <span>待機中...</span>
+              ) : null}
             </div>
           </div>
         </div>

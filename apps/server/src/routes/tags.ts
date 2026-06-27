@@ -14,10 +14,16 @@ import {
 export const tagsRoute = new Hono();
 const metadataRepository = new StandaloneMetadataRepository();
 
-function getDataSetIdFromQuery(c: Context): number {
-  const ds = c.req.query('datasetId') || c.req.query('dataSetId') || '1';
-  const n = Number.parseInt(ds as string, 10);
-  return Number.isNaN(n) ? 1 : n;
+function getDataSetIdFromQuery(c: Context): number | null {
+  const ds = c.req.query('dataSetId');
+  if (ds === undefined) return null;
+
+  const n = Number(ds);
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
+
+function rejectMissingDataSetId(c: Context) {
+  return c.json({ error: 'dataSetId is required' }, 400);
 }
 
 // Get all tags
@@ -25,6 +31,7 @@ tagsRoute.get('/', zValidator('query', PaginationSchema), async (c) => {
   try {
     const { limit, offset } = c.req.valid('query');
     const dataSetId = getDataSetIdFromQuery(c);
+    if (dataSetId === null) return rejectMissingDataSetId(c);
     const auth = await ensureDatasetAuthorizedForCurrentStore(c, dataSetId);
     if (auth) return auth;
     const orderBy = (c.req.query('orderBy') || 'title') as string;
@@ -48,8 +55,9 @@ tagsRoute.get('/', zValidator('query', PaginationSchema), async (c) => {
 // Get all tags for management (higher limit)
 tagsRoute.get('/management', zValidator('query', ManagementPaginationSchema), async (c) => {
   try {
-    const { limit, offset, dataSetId } = c.req.valid('query');
-    const ds = dataSetId ?? getDataSetIdFromQuery(c);
+    const { limit, offset } = c.req.valid('query');
+    const ds = getDataSetIdFromQuery(c);
+    if (ds === null) return rejectMissingDataSetId(c);
     const auth = await ensureDatasetAuthorizedForCurrentStore(c, ds);
     if (auth) return auth;
     return c.json(metadataRepository.getTags({ limit, offset, datasetId: ds }));
@@ -64,6 +72,7 @@ tagsRoute.get('/search', async (c) => {
   try {
     const key = c.req.query('key') || '';
     const dataSetId = getDataSetIdFromQuery(c);
+    if (dataSetId === null) return rejectMissingDataSetId(c);
     const auth = await ensureDatasetAuthorizedForCurrentStore(c, dataSetId);
     if (auth) return auth;
     return c.json(metadataRepository.searchTags(key, dataSetId));
@@ -77,7 +86,7 @@ tagsRoute.get('/search', async (c) => {
 tagsRoute.post('/', zValidator('json', CreateTagSchema), async (c) => {
   try {
     const data = c.req.valid('json');
-    const dataSetId = data.dataSetId ?? getDataSetIdFromQuery(c);
+    const dataSetId = data.dataSetId;
     const auth = await ensureDatasetAuthorizedForCurrentStore(c, dataSetId);
     if (auth) return auth;
     const tag = metadataRepository.createTag(dataSetId, data.title);
@@ -91,8 +100,7 @@ tagsRoute.post('/', zValidator('json', CreateTagSchema), async (c) => {
 // Tag a stack
 tagsRoute.post('/tag-stack', zValidator('json', TagStackSchema), async (c) => {
   try {
-    const { stackId, tagIds } = c.req.valid('json');
-    const dataSetId = getDataSetIdFromQuery(c);
+    const { dataSetId, stackId, tagIds } = c.req.valid('json');
     const auth = await ensureDatasetAuthorizedForCurrentStore(c, dataSetId);
     if (auth) return auth;
     const ok = metadataRepository.tagStack(stackId, dataSetId, tagIds);
@@ -115,6 +123,7 @@ tagsRoute.put('/:id/rename', zValidator('param', IdParamSchema), async (c) => {
     }
 
     const dataSetId = getDataSetIdFromQuery(c);
+    if (dataSetId === null) return rejectMissingDataSetId(c);
     const auth = await ensureDatasetAuthorizedForCurrentStore(c, dataSetId);
     if (auth) return auth;
     const tag = metadataRepository.renameTag(id, dataSetId, title);
@@ -140,6 +149,7 @@ tagsRoute.post('/merge', async (c) => {
     }
 
     const dataSetId = getDataSetIdFromQuery(c);
+    if (dataSetId === null) return rejectMissingDataSetId(c);
     const auth = await ensureDatasetAuthorizedForCurrentStore(c, dataSetId);
     if (auth) return auth;
     const result = metadataRepository.mergeTags(dataSetId, sourceTagIds, targetTagId);
@@ -160,6 +170,7 @@ tagsRoute.get(
       const { id } = c.req.valid('param');
       const { limit, offset } = c.req.valid('query');
       const dataSetId = getDataSetIdFromQuery(c);
+      if (dataSetId === null) return rejectMissingDataSetId(c);
       const auth = await ensureDatasetAuthorizedForCurrentStore(c, dataSetId);
       if (auth) return auth;
       return c.json(metadataRepository.getStacksByTag(id, dataSetId, { limit, offset }));
@@ -175,6 +186,7 @@ tagsRoute.delete('/:id', zValidator('param', IdParamSchema), async (c) => {
   try {
     const { id } = c.req.valid('param');
     const dataSetId = getDataSetIdFromQuery(c);
+    if (dataSetId === null) return rejectMissingDataSetId(c);
     const auth = await ensureDatasetAuthorizedForCurrentStore(c, dataSetId);
     if (auth) return auth;
     const ok = metadataRepository.deleteTag(id, dataSetId);

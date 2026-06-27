@@ -141,6 +141,15 @@ const withImageRefreshKey = (src: string, refreshKey?: string | number | null): 
   return `${base}${separator}cb=${encodeURIComponent(String(refreshKey))}${hash}`;
 };
 
+const withImageRetryToken = (src: string, retryToken: number): string => {
+  if (!src || retryToken <= 0 || /^(data|blob):/i.test(src)) return src;
+  const hashIndex = src.indexOf('#');
+  const base = hashIndex >= 0 ? src.slice(0, hashIndex) : src;
+  const hash = hashIndex >= 0 ? src.slice(hashIndex) : '';
+  const separator = base.includes('?') ? '&' : '?';
+  return `${base}${separator}imgRetry=${retryToken}${hash}`;
+};
+
 const getAssetFilenameBase = (asset?: Asset | null) => {
   const source = asset?.originalName || asset?.file || asset?.url || 'video-frame';
   const clean = stripUrlParams(source);
@@ -159,6 +168,8 @@ const canvasToPngBlob = (canvas: HTMLCanvasElement) =>
   new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
 
 const VIDEO_SHUTTLE_RATE = 1.5;
+const IMAGE_PRELOAD_TIMEOUT_MS = 15 * 1000;
+const IMAGE_PRELOAD_MAX_ATTEMPTS = 3;
 
 const getFiniteVideoDuration = (video: HTMLVideoElement, fallback: number) =>
   Number.isFinite(video.duration) ? video.duration : fallback;
@@ -219,6 +230,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
     ref
   ) => {
     const [loadedImages, setLoadedImages] = useState<Set<string>>(new Set());
+    const [imageRetryTokens, setImageRetryTokens] = useState<Map<string, number>>(() => new Map());
     const [videoState, setVideoState] = useState<VideoState>({
       currentTime: 0,
       duration: 0,
@@ -247,6 +259,9 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
     const currentVideoHostRef = useRef<HTMLDivElement | null>(null);
     const ownedVideoRef = useRef<HTMLVideoElement | null>(null);
     const currentVideoSrcRef = useRef<string | null>(null);
+    const preloadingImagesRef = useRef<Set<string>>(new Set());
+    const imageLoadAttemptsRef = useRef<Map<string, number>>(new Map());
+    const isMountedRef = useRef(true);
     const autoplayVideoKeyRef = useRef<string | null>(null);
     const lastPlaybackRef = useRef<{ time: number; wasPlaying: boolean }>({
       time: 0,
@@ -284,6 +299,46 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
       }
       const source = getImageDisplaySource(asset);
       return source ? withImageRefreshKey(source, asset.updatedAt) : null;
+    }, []);
+
+    const getImageLoadSrc = useCallback(
+      (src: string) => withImageRetryToken(src, imageRetryTokens.get(src) ?? 0),
+      [imageRetryTokens]
+    );
+
+    const markImageLoaded = useCallback((src: string) => {
+      preloadingImagesRef.current.delete(src);
+      if (!isMountedRef.current) return;
+      setLoadedImages((prev) => {
+        if (prev.has(src)) return prev;
+        return new Set(prev).add(src);
+      });
+    }, []);
+
+    const requestImageRetry = useCallback(
+      (baseSrc: string, loadSrc: string) => {
+        preloadingImagesRef.current.delete(loadSrc);
+        if (!isMountedRef.current) return;
+
+        const attempts = imageLoadAttemptsRef.current.get(baseSrc) ?? 0;
+        if (attempts >= IMAGE_PRELOAD_MAX_ATTEMPTS) {
+          markImageLoaded(loadSrc);
+          return;
+        }
+
+        setImageRetryTokens((prev) => {
+          const next = new Map(prev);
+          next.set(baseSrc, Math.max(prev.get(baseSrc) ?? 0, attempts));
+          return next;
+        });
+      },
+      [markImageLoaded]
+    );
+
+    useEffect(() => {
+      return () => {
+        isMountedRef.current = false;
+      };
     }, []);
 
     const clearResumeAfterSeekTimer = useCallback(() => {
@@ -786,16 +841,41 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
         .map((asset) => getPreloadTarget(asset))
         .filter(Boolean) as string[];
 
-      for (const src of targets) {
-        if (!loadedImages.has(src)) {
+      for (const baseSrc of targets) {
+        const src = getImageLoadSrc(baseSrc);
+        if (!loadedImages.has(src) && !preloadingImagesRef.current.has(src)) {
+          preloadingImagesRef.current.add(src);
+          imageLoadAttemptsRef.current.set(
+            baseSrc,
+            (imageLoadAttemptsRef.current.get(baseSrc) ?? 0) + 1
+          );
+
           const img = new Image();
+          const timeoutId = globalThis.setTimeout(() => {
+            requestImageRetry(baseSrc, src);
+          }, IMAGE_PRELOAD_TIMEOUT_MS);
+
           img.onload = () => {
-            setLoadedImages((prev) => new Set(prev).add(src));
+            globalThis.clearTimeout(timeoutId);
+            markImageLoaded(src);
+          };
+          img.onerror = () => {
+            globalThis.clearTimeout(timeoutId);
+            requestImageRetry(baseSrc, src);
           };
           img.src = src;
         }
       }
-    }, [resolvedCurrentUnit, resolvedNextUnit, resolvedPrevUnit, loadedImages, getPreloadTarget]);
+    }, [
+      resolvedCurrentUnit,
+      resolvedNextUnit,
+      resolvedPrevUnit,
+      loadedImages,
+      getPreloadTarget,
+      getImageLoadSrc,
+      markImageLoaded,
+      requestImageRetry,
+    ]);
 
     // Handle click for navigation
     const handleContainerClick = useCallback(
@@ -1202,9 +1282,10 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
 
       const style = getImageStyle(position);
       const isVideo = isVideoAsset(asset);
-      const source = isVideo
+      const baseSource = isVideo
         ? getVideoSource(asset)
         : withImageRefreshKey(getImageDisplaySource(asset), asset.updatedAt);
+      const source = isVideo ? baseSource : getImageLoadSrc(baseSource);
       const assetRenderKey = `asset-${String(asset.id ?? source ?? position)}`;
       const dragStyle: DragImageStyle | undefined = !isVideo
         ? {
@@ -1277,6 +1358,12 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
                   className="max-w-full max-h-full w-full h-full object-contain select-none"
                   draggable={nativeDragEnabled}
                   style={dragStyle}
+                  onLoad={() => {
+                    if (source) markImageLoaded(source);
+                  }}
+                  onError={() => {
+                    if (baseSource && source) requestImageRetry(baseSource, source);
+                  }}
                 />
               </div>
             </div>
@@ -1287,7 +1374,8 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
 
     const renderLogicalPageImage = (page: LogicalPage, visualIndex?: number) => {
       const asset = page.asset;
-      const source = withImageRefreshKey(getImageDisplaySource(asset), asset.updatedAt);
+      const baseSource = withImageRefreshKey(getImageDisplaySource(asset), asset.updatedAt);
+      const source = getImageLoadSrc(baseSource);
       const dragStyle: DragImageStyle = {
         cursor: nativeDragEnabled ? 'grab' : 'default',
         WebkitUserDrag: nativeDragEnabled ? 'element' : 'none',
@@ -1303,6 +1391,12 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
             className="max-w-full max-h-full w-full h-full object-contain select-none"
             draggable={nativeDragEnabled}
             style={{ ...dragStyle, objectPosition }}
+            onLoad={() => {
+              if (source) markImageLoaded(source);
+            }}
+            onError={() => {
+              if (baseSource && source) requestImageRetry(baseSource, source);
+            }}
           />
         );
       }
@@ -1314,6 +1408,12 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
             alt={asset.preview || asset.file || asset.url || ''}
             className="absolute top-0 h-full w-[200%] max-w-none select-none object-fill"
             draggable={nativeDragEnabled}
+            onLoad={() => {
+              if (source) markImageLoaded(source);
+            }}
+            onError={() => {
+              if (baseSource && source) requestImageRetry(baseSource, source);
+            }}
             style={{
               ...dragStyle,
               left: page.segment === 'left' ? 0 : '-100%',
@@ -1373,8 +1473,9 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
 
     const isCurrentVideo = isVideoAsset(currentAsset);
     const currentPreloadKey = getPreloadTarget(currentAsset);
+    const currentLoadKey = currentPreloadKey ? getImageLoadSrc(currentPreloadKey) : null;
     const shouldShowLoader = Boolean(
-      currentAsset && currentPreloadKey && !loadedImages.has(currentPreloadKey)
+      currentAsset && currentLoadKey && !loadedImages.has(currentLoadKey)
     );
     const _currentAssetIdKey = useMemo(
       () => (currentAsset ? String(currentAsset.id) : null),

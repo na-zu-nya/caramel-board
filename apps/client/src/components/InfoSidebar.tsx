@@ -136,9 +136,9 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
   // Fetch selected item data
   const { data: selectedItem, isLoading } = useQuery({
     queryKey: ['stack', datasetId, selectedItemId],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       if (!selectedItemId) return null;
-      return apiClient.getStack(String(selectedItemId), datasetId);
+      return apiClient.getStack(String(selectedItemId), datasetId, { signal });
     },
     enabled: !!selectedItemId && isOpen,
   });
@@ -294,7 +294,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
   // Mutations for immediate updates
   const addTagMutation = useMutation({
     mutationFn: async ({ stackId, tag }: { stackId: number; tag: string }) => {
-      const response = await fetch(`/api/v1/stacks/${stackId}/tags`, {
+      const response = await fetch(`/api/v1/datasets/${datasetId}/stacks/${stackId}/tags`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tag }),
@@ -303,9 +303,9 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
       return response.json();
     },
     onSuccess: () => {
-      // Stack detail + list caches
-      queryClient.invalidateQueries({ queryKey: ['stack', datasetId, selectedItemId] });
-      queryClient.invalidateQueries({ queryKey: ['stacks'], refetchType: 'all' });
+      // Stack detail + stale list caches
+      queryClient.invalidateQueries({ queryKey: ['stack', datasetId] });
+      queryClient.invalidateQueries({ queryKey: ['stacks'], refetchType: 'none' });
       // Side menu counts/lists
       queryClient.invalidateQueries({ queryKey: ['tags', datasetId] });
       queryClient.invalidateQueries({ queryKey: ['library-counts', datasetId] });
@@ -321,16 +321,19 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
 
   const removeTagMutation = useMutation({
     mutationFn: async ({ stackId, tag }: { stackId: number; tag: string }) => {
-      const response = await fetch(`/api/v1/stacks/${stackId}/tags/${encodeURIComponent(tag)}`, {
-        method: 'DELETE',
-      });
+      const response = await fetch(
+        `/api/v1/datasets/${datasetId}/stacks/${stackId}/tags/${encodeURIComponent(tag)}`,
+        {
+          method: 'DELETE',
+        }
+      );
       if (!response.ok) throw new Error('Failed to remove tag');
       return response.json();
     },
     onSuccess: () => {
-      // Stack detail + list caches
-      queryClient.invalidateQueries({ queryKey: ['stack', datasetId, selectedItemId] });
-      queryClient.invalidateQueries({ queryKey: ['stacks'], refetchType: 'all' });
+      // Stack detail + stale list caches
+      queryClient.invalidateQueries({ queryKey: ['stack', datasetId] });
+      queryClient.invalidateQueries({ queryKey: ['stacks'], refetchType: 'none' });
       // Side menu counts/lists
       queryClient.invalidateQueries({ queryKey: ['tags', datasetId] });
       queryClient.invalidateQueries({ queryKey: ['library-counts', datasetId] });
@@ -357,7 +360,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
     onSuccess: () => {
       // Stack detail + list caches
       queryClient.invalidateQueries({ queryKey: ['stack', datasetId, selectedItemId] });
-      queryClient.invalidateQueries({ queryKey: ['stacks'], refetchType: 'all' });
+      queryClient.invalidateQueries({ queryKey: ['stacks'] });
       // Side menu authors list and counts
       queryClient.invalidateQueries({ queryKey: ['authors', datasetId] });
       queryClient.invalidateQueries({ queryKey: ['library-counts', datasetId] });
@@ -371,7 +374,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
     onSuccess: () => {
       setAuthorLinkQuickAddOpen(false);
       queryClient.invalidateQueries({ queryKey: ['stack', datasetId, selectedItemId] });
-      queryClient.invalidateQueries({ queryKey: ['stacks'], refetchType: 'all' });
+      queryClient.invalidateQueries({ queryKey: ['stacks'] });
       queryClient.invalidateQueries({ queryKey: ['authors', datasetId] });
       queryClient.invalidateQueries({ queryKey: ['authors', datasetId, 'management'] });
       addNotification({ type: 'success', message: t.info.authorLinkAdded });

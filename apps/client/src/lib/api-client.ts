@@ -16,6 +16,8 @@ import type {
 } from '@/types';
 
 const API_BASE_URL = '';
+const READ_REQUEST_TIMEOUT_MS = 45 * 1000;
+const UPLOAD_REQUEST_TIMEOUT_MS = 10 * 60 * 1000;
 
 const API_SORT_FIELDS = ['recommended', 'dateAdded', 'name', 'likes', 'updated'] as const;
 type ApiSortField = (typeof API_SORT_FIELDS)[number];
@@ -30,6 +32,10 @@ type StackWire = Stack & {
   assetsCount?: unknown;
 };
 type AuthorRecord = Omit<Author, 'id'> & { id: number; dataSetId?: number };
+type ApiFetchOptions = RequestInit & { timeoutMs?: number };
+type ApiRequestOptions = {
+  signal?: AbortSignal;
+};
 export type ClipperApiKeyState = {
   configured: boolean;
   keyPreview: string | null;
@@ -67,6 +73,42 @@ function appendSortParams(
   if (!sort) return;
   queryParams.append('sort', normalizeSortField(sort.field));
   queryParams.append('order', normalizeSortOrder(sort.order));
+}
+
+function createRequestSignal(signal: AbortSignal | undefined, timeoutMs: number | undefined) {
+  if (timeoutMs === undefined) {
+    return {
+      signal,
+      didTimeout: () => false,
+      cleanup: () => undefined,
+    };
+  }
+
+  const controller = new AbortController();
+  let didTimeout = false;
+  const abortFromSource = () => {
+    controller.abort(signal?.reason);
+  };
+
+  if (signal?.aborted) {
+    controller.abort(signal.reason);
+  } else {
+    signal?.addEventListener('abort', abortFromSource, { once: true });
+  }
+
+  const timeoutId = globalThis.setTimeout(() => {
+    didTimeout = true;
+    controller.abort();
+  }, timeoutMs);
+
+  return {
+    signal: controller.signal,
+    didTimeout: () => didTimeout,
+    cleanup: () => {
+      globalThis.clearTimeout(timeoutId);
+      signal?.removeEventListener('abort', abortFromSource);
+    },
+  };
 }
 
 class ApiClient {
@@ -216,13 +258,16 @@ class ApiClient {
   }
 
   // Stack APIs
-  async getStacks(params: {
-    datasetId: string | number;
-    filter?: StackFilter;
-    sort?: SortOption;
-    limit?: number;
-    offset?: number;
-  }): Promise<StackPaginatedResponse> {
+  async getStacks(
+    params: {
+      datasetId: string | number;
+      filter?: StackFilter;
+      sort?: SortOption;
+      limit?: number;
+      offset?: number;
+    },
+    options: ApiRequestOptions = {}
+  ): Promise<StackPaginatedResponse> {
     const queryParams = new URLSearchParams();
 
     // Always add datasetId as required parameter
@@ -306,16 +351,20 @@ class ApiClient {
     if (params.offset) queryParams.append('offset', String(params.offset));
 
     const response = await this.fetch<StackPaginatedResponse>(
-      `/api/v1/stacks/paginated?${queryParams}`
+      `/api/v1/stacks/paginated?${queryParams}`,
+      { signal: options.signal, timeoutMs: READ_REQUEST_TIMEOUT_MS }
     );
     return this.normalizeStackResponse(response);
   }
 
   // Alias method for collection compatibility
-  async getStacksWithFilters(params: {
-    dataSetId: string | number;
-    [key: string]: any;
-  }): Promise<StackPaginatedResponse> {
+  async getStacksWithFilters(
+    params: {
+      dataSetId: string | number;
+      [key: string]: any;
+    },
+    options: ApiRequestOptions = {}
+  ): Promise<StackPaginatedResponse> {
     const queryParams = new URLSearchParams();
 
     // Always add datasetId as required parameter
@@ -353,18 +402,26 @@ class ApiClient {
     }
 
     const response = await this.fetch<StackPaginatedResponse>(
-      `/api/v1/stacks/paginated?${queryParams}`
+      `/api/v1/stacks/paginated?${queryParams}`,
+      { signal: options.signal, timeoutMs: READ_REQUEST_TIMEOUT_MS }
     );
     return this.normalizeStackResponse(response);
   }
 
-  async getStack(stackId: string | number, datasetId?: string | number): Promise<Stack> {
+  async getStack(
+    stackId: string | number,
+    datasetId?: string | number,
+    options: ApiRequestOptions = {}
+  ): Promise<Stack> {
     const params = new URLSearchParams();
     if (datasetId) {
       params.append('dataSetId', String(datasetId));
     }
     const queryString = params.toString();
-    return this.fetch<Stack>(`/api/v1/stacks/${stackId}${queryString ? `?${queryString}` : ''}`);
+    return this.fetch<Stack>(`/api/v1/stacks/${stackId}${queryString ? `?${queryString}` : ''}`, {
+      signal: options.signal,
+      timeoutMs: READ_REQUEST_TIMEOUT_MS,
+    });
   }
 
   async updateStack(
@@ -666,11 +723,11 @@ class ApiClient {
   }
 
   // Tag APIs
-  async searchTags(query: string, datasetId?: string): Promise<{ id: number; title: string }[]> {
-    const params = new URLSearchParams({ key: query });
-    if (datasetId) {
-      params.append('dataSetId', datasetId);
-    }
+  async searchTags(
+    query: string,
+    datasetId: string | number
+  ): Promise<{ id: number; title: string }[]> {
+    const params = new URLSearchParams({ key: query, dataSetId: String(datasetId) });
     return this.fetch<{ id: number; title: string }[]>(`/api/v1/tags/search?${params}`);
   }
 
@@ -1196,7 +1253,7 @@ class ApiClient {
 
   // Tag APIs
   async getTags(params: {
-    datasetId?: string;
+    datasetId: string | number;
     orderBy?: string;
     orderDirection?: string;
     limit?: number;
@@ -1208,7 +1265,7 @@ class ApiClient {
     offset: number;
   }> {
     const queryParams = new URLSearchParams();
-    if (params.datasetId) queryParams.append('datasetId', params.datasetId);
+    queryParams.append('dataSetId', String(params.datasetId));
     if (params.orderBy) queryParams.append('orderBy', params.orderBy);
     if (params.orderDirection) queryParams.append('orderDirection', params.orderDirection);
     if (params.limit) queryParams.append('limit', String(params.limit));
@@ -1646,28 +1703,44 @@ class ApiClient {
         reject(new Error('Upload cancelled'));
       });
 
+      xhr.addEventListener('timeout', () => {
+        reject(new Error('アップロードがタイムアウトしました'));
+      });
+
       xhr.open('POST', `${this.baseUrl}${path}`);
+      xhr.timeout = UPLOAD_REQUEST_TIMEOUT_MS;
       xhr.send(formData);
     });
   }
 
-  private async fetch<T>(path: string, options?: RequestInit): Promise<T> {
-    const headers: Record<string, string> = {
-      ...(options?.headers as Record<string, string>),
-    };
+  private async fetch<T>(path: string, options?: ApiFetchOptions): Promise<T> {
+    const { timeoutMs, signal, ...fetchOptions } = options ?? {};
+    const headers = new Headers(fetchOptions.headers);
 
     // Only set Content-Type for requests with body
-    if (options?.body) {
-      headers['Content-Type'] = 'application/json';
+    if (fetchOptions.body) {
+      headers.set('Content-Type', 'application/json');
     }
 
     const url = `${this.baseUrl}${path}`;
-    console.log('API Request:', options?.method || 'GET', url, options?.body);
+    console.log('API Request:', fetchOptions.method || 'GET', url, fetchOptions.body);
 
-    const response = await fetch(url, {
-      ...options,
-      headers,
-    });
+    const requestSignal = createRequestSignal(signal, timeoutMs);
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        ...fetchOptions,
+        headers,
+        signal: requestSignal.signal,
+      });
+    } catch (error) {
+      if (requestSignal.didTimeout()) {
+        throw new Error('API request timed out');
+      }
+      throw error;
+    } finally {
+      requestSignal.cleanup();
+    }
 
     if (!response.ok) {
       let errorMessage = `API Error: ${response.status} ${response.statusText}`;

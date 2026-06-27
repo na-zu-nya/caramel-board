@@ -191,6 +191,11 @@ export default function BulkEditPanel({
 
   const handleSearchTags = useCallback(
     async (query: string) => {
+      if (!datasetId) {
+        setTagSuggestions([]);
+        return;
+      }
+
       setTagLoading(true);
       try {
         const results = await apiClient.searchTags(query, datasetId);

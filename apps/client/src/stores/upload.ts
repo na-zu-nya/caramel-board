@@ -61,6 +61,7 @@ export const uploadProgressAtom = atom((get) => {
 
   const completed = allFiles.filter((f) => f.status === 'completed').length;
   const errors = allFiles.filter((f) => f.status === 'error').length;
+  const pending = allFiles.filter((f) => f.status === 'pending').length;
   const total = allFiles.length;
 
   const uploadingFiles = allFiles.filter((f) => f.status === 'uploading');
@@ -70,6 +71,7 @@ export const uploadProgressAtom = atom((get) => {
   return {
     completed,
     errors,
+    pending,
     total,
     progress: total > 0 ? ((completed + averageProgress / 100) / total) * 100 : 0,
     isUploading: uploadingFiles.length > 0,

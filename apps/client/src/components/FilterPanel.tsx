@@ -599,6 +599,11 @@ function FilterPanel({
                       }
                     }}
                     onSearch={async (query) => {
+                      if (!datasetId) {
+                        setTagSuggestions([]);
+                        return;
+                      }
+
                       setTagLoading(true);
                       try {
                         const results = await apiClient.searchTags(query, datasetId);
