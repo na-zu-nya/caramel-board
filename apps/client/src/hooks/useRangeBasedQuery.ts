@@ -1,6 +1,7 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { isCancelledError, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiClient } from '@/lib/api-client';
+import { getStackFilterKey } from '@/lib/stack-filter';
 import type { MediaGridItem, StackFilter } from '@/types';
 
 interface RangeBasedQueryOptions {
@@ -18,37 +19,8 @@ interface PageData {
   limit: number;
 }
 
-function stableFilterKey(filter: StackFilter): string {
-  try {
-    const f = filter || ({} as StackFilter);
-    const key = {
-      datasetId: (f as any).datasetId ?? undefined,
-      mediaType: (f as any).mediaType ?? undefined,
-      search: f.search ?? undefined,
-      tags: Array.isArray(f.tags) ? [...f.tags].sort() : undefined,
-      authors: Array.isArray(f.authors) ? [...f.authors].sort() : undefined,
-      isFavorite: f.isFavorite ?? undefined,
-      isLiked: f.isLiked ?? undefined,
-      hasNoTags: f.hasNoTags ?? undefined,
-      hasNoAuthor: f.hasNoAuthor ?? undefined,
-      colorFilter: f.colorFilter
-        ? {
-            hueCategories: f.colorFilter.hueCategories
-              ? [...f.colorFilter.hueCategories].sort()
-              : undefined,
-            toneSaturation: f.colorFilter.toneSaturation ?? undefined,
-            toneLightness: f.colorFilter.toneLightness ?? undefined,
-            toneTolerance: f.colorFilter.toneTolerance ?? undefined,
-            similarityThreshold: f.colorFilter.similarityThreshold ?? undefined,
-            customColor: f.colorFilter.customColor ?? undefined,
-          }
-        : undefined,
-    } as const;
-    return JSON.stringify(key);
-  } catch {
-    // Fallback to naive stringify if anything goes wrong
-    return JSON.stringify(filter || {});
-  }
+function isAbortError(error: unknown) {
+  return error instanceof Error && error.name === 'AbortError';
 }
 
 export function useRangeBasedQuery({
@@ -60,18 +32,22 @@ export function useRangeBasedQuery({
 }: RangeBasedQueryOptions) {
   const queryClient = useQueryClient();
   const [loadedPages, setLoadedPages] = useState<Set<number>>(new Set());
+  const pageRequestsRef = useRef<Map<number, Promise<PageData | null>>>(new Map());
+  const currentQueryKeyRef = useRef<string>('');
 
   // Keep track of previous query key to detect real changes
   const [previousQueryKey, setPreviousQueryKey] = useState<string>('');
-  const filterKey = stableFilterKey(filter);
+  const filterKey = getStackFilterKey(filter);
   const sortKey = JSON.stringify(sort ?? {});
   const currentQueryKey = `${datasetId}-${mediaType}-${filterKey}-${sortKey}`;
+  currentQueryKeyRef.current = currentQueryKey;
 
   // Reset loaded pages when key parameters change, but avoid unnecessary resets
   useEffect(() => {
     if (previousQueryKey && previousQueryKey !== currentQueryKey) {
       // Only reset if this is a real change, not initial load
       setLoadedPages(new Set());
+      pageRequestsRef.current.clear();
     }
     setPreviousQueryKey(currentQueryKey);
   }, [currentQueryKey, previousQueryKey]);
@@ -83,14 +59,17 @@ export function useRangeBasedQuery({
     isFetching: isCountFetching,
   } = useQuery({
     queryKey: ['stacks', 'count', datasetId, mediaType, filterKey, sortKey],
-    queryFn: async () => {
-      const result = await apiClient.getStacks({
-        datasetId,
-        filter,
-        sort,
-        limit: 1,
-        offset: 0,
-      });
+    queryFn: async ({ signal }) => {
+      const result = await apiClient.getStacks(
+        {
+          datasetId,
+          filter,
+          sort,
+          limit: 1,
+          offset: 0,
+        },
+        { signal }
+      );
       return { total: result.total };
     },
     staleTime: 5 * 60 * 1000, // 5 minutes - keep data fresh longer
@@ -120,29 +99,52 @@ export function useRangeBasedQuery({
 
       const offset = pageIndex * pageSize;
       if (offset >= total) return null;
+      const requestQueryKey = currentQueryKey;
 
-      try {
+      const existingRequest = pageRequestsRef.current.get(pageIndex);
+      if (existingRequest) {
+        return existingRequest;
+      }
+
+      const request = (async () => {
         const result = await queryClient.fetchQuery({
           queryKey: ['stacks', 'page', datasetId, mediaType, filterKey, sortKey, pageIndex],
-          queryFn: async () => {
-            return await apiClient.getStacks({
-              datasetId,
-              filter,
-              sort,
-              limit: pageSize,
-              offset,
-            });
+          queryFn: async ({ signal }) => {
+            return await apiClient.getStacks(
+              {
+                datasetId,
+                filter,
+                sort,
+                limit: pageSize,
+                offset,
+              },
+              { signal }
+            );
           },
+          retry: 2,
+          retryDelay: (failureCount) => Math.min(1000 * 2 ** failureCount, 4000),
           staleTime: 5 * 60 * 1000, // 5 minutes
           gcTime: 10 * 60 * 1000, // 10 minutes
         });
 
-        setLoadedPages((prev) => new Set([...prev, pageIndex]));
+        if (currentQueryKeyRef.current === requestQueryKey) {
+          setLoadedPages((prev) => new Set([...prev, pageIndex]));
+        }
         return result as unknown as PageData;
-      } catch (error) {
-        console.error('Failed to load page:', pageIndex, error);
-        return null;
-      }
+      })()
+        .catch((error) => {
+          if (isCancelledError(error) || isAbortError(error)) {
+            return null;
+          }
+          console.error('Failed to load page:', pageIndex, error);
+          return null;
+        })
+        .finally(() => {
+          pageRequestsRef.current.delete(pageIndex);
+        });
+
+      pageRequestsRef.current.set(pageIndex, request);
+      return request;
     },
     [
       queryClient,
@@ -155,18 +157,15 @@ export function useRangeBasedQuery({
       loadedPages,
       filterKey,
       sortKey,
+      currentQueryKey,
     ]
   );
 
   // Load specific range of items
   const loadRange = useCallback(
     async (startIndex: number, endIndex: number) => {
-      console.log(`📥 loadRange called: ${startIndex}-${endIndex}`);
-
       const startPage = Math.floor(startIndex / pageSize);
       const endPage = Math.floor(endIndex / pageSize);
-
-      console.log(`📄 Pages to load: ${startPage}-${endPage}`);
 
       // Check if all pages in range are already loaded
       const allPagesLoaded = (() => {
@@ -177,7 +176,6 @@ export function useRangeBasedQuery({
       })();
 
       if (allPagesLoaded) {
-        console.log('✅ All pages already loaded');
         return;
       }
 
@@ -188,8 +186,6 @@ export function useRangeBasedQuery({
           pagesToLoad.push(pageIndex);
         }
       }
-
-      console.log('📋 Pages to load:', pagesToLoad);
 
       // Optionally prefetch one extra page ahead if budget allows
       const MAX_PAGES_PER_BATCH = 2;
@@ -269,8 +265,6 @@ export function useRangeBasedQuery({
 
   // Force refresh all loaded data
   const refreshAll = useCallback(async () => {
-    console.log('🔄 Force refreshing all loaded pages...');
-
     // Invalidate count query
     await queryClient.invalidateQueries({
       queryKey: ['stacks', 'count', datasetId, mediaType, filterKey, sortKey],

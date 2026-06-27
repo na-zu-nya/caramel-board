@@ -16,6 +16,8 @@ import type {
 } from '@/types';
 
 const API_BASE_URL = '';
+const READ_REQUEST_TIMEOUT_MS = 45 * 1000;
+const UPLOAD_REQUEST_TIMEOUT_MS = 10 * 60 * 1000;
 
 const API_SORT_FIELDS = ['recommended', 'dateAdded', 'name', 'likes', 'updated'] as const;
 type ApiSortField = (typeof API_SORT_FIELDS)[number];
@@ -30,6 +32,10 @@ type StackWire = Stack & {
   assetsCount?: unknown;
 };
 type AuthorRecord = Omit<Author, 'id'> & { id: number; dataSetId?: number };
+type ApiFetchOptions = RequestInit & { timeoutMs?: number };
+type ApiRequestOptions = {
+  signal?: AbortSignal;
+};
 export type ClipperApiKeyState = {
   configured: boolean;
   keyPreview: string | null;
@@ -67,6 +73,42 @@ function appendSortParams(
   if (!sort) return;
   queryParams.append('sort', normalizeSortField(sort.field));
   queryParams.append('order', normalizeSortOrder(sort.order));
+}
+
+function createRequestSignal(signal: AbortSignal | undefined, timeoutMs: number | undefined) {
+  if (timeoutMs === undefined) {
+    return {
+      signal,
+      didTimeout: () => false,
+      cleanup: () => undefined,
+    };
+  }
+
+  const controller = new AbortController();
+  let didTimeout = false;
+  const abortFromSource = () => {
+    controller.abort(signal?.reason);
+  };
+
+  if (signal?.aborted) {
+    controller.abort(signal.reason);
+  } else {
+    signal?.addEventListener('abort', abortFromSource, { once: true });
+  }
+
+  const timeoutId = globalThis.setTimeout(() => {
+    didTimeout = true;
+    controller.abort();
+  }, timeoutMs);
+
+  return {
+    signal: controller.signal,
+    didTimeout: () => didTimeout,
+    cleanup: () => {
+      globalThis.clearTimeout(timeoutId);
+      signal?.removeEventListener('abort', abortFromSource);
+    },
+  };
 }
 
 class ApiClient {
@@ -216,13 +258,16 @@ class ApiClient {
   }
 
   // Stack APIs
-  async getStacks(params: {
-    datasetId: string | number;
-    filter?: StackFilter;
-    sort?: SortOption;
-    limit?: number;
-    offset?: number;
-  }): Promise<StackPaginatedResponse> {
+  async getStacks(
+    params: {
+      datasetId: string | number;
+      filter?: StackFilter;
+      sort?: SortOption;
+      limit?: number;
+      offset?: number;
+    },
+    options: ApiRequestOptions = {}
+  ): Promise<StackPaginatedResponse> {
     const queryParams = new URLSearchParams();
 
     // Always add datasetId as required parameter
@@ -306,16 +351,20 @@ class ApiClient {
     if (params.offset) queryParams.append('offset', String(params.offset));
 
     const response = await this.fetch<StackPaginatedResponse>(
-      `/api/v1/stacks/paginated?${queryParams}`
+      `/api/v1/stacks/paginated?${queryParams}`,
+      { signal: options.signal, timeoutMs: READ_REQUEST_TIMEOUT_MS }
     );
     return this.normalizeStackResponse(response);
   }
 
   // Alias method for collection compatibility
-  async getStacksWithFilters(params: {
-    dataSetId: string | number;
-    [key: string]: any;
-  }): Promise<StackPaginatedResponse> {
+  async getStacksWithFilters(
+    params: {
+      dataSetId: string | number;
+      [key: string]: any;
+    },
+    options: ApiRequestOptions = {}
+  ): Promise<StackPaginatedResponse> {
     const queryParams = new URLSearchParams();
 
     // Always add datasetId as required parameter
@@ -326,7 +375,8 @@ class ApiClient {
       limit: params.limit,
       offset: params.offset,
       collection: params.collection,
-      mediaType: params.mediaType,
+      mediaCategory: params.mediaCategory,
+      mediaTypes: params.mediaTypes,
       tag: params.tag,
       author: params.author,
       fav: params.fav,
@@ -352,18 +402,42 @@ class ApiClient {
     }
 
     const response = await this.fetch<StackPaginatedResponse>(
-      `/api/v1/stacks/paginated?${queryParams}`
+      `/api/v1/stacks/paginated?${queryParams}`,
+      { signal: options.signal, timeoutMs: READ_REQUEST_TIMEOUT_MS }
     );
     return this.normalizeStackResponse(response);
   }
 
-  async getStack(stackId: string | number, datasetId?: string | number): Promise<Stack> {
+  async getStack(
+    stackId: string | number,
+    datasetId?: string | number,
+    options: ApiRequestOptions = {}
+  ): Promise<Stack> {
     const params = new URLSearchParams();
     if (datasetId) {
       params.append('dataSetId', String(datasetId));
     }
     const queryString = params.toString();
-    return this.fetch<Stack>(`/api/v1/stacks/${stackId}${queryString ? `?${queryString}` : ''}`);
+    return this.fetch<Stack>(`/api/v1/stacks/${stackId}${queryString ? `?${queryString}` : ''}`, {
+      signal: options.signal,
+      timeoutMs: READ_REQUEST_TIMEOUT_MS,
+    });
+  }
+
+  async updateStack(
+    datasetId: string | number,
+    stackId: string | number,
+    data: {
+      name?: string;
+      thumbnail?: string;
+      meta?: Stack['meta'];
+      mediaType?: 'image' | 'comic' | 'video';
+    }
+  ): Promise<Stack> {
+    return this.fetch<Stack>(`/api/v1/datasets/${datasetId}/stacks/${stackId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
   }
 
   // Similar stacks (embedding-based)
@@ -649,11 +723,11 @@ class ApiClient {
   }
 
   // Tag APIs
-  async searchTags(query: string, datasetId?: string): Promise<{ id: number; title: string }[]> {
-    const params = new URLSearchParams({ key: query });
-    if (datasetId) {
-      params.append('dataSetId', datasetId);
-    }
+  async searchTags(
+    query: string,
+    datasetId: string | number
+  ): Promise<{ id: number; title: string }[]> {
+    const params = new URLSearchParams({ key: query, dataSetId: String(datasetId) });
     return this.fetch<{ id: number; title: string }[]>(`/api/v1/tags/search?${params}`);
   }
 
@@ -772,13 +846,55 @@ class ApiClient {
   }
 
   // Stack maintenance operations
-  async refreshThumbnail(stackId: string | number): Promise<{ success: boolean; message: string }> {
-    return this.fetch<{ success: boolean; message: string }>(
-      `/api/v1/stacks/${stackId}/refresh-thumbnail`,
-      {
-        method: 'POST',
-      }
-    );
+  async refreshThumbnail(stackId: string | number): Promise<{
+    success: boolean;
+    totalAssets: number;
+    eligible: number;
+    regenerated: number;
+    skipped: number;
+    failed: number[];
+  }> {
+    return this.fetch<{
+      success: boolean;
+      totalAssets: number;
+      eligible: number;
+      regenerated: number;
+      skipped: number;
+      failed: number[];
+    }>(`/api/v1/stacks/${stackId}/refresh-thumbnail`, {
+      method: 'POST',
+    });
+  }
+
+  async setStackThumbnailSource(params: {
+    datasetId: string | number;
+    stackId: string | number;
+    assetId: string | number;
+    pageNumber: number;
+    timeSeconds?: number;
+  }): Promise<{
+    success: boolean;
+    thumbnail: string;
+    thumbnailSource:
+      | { kind: 'asset'; assetId: number; pageNumber: number }
+      | { kind: 'videoFrame'; assetId: number; pageNumber: number; timeSeconds: number };
+  }> {
+    const { datasetId, stackId, assetId, pageNumber, timeSeconds } = params;
+    return this.fetch<{
+      success: boolean;
+      thumbnail: string;
+      thumbnailSource:
+        | { kind: 'asset'; assetId: number; pageNumber: number }
+        | { kind: 'videoFrame'; assetId: number; pageNumber: number; timeSeconds: number };
+    }>(`/api/v1/stacks/${stackId}/thumbnail-source`, {
+      method: 'POST',
+      body: JSON.stringify({
+        datasetId,
+        assetId,
+        pageNumber,
+        timeSeconds,
+      }),
+    });
   }
 
   async regenerateStackPreview(params: {
@@ -1016,19 +1132,32 @@ class ApiClient {
     );
   }
 
-  async bulkRefreshThumbnails(
-    stackIds: (string | number)[]
-  ): Promise<{ success: boolean; updated: number; errors?: string[] }> {
+  async refreshStacks(stackIds: (string | number)[]): Promise<{
+    success: boolean;
+    updated: {
+      success: boolean;
+      updated: number;
+      errors?: string[];
+      thumbnails?: { eligible: number; regenerated: number; skipped: number; failures: number };
+    };
+    previews?: { eligible: number; regenerated: number; failures: number };
+  }> {
     const numericIds = stackIds.map((id) =>
       typeof id === 'string' ? Number.parseInt(id, 10) : id
     );
-    return this.fetch<{ success: boolean; updated: number; errors?: string[] }>(
-      '/api/v1/stacks/bulk/refresh-thumbnails',
-      {
-        method: 'POST',
-        body: JSON.stringify({ stackIds: numericIds }),
-      }
-    );
+    return this.fetch<{
+      success: boolean;
+      updated: {
+        success: boolean;
+        updated: number;
+        errors?: string[];
+        thumbnails?: { eligible: number; regenerated: number; skipped: number; failures: number };
+      };
+      previews?: { eligible: number; regenerated: number; failures: number };
+    }>('/api/v1/stacks/bulk/refresh-thumbnails', {
+      method: 'POST',
+      body: JSON.stringify({ stackIds: numericIds }),
+    });
   }
 
   async removeStack(stackId: string | number): Promise<{ success: boolean; message: string }> {
@@ -1124,7 +1253,7 @@ class ApiClient {
 
   // Tag APIs
   async getTags(params: {
-    datasetId?: string;
+    datasetId: string | number;
     orderBy?: string;
     orderDirection?: string;
     limit?: number;
@@ -1136,7 +1265,7 @@ class ApiClient {
     offset: number;
   }> {
     const queryParams = new URLSearchParams();
-    if (params.datasetId) queryParams.append('datasetId', params.datasetId);
+    queryParams.append('dataSetId', String(params.datasetId));
     if (params.orderBy) queryParams.append('orderBy', params.orderBy);
     if (params.orderDirection) queryParams.append('orderDirection', params.orderDirection);
     if (params.limit) queryParams.append('limit', String(params.limit));
@@ -1231,7 +1360,12 @@ class ApiClient {
     // Map additional filters
     const f = params.filter;
     if (f) {
-      if (f.mediaType) query.append('mediaType', f.mediaType);
+      if (f.mediaCategory) query.append('mediaCategory', f.mediaCategory);
+      if (Array.isArray(f.mediaTypes)) {
+        for (const mediaType of f.mediaTypes) {
+          query.append('mediaTypes', mediaType);
+        }
+      }
       if (f.isFavorite === true) query.append('fav', '1');
       if (f.isFavorite === false) query.append('fav', '0');
       if (f.isLiked === true) query.append('liked', '1');
@@ -1279,12 +1413,16 @@ class ApiClient {
 
     // Auto-detect mediaType from file type if not provided
     if (!options?.mediaType) {
+      const extension = file.name.match(/\.([a-z0-9]+)$/i)?.[1]?.toLowerCase() ?? '';
       const mimeType = file.type.toLowerCase();
-      const inferredMediaType = mimeType.startsWith('video/')
-        ? 'video'
-        : mimeType === 'application/pdf'
-          ? 'comic'
-          : 'image';
+      const inferredMediaType = ['ai', 'svg', 'svgz'].includes(extension)
+        ? 'image'
+        : ['mp4', 'mov', 'avi', 'mkv', 'webm', 'mpeg', 'mpg', 'm4v', 'wmv'].includes(extension) ||
+            mimeType.startsWith('video/')
+          ? 'video'
+          : extension === 'pdf' || mimeType === 'application/pdf'
+            ? 'comic'
+            : 'image';
       formData.append('mediaType', inferredMediaType);
     }
 
@@ -1452,8 +1590,22 @@ class ApiClient {
     message: string;
     datasetId: number;
     totalStacks: number;
-    scheduled: { thumbnails: number; colors: number; autotags: number; embeddings: number };
-    totals: { embeddings: number };
+    scheduled: {
+      thumbnails: number;
+      previews?: number;
+      colors: number;
+      actualMediaTypes?: number;
+      autotags: number;
+      embeddings: number;
+    };
+    totals: {
+      thumbnailCandidates?: number;
+      thumbnailFailures?: number;
+      previewCandidates?: number;
+      previewFailures?: number;
+      actualMediaTypeCandidates?: number;
+      embeddings: number;
+    };
   }> {
     const queryParams = new URLSearchParams();
     if (params.forceRegenerate)
@@ -1551,28 +1703,44 @@ class ApiClient {
         reject(new Error('Upload cancelled'));
       });
 
+      xhr.addEventListener('timeout', () => {
+        reject(new Error('アップロードがタイムアウトしました'));
+      });
+
       xhr.open('POST', `${this.baseUrl}${path}`);
+      xhr.timeout = UPLOAD_REQUEST_TIMEOUT_MS;
       xhr.send(formData);
     });
   }
 
-  private async fetch<T>(path: string, options?: RequestInit): Promise<T> {
-    const headers: Record<string, string> = {
-      ...(options?.headers as Record<string, string>),
-    };
+  private async fetch<T>(path: string, options?: ApiFetchOptions): Promise<T> {
+    const { timeoutMs, signal, ...fetchOptions } = options ?? {};
+    const headers = new Headers(fetchOptions.headers);
 
     // Only set Content-Type for requests with body
-    if (options?.body) {
-      headers['Content-Type'] = 'application/json';
+    if (fetchOptions.body) {
+      headers.set('Content-Type', 'application/json');
     }
 
     const url = `${this.baseUrl}${path}`;
-    console.log('API Request:', options?.method || 'GET', url, options?.body);
+    console.log('API Request:', fetchOptions.method || 'GET', url, fetchOptions.body);
 
-    const response = await fetch(url, {
-      ...options,
-      headers,
-    });
+    const requestSignal = createRequestSignal(signal, timeoutMs);
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        ...fetchOptions,
+        headers,
+        signal: requestSignal.signal,
+      });
+    } catch (error) {
+      if (requestSignal.didTimeout()) {
+        throw new Error('API request timed out');
+      }
+      throw error;
+    } finally {
+      requestSignal.cleanup();
+    }
 
     if (!response.ok) {
       let errorMessage = `API Error: ${response.status} ${response.statusText}`;

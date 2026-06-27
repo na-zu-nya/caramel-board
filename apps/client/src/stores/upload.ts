@@ -1,5 +1,13 @@
 import { atom } from 'jotai';
 
+export interface UploadMetadata {
+  datasetId?: number;
+  mediaType?: string;
+  tags?: string[];
+  author?: string;
+  collectionId?: number;
+}
+
 export interface UploadFile {
   id: string;
   file: File;
@@ -7,6 +15,7 @@ export interface UploadFile {
   status: 'pending' | 'uploading' | 'completed' | 'error';
   error?: string;
   stackId?: number; // For adding to existing stack
+  metadata?: UploadMetadata;
   result?: {
     stackId: number;
     assetId: number;
@@ -18,14 +27,20 @@ export interface UploadBatch {
   files: UploadFile[];
   type: 'new-stack' | 'add-to-stack';
   stackId?: number; // For add-to-stack type
-  metadata?: {
-    datasetId?: number;
-    mediaType?: string;
-    tags?: string[];
-    author?: string;
-    collectionId?: number;
-  };
+  metadata?: UploadMetadata;
 }
+
+type AddFilesToQueuePayload =
+  | {
+      files: File[];
+      type: 'new-stack';
+      metadata?: UploadMetadata;
+    }
+  | {
+      files: File[];
+      type: 'add-to-stack';
+      stackId: number;
+    };
 
 // Upload queue with all files
 export const uploadQueueAtom = atom<UploadFile[]>([]);
@@ -46,6 +61,7 @@ export const uploadProgressAtom = atom((get) => {
 
   const completed = allFiles.filter((f) => f.status === 'completed').length;
   const errors = allFiles.filter((f) => f.status === 'error').length;
+  const pending = allFiles.filter((f) => f.status === 'pending').length;
   const total = allFiles.length;
 
   const uploadingFiles = allFiles.filter((f) => f.status === 'uploading');
@@ -55,20 +71,12 @@ export const uploadProgressAtom = atom((get) => {
   return {
     completed,
     errors,
+    pending,
     total,
     progress: total > 0 ? ((completed + averageProgress / 100) / total) * 100 : 0,
     isUploading: uploadingFiles.length > 0,
   };
 });
-
-// Default upload metadata (set from current filters)
-export const uploadDefaultsAtom = atom<{
-  datasetId?: number;
-  mediaType?: string;
-  tags?: string[];
-  author?: string;
-  collectionId?: number;
-}>({});
 
 // Upload notification messages
 export const uploadNotificationsAtom = atom<
@@ -99,33 +107,48 @@ export const addUploadNotificationAtom = atom(
   }
 );
 
-// Add files to upload queue
-export const addFilesToQueueAtom = atom(
-  null,
-  (
-    get,
-    set,
-    {
-      files,
-      type: _type,
-      stackId,
-    }: {
-      files: File[];
-      type: 'new-stack' | 'add-to-stack';
-      stackId?: number;
-    }
-  ) => {
-    const newFiles: UploadFile[] = files.map((file) => ({
-      id: Math.random().toString(36).substr(2, 9),
-      file,
-      progress: 0,
-      status: 'pending' as const,
-      stackId,
-    }));
-
-    set(uploadQueueAtom, [...get(uploadQueueAtom), ...newFiles]);
+function normalizeUploadMetadata(metadata?: UploadMetadata): UploadMetadata | undefined {
+  if (!metadata) {
+    return undefined;
   }
-);
+
+  const normalized: UploadMetadata = {};
+  if (metadata.datasetId !== undefined) {
+    normalized.datasetId = metadata.datasetId;
+  }
+  if (metadata.mediaType) {
+    normalized.mediaType = metadata.mediaType;
+  }
+  if (metadata.tags && metadata.tags.length > 0) {
+    normalized.tags = [...metadata.tags];
+  }
+  if (metadata.author) {
+    normalized.author = metadata.author;
+  }
+  if (metadata.collectionId !== undefined) {
+    normalized.collectionId = metadata.collectionId;
+  }
+
+  return Object.keys(normalized).length > 0 ? normalized : undefined;
+}
+
+// Add files to upload queue
+export const addFilesToQueueAtom = atom(null, (get, set, payload: AddFilesToQueuePayload) => {
+  const uploadMetadata =
+    payload.type === 'new-stack' ? normalizeUploadMetadata(payload.metadata) : undefined;
+  const stackId = payload.type === 'add-to-stack' ? payload.stackId : undefined;
+
+  const newFiles: UploadFile[] = payload.files.map((file) => ({
+    id: Math.random().toString(36).substr(2, 9),
+    file,
+    progress: 0,
+    status: 'pending' as const,
+    stackId,
+    metadata: uploadMetadata,
+  }));
+
+  set(uploadQueueAtom, [...get(uploadQueueAtom), ...newFiles]);
+});
 
 // Process next batch from queue
 export const processNextBatchAtom = atom(null, (get, set) => {
@@ -150,7 +173,7 @@ export const processNextBatchAtom = atom(null, (get, set) => {
       id: Math.random().toString(36).substr(2, 9),
       files: newStackFiles,
       type: 'new-stack',
-      metadata: get(uploadDefaultsAtom),
+      metadata: newStackFiles[0]?.metadata,
     };
 
     set(currentBatchAtom, batch);

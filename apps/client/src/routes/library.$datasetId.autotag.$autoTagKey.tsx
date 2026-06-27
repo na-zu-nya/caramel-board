@@ -85,7 +85,8 @@ function AutoTagStacksPage() {
   const _filterKey = useMemo(() => {
     const f = currentFilter || ({} as any);
     const key = {
-      mediaType: f.mediaType ?? undefined,
+      mediaCategory: f.mediaCategory ?? undefined,
+      mediaTypes: Array.isArray(f.mediaTypes) ? [...f.mediaTypes].sort() : undefined,
       search: f.search ?? undefined,
       authors: Array.isArray(f.authors) ? [...f.authors].sort() : undefined,
       tags: Array.isArray(f.tags) ? [...f.tags].sort() : undefined,
@@ -225,23 +226,22 @@ function AutoTagStacksPage() {
       items,
       lastPath: window.location.pathname,
     });
-    // Build ordered ids (right→left) from currently loaded items
-    const loadedIdsLtr = (items || [])
+    // Build ordered ids from currently loaded items in grid-list order.
+    const ids = (items || [])
       .filter((it): it is MediaGridItem => !!it)
       .map((it) =>
         typeof it.id === 'string' ? Number.parseInt(it.id as string, 10) : (it.id as number)
       );
-    const ids = loadedIdsLtr.slice().reverse();
     const clickedId =
       typeof item.id === 'string' ? Number.parseInt(item.id as string, 10) : (item.id as number);
     const currentIndex = Math.max(0, ids.indexOf(clickedId));
 
-    const mediaType = (item as any).mediaType as string | undefined;
+    const mediaType = item.mediaType;
     const token = genListToken({ datasetId, mediaType });
     saveViewContext({
       token,
       datasetId,
-      mediaType: mediaType as any,
+      mediaType,
       ids,
       currentIndex,
       createdAt: Date.now(),

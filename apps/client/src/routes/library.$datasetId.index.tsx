@@ -1,11 +1,12 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { useAtom } from 'jotai';
+import { useAtom, useSetAtom } from 'jotai';
 import { BookOpen, Film, Image, type LucideIcon } from 'lucide-react';
 import { useCallback, useEffect, useMemo } from 'react';
 import { StackTileGrid } from '@/components/StackTileGrid';
 import { EntityCard } from '@/components/ui/Card/EntityCard';
 import { TagChip } from '@/components/ui/Chip/TagChip';
+import { DropZone } from '@/components/ui/DropZone';
 import { SectionBlock, SectionHeader } from '@/components/ui/Section/Section';
 import { useDatasetOverview } from '@/hooks/useDatasetOverview';
 import { useDataset } from '@/hooks/useDatasets';
@@ -15,7 +16,8 @@ import { useStackTile } from '@/hooks/useStackTile';
 import { apiClient } from '@/lib/api-client';
 import { getMediaTypeLabel, useT } from '@/lib/i18n';
 import { currentFilterAtom } from '@/stores/ui';
-import type { MediaType, Stack } from '@/types';
+import { addFilesToQueueAtom, addUploadNotificationAtom } from '@/stores/upload';
+import type { MediaCategory, Stack } from '@/types';
 
 type StackCardItem = {
   id: string | number;
@@ -50,6 +52,9 @@ function DatasetHome() {
   const { data: overview, isLoading } = useDatasetOverview(datasetId);
   const { onOpen, onFindSimilar, onAddToScratch, onDownload, onToggleFavorite, onLike, dragProps } =
     useStackTile(datasetId);
+  const queryClient = useQueryClient();
+  const addFilesToQueue = useSetAtom(addFilesToQueueAtom);
+  const addNotification = useSetAtom(addUploadNotificationAtom);
 
   // Scratch detection (without creating one): find scratch collection and fetch recent items
   const { data: scratchData } = useQuery({
@@ -90,7 +95,7 @@ function DatasetHome() {
     setCurrentFilter({ datasetId });
   }, [datasetId, setCurrentFilter]);
 
-  const mediaTypeConfig: Record<MediaType, { label: string; Icon: LucideIcon }> = {
+  const mediaTypeConfig: Record<MediaCategory, { label: string; Icon: LucideIcon }> = {
     image: { label: getMediaTypeLabel(t, 'image'), Icon: Image },
     comic: { label: getMediaTypeLabel(t, 'comic'), Icon: BookOpen },
     video: { label: getMediaTypeLabel(t, 'video'), Icon: Film },
@@ -163,171 +168,278 @@ function DatasetHome() {
     [dragProps]
   );
 
+  const handleOverviewFileDrop = useCallback(
+    (files: File[]) => {
+      if (!files.length) return;
+      const datasetNumericId = Number(dataset?.id ?? datasetId);
+      if (!Number.isFinite(datasetNumericId)) {
+        addNotification({ type: 'error', message: t.grid.datasetNotFound });
+        return;
+      }
+
+      addFilesToQueue({
+        files,
+        type: 'new-stack',
+        metadata: { datasetId: datasetNumericId },
+      });
+    },
+    [addFilesToQueue, addNotification, dataset?.id, datasetId, t]
+  );
+
+  const handleOverviewUrlDrop = useCallback(
+    async (urls: string[]) => {
+      if (urls.length === 0) return;
+
+      const datasetNumericId = Number(dataset?.id ?? datasetId);
+      if (!Number.isFinite(datasetNumericId)) {
+        addNotification({ type: 'error', message: t.grid.datasetNotFound });
+        return;
+      }
+
+      try {
+        const { results } = await apiClient.importAssetsFromUrls({
+          urls,
+          dataSetId: datasetNumericId,
+        });
+
+        const successes = results.filter(
+          (result) => result.status === 'created' || result.status === 'added'
+        );
+        const duplicates = results.filter((result) => result.status === 'skipped');
+        const failures = results.filter((result) => result.status === 'error');
+        const protectedFailures = failures.filter((failure) =>
+          /HTTP 40[13]/.test(failure.message ?? '')
+        );
+
+        if (successes.length > 0) {
+          addNotification({
+            type: 'success',
+            message: t.grid.urlUploaded(successes.length),
+          });
+          await Promise.all([
+            queryClient.invalidateQueries({ queryKey: ['stacks'] }),
+            queryClient.invalidateQueries({ queryKey: ['dataset-overview', datasetId] }),
+            queryClient.invalidateQueries({ queryKey: ['library-counts', datasetId] }),
+          ]);
+        }
+
+        if (duplicates.length > 0) {
+          addNotification({
+            type: 'info',
+            message: t.grid.urlDuplicatesSkipped(duplicates.length),
+          });
+        }
+
+        if (failures.length > 0) {
+          const summary = failures
+            .map((failure) => failure.message || failure.url)
+            .filter(Boolean)
+            .slice(0, 2)
+            .join(' / ');
+          addNotification({
+            type: 'error',
+            message:
+              failures.length === results.length
+                ? t.grid.urlUploadFailed
+                : t.grid.urlUploadPartialFailed(failures.length, summary),
+          });
+
+          if (protectedFailures.length > 0) {
+            addNotification({
+              type: 'info',
+              message: t.grid.protectedImageDropHint,
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Failed to import URLs from overview', error);
+        addNotification({ type: 'error', message: t.grid.urlUploadFailed });
+      }
+    },
+    [addNotification, dataset?.id, datasetId, queryClient, t]
+  );
+
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-gray-300 border-t-transparent rounded-full animate-spin" />
-      </div>
+      <DropZone
+        onFilesDrop={handleOverviewFileDrop}
+        onUrlDrop={handleOverviewUrlDrop}
+        className="min-h-screen"
+        overlayClassName="top-14 left-0 right-0 bottom-0"
+      >
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="w-8 h-8 border-2 border-gray-300 border-t-transparent rounded-full animate-spin" />
+        </div>
+      </DropZone>
     );
   }
 
   return (
-    <div
-      className="min-h-screen transition-all duration-300 ease-in-out"
-      style={{
-        backgroundColor: dataset?.themeColor
-          ? `color-mix(in oklch, ${dataset.themeColor} 5%, white)`
-          : 'white',
-      }}
+    <DropZone
+      onFilesDrop={handleOverviewFileDrop}
+      onUrlDrop={handleOverviewUrlDrop}
+      className="min-h-screen"
+      overlayClassName="top-14 left-0 right-0 bottom-0"
     >
-      <div className="container mx-auto px-4 py-6 pt-8 pb-24 space-y-8">
-        <h1 className="text-4xl font-bold">
-          {dataset?.name || t.sidebar.library} {t.overview.title}
-        </h1>
+      <div
+        className="min-h-screen transition-all duration-300 ease-in-out"
+        style={{
+          backgroundColor: dataset?.themeColor
+            ? `color-mix(in oklch, ${dataset.themeColor} 5%, white)`
+            : 'white',
+        }}
+      >
+        <div className="container mx-auto px-4 py-6 pt-8 pb-24 space-y-8">
+          <h1 className="text-4xl font-bold">
+            {dataset?.name || t.sidebar.library} {t.overview.title}
+          </h1>
 
-        {/* Media Types Section */}
-        <section>
-          <SectionHeader title={t.overview.mediaTypes} />
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {overview?.mediaTypes.map((media) => {
-              const config = mediaTypeConfig[media.mediaType as MediaType];
-              return (
-                <EntityCard
-                  key={media.mediaType}
-                  asChild
-                  aspect="16/9"
-                  title={
-                    <span className="flex items-center gap-2">
-                      {config?.Icon && <config.Icon size={20} />}
-                      <span className="text-lg font-semibold">{config?.label}</span>
-                    </span>
-                  }
-                  subtitle={t.library.itemCount(media.count)}
-                  thumbnailSrc={media.thumbnail || null}
-                  icon={config?.Icon ? <config.Icon size={64} className="opacity-20" /> : undefined}
-                >
-                  <Link
-                    to="/library/$datasetId/media-type/$mediaType"
-                    params={{ datasetId, mediaType: media.mediaType }}
-                  />
-                </EntityCard>
-              );
-            })}
-          </div>
-        </section>
-
-        {/* Collections Section (exclude Scratch) */}
-        {overview?.collections && overview.collections.length > 0 && (
+          {/* Media Types Section */}
           <section>
-            <SectionHeader title={t.sidebar.collections} />
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-              {overview.collections
-                .filter((c) => !isScratchCollection(c))
-                .map((collection) => (
-                  <CollectionCard
-                    key={collection.id}
-                    datasetId={datasetId}
-                    id={collection.id}
-                    name={collection.name}
-                    icon={collection.icon}
-                    count={collection.count}
-                    thumbnail={collection.thumbnail}
-                  />
+            <SectionHeader title={t.overview.mediaTypes} />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {overview?.mediaTypes.map((media) => {
+                const config = mediaTypeConfig[media.mediaType as MediaCategory];
+                return (
+                  <EntityCard
+                    key={media.mediaType}
+                    asChild
+                    aspect="16/9"
+                    title={
+                      <span className="flex items-center gap-2">
+                        {config?.Icon && <config.Icon size={20} />}
+                        <span className="text-lg font-semibold">{config?.label}</span>
+                      </span>
+                    }
+                    subtitle={t.library.itemCount(media.count)}
+                    thumbnailSrc={media.thumbnail || null}
+                    icon={
+                      config?.Icon ? <config.Icon size={64} className="opacity-20" /> : undefined
+                    }
+                  >
+                    <Link
+                      to="/library/$datasetId/media-type/$mediaType"
+                      params={{ datasetId, mediaType: media.mediaType }}
+                    />
+                  </EntityCard>
+                );
+              })}
+            </div>
+          </section>
+
+          {/* Collections Section (exclude Scratch) */}
+          {overview?.collections && overview.collections.length > 0 && (
+            <section>
+              <SectionHeader title={t.sidebar.collections} />
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                {overview.collections
+                  .filter((c) => !isScratchCollection(c))
+                  .map((collection) => (
+                    <CollectionCard
+                      key={collection.id}
+                      datasetId={datasetId}
+                      id={collection.id}
+                      name={collection.name}
+                      icon={collection.icon}
+                      count={collection.count}
+                      thumbnail={collection.thumbnail}
+                    />
+                  ))}
+              </div>
+            </section>
+          )}
+
+          {/* Tag Cloud Section */}
+          {overview?.tagCloud && overview.tagCloud.length > 0 && (
+            <section>
+              <SectionHeader title={t.overview.popularTags} />
+              <div className="flex flex-wrap gap-2">
+                {overview.tagCloud.slice(0, 30).map((tag) => (
+                  <TagChip
+                    key={tag.id}
+                    asChild
+                    name={tag.name}
+                    displayName={tag.displayName || undefined}
+                    count={tag.count}
+                  >
+                    <Link
+                      to="/library/$datasetId/media-type/$mediaType"
+                      params={(): { datasetId: string; mediaType: 'image' } => ({
+                        datasetId,
+                        mediaType: 'image',
+                      })}
+                      search={{ tags: [tag.name] }}
+                    />
+                  </TagChip>
                 ))}
-            </div>
-          </section>
-        )}
+              </div>
+            </section>
+          )}
 
-        {/* Tag Cloud Section */}
-        {overview?.tagCloud && overview.tagCloud.length > 0 && (
-          <section>
-            <SectionHeader title={t.overview.popularTags} />
-            <div className="flex flex-wrap gap-2">
-              {overview.tagCloud.slice(0, 30).map((tag) => (
-                <TagChip
-                  key={tag.id}
-                  asChild
-                  name={tag.name}
-                  displayName={tag.displayName || undefined}
-                  count={tag.count}
+          {/* Recent Likes Section */}
+          {recentLikeItems.length > 0 && (
+            <SectionBlock
+              title={t.overview.recentlyLiked}
+              action={
+                <Link
+                  to="/library/$datasetId/likes"
+                  params={{ datasetId }}
+                  className="text-blue-600 hover:text-blue-800 font-medium"
                 >
-                  <Link
-                    to="/library/$datasetId/media-type/$mediaType"
-                    params={(): { datasetId: string; mediaType: 'image' } => ({
-                      datasetId,
-                      mediaType: 'image',
-                    })}
-                    search={{ tags: [tag.name] }}
-                  />
-                </TagChip>
-              ))}
-            </div>
-          </section>
-        )}
+                  {t.overview.recentlyLiked} ›
+                </Link>
+              }
+            >
+              <StackTileGrid
+                items={recentLikeItems}
+                datasetId={datasetId}
+                gridClassName="grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4"
+                cornerRadius="rounded"
+                getLinkElement={getStackLinkElement}
+                onOpenItem={handleOpenStack}
+                onFindSimilarItem={handleFindSimilarStack}
+                onAddToScratchItem={handleAddToScratchStack}
+                onDownloadItem={handleDownloadStack}
+                onToggleFavoriteItem={handleToggleFavoriteStack}
+                onLikeItem={handleLikeStack}
+                getDragHandlers={getStackDragHandlers}
+              />
+            </SectionBlock>
+          )}
 
-        {/* Recent Likes Section */}
-        {recentLikeItems.length > 0 && (
-          <SectionBlock
-            title={t.overview.recentlyLiked}
-            action={
-              <Link
-                to="/library/$datasetId/likes"
-                params={{ datasetId }}
-                className="text-blue-600 hover:text-blue-800 font-medium"
-              >
-                {t.overview.recentlyLiked} ›
-              </Link>
-            }
-          >
-            <StackTileGrid
-              items={recentLikeItems}
-              datasetId={datasetId}
-              gridClassName="grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4"
-              cornerRadius="rounded"
-              getLinkElement={getStackLinkElement}
-              onOpenItem={handleOpenStack}
-              onFindSimilarItem={handleFindSimilarStack}
-              onAddToScratchItem={handleAddToScratchStack}
-              onDownloadItem={handleDownloadStack}
-              onToggleFavoriteItem={handleToggleFavoriteStack}
-              onLikeItem={handleLikeStack}
-              getDragHandlers={getStackDragHandlers}
-            />
-          </SectionBlock>
-        )}
-
-        {/* Recently Scratch Section */}
-        {scratchData && scratchItems.length > 0 && (
-          <SectionBlock
-            title={t.overview.recentlyScratch}
-            action={
-              <Link
-                to="/library/$datasetId/scratch/$scratchId"
-                params={{ datasetId, scratchId: String(scratchData.id) }}
-                className="text-blue-600 hover:text-blue-800 font-medium"
-              >
-                {t.overview.recentlyScratch} ›
-              </Link>
-            }
-          >
-            <StackTileGrid
-              items={scratchItems}
-              datasetId={datasetId}
-              gridClassName="grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4"
-              cornerRadius="rounded"
-              getLinkElement={getStackLinkElement}
-              onOpenItem={handleOpenStack}
-              onFindSimilarItem={handleFindSimilarStack}
-              onAddToScratchItem={handleAddToScratchStack}
-              onDownloadItem={handleDownloadStack}
-              onToggleFavoriteItem={handleToggleFavoriteStack}
-              onLikeItem={handleLikeStack}
-              getDragHandlers={getStackDragHandlers}
-            />
-          </SectionBlock>
-        )}
+          {/* Recently Scratch Section */}
+          {scratchData && scratchItems.length > 0 && (
+            <SectionBlock
+              title={t.overview.recentlyScratch}
+              action={
+                <Link
+                  to="/library/$datasetId/scratch/$scratchId"
+                  params={{ datasetId, scratchId: String(scratchData.id) }}
+                  className="text-blue-600 hover:text-blue-800 font-medium"
+                >
+                  {t.overview.recentlyScratch} ›
+                </Link>
+              }
+            >
+              <StackTileGrid
+                items={scratchItems}
+                datasetId={datasetId}
+                gridClassName="grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4"
+                cornerRadius="rounded"
+                getLinkElement={getStackLinkElement}
+                onOpenItem={handleOpenStack}
+                onFindSimilarItem={handleFindSimilarStack}
+                onAddToScratchItem={handleAddToScratchStack}
+                onDownloadItem={handleDownloadStack}
+                onToggleFavoriteItem={handleToggleFavoriteStack}
+                onLikeItem={handleLikeStack}
+                getDragHandlers={getStackDragHandlers}
+              />
+            </SectionBlock>
+          )}
+        </div>
       </div>
-    </div>
+    </DropZone>
   );
 }
 

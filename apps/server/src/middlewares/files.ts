@@ -68,6 +68,13 @@ export const fileServer = factory.createMiddleware(async (c) => {
         '.png': 'image/png',
         '.webp': 'image/webp',
         '.gif': 'image/gif',
+        '.svg': 'image/svg+xml',
+        '.svgz': 'image/svg+xml',
+        '.dng': 'image/x-adobe-dng',
+        '.tif': 'image/tiff',
+        '.tiff': 'image/tiff',
+        '.avif': 'image/avif',
+        '.bmp': 'image/bmp',
         '.pdf': 'application/pdf',
         '.mp4': 'video/mp4',
         '.webm': 'video/webm',
@@ -89,7 +96,7 @@ export const fileServer = factory.createMiddleware(async (c) => {
     fs.readSync(fd, buf, 0, chunk, start);
     fs.closeSync(fd);
 
-    return new Response(buf, {
+    return new Response(new Blob([new Uint8Array(buf)]), {
       status: 206,
       headers: {
         'Content-Range': `bytes ${start}-${end}/${size}`,
@@ -102,9 +109,10 @@ export const fileServer = factory.createMiddleware(async (c) => {
   }
 
   // ---- Normal file ----
-  return new Response(fs.readFileSync(full), {
+  return new Response(new Blob([new Uint8Array(fs.readFileSync(full))]), {
     headers: {
       'Content-Type': type,
+      ...(ext === '.svgz' ? { 'Content-Encoding': 'gzip' } : {}),
       'Content-Length': size.toString(),
       'Cache-Control': 'public, max-age=31536000',
     },

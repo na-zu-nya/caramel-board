@@ -28,10 +28,12 @@ code {
 
 :root {
   --font-sans:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell",
-    "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+    -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Segoe UI",
+    "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
+    sans-serif;
   --font-display: "Tilt Warp", "Murecho", var(--font-sans);
   --font-display-ja: "Murecho", "Tilt Warp", var(--font-sans);
+  --side-menu-list-item-font-size: 0.875rem;
   --caramel-thumbnail-blur-radius: 10px;
   --font-weight-semibold: 500;
   --font-weight-bold: 500;
@@ -70,6 +72,11 @@ code {
   --sidebar-border: oklch(0.92 0.004 286.32);
   --sidebar-ring: oklch(0.871 0.006 286.286);
   --like-color: #d90778;
+}
+
+:root[data-rendering-profile="chrome"],
+[data-rendering-profile="chrome"] {
+  --side-menu-list-item-font-size: 13px;
 }
 
 .dark {
@@ -264,6 +271,132 @@ code {
   }
   body.list-stable-body {
     scrollbar-gutter: stable;
+  }
+
+  .coarse-pointer-only {
+    display: none;
+  }
+
+  .list-upload-action {
+    bottom: calc(env(safe-area-inset-bottom) + 1rem);
+  }
+
+  .list-upload-action--default {
+    left: 1rem;
+  }
+
+  .floating-upload-panel {
+    width: min(18rem, calc(100vw - 2rem));
+    max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 7rem);
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  @media (pointer: coarse) {
+    .coarse-pointer-only {
+      display: inline-flex;
+    }
+
+    .list-upload-action--sidebar-open {
+      left: calc(20rem + 1rem);
+    }
+  }
+
+  @media (pointer: coarse) and (max-width: 408px) {
+    .list-upload-action--sidebar-open,
+    .list-upload-action--right-panel-open {
+      display: none;
+    }
+  }
+
+  @media (pointer: coarse) and (max-width: 728px) {
+    .list-upload-action--sidebar-and-panel-open {
+      display: none;
+    }
+  }
+
+  .sidebar-floating-backdrop {
+    display: none;
+  }
+
+  .right-panel-floating-backdrop {
+    display: none;
+  }
+
+  .app-side-menu-content {
+    max-height: calc(100vh - 64px);
+  }
+
+  @media (max-width: 900px) {
+    .app-side-menu {
+      top: calc(env(safe-area-inset-top) + 0.75rem);
+      bottom: calc(env(safe-area-inset-bottom) + 0.75rem);
+      left: 0.75rem;
+      height: auto;
+      z-index: 60;
+      width: min(20rem, calc(100vw - 1.5rem));
+      overflow: hidden;
+      border: 1px solid rgb(229 231 235 / 0.95);
+      border-radius: 0.875rem;
+      box-shadow: 0 24px 80px rgb(15 23 42 / 0.28);
+    }
+
+    .app-side-menu.-translate-x-full {
+      --tw-translate-x: calc(-100% - 1.5rem);
+      translate: var(--tw-translate-x) var(--tw-translate-y, 0);
+    }
+
+    .app-side-menu-content {
+      max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 5.5rem);
+    }
+
+    .sidebar-floating-backdrop {
+      display: block;
+      position: fixed;
+      inset: 0;
+      z-index: 55;
+      border: 0;
+      background: rgb(15 23 42 / 0.14);
+      padding: 0;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .app-right-panel {
+      --right-panel-floating-height: calc(
+        100dvh -
+        3.5rem -
+        env(safe-area-inset-top) -
+        env(safe-area-inset-bottom) -
+        1.5rem
+      );
+      top: calc(3.5rem + env(safe-area-inset-top) + 0.75rem);
+      right: 0.75rem;
+      bottom: auto;
+      height: var(--right-panel-floating-height);
+      max-height: var(--right-panel-floating-height);
+      z-index: 60;
+      width: min(20rem, calc(100vw - 1.5rem));
+      overflow: hidden;
+      border: 1px solid rgb(229 231 235 / 0.95);
+      border-radius: 0.875rem;
+      box-shadow: 0 24px 80px rgb(15 23 42 / 0.28);
+    }
+
+    .app-right-panel.translate-x-full {
+      --tw-translate-x: calc(100% + 1.5rem);
+      translate: var(--tw-translate-x) var(--tw-translate-y, 0);
+    }
+
+    .right-panel-floating-backdrop {
+      display: block;
+      position: fixed;
+      inset: 0;
+      z-index: 55;
+      border: 0;
+      background: rgb(15 23 42 / 0.14);
+      padding: 0;
+    }
   }
 
   /* Safari/macOS fallback for scrollbar-gutter */

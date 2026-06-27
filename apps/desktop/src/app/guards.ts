@@ -14,17 +14,11 @@ export const isTextSettingKey = (value: string | undefined): value is TextSettin
   value === 'autoTagRepoDir' ||
   value === 'autoTagModelDir' ||
   value === 'ffmpegPath' ||
-  value === 'pdfRasterizerPath' ||
-  value === 'dockerDatabaseUrl' ||
-  value === 'dockerStorageRoot' ||
-  value === 'dockerDatasetId';
+  value === 'pdfRasterizerPath';
 
 export const isBooleanSettingKey = (value: string | undefined): value is BooleanSettingKey =>
   value === 'allowExternalNetwork' ||
   value === 'basicAuthEnabled' ||
-  value === 'dockerVerifyFiles' ||
   value === 'autoTagEnabled' ||
+  value === 'autoTagUseGpu' ||
   value === 'launchOnStartup';
-
-export const isDockerTextSettingKey = (value: TextSettingKey) =>
-  value === 'dockerDatabaseUrl' || value === 'dockerStorageRoot' || value === 'dockerDatasetId';

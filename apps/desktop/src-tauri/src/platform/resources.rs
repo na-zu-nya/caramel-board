@@ -77,11 +77,28 @@ fn bundled_uv_path(app: &AppHandle) -> Option<PathBuf> {
     packaged_resource_path(app, candidate)
 }
 
+fn uv_storage_root(app: &AppHandle) -> Option<PathBuf> {
+    app.path()
+        .app_local_data_dir()
+        .ok()
+        .map(|path| path.join("uv"))
+}
+
 fn uv_command(app: &AppHandle) -> Command {
-    match bundled_uv_path(app) {
+    let mut command = match bundled_uv_path(app) {
         Some(uv) => hidden_command(child_process_path(uv)),
         None => hidden_command("uv"),
+    };
+
+    if let Some(root) = uv_storage_root(app) {
+        let data_dir = root.join("data");
+        command
+            .env("UV_DATA_DIR", child_process_path(&data_dir))
+            .env("UV_PYTHON_INSTALL_DIR", child_process_path(data_dir.join("python")))
+            .env("UV_CACHE_DIR", child_process_path(root.join("cache")));
     }
+
+    command
 }
 
 fn uv_available(app: &AppHandle) -> bool {

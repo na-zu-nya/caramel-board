@@ -88,6 +88,9 @@ fn auto_tag_status_from(
     let repository_ready = is_auto_tag_repository_ready(settings);
     let model_ready = is_auto_tag_model_ready(settings);
     let ready = uv_installed && repository_ready && model_ready;
+    let gpu_available = auto_tag_gpu_available();
+    let gpu_preference_supported = auto_tag_gpu_preference_supported();
+    let runtime_mode = auto_tag_status_runtime_mode(app, settings, gpu_available);
     let process_running = sidecar.auto_tag_child.is_some();
     let reachable = process_running && http_health_ok(settings.auto_tag_port);
     let running = reachable;
@@ -122,6 +125,9 @@ fn auto_tag_status_from(
         repository_ready,
         model_ready,
         ready,
+        gpu_available,
+        gpu_preference_supported,
+        runtime_mode: String::from(runtime_mode.as_str()),
         message,
     }
 }
@@ -311,22 +317,78 @@ fn nvidia_gpu_available() -> bool {
         .unwrap_or(false)
 }
 
-fn prefer_cuda_auto_tag() -> bool {
-    env::var("CARAMEL_AUTOTAG_PREFER_CUDA")
-        .map(|value| {
-            let normalized = value.trim().to_ascii_lowercase();
-            normalized == "1" || normalized == "true" || normalized == "yes"
-        })
-        .unwrap_or(false)
+fn auto_tag_gpu_preference_supported() -> bool {
+    !cfg!(target_os = "macos")
 }
 
-fn auto_tag_candidate_runtime_modes() -> Vec<AutoTagRuntimeMode> {
-    let mut attempts = Vec::new();
-    #[cfg(target_os = "macos")]
-    attempts.push(AutoTagRuntimeMode::Mps);
-    if prefer_cuda_auto_tag() && nvidia_gpu_available() {
-        attempts.push(AutoTagRuntimeMode::Cuda);
+fn auto_tag_gpu_available() -> bool {
+    auto_tag_gpu_preference_supported() && nvidia_gpu_available()
+}
+
+#[cfg(target_os = "macos")]
+fn auto_tag_status_runtime_mode(
+    app: &AppHandle,
+    settings: &AppSettings,
+    _gpu_available: bool,
+) -> AutoTagRuntimeMode {
+    if settings.auto_tag_use_gpu {
+        read_auto_tag_runtime_mode(app)
+    } else {
+        AutoTagRuntimeMode::Cpu
     }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn auto_tag_status_runtime_mode(
+    _app: &AppHandle,
+    settings: &AppSettings,
+    gpu_available: bool,
+) -> AutoTagRuntimeMode {
+    if settings.auto_tag_use_gpu && gpu_available {
+        AutoTagRuntimeMode::Cuda
+    } else {
+        AutoTagRuntimeMode::Cpu
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn auto_tag_runtime_mode_for_settings(
+    app: &AppHandle,
+    settings: &AppSettings,
+) -> AutoTagRuntimeMode {
+    if settings.auto_tag_use_gpu {
+        ensure_preferred_auto_tag_runtime_mode(app)
+    } else {
+        AutoTagRuntimeMode::Cpu
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn auto_tag_runtime_mode_for_settings(
+    _app: &AppHandle,
+    settings: &AppSettings,
+) -> AutoTagRuntimeMode {
+    auto_tag_status_runtime_mode(_app, settings, auto_tag_gpu_available())
+}
+
+fn auto_tag_candidate_runtime_modes(settings: &AppSettings) -> Vec<AutoTagRuntimeMode> {
+    let mut attempts = Vec::new();
+
+    #[cfg(target_os = "macos")]
+    if settings.auto_tag_use_gpu {
+        attempts.push(AutoTagRuntimeMode::Mps);
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        if settings.auto_tag_use_gpu && auto_tag_gpu_available() {
+            attempts.push(AutoTagRuntimeMode::Cuda);
+        } else {
+            attempts.push(AutoTagRuntimeMode::Cpu);
+        }
+    }
+
+    #[cfg(target_os = "macos")]
     attempts.push(AutoTagRuntimeMode::Cpu);
     attempts.dedup();
     attempts
@@ -383,9 +445,9 @@ if requested == "mps" and not mps_available:
     )
 }
 
-fn prepare_auto_tag_environment(app: &AppHandle) -> Result<String, String> {
+fn prepare_auto_tag_environment(app: &AppHandle, settings: &AppSettings) -> Result<String, String> {
     let mut failures = Vec::new();
-    for mode in auto_tag_candidate_runtime_modes() {
+    for mode in auto_tag_candidate_runtime_modes(settings) {
         let mut command = auto_tag_dependency_command(app, mode);
         command
             .arg("--with")
@@ -419,6 +481,13 @@ fn prepare_auto_tag_environment(app: &AppHandle) -> Result<String, String> {
 
 fn auto_tag_environment_error_message(details: &str) -> String {
     let lower = details.to_ascii_lowercase();
+    if lower.contains("cuda pytorch was requested")
+        || lower.contains("torch.cuda.is_available() is false")
+    {
+        return String::from(
+            "AutoTag の GPU 実行環境を準備できませんでした。NVIDIA ドライバーを更新してから再試行してください。GPU を使わない場合は「GPUでタグを生成する」をオフにしてからインストールしてください。",
+        );
+    }
     if lower.contains("winerror 1114") || lower.contains("c10.dll") {
         return String::from(
             "AutoTag 実行環境を準備できませんでした。PyTorch の DLL を読み込めません。Microsoft Visual C++ 2015-2022 Redistributable を更新してから再試行してください。CUDA を使う場合は GPU ドライバーも更新してください。セットアップは「あとで設定する」で続行できます。",
@@ -522,7 +591,8 @@ fn start_auto_tag_if_enabled(
 
     let bridge_root = auto_tag_bridge_root(app);
     let bridge_script = bridge_root.join("joytag_server.py");
-    let runtime_mode = ensure_preferred_auto_tag_runtime_mode(app);
+    let runtime_mode = auto_tag_runtime_mode_for_settings(app, settings);
+    write_auto_tag_runtime_mode(app, runtime_mode)?;
     write_auto_tag_log_header(app, settings, runtime_mode, &bridge_script)?;
     let log_path = auto_tag_log_path(app)?;
     if let Some(parent) = log_path.parent() {
@@ -673,7 +743,7 @@ fn prepare_auto_tag_for_settings(
         logs.push(run_command(model_command, "JoyTag モデルの取得")?);
     }
 
-    logs.push(prepare_auto_tag_environment(app)?);
+    logs.push(prepare_auto_tag_environment(app, settings)?);
 
     Ok(logs.join("\n"))
 }
@@ -806,7 +876,7 @@ fn run_auto_tag_install_task(
         progress.message = String::from("自動タグの実行環境を準備しています...");
     });
 
-    prepare_auto_tag_environment(&app)?;
+    prepare_auto_tag_environment(&app, &settings)?;
 
     settings.auto_tag_enabled = true;
     write_settings(&app, &settings)?;

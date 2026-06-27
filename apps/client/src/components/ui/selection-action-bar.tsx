@@ -6,6 +6,9 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useT } from '@/lib/i18n';
@@ -23,12 +26,13 @@ interface SelectionActionBarProps {
 export interface SelectionAction {
   label: string;
   value: string;
-  onSelect: () => void;
+  onSelect?: () => void;
   icon?: ReactNode;
   disabled?: boolean;
   confirmMessage?: string;
   destructive?: boolean;
   group?: 'primary' | 'secondary';
+  children?: SelectionAction[];
 }
 
 export function SelectionActionBar({
@@ -80,31 +84,55 @@ export function SelectionActionBar({
                   );
                   const destructiveActions = actions.filter((action) => action.destructive);
 
-                  const renderAction = (action: SelectionAction) => (
-                    <DropdownMenuItem
-                      key={action.value}
-                      onSelect={(event) => {
-                        event.preventDefault();
-                        if (action.disabled) return;
-                        if (action.confirmMessage && !window.confirm(action.confirmMessage)) {
-                          return;
-                        }
-                        action.onSelect();
-                        setMenuOpen(false);
-                      }}
-                      disabled={action.disabled}
-                      className={`text-xs flex items-center gap-2 ${
-                        action.destructive ? 'text-red-600 focus:text-red-600' : ''
-                      }`}
-                    >
+                  const renderActionContent = (action: SelectionAction) => (
+                    <>
                       {action.icon && (
                         <span className={action.destructive ? 'text-red-500' : 'text-gray-500'}>
                           {action.icon}
                         </span>
                       )}
-                      <span>{action.label}</span>
-                    </DropdownMenuItem>
+                      <span className="min-w-0 truncate">{action.label}</span>
+                    </>
                   );
+
+                  const renderAction = (action: SelectionAction): ReactNode => {
+                    if (action.children && action.children.length > 0) {
+                      return (
+                        <DropdownMenuSub key={action.value}>
+                          <DropdownMenuSubTrigger
+                            disabled={action.disabled}
+                            className="text-xs flex items-center gap-2"
+                          >
+                            {renderActionContent(action)}
+                          </DropdownMenuSubTrigger>
+                          <DropdownMenuSubContent className="w-56">
+                            {action.children.map(renderAction)}
+                          </DropdownMenuSubContent>
+                        </DropdownMenuSub>
+                      );
+                    }
+
+                    return (
+                      <DropdownMenuItem
+                        key={action.value}
+                        onSelect={(event) => {
+                          event.preventDefault();
+                          if (action.disabled || !action.onSelect) return;
+                          if (action.confirmMessage && !window.confirm(action.confirmMessage)) {
+                            return;
+                          }
+                          action.onSelect();
+                          setMenuOpen(false);
+                        }}
+                        disabled={action.disabled}
+                        className={`text-xs flex items-center gap-2 ${
+                          action.destructive ? 'text-red-600 focus:text-red-600' : ''
+                        }`}
+                      >
+                        {renderActionContent(action)}
+                      </DropdownMenuItem>
+                    );
+                  };
 
                   return (
                     <>

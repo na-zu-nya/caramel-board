@@ -10,7 +10,7 @@ import {
   useSensors,
 } from '@dnd-kit/core';
 import { ChevronDown, ChevronRight, Folder, FolderOpen } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { CollectionFolderContextMenu } from '@/components/modals/CollectionFolderContextMenu';
 import { SideMenuMessage } from '@/components/ui/SideMenu';
 import { CountBadge } from '@/components/ui/SideMenu/CountBadge';
@@ -61,7 +61,7 @@ function saveExpandedState(state: Record<string, boolean>) {
   }
 }
 
-export function FolderTreeView({
+function FolderTreeViewComponent({
   datasetId,
   folders,
   rootCollections,
@@ -458,24 +458,12 @@ export function FolderTreeView({
       setIsDragOver(false);
     };
 
-    const handleDrop = async (e: React.DragEvent) => {
+    const handleDrop = (e: React.DragEvent) => {
       e.preventDefault();
       e.stopPropagation();
       setIsDragOver(false);
 
       if (!folder) return;
-
-      try {
-        const data = e.dataTransfer.getData('application/json');
-        if (!data) return;
-
-        const dragData = JSON.parse(data);
-
-        // For now, just log the drop event on folders
-        console.log('🟢 Stack dropped on folder:', folder.name, dragData);
-      } catch (error) {
-        console.error('Failed to process drop on folder:', error);
-      }
     };
 
     const highlight = isOver || isDragOver;
@@ -615,3 +603,6 @@ export function FolderTreeView({
     </DndContext>
   );
 }
+
+export const FolderTreeView = memo(FolderTreeViewComponent);
+FolderTreeView.displayName = 'FolderTreeView';

@@ -1,9 +1,10 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from '@tanstack/react-router';
+import { useNavigate, useSearch } from '@tanstack/react-router';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import {
   Download,
   GalleryVerticalEnd,
+  ImagePlus,
   Info,
   NotebookText,
   PenTool,
@@ -12,26 +13,35 @@ import {
   X,
 } from 'lucide-react';
 import MersenneTwister from 'mersenne-twister';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { FullPageDropZone } from '@/components/ui/DropZone';
+import { FloatingUploadAction } from '@/components/ui/FloatingUploadAction';
 import { HeaderIconButton } from '@/components/ui/Header/HeaderIconButton';
 import MarkerEditorDialog from '@/components/ui/SeekBar/MarkerEditorDialog';
 import { useStackNavigation } from '@/hooks/features/useStackNavigation';
 import { useStackViewer } from '@/hooks/features/useStackViewer';
-import { useStackViewerInteractions } from '@/hooks/features/useStackViewerInteractions';
+import {
+  useStackViewerInteractions,
+  type ViewerEdgeKind,
+  type ViewerEdgeSide,
+} from '@/hooks/features/useStackViewerInteractions';
 import { useStackViewerZoom } from '@/hooks/features/useStackViewerZoom';
 import { useViewerContextMenu } from '@/hooks/features/useViewerContextMenu';
 import { useHeaderActions } from '@/hooks/useHeaderActions';
 import { useScratch } from '@/hooks/useScratch';
+import { useRightPanelPushesContent, useSidebarPushesContent } from '@/hooks/useSidebarLayoutMode';
 import { useViewContext } from '@/hooks/useViewContext';
 import { apiClient } from '@/lib/api-client';
+import { buildComicReadingModel, normalizeComicReadingSettings } from '@/lib/comic-reading';
 import { downloadAssetOriginals, downloadStackOriginals } from '@/lib/download-originals';
 import { useT } from '@/lib/i18n';
 import { isVideoAsset } from '@/lib/media';
 import { cn } from '@/lib/utils';
+import { getViewerComicDisplayMode, setViewerComicDisplayMode } from '@/lib/viewerSettings';
 import {
   infoSidebarOpenAtom,
+  selectedInfoAssetIdAtom,
   selectedItemIdAtom,
   selectionModeAtom,
   sidebarOpenAtom,
@@ -41,12 +51,19 @@ import {
   addUploadNotificationAtom,
   uploadNotificationsAtom,
 } from '@/stores/upload';
-import type { Asset, VideoMarker as TVideoMarker, VideoMarker } from '@/types';
+import type {
+  Asset,
+  ComicDisplayMode,
+  Stack,
+  VideoMarker as TVideoMarker,
+  VideoMarker,
+} from '@/types';
 import AssetGrid from './AssetGrid';
 import ColorPickerOverlay from './ColorPickerOverlay';
+import ComicPageSeekBar from './ComicPageSeekBar';
+import EdgeNavigationAffordance from './EdgeNavigationAffordance';
 import ImageCarousel from './ImageCarousel';
 import PenOverlay from './PenOverlay';
-import StackPageIndicator from './StackPageIndicator';
 import StackToolbar, { type AssetSortPreset } from './StackToolbar';
 import TapZoneOverlay from './TapZoneOverlay';
 
@@ -75,6 +92,21 @@ interface ViewerShellProps {
   onUrlDrop: (urls: string[]) => void;
 }
 
+interface OptimisticReadingPage {
+  pageIndex: number;
+  leftEdgeKind: ViewerEdgeKind;
+  rightEdgeKind: ViewerEdgeKind;
+}
+
+const getStackBoundarySide = (edgeKinds: {
+  leftEdgeKind: ViewerEdgeKind;
+  rightEdgeKind: ViewerEdgeKind;
+}): ViewerEdgeSide | null => {
+  if (edgeKinds.leftEdgeKind === 'stack-boundary') return 'left';
+  if (edgeKinds.rightEdgeKind === 'stack-boundary') return 'right';
+  return null;
+};
+
 const assetNameCollator = new Intl.Collator(undefined, {
   numeric: true,
   sensitivity: 'base',
@@ -95,6 +127,11 @@ const getAssetCreatedAtValue = (asset: Asset) => {
   if (Number.isFinite(time)) return time;
   const numericId = typeof asset.id === 'string' ? Number.parseInt(asset.id, 10) : asset.id;
   return Number.isFinite(numericId) ? numericId : 0;
+};
+
+const toPositiveNumericId = (value: string | number) => {
+  const id = typeof value === 'string' ? Number.parseInt(value, 10) : value;
+  return Number.isFinite(id) && id > 0 ? id : null;
 };
 
 const sortAssetsByPreset = (assets: Asset[], preset: AssetSortPreset) => {
@@ -144,7 +181,7 @@ function ViewerShell({
     <FullPageDropZone
       onDrop={onDrop}
       onUrlDrop={onUrlDrop}
-      accept="image/*,video/*,application/pdf"
+      accept="image/*,video/*,application/pdf,.pdf,.ai,.svg,.svgz"
       multiple
       disabled={isPenMode || isNativeInteractionMode}
     >
@@ -167,9 +204,14 @@ export default function StackViewer({
   const t = useT();
   const [isInfoSidebarOpen, setIsInfoSidebarOpen] = useAtom(infoSidebarOpenAtom);
   const [, setSelectedItemId] = useAtom(selectedItemIdAtom);
+  const setSelectedInfoAssetId = useSetAtom(selectedInfoAssetIdAtom);
   const [rawSidebarOpen] = useAtom(sidebarOpenAtom);
   // 埋め込み時はアプリのサイドバーが存在しないため、レイアウト連動を無効化する
   const sidebarOpen = embedded ? false : rawSidebarOpen;
+  const sidebarPushesContent = useSidebarPushesContent(sidebarOpen);
+  const sidebarLeftInset = sidebarPushesContent ? 320 : 0;
+  const infoSidebarPushesContent = useRightPanelPushesContent(isInfoSidebarOpen);
+  const infoSidebarRightInset = infoSidebarPushesContent ? 320 : 0;
   const setSelectionMode = useSetAtom(selectionModeAtom);
   const addFilesToQueue = useSetAtom(addFilesToQueueAtom);
   const uploadNotifications = useAtomValue(uploadNotificationsAtom);
@@ -181,6 +223,26 @@ export default function StackViewer({
   const [isReorderMode, setIsReorderMode] = useState(false);
   const [pendingOrder, setPendingOrder] = useState<Asset[] | null>(null);
   const [isSavingOrder, setIsSavingOrder] = useState(false);
+  const [isPageSeekBarVisible, setIsPageSeekBarVisible] = useState(false);
+  const [isEdgeAffordanceSuppressed, setIsEdgeAffordanceSuppressed] = useState(false);
+  const [isEdgeAffordanceReady, setIsEdgeAffordanceReady] = useState(false);
+  const [edgeAttention, setEdgeAttention] = useState<{
+    side: ViewerEdgeSide;
+    token: number;
+  } | null>(null);
+  const [edgeBoundaryArmedSide, setEdgeBoundaryArmedSide] = useState<ViewerEdgeSide | null>(null);
+  const [optimisticReadingPage, setOptimisticReadingPage] = useState<OptimisticReadingPage | null>(
+    null
+  );
+  const pageSeekBarHoverCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const routeSearch = useSearch({ strict: false }) as { page?: number };
+  const [comicDisplayMode, setComicDisplayModeState] = useState<ComicDisplayMode>(() =>
+    getViewerComicDisplayMode()
+  );
+  const [comicDisplayModeOverride, setComicDisplayModeOverride] = useState<{
+    stackId: string;
+    mode: ComicDisplayMode;
+  } | null>(null);
 
   const {
     stack,
@@ -190,18 +252,129 @@ export default function StackViewer({
     isListMode,
     setIsListMode,
     handleFavoriteToggle,
-    handleAssetFavoriteToggle,
-    handleLikeToggle,
     refetch,
   } = useStackViewer({ datasetId, mediaType, stackId });
+
+  const readingSettings = useMemo(
+    () => normalizeComicReadingSettings(stack?.meta?.reading),
+    [stack?.meta?.reading]
+  );
+  const currentStackKey = String(stack?.id ?? stackId);
+  const currentComicDisplayMode =
+    comicDisplayModeOverride?.stackId === currentStackKey
+      ? comicDisplayModeOverride.mode
+      : (readingSettings.displayMode ?? comicDisplayMode);
+  const effectiveComicDisplayMode: ComicDisplayMode =
+    mediaType === 'video' || !readingSettings.spreadDisplayEnabled
+      ? 'single'
+      : currentComicDisplayMode;
+  const readingModel = useMemo(
+    () =>
+      buildComicReadingModel({
+        assets: stack?.assets ?? [],
+        displayMode: effectiveComicDisplayMode,
+        settings: readingSettings,
+      }),
+    [effectiveComicDisplayMode, readingSettings, stack?.assets]
+  );
+  const readingUnits = readingModel.units;
+  const hasMultipleAssets =
+    (stack?.assetsCount ?? stack?.assetCount ?? stack?.assets.length ?? 0) > 1;
+
+  useEffect(() => {
+    if (!hasMultipleAssets || isListMode) {
+      setIsPageSeekBarVisible(false);
+    }
+  }, [hasMultipleAssets, isListMode]);
+
+  const appliedRoutePageKeyRef = useRef('');
+  useEffect(() => {
+    if (!stack || readingUnits.length === 0) return;
+    const requestedAssetIndex = Number(routeSearch.page) || 0;
+    const applyKey = `${stack.id}:${effectiveComicDisplayMode}:${requestedAssetIndex}:${readingUnits.length}`;
+    if (appliedRoutePageKeyRef.current === applyKey) return;
+    appliedRoutePageKeyRef.current = applyKey;
+    const nextUnitIndex =
+      readingModel.assetIndexToUnitIndex.get(requestedAssetIndex) ??
+      Math.min(Math.max(requestedAssetIndex, 0), readingUnits.length - 1);
+    setEdgeBoundaryArmedSide(null);
+    setCurrentPage(nextUnitIndex);
+  }, [
+    effectiveComicDisplayMode,
+    readingModel.assetIndexToUnitIndex,
+    readingUnits.length,
+    routeSearch.page,
+    setCurrentPage,
+    stack,
+  ]);
+
+  useEffect(() => {
+    if (readingUnits.length === 0) return;
+    if (currentPage < 0 || currentPage > readingUnits.length - 1) {
+      setEdgeBoundaryArmedSide(null);
+      setCurrentPage(Math.max(0, readingUnits.length - 1));
+    }
+  }, [currentPage, readingUnits.length, setCurrentPage]);
+
+  const hideEdgeAffordance = useCallback(() => {
+    setIsEdgeAffordanceSuppressed(true);
+  }, []);
+
+  const showEdgeAffordance = useCallback(() => {
+    setIsEdgeAffordanceSuppressed(false);
+  }, []);
+
+  const handleHorizontalPageTransitionCommit = useCallback(
+    ({
+      targetPage,
+      edgeKinds,
+    }: {
+      targetPage: number;
+      direction: 1 | -1;
+      edgeKinds: { leftEdgeKind: ViewerEdgeKind; rightEdgeKind: ViewerEdgeKind };
+    }) => {
+      setOptimisticReadingPage({
+        pageIndex: targetPage,
+        leftEdgeKind: edgeKinds.leftEdgeKind,
+        rightEdgeKind: edgeKinds.rightEdgeKind,
+      });
+      setEdgeBoundaryArmedSide(getStackBoundarySide(edgeKinds));
+      setIsEdgeAffordanceSuppressed(false);
+      setIsEdgeAffordanceReady(false);
+    },
+    []
+  );
+
+  const handleBoundaryNavigationAttempt = useCallback(
+    ({ side, kind }: { side: ViewerEdgeSide; kind: Exclude<ViewerEdgeKind, null> }) => {
+      if (!hasMultipleAssets || readingUnits.length <= 1) return true;
+      if (kind === 'stack-boundary' && edgeBoundaryArmedSide !== side) return true;
+      if (kind === 'stack-boundary' && isEdgeAffordanceReady) return true;
+
+      setIsEdgeAffordanceSuppressed(false);
+      setIsEdgeAffordanceReady(false);
+      setEdgeAttention((prev) => ({
+        side,
+        token: (prev?.token ?? 0) + 1,
+      }));
+      return false;
+    },
+    [edgeBoundaryArmedSide, hasMultipleAssets, isEdgeAffordanceReady, readingUnits.length]
+  );
 
   // Interactions + neighbors + animations
   const {
     imageCarouselRef,
-    dragOffset,
     currentAsset,
     nextAsset,
     prevAsset,
+    currentUnit: interactionCurrentUnit,
+    nextUnit,
+    prevUnit,
+    nextStackNeighborSide,
+    prevStackNeighborSide,
+    leftEdgeKind,
+    rightEdgeKind,
     onDrag,
     onDragEnd,
     onLeftTap,
@@ -213,10 +386,34 @@ export default function StackViewer({
     listToken,
     returnTo,
     stack,
+    readingUnits,
+    openingDirection: readingSettings.openingDirection,
     currentPage,
     setCurrentPage,
+    onHorizontalInteractionSettled: showEdgeAffordance,
+    onHorizontalPageTransitionCommit: handleHorizontalPageTransitionCommit,
+    onBoundaryNavigationAttempt: handleBoundaryNavigationAttempt,
     onNavigateStack: embedded ? onNavigateStack : undefined,
   });
+  const displayedCurrentPage = optimisticReadingPage?.pageIndex ?? currentPage;
+  const displayedLeftEdgeKind = optimisticReadingPage?.leftEdgeKind ?? leftEdgeKind;
+  const displayedRightEdgeKind = optimisticReadingPage?.rightEdgeKind ?? rightEdgeKind;
+  const edgeAffordanceResetKey = `${stack?.id ?? 'none'}:${displayedCurrentPage}:${isListMode ? 'list' : 'viewer'}:${displayedLeftEdgeKind ?? 'none'}:${displayedRightEdgeKind ?? 'none'}`;
+
+  useEffect(() => {
+    void edgeAffordanceResetKey;
+    setIsEdgeAffordanceSuppressed(false);
+    setIsEdgeAffordanceReady(false);
+    setEdgeAttention(null);
+  }, [edgeAffordanceResetKey]);
+
+  useEffect(() => {
+    setOptimisticReadingPage((prev) => (prev?.pageIndex === currentPage ? null : prev));
+  }, [currentPage]);
+
+  const handleEdgeAffordanceEntered = useCallback(() => {
+    setIsEdgeAffordanceReady(true);
+  }, []);
 
   // Optimistic markers per assetId so UI updates immediately
   const [optimisticMarkers, setOptimisticMarkers] = useState<
@@ -230,6 +427,131 @@ export default function StackViewer({
     [optimisticMarkers]
   );
   const isCurrentVideoAsset = isVideoAsset(currentAsset);
+  const isSingleFullImageUnit =
+    interactionCurrentUnit?.pages.length === 1 &&
+    interactionCurrentUnit.pages[0]?.segment === 'full';
+  const currentAssetIndex = useMemo(() => {
+    if (!stack || !currentAsset) return 0;
+    const orderedIndex = currentAsset.orderInStack;
+    if (Number.isInteger(orderedIndex) && orderedIndex !== undefined && orderedIndex >= 0) {
+      return orderedIndex;
+    }
+    return Math.max(
+      0,
+      stack.assets.findIndex((asset) => asset.id === currentAsset.id)
+    );
+  }, [currentAsset, stack]);
+  const bookmarkUnitIndexes = useMemo(() => {
+    if (!stack) return [];
+    const indexes = new Set<number>();
+    for (const asset of stack.assets) {
+      if (!(asset.favorited ?? asset.isFavorite)) continue;
+      const assetIndex =
+        asset.orderInStack ?? stack.assets.findIndex((item) => item.id === asset.id);
+      const unitIndex = readingModel.assetIndexToUnitIndex.get(assetIndex);
+      if (unitIndex !== undefined) indexes.add(unitIndex);
+    }
+    return Array.from(indexes).sort((left, right) => left - right);
+  }, [readingModel.assetIndexToUnitIndex, stack]);
+
+  const cancelPageSeekBarHoverClose = useCallback(() => {
+    if (pageSeekBarHoverCloseTimerRef.current) {
+      clearTimeout(pageSeekBarHoverCloseTimerRef.current);
+      pageSeekBarHoverCloseTimerRef.current = null;
+    }
+  }, []);
+
+  const hidePageSeekBar = useCallback(() => {
+    cancelPageSeekBarHoverClose();
+    setIsPageSeekBarVisible(false);
+  }, [cancelPageSeekBarHoverClose]);
+
+  const scheduleHidePageSeekBar = useCallback(() => {
+    cancelPageSeekBarHoverClose();
+    pageSeekBarHoverCloseTimerRef.current = setTimeout(() => {
+      setIsPageSeekBarVisible(false);
+      pageSeekBarHoverCloseTimerRef.current = null;
+    }, 80);
+  }, [cancelPageSeekBarHoverClose]);
+
+  const showPageSeekBar = useCallback(() => {
+    cancelPageSeekBarHoverClose();
+    if (hasMultipleAssets && readingUnits.length > 1 && !isListMode) {
+      setIsPageSeekBarVisible(true);
+    }
+  }, [cancelPageSeekBarHoverClose, hasMultipleAssets, isListMode, readingUnits.length]);
+
+  useEffect(() => {
+    return () => {
+      cancelPageSeekBarHoverClose();
+    };
+  }, [cancelPageSeekBarHoverClose]);
+
+  const handlePageSeek = useCallback(
+    (index: number) => {
+      cancelPageSeekBarHoverClose();
+      setEdgeBoundaryArmedSide(null);
+      setCurrentPage(index);
+      setIsPageSeekBarVisible(true);
+    },
+    [cancelPageSeekBarHoverClose, setCurrentPage]
+  );
+
+  const handleDisplayModeToggle = useCallback(() => {
+    const nextMode: ComicDisplayMode = effectiveComicDisplayMode === 'single' ? 'spread' : 'single';
+    setComicDisplayModeOverride({ stackId: currentStackKey, mode: nextMode });
+    setComicDisplayModeState(nextMode);
+    setViewerComicDisplayMode(nextMode);
+    setEdgeBoundaryArmedSide(null);
+    hidePageSeekBar();
+  }, [currentStackKey, effectiveComicDisplayMode, hidePageSeekBar]);
+
+  const handleLeftTap = useCallback(() => {
+    hidePageSeekBar();
+    if (!(leftEdgeKind === 'stack-boundary' && isEdgeAffordanceReady)) {
+      hideEdgeAffordance();
+    }
+    onLeftTap();
+  }, [hideEdgeAffordance, hidePageSeekBar, isEdgeAffordanceReady, leftEdgeKind, onLeftTap]);
+
+  const handleRightTap = useCallback(() => {
+    hidePageSeekBar();
+    if (!(rightEdgeKind === 'stack-boundary' && isEdgeAffordanceReady)) {
+      hideEdgeAffordance();
+    }
+    onRightTap();
+  }, [hideEdgeAffordance, hidePageSeekBar, isEdgeAffordanceReady, onRightTap, rightEdgeKind]);
+
+  useEffect(() => {
+    setSelectedInfoAssetId(currentAsset?.id ?? null);
+  }, [currentAsset?.id, setSelectedInfoAssetId]);
+
+  const handleCurrentAssetFavoriteToggle = useCallback(async () => {
+    if (!currentAsset) return;
+    try {
+      const currentFavorited = Boolean(currentAsset.favorited ?? currentAsset.isFavorite);
+      await apiClient.toggleAssetFavorite(currentAsset.id, !currentFavorited);
+      await refetch();
+      await queryClient.invalidateQueries({ queryKey: ['favorite-items', datasetId] });
+    } catch (error) {
+      console.error('Failed to toggle page favorite:', error);
+    }
+  }, [currentAsset, datasetId, queryClient, refetch]);
+
+  const handleCurrentLikeToggle = useCallback(async () => {
+    if (!stack) return;
+    try {
+      if (currentAsset) {
+        await apiClient.likeAsset(currentAsset.id);
+      } else {
+        await apiClient.likeStack(stack.id);
+      }
+      await refetch();
+      await queryClient.invalidateQueries({ queryKey: ['likes', 'yearly'] });
+    } catch (error) {
+      console.error('Failed to like stack:', error);
+    }
+  }, [currentAsset, queryClient, refetch, stack]);
 
   const handleSortPresetSelect = useCallback(
     (preset: AssetSortPreset) => {
@@ -280,11 +602,12 @@ export default function StackViewer({
   // ペンモード
   const [isPenMode, setIsPenMode] = useState(false);
   const [isMetaNativeMode, setIsMetaNativeMode] = useState(false);
-  const canUseImageTools = !!currentAsset && !isCurrentVideoAsset && !isListMode;
+  const canUseImageTools =
+    !!currentAsset && !isCurrentVideoAsset && !isListMode && isSingleFullImageUnit;
   const canUseNativeInteraction = canUseImageTools && !isColorPicker && !isPenMode;
   const isNativeInteractionMode = canUseNativeInteraction && isMetaNativeMode;
   const markerDialogPlaybackRef = useRef<{ time: number; wasPlaying: boolean } | null>(null);
-  const canUseZoom = !!currentAsset && !isListMode;
+  const canUseZoom = !!currentAsset && !isListMode && isSingleFullImageUnit;
   const canUseZoomInteraction = canUseZoom && !isColorPicker && !isPenMode;
   const getZoomMediaElement = useCallback(
     () => imageCarouselRef.current?.getCurrentZoomMediaElement() || null,
@@ -415,10 +738,12 @@ export default function StackViewer({
       const item = page.stacks?.[withinPageIndex];
       if (!item) return;
 
-      // Build a local window for cross-stack neighbors from the fetched page
-      const pageIds = (page.stacks || [])
-        .map((s: any) => (typeof s.id === 'string' ? Number.parseInt(s.id, 10) : (s.id as number)))
-        .reverse();
+      // Build a local window for cross-stack neighbors in the same order as the grid list.
+      const pageIds = (page.stacks || []).map((pageStack: Stack) =>
+        typeof pageStack.id === 'string'
+          ? Number.parseInt(pageStack.id, 10)
+          : (pageStack.id as number)
+      );
       const targetId =
         typeof item.id === 'string' ? Number.parseInt(item.id, 10) : (item.id as number);
       const token = state.listToken || (state.ctx?.token ?? '');
@@ -552,6 +877,60 @@ export default function StackViewer({
     closeViewerContextMenu();
     void handleDownloadCurrentVideoFrame();
   }, [closeViewerContextMenu, handleDownloadCurrentVideoFrame]);
+  const handleContextMenuSetThumbnailSource = useCallback(async () => {
+    if (!stack || !currentAsset) return;
+    closeViewerContextMenu();
+
+    const numericStackId = toPositiveNumericId(stack.id);
+    const numericAssetId = toPositiveNumericId(currentAsset.id);
+    if (numericStackId === null || numericAssetId === null) {
+      addNotification({ type: 'error', message: t.viewer.thumbnailSourceSaveFailed });
+      return;
+    }
+
+    const carousel = imageCarouselRef.current;
+    const isVideo = isVideoAsset(currentAsset);
+    const currentTime = isVideo ? Number(carousel?.getCurrentTime() ?? 0) : undefined;
+    const playback =
+      isVideo && carousel?.isCurrentVideo()
+        ? { time: Number(currentTime ?? 0) || 0, wasPlaying: carousel.getIsPlaying() }
+        : null;
+
+    try {
+      await apiClient.setStackThumbnailSource({
+        datasetId,
+        stackId: numericStackId,
+        assetId: numericAssetId,
+        pageNumber: (currentAsset.orderInStack ?? currentPage) + 1,
+        timeSeconds: currentTime,
+      });
+      await refetch();
+      if (playback) {
+        imageCarouselRef.current?.requestRestorePlayback(playback);
+      }
+      await queryClient.invalidateQueries({ queryKey: ['stacks'] });
+      await queryClient.invalidateQueries({ queryKey: ['favorite-items', datasetId] });
+      await queryClient.invalidateQueries({ queryKey: ['dataset-overview', datasetId] });
+      addNotification({ type: 'success', message: t.viewer.thumbnailSourceSaved });
+    } catch (error) {
+      console.error('Failed to set stack thumbnail source:', error);
+      if (playback) {
+        imageCarouselRef.current?.requestRestorePlayback(playback);
+      }
+      addNotification({ type: 'error', message: t.viewer.thumbnailSourceSaveFailed });
+    }
+  }, [
+    addNotification,
+    closeViewerContextMenu,
+    currentAsset,
+    currentPage,
+    datasetId,
+    imageCarouselRef,
+    queryClient,
+    refetch,
+    stack,
+    t,
+  ]);
   const handleContextMenuFindSimilar = useCallback(async () => {
     if (!stack) return;
     closeViewerContextMenu();
@@ -861,12 +1240,10 @@ export default function StackViewer({
       }
       switch (e.key) {
         case 'ArrowLeft':
-          if (stack && currentPage < stack.assets.length - 1) setCurrentPage((p) => p + 1);
-          else if (mediaType !== 'comic') onLeftTap();
+          handleLeftTap();
           break;
         case 'ArrowRight':
-          if (currentPage > 0) setCurrentPage((p) => p - 1);
-          else if (mediaType !== 'comic') onRightTap();
+          handleRightTap();
           break;
         case 'Escape':
           navigateBack();
@@ -928,16 +1305,12 @@ export default function StackViewer({
       window.removeEventListener('dragend', handleDragEnd);
     };
   }, [
-    currentPage,
-    stack,
     navigateBack,
     isInfoSidebarOpen,
     setIsInfoSidebarOpen,
     setIsListMode,
-    onLeftTap,
-    onRightTap,
-    mediaType,
-    setCurrentPage,
+    handleLeftTap,
+    handleRightTap,
     handleShuffle,
     isColorPicker,
     canUseImageTools,
@@ -962,10 +1335,13 @@ export default function StackViewer({
   }, [uploadNotifications, refetch]);
 
   // Drop to add assets
-  const handleFileDrop = (files: File[]) => {
-    if (!stack) return;
-    addFilesToQueue({ files, type: 'add-to-stack', stackId: Number(stack.id) });
-  };
+  const handleFileDrop = useCallback(
+    (files: File[]) => {
+      if (!stack) return;
+      addFilesToQueue({ files, type: 'add-to-stack', stackId: Number(stack.id) });
+    },
+    [addFilesToQueue, stack]
+  );
 
   const handleUrlDrop = useCallback(
     async (urls: string[]) => {
@@ -1035,6 +1411,7 @@ export default function StackViewer({
     [stack, addNotification, refetch, queryClient, datasetId, t]
   );
 
+  const gestureState = useMemo(() => ({ translateX: 0, translateY: 0, scale: 1, opacity: 1 }), []);
   if (isLoading) {
     return (
       <div className="fixed inset-0 bg-black flex items-center justify-center">
@@ -1059,7 +1436,6 @@ export default function StackViewer({
     );
   }
 
-  const gestureState = { translateX: 0, translateY: 0, scale: 1, opacity: 1 };
   const isGesturing = false;
 
   return (
@@ -1108,8 +1484,8 @@ export default function StackViewer({
         <div
           className={cn(
             'stack-content fixed top-14 bottom-0 transition-all duration-300 ease-in-out',
-            sidebarOpen ? 'left-80' : 'left-0',
-            isInfoSidebarOpen ? 'right-80' : 'right-0'
+            sidebarPushesContent ? 'left-80' : 'left-0',
+            infoSidebarPushesContent ? 'right-80' : 'right-0'
           )}
         >
           {!isListMode ? (
@@ -1121,24 +1497,52 @@ export default function StackViewer({
               }}
               {...(isNativeInteractionMode ? {} : viewerContextMenuTriggerProps)}
             >
+              {hasMultipleAssets && (
+                <>
+                  <div
+                    className="absolute inset-x-0 top-0 z-30 h-16"
+                    onPointerEnter={(event) => {
+                      if (event.pointerType === 'mouse') showPageSeekBar();
+                    }}
+                    onPointerLeave={(event) => {
+                      if (event.pointerType === 'mouse') scheduleHidePageSeekBar();
+                    }}
+                  />
+                  <ComicPageSeekBar
+                    currentIndex={displayedCurrentPage}
+                    total={readingUnits.length}
+                    openingDirection={readingSettings.openingDirection}
+                    bookmarkIndexes={bookmarkUnitIndexes}
+                    visible={isPageSeekBarVisible}
+                    onHoverStart={showPageSeekBar}
+                    onHoverEnd={scheduleHidePageSeekBar}
+                    onSeek={handlePageSeek}
+                  />
+                </>
+              )}
               <ImageCarousel
                 ref={imageCarouselRef}
                 currentAsset={currentAsset}
                 nextAsset={nextAsset}
                 prevAsset={prevAsset}
+                currentUnit={interactionCurrentUnit}
+                nextUnit={nextUnit}
+                prevUnit={prevUnit}
+                nextStackNeighborSide={nextStackNeighborSide}
+                prevStackNeighborSide={prevStackNeighborSide}
+                openingDirection={readingSettings.openingDirection}
                 markers={getMarkersFor(currentAsset)}
                 onEditMarkerRequest={openMarkerEditor}
                 onMoveMarkerRequest={handleMoveMarker}
                 onDeleteMarkerRequest={handleDeleteMarker}
                 onChangeMarkerColorRequest={handleChangeMarkerColor}
                 gestureTransform={gestureState}
-                translateX={dragOffset}
                 nativeDragEnabled={isNativeInteractionMode}
                 zoomTransform={zoomTransform}
                 uiInsets={{
                   top: 56,
-                  left: sidebarOpen ? 320 : 0,
-                  right: isInfoSidebarOpen ? 320 : 0,
+                  left: sidebarLeftInset,
+                  right: infoSidebarRightInset,
                 }}
                 className="w-full h-full"
               />
@@ -1147,16 +1551,14 @@ export default function StackViewer({
                 // Leave safe area at bottom so toolbar remains clickable
                 contentArea={{
                   top: 14,
-                  left: sidebarOpen ? 320 : 0,
-                  right: isInfoSidebarOpen ? 320 : 0,
+                  left: sidebarLeftInset,
+                  right: infoSidebarRightInset,
                   bottom: 96,
                 }}
                 disableDrag={isZoomed || isColorPicker || isPenMode || isNativeInteractionMode}
                 isZoomed={isZoomed}
-                canGoLeft={stack ? currentPage < stack.assets.length - 1 : false}
-                canGoRight={stack ? currentPage > 0 : false}
-                onLeftTap={onLeftTap}
-                onRightTap={onRightTap}
+                onLeftTap={handleLeftTap}
+                onRightTap={handleRightTap}
                 onWheelZoom={
                   canUseZoomInteraction && !isViewerContextMenuOpen ? zoomWithWheel : undefined
                 }
@@ -1173,22 +1575,29 @@ export default function StackViewer({
                 onDoubleTap={isZoomed ? resetZoom : undefined}
                 onContextMenuCancelRequest={handleContextMenuCancelRequest}
                 onCenterTap={() => {
+                  hideEdgeAffordance();
                   // Move無しのクリック/タップ: 動画なら再生/停止をトグル
                   const carousel = imageCarouselRef.current;
                   if (carousel?.isCurrentVideo()) {
                     carousel.toggleVideo();
+                  } else {
+                    showPageSeekBar();
                   }
                 }}
                 onDrag={(dx) => {
                   if (isZoomed) return;
+                  hidePageSeekBar();
+                  hideEdgeAffordance();
                   onDrag(dx);
                 }}
                 onDragEnd={(dx, velocity) => {
                   if (isZoomed) return;
+                  hidePageSeekBar();
                   onDragEnd(dx, velocity);
                 }}
                 onVerticalDrag={(deltaY, progress) => {
                   if (isZoomed) return;
+                  hidePageSeekBar();
                   if (!imageCarouselRef.current) return;
                   // Default vertical dismiss behavior
                   verticalAnimRef.current && cancelAnimationFrame(verticalAnimRef.current);
@@ -1268,13 +1677,26 @@ export default function StackViewer({
                   }
                 }}
               />
+              {hasMultipleAssets && (
+                <EdgeNavigationAffordance
+                  leftKind={displayedLeftEdgeKind}
+                  rightKind={displayedRightEdgeKind}
+                  active={!isEdgeAffordanceSuppressed}
+                  resetKey={edgeAffordanceResetKey}
+                  attentionSide={edgeAttention?.side ?? null}
+                  attentionToken={edgeAttention?.token ?? 0}
+                  hidden={isZoomed || isColorPicker || isPenMode}
+                  onEntered={handleEdgeAffordanceEntered}
+                />
+              )}
             </div>
           ) : (
             <AssetGrid
               assets={isReorderMode && pendingOrder ? pendingOrder : stack.assets}
-              currentPage={currentPage}
+              currentPage={currentAssetIndex}
               onSelectPage={(page) => {
-                setCurrentPage(page);
+                setEdgeBoundaryArmedSide(null);
+                setCurrentPage(readingModel.assetIndexToUnitIndex.get(page) ?? page);
                 setIsListMode(false);
               }}
               // Reorder mode decoupled from Info panel; we allow reordering only in explicit mode
@@ -1353,7 +1775,7 @@ export default function StackViewer({
           {isViewerContextMenuOpen && !isListMode && (
             <div
               ref={viewerContextMenuRef}
-              className="fixed z-50 w-48 overflow-hidden rounded-md border border-gray-200 bg-white p-1 text-gray-700 shadow-md"
+              className="fixed z-50 w-60 overflow-hidden rounded-md border border-gray-200 bg-white p-1 text-gray-700 shadow-md"
               style={{
                 left: viewerContextMenuPosition.x,
                 top: viewerContextMenuPosition.y,
@@ -1387,6 +1809,17 @@ export default function StackViewer({
                 >
                   <Download className="w-4 h-4 mr-2" />
                   {t.viewer.downloadFrame}
+                </button>
+              )}
+              {currentAsset && (
+                <button
+                  type="button"
+                  className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-left text-[13px] outline-none transition-colors hover:bg-gray-100 hover:text-gray-700"
+                  onClick={() => void handleContextMenuSetThumbnailSource()}
+                  role="menuitem"
+                >
+                  <ImagePlus className="w-4 h-4 mr-2" />
+                  {isCurrentVideoAsset ? t.viewer.useFrameAsThumbnail : t.viewer.usePageAsThumbnail}
                 </button>
               )}
               <button
@@ -1429,21 +1862,30 @@ export default function StackViewer({
             </div>
           )}
 
-          <StackPageIndicator
-            currentPage={currentPage}
-            totalPages={stack.assets.length}
-            isGesturing={isGesturing}
-          />
-
           <StackToolbar
             stack={stack}
             isListMode={isListMode}
             isGesturing={isGesturing}
             isCurrentAssetFavorited={Boolean(currentAsset?.favorited ?? currentAsset?.isFavorite)}
             onStackFavoriteToggle={handleFavoriteToggle}
-            onAssetFavoriteToggle={handleAssetFavoriteToggle}
-            onLikeToggle={handleLikeToggle}
+            onAssetFavoriteToggle={handleCurrentAssetFavoriteToggle}
+            onLikeToggle={handleCurrentLikeToggle}
             onListModeToggle={() => setIsListMode((prev) => !prev)}
+            displayMode={effectiveComicDisplayMode}
+            onDisplayModeToggle={
+              mediaType === 'video' || !hasMultipleAssets || !readingSettings.spreadDisplayEnabled
+                ? undefined
+                : handleDisplayModeToggle
+            }
+            leadingAction={
+              <FloatingUploadAction
+                variant="toolbar"
+                onFiles={handleFileDrop}
+                onUrls={handleUrlDrop}
+                disabled={isReorderMode || isPenMode || isNativeInteractionMode}
+                closeOnOutsidePointerDown
+              />
+            }
           />
         </div>
       </div>
@@ -1451,8 +1893,8 @@ export default function StackViewer({
       {/* Pen overlay (draws above content, below header) */}
       {isPenMode && (
         <PenOverlay
-          leftInset={sidebarOpen ? 320 : 0}
-          rightInset={isInfoSidebarOpen ? 320 : 0}
+          leftInset={sidebarLeftInset}
+          rightInset={infoSidebarRightInset}
           topInset={56}
           docKey={`${datasetId}:${stackId}:${currentAsset?.id ?? 'na'}`}
           getImageEl={() => imageCarouselRef.current?.getCurrentImageElement() || null}

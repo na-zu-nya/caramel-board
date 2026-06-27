@@ -53,6 +53,9 @@ const meta: Meta<typeof StackGridItem> = {
     onCreateCollectionWithStacks: async (stackIds) => {
       console.log('create collection with stacks', stackIds);
     },
+    onRefreshStacks: async (stackIds) => {
+      console.log('refresh stacks', stackIds);
+    },
   },
 };
 

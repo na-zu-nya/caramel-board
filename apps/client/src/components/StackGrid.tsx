@@ -6,13 +6,16 @@ import { createPortal } from 'react-dom';
 import { StackGridItem } from '@/components/grid/StackGridItem.tsx';
 import { FolderDropDialog } from '@/components/modals/FolderDropDialog.tsx';
 import { DropZone } from '@/components/ui/DropZone';
+import { FloatingUploadAction } from '@/components/ui/FloatingUploadAction';
 import { GridColumnSlider } from '@/components/ui/GridColumnSlider';
 import { HeaderIconButton } from '@/components/ui/Header/HeaderIconButton';
 import { SelectionActionBar } from '@/components/ui/selection-action-bar';
 import { useStackGrid } from '@/hooks/features/useStackGrid';
 import { useScratch } from '@/hooks/useScratch';
+import { useRightPanelPushesContent, useSidebarPushesContent } from '@/hooks/useSidebarLayoutMode';
 import { useStackCollectionMenu } from '@/hooks/useStackCollectionMenu';
 import { apiClient } from '@/lib/api-client';
+import { downloadStackOriginals } from '@/lib/download-originals';
 import {
   type FolderGroup,
   type FolderUploadDefaults,
@@ -30,10 +33,9 @@ import { currentFilterAtom, reorderModeAtom, selectionModeAtom } from '@/stores/
 import {
   addFilesToQueueAtom,
   addUploadNotificationAtom,
-  uploadDefaultsAtom,
   uploadNotificationsAtom,
 } from '@/stores/upload';
-import type { Dataset, MediaGridItem } from '@/types';
+import type { Dataset, MediaCategory, MediaGridItem } from '@/types';
 import BulkEditPanel from './BulkEditPanel.tsx';
 
 interface StackGridProps {
@@ -59,6 +61,7 @@ interface StackGridProps {
   onItemClick?: (item: MediaGridItem) => void;
   className?: string;
   allowRemoveFromCollection?: boolean;
+  uploadMediaCategory?: MediaCategory;
   // Scratch support
   allowRemoveFromScratch?: boolean;
   scratchCollectionId?: string | number;
@@ -70,6 +73,8 @@ interface FolderImportRequest {
   files: File[];
   defaults: FolderUploadDefaults;
 }
+
+const EMPTY_SELECTED_STACK_IDS: number[] = [];
 
 export default function StackGrid({
   // Legacy mode props
@@ -89,6 +94,7 @@ export default function StackGrid({
   className,
   useWindowScroll = true,
   allowRemoveFromCollection = false,
+  uploadMediaCategory,
   allowRemoveFromScratch = false,
   scratchCollectionId,
 }: StackGridProps) {
@@ -96,7 +102,7 @@ export default function StackGrid({
   const queryClient = useQueryClient();
   const currentFilter = useAtomValue(currentFilterAtom);
   const dsId = dataset?.id ? String(dataset.id) : String((currentFilter as any)?.datasetId || '1');
-  const { scratch } = useScratch(dsId);
+  const { scratch, ensureScratch } = useScratch(dsId);
   const {
     collections: collectionMenuCollections,
     isLoadingCollections: isCollectionMenuLoading,
@@ -107,7 +113,6 @@ export default function StackGrid({
   const setSelectionMode = useSetAtom(selectionModeAtom);
   const reorderMode = useAtomValue(reorderModeAtom);
   const addFilesToQueue = useSetAtom(addFilesToQueueAtom);
-  const setUploadDefaults = useSetAtom(uploadDefaultsAtom);
   const addNotification = useSetAtom(addUploadNotificationAtom);
   const uploadNotifications = useAtomValue(uploadNotificationsAtom);
 
@@ -143,7 +148,7 @@ export default function StackGrid({
         ? currentFilter.authors[0]
         : undefined;
 
-    let targetMediaType = currentFilter.mediaType || undefined;
+    let targetMediaType = uploadMediaCategory ?? currentFilter.mediaCategory ?? undefined;
     const collectionMatch = window.location.pathname.match(/(?:collections|scratch)\/(\d+)/);
     const inCollectionView = Boolean(collectionMatch);
     const collectionId = collectionMatch ? Number.parseInt(collectionMatch[1], 10) : undefined;
@@ -158,7 +163,7 @@ export default function StackGrid({
       author: currentAuthor,
       collectionId,
     };
-  }, [currentFilter, dataset?.id, dsId, dataset]);
+  }, [currentFilter, dataset?.id, dsId, dataset, uploadMediaCategory]);
 
   // While this grid is mounted, stabilize body scrollbar gutter for contextmenu reflows
   useEffect(() => {
@@ -215,6 +220,9 @@ export default function StackGrid({
 
   // Use external containerRef if provided, otherwise use internal
   const containerRef = externalContainerRef || internalContainerRef;
+  const sidebarPushesContent = useSidebarPushesContent(sidebarOpen);
+  const rightPanelOpen = infoSidebarOpen || isEditPanelOpen;
+  const rightPanelPushesContent = useRightPanelPushesContent(rightPanelOpen);
 
   // Wrap handleItemClick with onItemClick parameter
   const lastClickedIndexRef = useRef<number | null>(null);
@@ -293,8 +301,14 @@ export default function StackGrid({
   );
 
   const selectedStackIdsInOrder = useMemo(() => {
+    if (selectedItemOrder.length === 0) return EMPTY_SELECTED_STACK_IDS;
     return getSelectedMediaGridStackIds(selectedItemOrder, actualItems);
   }, [actualItems, selectedItemOrder]);
+  const selectedActionStackIds = useMemo(
+    () =>
+      selectedStackIdsInOrder.length > 0 ? selectedStackIdsInOrder : Array.from(selectedItems),
+    [selectedItems, selectedStackIdsInOrder]
+  );
 
   // Track processed notification IDs to avoid duplicate refreshes
   const processedNotificationIds = useRef<Set<string>>(new Set());
@@ -402,68 +416,124 @@ export default function StackGrid({
     };
   }, []);
 
-  // Handle remove from collection
-  const handleRemoveFromCollection = async (itemIds: (string | number)[]) => {
-    try {
-      console.log('Removing from collection:', itemIds);
-      // Retrieve collection ID from current route
-      const collectionId = window.location.pathname.match(/collections\/(\d+)/)?.[1];
+  const handleRemoveFromCollection = useCallback(
+    async (itemIds: (string | number)[]) => {
+      try {
+        console.log('Removing from collection:', itemIds);
+        // Retrieve collection ID from current route
+        const collectionId = window.location.pathname.match(/collections\/(\d+)/)?.[1];
 
-      if (!collectionId) {
-        console.error('Collection ID not found');
-        return;
-      }
-
-      for (const itemId of itemIds) {
-        const stackId = typeof itemId === 'string' ? Number.parseInt(itemId, 10) : itemId;
-        await apiClient.removeStackFromCollection(collectionId, stackId);
-      }
-
-      // Clear selection and exit selection mode after successful removal
-      selectedItems.clear();
-      setSelectionMode(false);
-
-      // Refresh the data
-      console.log('🔄 Refreshing after collection removal...');
-      if (onRefreshAll) {
-        await onRefreshAll();
-        // Reload current view
-        if (onLoadRange && rangeStart !== undefined) {
-          const endIndex = Math.min(rangeStart + 100, actualTotal - itemIds.length);
-          console.log(`📥 Reloading after collection removal (${rangeStart} to ${endIndex})`);
-          onLoadRange(rangeStart, endIndex);
+        if (!collectionId) {
+          console.error('Collection ID not found');
+          return;
         }
-      } else {
-        void queryClient.invalidateQueries({ queryKey: ['stacks'] });
-      }
 
-      if (scratch && String(collectionId) === String(scratch.id)) {
+        for (const itemId of itemIds) {
+          const stackId = typeof itemId === 'string' ? Number.parseInt(itemId, 10) : itemId;
+          await apiClient.removeStackFromCollection(collectionId, stackId);
+        }
+
+        // Clear selection and exit selection mode after successful removal
+        clearSelection();
+        exitSelectionMode();
+
+        // Refresh the data
+        console.log('🔄 Refreshing after collection removal...');
+        if (onRefreshAll) {
+          await onRefreshAll();
+          // Reload current view
+          if (onLoadRange && rangeStart !== undefined) {
+            const endIndex = Math.min(rangeStart + 100, actualTotal - itemIds.length);
+            console.log(`📥 Reloading after collection removal (${rangeStart} to ${endIndex})`);
+            onLoadRange(rangeStart, endIndex);
+          }
+        } else {
+          void queryClient.invalidateQueries({ queryKey: ['stacks'] });
+        }
+
+        if (scratch && String(collectionId) === String(scratch.id)) {
+          await queryClient.invalidateQueries({ queryKey: ['library-counts', dsId] });
+        }
+
+        console.log('✅ Items removed from collection successfully');
+      } catch (error) {
+        console.error('❌ Failed to remove from collection:', error);
+      }
+    },
+    [
+      actualTotal,
+      clearSelection,
+      dsId,
+      exitSelectionMode,
+      onLoadRange,
+      onRefreshAll,
+      queryClient,
+      rangeStart,
+      scratch,
+    ]
+  );
+
+  const handleRemoveFromScratch = useCallback(
+    async (itemIds: (string | number)[]) => {
+      try {
+        const collectionId =
+          scratchCollectionId ?? window.location.pathname.match(/scratch\/(\d+)/)?.[1];
+        if (!collectionId) return;
+
+        for (const id of itemIds) {
+          const stackId = typeof id === 'string' ? Number.parseInt(id, 10) : id;
+          await apiClient.removeStackFromCollection(collectionId, stackId);
+        }
+
+        clearSelection();
+        exitSelectionMode();
+
+        if (onRefreshAll) await onRefreshAll();
+        else void queryClient.invalidateQueries({ queryKey: ['stacks'] });
         await queryClient.invalidateQueries({ queryKey: ['library-counts', dsId] });
+      } catch (error) {
+        console.error('❌ Failed to remove from scratch:', error);
       }
+    },
+    [clearSelection, dsId, exitSelectionMode, onRefreshAll, queryClient, scratchCollectionId]
+  );
 
-      console.log('✅ Items removed from collection successfully');
-    } catch (error) {
-      console.error('❌ Failed to remove from collection:', error);
-    }
-  };
+  const handleRemoveFromScratchSingle = useCallback(
+    async (id: string | number) => {
+      await handleRemoveFromScratch([id]);
+    },
+    [handleRemoveFromScratch]
+  );
 
-  // Handle remove from scratch (single)
-  const handleRemoveFromScratchSingle = async (id: string | number) => {
-    try {
-      const collectionId =
-        scratchCollectionId ?? window.location.pathname.match(/scratch\/(\d+)/)?.[1];
-      if (!collectionId) return;
-      const stackId = typeof id === 'string' ? Number.parseInt(id, 10) : id;
-      await apiClient.removeStackFromCollection(collectionId, stackId);
-      if (onRefreshAll) await onRefreshAll();
-      else void queryClient.invalidateQueries({ queryKey: ['stacks'] });
+  const handleAddStacksToScratch = useCallback(
+    async (ids: readonly (string | number)[]) => {
+      const scratchCollection = await ensureScratch();
+      const stackIds = ids
+        .map((id) => (typeof id === 'string' ? Number.parseInt(id, 10) : id))
+        .filter((id): id is number => Number.isFinite(id));
+
+      if (stackIds.length === 0) return;
+
+      if (stackIds.length === 1) {
+        await apiClient.addStackToCollection(scratchCollection.id, stackIds[0]);
+      } else {
+        await apiClient.bulkAddStacksToCollection(scratchCollection.id, stackIds);
+      }
+      await queryClient.invalidateQueries({ queryKey: ['stacks'] });
       await queryClient.invalidateQueries({ queryKey: ['library-counts', dsId] });
-    } catch (error) {
-      console.error('❌ Failed to remove from scratch:', error);
-    }
-  };
+      await queryClient.refetchQueries({ queryKey: ['library-counts', dsId] });
+    },
+    [dsId, ensureScratch, queryClient]
+  );
 
-  const handleRefreshThumbnails = useCallback(
+  const handleAddStackToScratch = useCallback(
+    async (id: string | number) => {
+      await handleAddStacksToScratch([id]);
+    },
+    [handleAddStacksToScratch]
+  );
+
+  const handleRefreshStacks = useCallback(
     async (itemIds: (string | number)[]) => {
       if (itemIds.length === 0) return;
 
@@ -471,7 +541,7 @@ export default function StackGrid({
         const stackIds = itemIds.map((id) =>
           typeof id === 'string' ? Number.parseInt(id, 10) : id
         );
-        await apiClient.bulkRefreshThumbnails(stackIds);
+        await apiClient.refreshStacks(stackIds);
 
         clearSelection();
         exitSelectionMode();
@@ -486,8 +556,8 @@ export default function StackGrid({
           void queryClient.invalidateQueries({ queryKey: ['stacks'] });
         }
       } catch (error) {
-        console.error('❌ Failed to refresh thumbnails:', error);
-        alert(t.grid.refreshThumbnailsFailed);
+        console.error('❌ Failed to refresh stacks:', error);
+        alert(t.grid.refreshFailed);
       }
     },
     [
@@ -501,47 +571,6 @@ export default function StackGrid({
       t,
     ]
   );
-
-  const handleOptimizePreviews = useCallback(async () => {
-    if (selectedItems.size === 0) return;
-
-    const stackIds = Array.from(selectedItems).map((id) =>
-      typeof id === 'string' ? Number.parseInt(id, 10) : id
-    );
-
-    try {
-      for (const stackId of stackIds) {
-        await apiClient.regenerateStackPreview({ stackId, datasetId: dsId, force: true });
-      }
-
-      clearSelection();
-      exitSelectionMode();
-
-      if (onRefreshAll) {
-        await onRefreshAll();
-        if (onLoadRange && rangeStart !== undefined) {
-          const endIndex = Math.min(rangeStart + 100, actualTotal);
-          onLoadRange(rangeStart, endIndex);
-        }
-      } else {
-        void queryClient.invalidateQueries({ queryKey: ['stacks'] });
-      }
-    } catch (error) {
-      console.error('❌ Failed to optimize video previews:', error);
-      alert(t.grid.optimizeVideoFailed);
-    }
-  }, [
-    actualTotal,
-    clearSelection,
-    dsId,
-    exitSelectionMode,
-    onLoadRange,
-    onRefreshAll,
-    queryClient,
-    rangeStart,
-    selectedItems,
-    t,
-  ]);
 
   const handleToggleBulkEditPanel = useCallback(() => {
     if (selectedItems.size === 0) return;
@@ -658,13 +687,43 @@ export default function StackGrid({
         copy: {
           bulkEdit: t.grid.bulkEdit,
           downloadSelected: t.contextMenu.downloadSelected,
+          addToScratch: t.contextMenu.addToScratch,
+          addToCollection: t.contextMenu.addToCollection,
+          createNewCollection: t.contextMenu.createNewCollection,
+          collectionLoading: t.collection.loading,
+          noCollectionsAvailable: t.contextMenu.noCollectionsAvailable,
           mergeStacks: t.grid.mergeStacks,
-          refreshThumbnails: t.grid.refreshThumbnails,
-          optimizeVideo: t.grid.optimizeVideo,
+          refresh: t.grid.refresh,
+          removeFromCollection: t.contextMenu.removeFromCollection,
+          removeFromScratch: t.contextMenu.removeFromScratch,
           deleteStacks: t.grid.deleteStacks,
           deleteStacksConfirm: t.grid.deleteStacksConfirm,
         },
         bulkEdit: { onSelect: handleToggleBulkEditPanel },
+        downloadSelected:
+          selectedActionStackIds.length > 0
+            ? {
+                onSelect: () => downloadStackOriginals(dsId, selectedActionStackIds),
+              }
+            : undefined,
+        addToScratch:
+          selectedActionStackIds.length > 0
+            ? {
+                onSelect: () => {
+                  void handleAddStacksToScratch(selectedActionStackIds);
+                },
+              }
+            : undefined,
+        collectionMenu:
+          selectedActionStackIds.length > 0
+            ? {
+                collections: collectionMenuCollections,
+                isLoading: isCollectionMenuLoading,
+                onCreateCollection: () => openCreateCollectionForStackIds(selectedActionStackIds),
+                onAddToCollection: (collectionId) =>
+                  addStackIdsToCollection(collectionId, selectedActionStackIds),
+              }
+            : undefined,
         mergeStacks:
           selectedStackIdsInOrder.length >= 2
             ? {
@@ -675,22 +734,47 @@ export default function StackGrid({
                 ),
               }
             : undefined,
-        refreshThumbnails: {
-          onSelect: () => handleRefreshThumbnails(Array.from(selectedItems)),
+        refresh: {
+          onSelect: () => handleRefreshStacks(selectedActionStackIds),
         },
-        optimizeVideo: { onSelect: handleOptimizePreviews },
+        removeFromCollection:
+          allowRemoveFromCollection && selectedActionStackIds.length > 0
+            ? {
+                onSelect: () => {
+                  void handleRemoveFromCollection(selectedActionStackIds);
+                },
+              }
+            : undefined,
+        removeFromScratch:
+          allowRemoveFromScratch && selectedActionStackIds.length > 0
+            ? {
+                onSelect: () => {
+                  void handleRemoveFromScratch(selectedActionStackIds);
+                },
+              }
+            : undefined,
         deleteStacks: {
-          onSelect: () => handleRemoveStacks(Array.from(selectedItems)),
+          onSelect: () => handleRemoveStacks(selectedActionStackIds),
         },
       }),
     [
+      addStackIdsToCollection,
+      allowRemoveFromCollection,
+      allowRemoveFromScratch,
+      collectionMenuCollections,
+      dsId,
+      handleAddStacksToScratch,
       handleMergeStacks,
       handleRemoveStacks,
+      handleRemoveFromCollection,
+      handleRemoveFromScratch,
       handleToggleBulkEditPanel,
-      handleRefreshThumbnails,
-      handleOptimizePreviews,
-      selectedItems,
+      handleRefreshStacks,
+      isCollectionMenuLoading,
+      openCreateCollectionForStackIds,
+      selectedActionStackIds,
       selectedStackIdsInOrder,
+      selectedItems.size,
       t,
     ]
   );
@@ -743,14 +827,11 @@ export default function StackGrid({
 
       try {
         if (mode === 'flat-upload') {
-          setUploadDefaults({
-            datasetId: defaults.datasetId,
-            mediaType: defaults.mediaType,
-            tags: defaults.tags,
-            author: defaults.author,
-            collectionId: defaults.collectionId,
+          addFilesToQueue({
+            files: activeFolder.files,
+            type: 'new-stack',
+            metadata: defaults,
           });
-          addFilesToQueue({ files: activeFolder.files, type: 'new-stack' });
           addNotification({
             type: 'success',
             message: t.upload.queuedFiles(activeFolder.files.length, activeFolder.name),
@@ -812,7 +893,6 @@ export default function StackGrid({
       addNotification,
       finalizeFolderProcessing,
       refreshAfterManualUpload,
-      setUploadDefaults,
       t,
     ]
   );
@@ -846,14 +926,7 @@ export default function StackGrid({
       const { folders, standalone } = splitFilesByTopLevelFolder(files);
 
       if (standalone.length > 0) {
-        setUploadDefaults({
-          datasetId: defaults.datasetId,
-          mediaType: defaults.mediaType,
-          tags: defaults.tags,
-          author: defaults.author,
-          collectionId: defaults.collectionId,
-        });
-        addFilesToQueue({ files: standalone, type: 'new-stack' });
+        addFilesToQueue({ files: standalone, type: 'new-stack', metadata: defaults });
       }
 
       if (folders.length > 0) {
@@ -866,7 +939,7 @@ export default function StackGrid({
         setFolderQueue((prev) => [...prev, ...requests]);
       }
     },
-    [addFilesToQueue, addNotification, computeUploadDefaults, setUploadDefaults, t]
+    [addFilesToQueue, addNotification, computeUploadDefaults, t]
   );
 
   const handleUrlDrop = useCallback(
@@ -884,7 +957,7 @@ export default function StackGrid({
           ? currentFilter.authors[0]
           : undefined;
 
-      let targetMediaType = currentFilter.mediaType || undefined;
+      let targetMediaType = uploadMediaCategory ?? currentFilter.mediaCategory ?? undefined;
       const collectionMatch = window.location.pathname.match(/(?:collections|scratch)\/(\d+)/);
       const inCollectionView = Boolean(collectionMatch);
       const collectionId = collectionMatch ? Number.parseInt(collectionMatch[1], 10) : undefined;
@@ -951,7 +1024,7 @@ export default function StackGrid({
         addNotification({ type: 'error', message: t.grid.urlUploadFailed });
       }
     },
-    [dataset?.id, dsId, currentFilter, addNotification, t]
+    [dataset?.id, dsId, currentFilter, uploadMediaCategory, addNotification, t]
   );
 
   // Show loading only for absolute initial load (when no items exist and no total count)
@@ -984,8 +1057,8 @@ export default function StackGrid({
       className="min-h-screen"
       overlayClassName={cn(
         'fixed z-50 pointer-events-none',
-        sidebarOpen ? 'left-80' : 'left-0',
-        infoSidebarOpen || isEditPanelOpen ? 'right-80' : 'right-0',
+        sidebarPushesContent ? 'left-80' : 'left-0',
+        rightPanelPushesContent ? 'right-80' : 'right-0',
         'top-14 bottom-0' // Exclude header height
       )}
     >
@@ -994,7 +1067,7 @@ export default function StackGrid({
         className={cn(
           'relative transition-all duration-300 ease-in-out bg-gray-50',
           // 右側の情報パネル分の余白のみ確保（左は__rootで調整）
-          infoSidebarOpen || isEditPanelOpen ? 'mr-80' : 'mr-0',
+          rightPanelPushesContent ? 'mr-80' : 'mr-0',
           className
         )}
         style={{ minHeight: '100vh' }}
@@ -1049,6 +1122,7 @@ export default function StackGrid({
                   isSelectionMode={isSelectionMode}
                   isFavoritePending={favoriteStates.has(item.id)}
                   overrideFavorited={favoriteOverrides.get(item.id)}
+                  datasetId={dsId}
                   selectedItems={selectedItems}
                   onItemClick={onTileClick}
                   onToggleSelection={handleToggleSelection}
@@ -1057,17 +1131,26 @@ export default function StackGrid({
                   selectedStackIdsInOrder={selectedStackIdsInOrder}
                   onBulkEditSelected={handleToggleBulkEditPanel}
                   onMergeStacks={handleMergeStacks}
+                  onRefreshStacks={handleRefreshStacks}
                   onRemoveSelectedStacks={handleRemoveStacks}
                   collectionMenuCollections={collectionMenuCollections}
                   isCollectionMenuLoading={isCollectionMenuLoading}
                   onAddStacksToCollection={addStackIdsToCollection}
                   onCreateCollectionWithStacks={openCreateCollectionForStackIds}
+                  onAddToScratch={handleAddStackToScratch}
+                  onAddStacksToScratch={handleAddStacksToScratch}
                   onRemoveFromCollection={
                     allowRemoveFromCollection ? (id) => handleRemoveFromCollection([id]) : undefined
+                  }
+                  onRemoveStacksFromCollection={
+                    allowRemoveFromCollection ? handleRemoveFromCollection : undefined
                   }
                   allowRemoveFromScratch={allowRemoveFromScratch}
                   onRemoveFromScratch={
                     allowRemoveFromScratch ? handleRemoveFromScratchSingle : undefined
+                  }
+                  onRemoveStacksFromScratch={
+                    allowRemoveFromScratch ? handleRemoveFromScratch : undefined
                   }
                 />
               );
@@ -1129,19 +1212,31 @@ export default function StackGrid({
         selectedCount={selectedItems.size}
         onClearSelection={clearSelection}
         onExitSelectionMode={exitSelectionMode}
-        onRemoveFromCollection={
-          allowRemoveFromCollection
-            ? () => handleRemoveFromCollection(Array.from(selectedItems))
-            : undefined
-        }
-        showRemoveFromCollection={allowRemoveFromCollection}
         actions={selectionActions}
       />
+
+      {!isSelectionMode &&
+        !reorderMode &&
+        (!sidebarOpen || sidebarPushesContent) &&
+        (!rightPanelOpen || rightPanelPushesContent) && (
+          <FloatingUploadAction
+            className={cn(
+              'coarse-pointer-only list-upload-action fixed z-[70]',
+              sidebarPushesContent
+                ? 'list-upload-action--sidebar-open'
+                : 'list-upload-action--default',
+              rightPanelPushesContent && 'list-upload-action--right-panel-open',
+              sidebarOpen && rightPanelPushesContent && 'list-upload-action--sidebar-and-panel-open'
+            )}
+            onFiles={handleFileDrop}
+            onUrls={handleUrlDrop}
+          />
+        )}
 
       {createPortal(
         <GridColumnSlider
           value={itemsPerRow}
-          className={cn(infoSidebarOpen || isEditPanelOpen ? 'right-[21.25rem]' : 'right-5')}
+          className={cn(rightPanelPushesContent ? 'right-[21.25rem]' : 'right-5')}
           onChange={setGridColumns}
         />,
         document.body

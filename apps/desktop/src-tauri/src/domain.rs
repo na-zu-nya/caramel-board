@@ -31,16 +31,10 @@ struct AppSettings {
     basic_auth_enabled: bool,
     basic_auth_username: String,
     basic_auth_password: String,
-    #[serde(default = "default_docker_database_url")]
-    docker_database_url: String,
-    #[serde(default)]
-    docker_storage_root: String,
-    #[serde(default)]
-    docker_dataset_id: String,
-    #[serde(default)]
-    docker_verify_files: bool,
     #[serde(default)]
     auto_tag_enabled: bool,
+    #[serde(default = "default_auto_tag_use_gpu")]
+    auto_tag_use_gpu: bool,
     #[serde(default = "default_auto_tag_port")]
     auto_tag_port: u16,
     #[serde(default)]
@@ -71,41 +65,11 @@ struct DataStoreInspection {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct DockerStorageResolution {
-    resolved: String,
-    adjusted: bool,
-    matched: bool,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
 struct SidecarStatus {
     running: bool,
     url: String,
     pid: Option<u32>,
     started_at: Option<u64>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct MigrationResult {
-    export_dir: String,
-    db_path: String,
-    stdout: String,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct DockerMigrationProgress {
-    running: bool,
-    completed: bool,
-    phase: String,
-    message: String,
-    percent: f64,
-    last_log: String,
-    export_dir: Option<String>,
-    db_path: Option<String>,
-    error: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -146,27 +110,6 @@ struct StandaloneMigrationProgress {
     error: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct DockerDatasetSummary {
-    id: i64,
-    name: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct DockerSourceDetection {
-    available: bool,
-    database_url: String,
-    storage_root: String,
-    storage_root_exists: bool,
-    dataset_count: u64,
-    stack_count: u64,
-    asset_count: u64,
-    datasets: Vec<DockerDatasetSummary>,
-    message: String,
-}
-
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct AutoTagStatus {
@@ -180,6 +123,9 @@ struct AutoTagStatus {
     repository_ready: bool,
     model_ready: bool,
     ready: bool,
+    gpu_available: bool,
+    gpu_preference_supported: bool,
+    runtime_mode: String,
     message: String,
 }
 
@@ -231,22 +177,6 @@ impl Default for AutoTagInstallProgress {
     }
 }
 
-impl Default for DockerMigrationProgress {
-    fn default() -> Self {
-        Self {
-            running: false,
-            completed: false,
-            phase: String::from("idle"),
-            message: String::new(),
-            percent: 0.0,
-            last_log: String::new(),
-            export_dir: None,
-            db_path: None,
-            error: None,
-        }
-    }
-}
-
 impl Default for StandaloneMigrationProgress {
     fn default() -> Self {
         Self {
@@ -268,7 +198,6 @@ struct ManagedSidecar {
     child: Option<Child>,
     auto_tag_child: Option<Child>,
     auto_tag_install: AutoTagInstallProgress,
-    docker_migration: DockerMigrationProgress,
     standalone_migration: StandaloneMigrationProgress,
     settings: Option<AppSettings>,
     started_at: Option<u64>,

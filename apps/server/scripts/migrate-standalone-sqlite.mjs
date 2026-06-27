@@ -33,7 +33,7 @@ const mode = getArgValue('mode') ?? 'status';
 const appVersion = getArgValue('app-version') ?? process.env.CARAMEL_APP_VERSION ?? null;
 const migrationsDir = path.resolve(
   resolveUserPath(
-    getArgValue('migrations') ?? path.join(serverRoot, 'prisma', 'standalone', 'migrations')
+    getArgValue('migrations') ?? path.join(serverRoot, 'sqlite', 'migrations')
   )
 );
 const useJsonLines = hasFlag('json-lines');

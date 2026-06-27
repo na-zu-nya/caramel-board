@@ -1,6 +1,9 @@
 import { useCallback, useState } from 'react';
+import { useRightPanelLayoutMode, useSidebarLayoutMode } from './useSidebarLayoutMode';
 
 export function useGridDimensions() {
+  const { isFloating: sidebarIsFloating } = useSidebarLayoutMode();
+  const { isFloating: rightPanelIsFloating } = useRightPanelLayoutMode();
   const [itemSize, setItemSize] = useState(200); // Default item size in pixels
   const [columnsPerRow, setColumnsPerRow] = useState(5);
 
@@ -14,7 +17,6 @@ export function useGridDimensions() {
       if (isAnimating) {
         return;
       }
-      console.log('update calculateGridDimensions');
 
       // Use full viewport width for consistent column calculation
       // regardless of sidebar/panel states
@@ -29,14 +31,14 @@ export function useGridDimensions() {
       // but maintain the column count from full viewport
       const containerWidth =
         fullViewportWidth -
-        (sidebarOpen ? 320 : 0) -
-        (infoSidebarOpen || isSelectionMode ? 320 : 0);
+        (sidebarOpen && !sidebarIsFloating ? 320 : 0) -
+        ((infoSidebarOpen || isSelectionMode) && !rightPanelIsFloating ? 320 : 0);
       const actualItemSize = containerWidth / calculatedColumns;
 
       setItemSize(actualItemSize);
       setColumnsPerRow(calculatedColumns);
     },
-    []
+    [rightPanelIsFloating, sidebarIsFloating]
   );
 
   return {

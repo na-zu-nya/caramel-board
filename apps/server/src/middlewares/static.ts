@@ -64,7 +64,9 @@ export const staticServer = factory.createMiddleware(async (c, next) => {
     )[ext] ?? 'application/octet-stream';
 
   const body =
-    ext === '.html' ? injectRuntimeConfig(fs.readFileSync(file, 'utf-8')) : fs.readFileSync(file);
+    ext === '.html'
+      ? injectRuntimeConfig(fs.readFileSync(file, 'utf-8'))
+      : new Blob([new Uint8Array(fs.readFileSync(file))]);
 
   return new Response(body, {
     headers: {

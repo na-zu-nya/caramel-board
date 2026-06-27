@@ -88,7 +88,13 @@ function FavoritesPage() {
     const items = favoriteItems?.stacks ?? [];
     const search = currentFilter.search?.trim().toLowerCase();
     const filtered = items.filter((item) => {
-      if (currentFilter.mediaType && item.mediaType !== currentFilter.mediaType) return false;
+      if (currentFilter.mediaCategory && item.mediaType !== currentFilter.mediaCategory)
+        return false;
+      if (
+        currentFilter.mediaTypes?.length &&
+        (!item.actualMediaType || !currentFilter.mediaTypes.includes(item.actualMediaType))
+      )
+        return false;
       if (
         search &&
         !String(item.name ?? '')
@@ -124,7 +130,13 @@ function FavoritesPage() {
           );
       }
     });
-  }, [currentFilter.mediaType, currentFilter.search, currentSort, favoriteItems?.stacks]);
+  }, [
+    currentFilter.mediaCategory,
+    currentFilter.mediaTypes,
+    currentFilter.search,
+    currentSort,
+    favoriteItems?.stacks,
+  ]);
 
   const total = stableLoadedItems.length;
   const allItems = stableLoadedItems;
@@ -156,7 +168,7 @@ function FavoritesPage() {
           .map((id) => (typeof id === 'string' ? Number.parseInt(id, 10) : id))
           .filter((id): id is number => Number.isFinite(id))
       )
-    ).reverse();
+    );
     const itemStackId = item.stackId ?? item.id;
     const clickedId =
       typeof itemStackId === 'string' ? Number.parseInt(itemStackId, 10) : itemStackId;
@@ -241,8 +253,8 @@ function FavoritesPage() {
       filter: { ...currentFilter, datasetId, isFavorite: true },
       sort: currentSort,
     });
-    // 現在ロード済みのウィンドウから右→左順のID配列を構築
-    const loadedIdsLtr = Array.from(
+    // 現在ロード済みのウィンドウからグリッドリスト順のID配列を構築
+    const ids = Array.from(
       new Set(
         (allItems || [])
           .filter((it): it is MediaGridItem => !!it)
@@ -251,7 +263,6 @@ function FavoritesPage() {
           .filter((id): id is number => Number.isFinite(id))
       )
     );
-    const ids = loadedIdsLtr.slice().reverse();
     const itemStackId = item.stackId ?? item.id;
     const clickedId =
       typeof itemStackId === 'string' ? Number.parseInt(itemStackId, 10) : itemStackId;

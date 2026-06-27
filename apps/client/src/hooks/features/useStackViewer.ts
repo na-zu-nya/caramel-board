@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation, useSearch } from '@tanstack/react-router';
 import { useSetAtom } from 'jotai';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { startTransition, useCallback, useEffect, useRef, useState } from 'react';
 import { apiClient } from '@/lib/api-client';
 import { infoSidebarOpenAtom, selectedInfoAssetIdAtom, selectedItemIdAtom } from '@/stores/ui';
 import type { Stack } from '@/types';
@@ -25,12 +25,40 @@ interface UseStackViewerReturn {
   refetch: () => void;
 }
 
+type CurrentPageState = {
+  stackId: string;
+  routePage: number;
+  page: number;
+};
+
+type SetCurrentPageValue = number | ((prev: number) => number);
+
 export function useStackViewer({
   datasetId,
   stackId,
 }: UseStackViewerOptions): UseStackViewerReturn {
   const searchParams = useSearch({ strict: false }) as { page?: number };
-  const [currentPage, setCurrentPage] = useState(Number(searchParams.page) || 0);
+  const routePage = Number(searchParams.page) || 0;
+  const [currentPageState, setCurrentPageState] = useState<CurrentPageState>(() => ({
+    stackId,
+    routePage,
+    page: routePage,
+  }));
+  const currentPage =
+    currentPageState.stackId === stackId && currentPageState.routePage === routePage
+      ? currentPageState.page
+      : routePage;
+  const setCurrentPage = useCallback(
+    (value: SetCurrentPageValue) => {
+      setCurrentPageState((prev) => {
+        const basePage =
+          prev.stackId === stackId && prev.routePage === routePage ? prev.page : routePage;
+        const nextPage = typeof value === 'function' ? value(basePage) : value;
+        return { stackId, routePage, page: nextPage };
+      });
+    },
+    [routePage, stackId]
+  );
   const [isListMode, setIsListMode] = useState(false);
   const setSelectedItemId = useSetAtom(selectedItemIdAtom);
   const setSelectedInfoAssetId = useSetAtom(selectedInfoAssetIdAtom);
@@ -50,13 +78,15 @@ export function useStackViewer({
     refetch,
   } = useQuery({
     queryKey: ['stack', datasetId, stackId],
-    queryFn: () => apiClient.getStack(stackId, datasetId),
+    queryFn: ({ signal }) => apiClient.getStack(stackId, datasetId, { signal }),
   });
 
   // Set selected item ID when stack loads
   useEffect(() => {
     if (stack) {
-      setSelectedItemId(Number(stack.id));
+      startTransition(() => {
+        setSelectedItemId(Number(stack.id));
+      });
     }
   }, [stack, setSelectedItemId]);
 
@@ -82,20 +112,17 @@ export function useStackViewer({
 
   // When stackId or search param page changes within the same route, reset current page accordingly
   useEffect(() => {
-    const nextPage = Number(searchParams.page) || 0;
-    setCurrentPage(nextPage);
-  }, [searchParams.page]);
-
-  // Clamp current page after stack data loads to avoid out-of-range pages
-  useEffect(() => {
-    if (!stack) return;
-    if (currentPage < 0 || currentPage > (stack.assets?.length || 1) - 1) {
-      setCurrentPage(0);
-    }
-  }, [stack, currentPage]);
+    setCurrentPageState((prev) => {
+      if (prev.stackId === stackId && prev.routePage === routePage) return prev;
+      return { stackId, routePage, page: routePage };
+    });
+  }, [routePage, stackId]);
 
   useEffect(() => {
-    setSelectedInfoAssetId(stack?.assets?.[currentPage]?.id ?? null);
+    const selectedAssetId = stack?.assets?.[currentPage]?.id ?? null;
+    startTransition(() => {
+      setSelectedInfoAssetId(selectedAssetId);
+    });
   }, [currentPage, setSelectedInfoAssetId, stack?.assets]);
 
   // Stack favorite toggle

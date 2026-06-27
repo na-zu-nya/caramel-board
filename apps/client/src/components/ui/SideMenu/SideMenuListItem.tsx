@@ -55,7 +55,7 @@ export function SideMenuListItem({
   const IconComp: any = icon;
   const style = indent > 0 ? { paddingLeft: `${indent * 0.75 + 0.5}rem` } : undefined;
   const baseClass = cn(
-    'w-full flex items-center gap-1.5 px-2 py-1 text-sm text-gray-700 rounded hover:bg-gray-100 transition-colors',
+    'w-full flex items-center gap-1.5 px-2 py-1 text-[length:var(--side-menu-list-item-font-size)] leading-5 text-gray-700 rounded hover:bg-gray-100 transition-colors',
     active && 'bg-gray-100 font-medium',
     className
   );
@@ -76,7 +76,7 @@ export function SideMenuListItem({
   const content = (
     <>
       {renderIconNode()}
-      <span className="mr-auto" title={props.title}>
+      <span className="min-w-0 flex-1 truncate text-left" title={props.title}>
         {label}
       </span>
       <CountBadge count={count} />

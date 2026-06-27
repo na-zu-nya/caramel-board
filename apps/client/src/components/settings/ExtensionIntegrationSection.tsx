@@ -1,4 +1,4 @@
-import { Copy, KeyRound, RefreshCw, Trash2 } from 'lucide-react';
+import { Copy, ExternalLink, KeyRound, RefreshCw, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { ClipperApiKeyState } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
@@ -14,6 +14,7 @@ export interface ExtensionIntegrationCopy {
   regenerateKey: string;
   revokeKey: string;
   copyKey: string;
+  addExtension: string;
   generatedKeyLabel: string;
   generatedKeyHint: string;
 }
@@ -26,6 +27,7 @@ export interface ExtensionIntegrationSectionProps {
   revoking?: boolean;
   copy: ExtensionIntegrationCopy;
   feedback?: string | null;
+  chromeWebStoreUrl?: string | null;
   onIssueKey: () => void;
   onRevokeKey: () => void;
   onCopyGeneratedKey: () => void;
@@ -40,6 +42,7 @@ export function ExtensionIntegrationSection({
   revoking = false,
   copy,
   feedback,
+  chromeWebStoreUrl,
   onIssueKey,
   onRevokeKey,
   onCopyGeneratedKey,
@@ -52,17 +55,21 @@ export function ExtensionIntegrationSection({
   return (
     <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
       <div className="border-b border-gray-100 px-6 py-5">
-        <div className="flex items-start gap-3">
+        <div className="flex min-w-0 items-center gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-amber-100 text-amber-700">
             <KeyRound size={20} />
           </div>
-          <div className="min-w-0">
-            <h2 className="text-base font-semibold text-gray-900">{copy.title}</h2>
-            {copy.description ? (
-              <p className="mt-1 text-sm text-gray-500">{copy.description}</p>
-            ) : null}
-          </div>
+          <h2 className="min-w-0 flex-1 text-base font-semibold text-gray-900">{copy.title}</h2>
+          {chromeWebStoreUrl ? (
+            <Button type="button" variant="outline" className="shrink-0" asChild>
+              <a href={chromeWebStoreUrl} target="_blank" rel="noreferrer">
+                <ExternalLink className="mr-2 h-4 w-4" />
+                {copy.addExtension}
+              </a>
+            </Button>
+          ) : null}
         </div>
+        {copy.description ? <p className="mt-3 text-sm text-gray-500">{copy.description}</p> : null}
       </div>
 
       <div className="grid gap-4 px-6 py-5">

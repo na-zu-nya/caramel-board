@@ -6,6 +6,7 @@ import 'source-map-support/register';
 
 import type { ArgumentsCamelCase } from 'yargs';
 import yargs from 'yargs';
+import { hideBin } from 'yargs/helpers';
 
 dotenv.config();
 
@@ -25,7 +26,7 @@ interface CropOptions {
   rename: boolean;
 }
 
-const option = yargs
+const option = yargs(hideBin(process.argv))
   .option('sourceDir', {
     alias: 's',
     type: 'string',

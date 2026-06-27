@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 const HASH_PREFIX_LENGTH = 2;
 const STORAGE_ROOT = 'library';
 
@@ -29,6 +31,21 @@ export const buildThumbnailKey = (dataSetId: number, hash: string) => {
   const prefix = hashPrefix(hash);
   const remainder = hashRemainder(hash);
   return `${STORAGE_ROOT}/${dataSetId}/thumbnails/${prefix}/${remainder}.jpg`;
+};
+
+export const buildStackFrameThumbnailKey = (
+  dataSetId: number,
+  stackId: number,
+  assetId: number,
+  timeSeconds: number
+) => {
+  const normalizedTimeMillis = Math.max(0, Math.round(timeSeconds * 1000));
+  const digest = createHash('sha256')
+    .update(`${stackId}:${assetId}:${normalizedTimeMillis}`)
+    .digest('hex');
+  const prefix = hashPrefix(digest);
+  const remainder = hashRemainder(digest);
+  return `${STORAGE_ROOT}/${dataSetId}/thumbnails/stacks/${prefix}/${remainder}.jpg`;
 };
 
 interface PreviewOptions {

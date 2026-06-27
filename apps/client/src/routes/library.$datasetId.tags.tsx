@@ -42,6 +42,7 @@ import {
 } from '@/components/ui/select';
 import { SelectionActionBar } from '@/components/ui/selection-action-bar';
 import { useHeaderActions } from '@/hooks/useHeaderActions';
+import { useRightPanelPushesContent } from '@/hooks/useSidebarLayoutMode';
 import { useStackTile } from '@/hooks/useStackTile';
 import { apiClient } from '@/lib/api-client';
 import { downloadStackOriginals } from '@/lib/download-originals';
@@ -55,7 +56,7 @@ import {
   selectionModeAtom,
 } from '@/stores/ui';
 import { genListToken, saveViewContext } from '@/stores/view-context';
-import type { ColorFilter, MediaType, StackFilter } from '@/types';
+import type { ColorFilter, MediaCategory, MediaType, StackFilter } from '@/types';
 
 interface TagsSearch {
   tagId?: string;
@@ -92,7 +93,8 @@ interface StackItem {
   likeCount?: number;
   favorited?: boolean;
   isFavorite?: boolean;
-  mediaType?: MediaType;
+  mediaType?: MediaCategory;
+  actualMediaType?: MediaType;
   author?: string | { id: string | number; name: string };
   tags?: Array<string | { name?: string; title?: string }>;
   assetCount?: number;
@@ -111,7 +113,8 @@ interface TagStacksQueryParams {
   limit: number;
   offset: number;
   tag: string[];
-  mediaType?: MediaType;
+  mediaCategory?: MediaCategory;
+  mediaTypes?: MediaType[];
   author?: string[];
   fav?: 0 | 1;
   liked?: 0 | 1;
@@ -152,7 +155,8 @@ function buildTagStacksQuery(params: {
     tag: [params.selectedTag.title],
   };
 
-  if (params.filter.mediaType) query.mediaType = params.filter.mediaType;
+  if (params.filter.mediaCategory) query.mediaCategory = params.filter.mediaCategory;
+  if (params.filter.mediaTypes?.length) query.mediaTypes = params.filter.mediaTypes;
   if (params.filter.tags && params.filter.tags.length > 0) {
     const extras = params.filter.tags.filter((tag) => tag !== params.selectedTag.title);
     if (extras.length > 0) query.tag = [...query.tag, ...extras];
@@ -176,7 +180,7 @@ function toNumericId(value: string | number): number {
   return typeof value === 'number' ? value : Number.parseInt(value, 10);
 }
 
-function isMediaType(value: unknown): value is MediaType {
+function isMediaCategory(value: unknown): value is MediaCategory {
   return value === 'image' || value === 'comic' || value === 'video';
 }
 
@@ -234,6 +238,9 @@ function TagsPage() {
   const effectiveFilter = filterScopeKey === routeFilterScopeKey ? currentFilter : tagsPageFilter;
   const [selectedStackItems, setSelectedStackItems] = useState<Set<string | number>>(new Set());
   const [isEditPanelOpen, setIsEditPanelOpen] = useState(false);
+  const rightPanelPushesContent = useRightPanelPushesContent(
+    (!selectionMode && infoSidebarOpen) || (selectionMode && isEditPanelOpen)
+  );
 
   // Stabilize body scrollbar gutter while this page is active
   useEffect(() => {
@@ -326,7 +333,7 @@ function TagsPage() {
   const filterKey = useMemo(() => {
     const f = effectiveFilter;
     const key = {
-      mediaType: f.mediaType ?? undefined,
+      mediaCategory: f.mediaCategory ?? undefined,
       search: f.search ?? undefined,
       tags: Array.isArray(f.tags) ? [...f.tags] : undefined,
       authors: Array.isArray(f.authors) ? [...f.authors] : undefined,
@@ -425,7 +432,7 @@ function TagsPage() {
     const page = await apiClient.getStacksWithFilters(qp);
     const item = page?.stacks?.[withinPageIndex];
     if (!item) return;
-    const ids = (page.stacks || []).map((stack) => toNumericId(stack.id)).reverse();
+    const ids = (page.stacks || []).map((stack) => toNumericId(stack.id));
     const clickedId = toNumericId(item.id);
     const currentIndex = Math.max(
       0,
@@ -462,6 +469,10 @@ function TagsPage() {
   });
 
   const selectedTagId = selectedTag?.id;
+  const tagDataSetQuery = useMemo(
+    () => new URLSearchParams({ dataSetId: datasetId }).toString(),
+    [datasetId]
+  );
 
   // Handle infinite scroll within the asset list pane
   useEffect(() => {
@@ -491,7 +502,9 @@ function TagsPage() {
   // Mutations
   const renameMutation = useMutation({
     mutationFn: async ({ id, title }: { id: number; title: string }) => {
-      const response = await apiClient.put(`/api/v1/tags/${id}/rename`, { title });
+      const response = await apiClient.put(`/api/v1/tags/${id}/rename?${tagDataSetQuery}`, {
+        title,
+      });
       return response.data;
     },
     onSuccess: () => {
@@ -503,7 +516,7 @@ function TagsPage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (ids: number[]) => {
-      await Promise.all(ids.map((id) => apiClient.delete(`/api/v1/tags/${id}`)));
+      await Promise.all(ids.map((id) => apiClient.delete(`/api/v1/tags/${id}?${tagDataSetQuery}`)));
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tags', datasetId] });
@@ -517,7 +530,7 @@ function TagsPage() {
 
   const mergeMutation = useMutation({
     mutationFn: async ({ sourceIds, targetId }: { sourceIds: number[]; targetId: number }) => {
-      const response = await apiClient.post('/api/v1/tags/merge', {
+      const response = await apiClient.post(`/api/v1/tags/merge?${tagDataSetQuery}`, {
         sourceTagIds: sourceIds,
         targetTagId: targetId,
       });
@@ -683,12 +696,11 @@ function TagsPage() {
       }
 
       event.preventDefault();
-      const loadedIdsLtr = (allStacks || []).map((s) => toNumericId(s.id));
-      const ids = loadedIdsLtr.slice().reverse();
+      const ids = (allStacks || []).map((s) => toNumericId(s.id));
       const clickedId = toNumericId(stack.id);
       const currentIndex = Math.max(0, ids.indexOf(clickedId));
 
-      const mediaType = isMediaType(stack.mediaType) ? stack.mediaType : undefined;
+      const mediaType = isMediaCategory(stack.mediaType) ? stack.mediaType : undefined;
       const selectedTagContextFilter: StackFilter = selectedTag
         ? { tags: [String(selectedTag.id)] }
         : {};
@@ -854,26 +866,27 @@ function TagsPage() {
   );
 
   // Bulk operations handlers
-  const refreshThumbnails = useCallback(
+  const refreshStacks = useCallback(
     async (stackIds: (string | number)[]) => {
       if (stackIds.length === 0) return;
-      await apiClient.bulkRefreshThumbnails(stackIds);
+      await apiClient.refreshStacks(stackIds);
       queryClient.invalidateQueries({ queryKey: ['tag-stacks', selectedTag?.id] });
     },
     [queryClient, selectedTag]
   );
 
-  const handleRefreshThumbnails = useCallback(async () => {
-    if (selectedStackItems.size === 0) return;
-
-    const stackIds = Array.from(selectedStackItems);
-    try {
-      await refreshThumbnails(stackIds);
-      exitSelectionMode();
-    } catch (error) {
-      console.error('Error refreshing thumbnails:', error);
-    }
-  }, [selectedStackItems, refreshThumbnails, exitSelectionMode]);
+  const handleRefreshStacks = useCallback(
+    async (targetStackIds?: Array<string | number>) => {
+      const stackIds = targetStackIds ?? Array.from(selectedStackItems);
+      try {
+        await refreshStacks(stackIds);
+        exitSelectionMode();
+      } catch (error) {
+        console.error('Error refreshing stacks:', error);
+      }
+    },
+    [selectedStackItems, refreshStacks, exitSelectionMode]
+  );
 
   const removeStacks = useCallback(
     async (stackIds: (string | number)[]) => {
@@ -902,26 +915,6 @@ function TagsPage() {
     downloadStackOriginals(datasetId, selectedStackIds);
   }, [datasetId, selectedStackIds]);
 
-  const handleOptimizePreviews = useCallback(async () => {
-    if (selectedStackItems.size === 0) return;
-
-    const stackIds = Array.from(selectedStackItems).map((id) =>
-      typeof id === 'string' ? Number.parseInt(id, 10) : id
-    );
-
-    try {
-      for (const id of stackIds) {
-        await apiClient.regenerateStackPreview({ stackId: id, datasetId, force: true });
-      }
-
-      exitSelectionMode();
-      queryClient.invalidateQueries({ queryKey: ['tag-stacks', selectedTag?.id] });
-    } catch (error) {
-      console.error('Error optimizing video previews:', error);
-      alert(t.grid.optimizeVideoFailed);
-    }
-  }, [selectedStackItems, datasetId, exitSelectionMode, queryClient, selectedTag, t]);
-
   const selectionActions = useMemo(
     () =>
       createStackSelectionActions({
@@ -929,22 +922,26 @@ function TagsPage() {
         copy: {
           bulkEdit: t.grid.bulkEdit,
           downloadSelected: t.contextMenu.downloadSelected,
+          addToScratch: t.contextMenu.addToScratch,
+          addToCollection: t.contextMenu.addToCollection,
+          createNewCollection: t.contextMenu.createNewCollection,
+          collectionLoading: t.collection.loading,
+          noCollectionsAvailable: t.contextMenu.noCollectionsAvailable,
           mergeStacks: t.grid.mergeStacks,
-          refreshThumbnails: t.grid.refreshThumbnails,
-          optimizeVideo: t.grid.optimizeVideo,
+          refresh: t.grid.refresh,
+          removeFromCollection: t.contextMenu.removeFromCollection,
+          removeFromScratch: t.contextMenu.removeFromScratch,
           deleteStacks: t.grid.deleteStacks,
           deleteStacksConfirm: t.grid.deleteStacksConfirm,
         },
         bulkEdit: { onSelect: toggleEditPanel },
         downloadSelected: { onSelect: handleDownloadSelectedStacks },
-        refreshThumbnails: { onSelect: handleRefreshThumbnails },
-        optimizeVideo: { onSelect: handleOptimizePreviews },
+        refresh: { onSelect: () => handleRefreshStacks() },
         deleteStacks: { onSelect: handleRemoveStacks },
       }),
     [
       handleDownloadSelectedStacks,
-      handleOptimizePreviews,
-      handleRefreshThumbnails,
+      handleRefreshStacks,
       handleRemoveStacks,
       selectedStackItems.size,
       t,
@@ -1126,7 +1123,7 @@ function TagsPage() {
           ref={scrollContainerRef}
           className={cn(
             'flex-1 min-w-0 h-full overflow-y-auto bg-gray-50 transition-all duration-300 ease-in-out',
-            !selectionMode && infoSidebarOpen ? 'mr-80' : 'mr-0'
+            rightPanelPushesContent ? 'mr-80' : 'mr-0'
           )}
         >
           <div className="p-4">
@@ -1192,6 +1189,7 @@ function TagsPage() {
                       onAddToScratchItem={handleAddToScratchStack}
                       onDownloadItem={handleDownloadStack}
                       onDownloadSelected={handleDownloadSelectedStacks}
+                      onRefreshStacks={handleRefreshStacks}
                       onBulkEditSelected={toggleEditPanel}
                       onRemoveSelectedStacks={handleRemoveStacks}
                       onToggleFavoriteItem={handleToggleFavoriteStack}
@@ -1225,8 +1223,7 @@ function TagsPage() {
         <div
           className={cn(
             'flex-1 min-w-0 h-full flex items-center justify-center bg-gray-50 transition-all duration-300 ease-in-out',
-            !selectionMode && infoSidebarOpen ? 'mr-80' : 'mr-0',
-            isEditPanelOpen && selectionMode ? 'mr-80' : ''
+            rightPanelPushesContent ? 'mr-80' : 'mr-0'
           )}
         >
           <div className="text-center">

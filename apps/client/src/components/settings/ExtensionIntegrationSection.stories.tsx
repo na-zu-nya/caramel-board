@@ -12,6 +12,7 @@ const copy = {
   regenerateKey: 'Regenerate key',
   revokeKey: 'Revoke key',
   copyKey: 'Copy',
+  addExtension: 'Add extension',
   generatedKeyLabel: 'New key',
   generatedKeyHint: 'Paste this key into the Clipper options page.',
 };
@@ -59,5 +60,12 @@ export const NotConfigured: Story = {
       createdAt: null,
       apiKey: null,
     },
+  },
+};
+
+export const ChromeInstall: Story = {
+  args: {
+    chromeWebStoreUrl:
+      'https://chromewebstore.google.com/detail/caramel-board-clipper-bet/hmbbjgdimepjnnpbedcdhidcfhgllcjo',
   },
 };

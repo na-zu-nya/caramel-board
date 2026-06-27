@@ -14,6 +14,19 @@ const makeAsset = (id: number): Asset => ({
   createdAt: '2026-01-01T00:00:00.000Z',
 });
 
+const makeLabeledAsset = (id: number, label: string, color: string): Asset => ({
+  id,
+  stackId: 1,
+  file: `data:image/svg+xml,${encodeURIComponent(`
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800">
+      <rect width="1200" height="800" fill="${color}"/>
+      <rect x="120" y="120" width="960" height="560" rx="32" fill="rgba(255,255,255,0.12)"/>
+      <text x="600" y="420" text-anchor="middle" font-family="system-ui, sans-serif" font-size="104" font-weight="700" fill="white">${label}</text>
+    </svg>
+  `)}`,
+  createdAt: '2026-01-01T00:00:00.000Z',
+});
+
 const makeVideoAsset = (id: number): Asset => ({
   id,
   stackId: 1,
@@ -26,6 +39,29 @@ const makeVideoAsset = (id: number): Asset => ({
       { time: 5.8, color: 'bright-yellow', label: '' },
     ],
   },
+  createdAt: '2026-01-01T00:00:00.000Z',
+});
+
+const makeSvgAsset = (id: number): Asset => ({
+  id,
+  stackId: 1,
+  file: '/files/vector-reference.svg',
+  originalName: 'vector-reference.svg',
+  mimeType: 'image/svg+xml',
+  preview: sampleImage,
+  thumbnail: sampleImage,
+  createdAt: '2026-01-01T00:00:00.000Z',
+});
+
+const makeRawAsset = (id: number): Asset => ({
+  id,
+  stackId: 1,
+  file: '/files/raw-reference.dng',
+  originalName: 'raw-reference.dng',
+  fileType: 'dng',
+  mimeType: 'image/x-adobe-dng',
+  preview: sampleImage,
+  thumbnail: sampleImage,
   createdAt: '2026-01-01T00:00:00.000Z',
 });
 
@@ -70,5 +106,54 @@ export const Video: Story = {
   args: {
     currentAsset: makeVideoAsset(2),
     uiInsets: { top: 16, left: 16, right: 16 },
+  },
+};
+
+export const SvgPreview: Story = {
+  args: {
+    currentAsset: makeSvgAsset(3),
+  },
+};
+
+export const RawPreview: Story = {
+  args: {
+    currentAsset: makeRawAsset(4),
+  },
+};
+
+export const SpreadUnit: Story = {
+  args: {
+    currentAsset: makeAsset(1),
+    currentUnit: {
+      id: 'spread-1',
+      index: 0,
+      kind: 'spread',
+      pages: [
+        { id: '1:full', asset: makeAsset(1), assetIndex: 0, segment: 'full' },
+        { id: '2:full', asset: makeAsset(2), assetIndex: 1, segment: 'full' },
+      ],
+    },
+    openingDirection: 'right-opening',
+  },
+};
+
+export const LeftOpeningDrag: Story = {
+  args: {
+    currentAsset: makeLabeledAsset(10, 'CURRENT', '#314f5c'),
+    nextAsset: makeLabeledAsset(11, 'NEXT', '#2f6f58'),
+    prevAsset: makeLabeledAsset(9, 'PREV', '#7a3f4d'),
+    openingDirection: 'left-opening',
+    translateX: -180,
+  },
+};
+
+export const RightOpeningEndToPreviousStack: Story = {
+  args: {
+    currentAsset: makeLabeledAsset(20, '3P', '#314f5c'),
+    nextAsset: makeLabeledAsset(19, 'STACK', '#80502d'),
+    prevAsset: makeLabeledAsset(18, '2P', '#7a3f4d'),
+    openingDirection: 'right-opening',
+    nextStackNeighborSide: 'left',
+    translateX: 180,
   },
 };

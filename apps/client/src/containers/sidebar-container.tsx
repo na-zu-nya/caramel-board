@@ -14,12 +14,12 @@ import { apiClient } from '@/lib/api-client';
 import { APP_GIT_HASH, APP_VERSION } from '@/lib/app-info';
 import { useT } from '@/lib/i18n';
 import { currentDatasetAtom, sidebarOpenAtom } from '@/stores/ui';
-import type { MediaType } from '@/types';
+import type { MediaCategory } from '@/types';
 
 // LocalStorage keys for collapsed state
 const COLLAPSED_STATE_KEY = 'sidebar-collapsed-groups';
 
-const DEFAULT_MEDIA_TYPE_PIN_NAMES: Record<MediaType, string> = {
+const DEFAULT_MEDIA_TYPE_PIN_NAMES: Record<MediaCategory, string> = {
   image: 'Images',
   comic: 'Comics',
   video: 'Videos',

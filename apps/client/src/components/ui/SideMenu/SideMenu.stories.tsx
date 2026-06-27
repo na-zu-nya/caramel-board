@@ -7,6 +7,7 @@ import {
   Heart,
   Layers,
   Megaphone,
+  Menu,
   Twitter,
   XCircle,
 } from 'lucide-react';
@@ -164,6 +165,58 @@ export const WithTextTitle: Story = {
         >
           <SideMenuGroup label="Example">
             <SideMenuListItem label="Item" />
+          </SideMenuGroup>
+        </SideMenu>
+      </div>
+    );
+  },
+};
+
+export const FloatingNarrow: Story = {
+  parameters: {
+    viewport: {
+      defaultViewport: 'mobile2',
+    },
+  },
+  render: () => {
+    const [open, setOpen] = useState(true);
+
+    return (
+      <div className="min-h-screen bg-gray-100">
+        <header className="fixed left-0 right-0 top-0 z-30 flex h-14 items-center gap-3 border-b border-gray-200 bg-white px-4">
+          <button
+            type="button"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-700 shadow-sm transition-colors hover:bg-gray-50"
+            onClick={() => setOpen(true)}
+            aria-label="Open menu"
+          >
+            <Menu size={18} />
+          </button>
+          <span className="text-sm font-semibold text-gray-900">Narrow layout</span>
+        </header>
+
+        <main className="px-4 pt-20">
+          <div className="grid gap-3">
+            {['stack-1', 'stack-2', 'stack-3', 'stack-4', 'stack-5', 'stack-6'].map((itemId) => (
+              <div
+                key={itemId}
+                className="h-20 rounded-lg border border-gray-200 bg-white shadow-sm"
+              />
+            ))}
+          </div>
+        </main>
+
+        <SideMenu open={open} onClose={() => setOpen(false)} title="Caramel Board">
+          <SideMenuGroup label="Library">
+            <SideMenuListItem icon={Layers} label="Overview" active count={120} />
+            <SideMenuListItem icon={Camera} label="Photos" count={87} />
+            <SideMenuListItem icon={Book} label="Books" />
+            <SideMenuListItem icon={Heart} label="Likes" />
+          </SideMenuGroup>
+
+          <SideMenuGroup label="Collections">
+            <SideMenuListItem icon={Folder} label="Project Alpha" count={12} />
+            <SideMenuListItem icon={Folder} label="Project Beta" count={4} />
           </SideMenuGroup>
         </SideMenu>
       </div>

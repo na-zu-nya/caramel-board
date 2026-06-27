@@ -10,9 +10,12 @@ import { GridColumnSlider } from '@/components/ui/GridColumnSlider';
 import { HeaderIconButton } from '@/components/ui/Header/HeaderIconButton';
 import { SelectionActionBar } from '@/components/ui/selection-action-bar';
 import { useStackGrid } from '@/hooks/features/useStackGrid';
+import { useScratch } from '@/hooks/useScratch';
+import { useRightPanelPushesContent } from '@/hooks/useSidebarLayoutMode';
 import { useSparseInfiniteScroll } from '@/hooks/useSparseInfiniteScroll';
 import { useStackCollectionMenu } from '@/hooks/useStackCollectionMenu';
 import { apiClient } from '@/lib/api-client';
+import { downloadStackOriginals } from '@/lib/download-originals';
 import {
   type FolderGroup,
   type FolderUploadDefaults,
@@ -26,11 +29,10 @@ import { getSelectedMediaGridStackIds } from '@/lib/media-grid-selection';
 import { applyScrollbarCompensation, removeScrollbarCompensation } from '@/lib/scrollbar-utils';
 import { createStackSelectionActions } from '@/lib/stack-selection-actions';
 import { cn } from '@/lib/utils';
-import { reorderModeAtom, selectionModeAtom } from '@/stores/ui';
+import { selectionModeAtom } from '@/stores/ui';
 import {
   addFilesToQueueAtom,
   addUploadNotificationAtom,
-  uploadDefaultsAtom,
   uploadNotificationsAtom,
 } from '@/stores/upload';
 import type { Dataset, MediaGridItem, SortOption, StackFilter } from '@/types';
@@ -58,6 +60,8 @@ interface FolderImportRequest {
   defaults: FolderUploadDefaults;
 }
 
+const EMPTY_SELECTED_STACK_IDS: number[] = [];
+
 export default function SparseStackGrid({
   datasetId,
   mediaType,
@@ -71,11 +75,10 @@ export default function SparseStackGrid({
   const t = useT();
   const queryClient = useQueryClient();
   const setSelectionMode = useSetAtom(selectionModeAtom);
-  const reorderMode = useAtomValue(reorderModeAtom);
   const addFilesToQueue = useSetAtom(addFilesToQueueAtom);
-  const setUploadDefaults = useSetAtom(uploadDefaultsAtom);
   const addNotification = useSetAtom(addUploadNotificationAtom);
   const uploadNotifications = useAtomValue(uploadNotificationsAtom);
+  const { ensureScratch } = useScratch(datasetId);
   const {
     collections: collectionMenuCollections,
     isLoadingCollections: isCollectionMenuLoading,
@@ -192,14 +195,11 @@ export default function SparseStackGrid({
 
       try {
         if (mode === 'flat-upload') {
-          setUploadDefaults({
-            datasetId: defaults.datasetId,
-            mediaType: defaults.mediaType,
-            tags: defaults.tags,
-            author: defaults.author,
-            collectionId: defaults.collectionId,
+          addFilesToQueue({
+            files: activeFolder.files,
+            type: 'new-stack',
+            metadata: defaults,
           });
-          addFilesToQueue({ files: activeFolder.files, type: 'new-stack' });
           addNotification({
             type: 'success',
             message: t.upload.queuedFiles(activeFolder.files.length, activeFolder.name),
@@ -261,7 +261,6 @@ export default function SparseStackGrid({
       addNotification,
       finalizeFolderProcessing,
       refreshAfterManualUpload,
-      setUploadDefaults,
       t,
     ]
   );
@@ -288,6 +287,8 @@ export default function SparseStackGrid({
     setIsEditPanelOpen,
     itemsPerRow,
     itemSize,
+    rangeStart,
+    rangeEnd,
     setGridColumns,
     favoriteStates,
     favoriteOverrides,
@@ -302,7 +303,7 @@ export default function SparseStackGrid({
     exitSelectionMode,
     isSidebarAnimating,
   } = useStackGrid({
-    items: sparseItems.filter((item): item is MediaGridItem => item !== undefined), // Only pass actual items for selection logic
+    items: sparseItems,
     total,
     hasMore: false, // Not used in sparse mode
     isLoading,
@@ -310,6 +311,7 @@ export default function SparseStackGrid({
     onItemClick,
     onRefreshAll: refreshAll,
   });
+  const rightPanelPushesContent = useRightPanelPushesContent(infoSidebarOpen || isEditPanelOpen);
 
   const selectedBulkEditItems = useMemo(
     () =>
@@ -379,8 +381,26 @@ export default function SparseStackGrid({
   );
 
   const selectedStackIdsInOrder = useMemo(() => {
+    if (selectedItemOrder.length === 0) return EMPTY_SELECTED_STACK_IDS;
     return getSelectedMediaGridStackIds(selectedItemOrder, sparseItems);
   }, [selectedItemOrder, sparseItems]);
+
+  const handleToggleBulkEditPanel = useCallback(() => {
+    if (selectedItems.size === 0) return;
+    setIsEditPanelOpen((prev) => !prev);
+  }, [selectedItems.size, setIsEditPanelOpen]);
+
+  const visibleGridEntries = useMemo(() => {
+    const start = Math.max(0, Math.min(rangeStart, total));
+    const end = Math.max(start, Math.min(rangeEnd, total));
+    const entries: Array<{ index: number; item: MediaGridItem | undefined }> = [];
+
+    for (let index = start; index < end; index++) {
+      entries.push({ index, item: sparseItems[index] });
+    }
+
+    return entries;
+  }, [rangeStart, rangeEnd, sparseItems, total]);
 
   const handleMergeStacks = useCallback(async () => {
     if (selectedStackIdsInOrder.length < 2) return;
@@ -418,6 +438,62 @@ export default function SparseStackGrid({
     t,
   ]);
 
+  const handleAddStacksToScratch = useCallback(
+    async (ids: readonly (string | number)[]) => {
+      const scratchCollection = await ensureScratch();
+      const stackIds = ids
+        .map((id) => (typeof id === 'string' ? Number.parseInt(id, 10) : id))
+        .filter((id): id is number => Number.isFinite(id));
+
+      if (stackIds.length === 0) return;
+
+      if (stackIds.length === 1) {
+        await apiClient.addStackToCollection(scratchCollection.id, stackIds[0]);
+      } else {
+        await apiClient.bulkAddStacksToCollection(scratchCollection.id, stackIds);
+      }
+      await queryClient.invalidateQueries({ queryKey: ['stacks'] });
+      await queryClient.invalidateQueries({ queryKey: ['library-counts', datasetId] });
+      await queryClient.refetchQueries({ queryKey: ['library-counts', datasetId] });
+    },
+    [datasetId, ensureScratch, queryClient]
+  );
+
+  const handleAddStackToScratch = useCallback(
+    async (id: string | number) => {
+      await handleAddStacksToScratch([id]);
+    },
+    [handleAddStacksToScratch]
+  );
+
+  const handleDownloadSelectedStacks = useCallback(() => {
+    if (selectedStackIdsInOrder.length === 0) return;
+    downloadStackOriginals(datasetId, selectedStackIdsInOrder);
+  }, [datasetId, selectedStackIdsInOrder]);
+
+  const handleRefreshStacks = useCallback(
+    async (stackIds: Array<string | number>) => {
+      if (stackIds.length === 0) return;
+
+      try {
+        await apiClient.refreshStacks(stackIds);
+        handleDeselectAll();
+        exitSelectionMode();
+        await refreshAll();
+        void Promise.allSettled([
+          queryClient.invalidateQueries({ queryKey: ['stack'] }),
+          queryClient.invalidateQueries({ queryKey: ['stacks'] }),
+          queryClient.invalidateQueries({ queryKey: ['library-counts', datasetId] }),
+          queryClient.invalidateQueries({ queryKey: ['dataset-overview', datasetId] }),
+        ]);
+      } catch (error) {
+        console.error('❌ Failed to refresh stacks:', error);
+        addNotification({ type: 'error', message: t.grid.refreshFailed });
+      }
+    },
+    [addNotification, datasetId, exitSelectionMode, handleDeselectAll, queryClient, refreshAll, t]
+  );
+
   const selectionActions = useMemo(
     () =>
       createStackSelectionActions({
@@ -425,13 +501,41 @@ export default function SparseStackGrid({
         copy: {
           bulkEdit: t.grid.bulkEdit,
           downloadSelected: t.contextMenu.downloadSelected,
+          addToScratch: t.contextMenu.addToScratch,
+          addToCollection: t.contextMenu.addToCollection,
+          createNewCollection: t.contextMenu.createNewCollection,
+          collectionLoading: t.collection.loading,
+          noCollectionsAvailable: t.contextMenu.noCollectionsAvailable,
           mergeStacks: t.grid.mergeStacks,
-          refreshThumbnails: t.grid.refreshThumbnails,
-          optimizeVideo: t.grid.optimizeVideo,
+          refresh: t.grid.refresh,
+          removeFromCollection: t.contextMenu.removeFromCollection,
+          removeFromScratch: t.contextMenu.removeFromScratch,
           deleteStacks: t.grid.deleteStacks,
           deleteStacksConfirm: t.grid.deleteStacksConfirm,
         },
-        bulkEdit: { onSelect: () => setIsEditPanelOpen((prev) => !prev) },
+        bulkEdit: { onSelect: handleToggleBulkEditPanel },
+        downloadSelected:
+          selectedStackIdsInOrder.length > 0
+            ? { onSelect: handleDownloadSelectedStacks }
+            : undefined,
+        addToScratch:
+          selectedStackIdsInOrder.length > 0
+            ? {
+                onSelect: () => {
+                  void handleAddStacksToScratch(selectedStackIdsInOrder);
+                },
+              }
+            : undefined,
+        collectionMenu:
+          selectedStackIdsInOrder.length > 0
+            ? {
+                collections: collectionMenuCollections,
+                isLoading: isCollectionMenuLoading,
+                onCreateCollection: () => openCreateCollectionForStackIds(selectedStackIdsInOrder),
+                onAddToCollection: (collectionId) =>
+                  addStackIdsToCollection(collectionId, selectedStackIdsInOrder),
+              }
+            : undefined,
         mergeStacks:
           selectedStackIdsInOrder.length >= 2
             ? {
@@ -442,8 +546,24 @@ export default function SparseStackGrid({
                 ),
               }
             : undefined,
+        refresh: {
+          onSelect: () => handleRefreshStacks(selectedStackIdsInOrder),
+        },
       }),
-    [handleMergeStacks, selectedItems.size, selectedStackIdsInOrder, setIsEditPanelOpen, t]
+    [
+      addStackIdsToCollection,
+      collectionMenuCollections,
+      handleAddStacksToScratch,
+      handleDownloadSelectedStacks,
+      handleMergeStacks,
+      handleRefreshStacks,
+      handleToggleBulkEditPanel,
+      isCollectionMenuLoading,
+      openCreateCollectionForStackIds,
+      selectedItems.size,
+      selectedStackIdsInOrder,
+      t,
+    ]
   );
 
   // Handle scroll-based loading
@@ -478,7 +598,6 @@ export default function SparseStackGrid({
 
     // Only request if we don't already have this range
     if (startIndex < total && !isRangeLoaded(startIndex, endIndex)) {
-      console.log(`🔄 Requesting range ${startIndex}-${endIndex} (scroll-based)`);
       requestLoadRange(startIndex, endIndex);
     }
   }, [
@@ -528,14 +647,7 @@ export default function SparseStackGrid({
       const { folders, standalone } = splitFilesByTopLevelFolder(files);
 
       if (standalone.length > 0) {
-        setUploadDefaults({
-          datasetId: defaults.datasetId,
-          mediaType: defaults.mediaType,
-          tags: defaults.tags,
-          author: defaults.author,
-          collectionId: defaults.collectionId,
-        });
-        addFilesToQueue({ files: standalone, type: 'new-stack' });
+        addFilesToQueue({ files: standalone, type: 'new-stack', metadata: defaults });
       }
 
       if (folders.length > 0) {
@@ -548,7 +660,7 @@ export default function SparseStackGrid({
         setFolderQueue((prev) => [...prev, ...requests]);
       }
     },
-    [addFilesToQueue, addNotification, computeUploadDefaults, setUploadDefaults, t]
+    [addFilesToQueue, addNotification, computeUploadDefaults, t]
   );
 
   const handleUrlDrop = useCallback(
@@ -667,7 +779,7 @@ export default function SparseStackGrid({
         className={cn(
           // Smoothly follow sidebar/InfoPanel without reflow jumps
           'h-full overflow-y-scroll overscroll-contain transition-[padding] duration-300 ease-in-out',
-          infoSidebarOpen ? 'pr-80' : 'pr-0'
+          rightPanelPushesContent ? 'pr-80' : 'pr-0'
         )}
         style={{ scrollbarGutter: 'stable' }}
       >
@@ -686,7 +798,7 @@ export default function SparseStackGrid({
         {/* Virtual grid container */}
         <div className="relative w-full" style={{ height: gridHeight }}>
           {/* Render visible items */}
-          {sparseItems.map((item, index) => {
+          {visibleGridEntries.map(({ item, index }) => {
             const row = Math.floor(index / itemsPerRow);
             const col = index % itemsPerRow;
             const top = row * itemSize;
@@ -704,53 +816,67 @@ export default function SparseStackGrid({
                   padding: '4px',
                 }}
               >
-                <StackGridItem
-                  item={item} // May be undefined - handled by GridItem
-                  index={index}
-                  isSelected={item ? selectedItems.has(item.id) : false}
-                  isInfoSelected={item ? selectedItemId === item.id : false}
-                  isAnchorItem={false}
-                  isSelectionMode={isSelectionMode}
-                  isReorderMode={reorderMode}
-                  isFavoritePending={item ? favoriteStates.has(item.id) : false}
-                  overrideFavorited={item ? favoriteOverrides.get(item.id) : undefined}
-                  onItemClick={onTileClick}
-                  onToggleSelection={handleToggleSelection}
-                  onToggleFavorite={handleToggleFavorite}
-                  selectedItems={selectedItems}
-                  selectedStackIdsInOrder={selectedStackIdsInOrder}
-                  onMergeStacks={handleMergeStacks}
-                  collectionMenuCollections={collectionMenuCollections}
-                  isCollectionMenuLoading={isCollectionMenuLoading}
-                  onAddStacksToCollection={addStackIdsToCollection}
-                  onCreateCollectionWithStacks={openCreateCollectionForStackIds}
-                  onReorder={() => {}} // Not implemented in sparse mode
-                />
+                {item ? (
+                  <StackGridItem
+                    item={item}
+                    isSelected={selectedItems.has(item.id)}
+                    isInfoSelected={selectedItemId === item.id}
+                    isSelectionMode={isSelectionMode}
+                    isFavoritePending={favoriteStates.has(item.id)}
+                    overrideFavorited={favoriteOverrides.get(item.id)}
+                    datasetId={datasetId}
+                    onItemClick={onTileClick}
+                    onToggleSelection={handleToggleSelection}
+                    onToggleFavorite={handleToggleFavorite}
+                    selectedItems={selectedItems}
+                    selectedStackIdsInOrder={selectedStackIdsInOrder}
+                    onBulkEditSelected={handleToggleBulkEditPanel}
+                    onMergeStacks={handleMergeStacks}
+                    onRefreshStacks={handleRefreshStacks}
+                    collectionMenuCollections={collectionMenuCollections}
+                    isCollectionMenuLoading={isCollectionMenuLoading}
+                    onAddStacksToCollection={addStackIdsToCollection}
+                    onCreateCollectionWithStacks={openCreateCollectionForStackIds}
+                    onAddToScratch={handleAddStackToScratch}
+                    onAddStacksToScratch={handleAddStacksToScratch}
+                  />
+                ) : (
+                  <div className="h-full w-full" />
+                )}
               </div>
             );
           })}
         </div>
 
         {/* Upload notifications */}
-        {uploadNotifications.map((notification) => (
-          <div
-            key={notification.id}
-            className="fixed bottom-4 right-4 bg-blue-500 text-white p-4 rounded-lg shadow-lg z-[120]"
-          >
-            <div className="flex items-center gap-2">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span>{notification.message}</span>
-            </div>
-            {notification.progress !== undefined && (
-              <div className="mt-2 w-full bg-blue-400 rounded-full h-2">
-                <div
-                  className="bg-white h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${notification.progress}%` }}
-                />
+        {uploadNotifications.map((notification) => {
+          const progress =
+            'progress' in notification && typeof notification.progress === 'number'
+              ? notification.progress
+              : undefined;
+
+          return (
+            <div
+              key={notification.id}
+              className="fixed left-3 right-3 bottom-[calc(env(safe-area-inset-bottom)+0.75rem)] z-[120] rounded-lg bg-blue-500 p-3 text-white shadow-lg sm:left-auto sm:right-4 sm:w-80 lg:bottom-4 lg:w-96 lg:p-4"
+            >
+              <div className="flex items-center gap-2">
+                <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+                <span className="min-w-0 text-xs font-medium leading-snug lg:text-sm">
+                  {notification.message}
+                </span>
               </div>
-            )}
-          </div>
-        ))}
+              {progress !== undefined && (
+                <div className="mt-2 h-2 w-full rounded-full bg-blue-400">
+                  <div
+                    className="h-2 rounded-full bg-white transition-all duration-300"
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {activeFolder && (
@@ -777,19 +903,20 @@ export default function SparseStackGrid({
 
       {/* Info Sidebar Toggle */}
       <HeaderIconButton
-        icon={Info}
-        label={infoSidebarOpen ? t.viewer.closeInfo : t.viewer.openInfo}
+        aria-label={infoSidebarOpen ? t.viewer.closeInfo : t.viewer.openInfo}
         onClick={() => setInfoSidebarOpen(!infoSidebarOpen)}
         className={cn(
           'fixed top-4 right-4 z-50 transition-colors',
           infoSidebarOpen ? 'bg-blue-500 text-white' : 'text-white hover:bg-white/20'
         )}
-      />
+      >
+        <Info size={18} />
+      </HeaderIconButton>
 
       {createPortal(
         <GridColumnSlider
           value={itemsPerRow}
-          className={cn(infoSidebarOpen || isEditPanelOpen ? 'right-[21.25rem]' : 'right-5')}
+          className={cn(rightPanelPushesContent ? 'right-[21.25rem]' : 'right-5')}
           onChange={setGridColumns}
         />,
         document.body

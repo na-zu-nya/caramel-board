@@ -10,7 +10,7 @@ import { useT } from '@/lib/i18n';
 import { navigationStateAtom } from '@/stores/navigation';
 import { currentFilterAtom } from '@/stores/ui';
 import { genListToken, saveViewContext } from '@/stores/view-context';
-import type { MediaGridItem, MediaType, StackFilter } from '@/types';
+import type { MediaCategory, MediaGridItem, StackFilter } from '@/types';
 
 export const Route = createFileRoute('/library/$datasetId/tag/$tagName')({
   component: TagDetailPage,
@@ -174,11 +174,10 @@ function TagDetailPage() {
       filter: effectiveFilter,
       sort: currentSort,
     });
-    // Build ordered ids (right-to-left) from loaded items
-    const loadedIdsLtr = (allItems || [])
+    // Build ordered ids from loaded items in grid-list order.
+    const ids = (allItems || [])
       .filter((it): it is MediaGridItem => !!it)
       .map((it) => toNumericId(it.id));
-    const ids = loadedIdsLtr.slice().reverse();
     const clickedId = toNumericId(item.id);
     const currentIndex = Math.max(0, ids.indexOf(clickedId));
 
@@ -233,6 +232,6 @@ function toNumericId(value: string | number): number {
   return typeof value === 'number' ? value : Number.parseInt(value, 10);
 }
 
-function isMediaType(value: unknown): value is MediaType {
+function isMediaType(value: unknown): value is MediaCategory {
   return value === 'image' || value === 'comic' || value === 'video';
 }

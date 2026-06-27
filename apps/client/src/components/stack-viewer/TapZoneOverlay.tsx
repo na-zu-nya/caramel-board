@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 
 interface TapZoneOverlayProps {
   onLeftTap: () => void;
@@ -24,8 +24,6 @@ interface TapZoneOverlayProps {
   };
   disableDrag?: boolean;
   isZoomed?: boolean;
-  canGoLeft?: boolean;
-  canGoRight?: boolean;
 }
 
 interface PointerPosition {
@@ -67,11 +65,7 @@ export default function TapZoneOverlay({
   contentArea = { top: 0, left: 0, right: 0, bottom: 0 },
   disableDrag = false,
   isZoomed = false,
-  canGoLeft = true,
-  canGoRight = true,
 }: TapZoneOverlayProps) {
-  const [leftHover, setLeftHover] = useState(false);
-  const [rightHover, setRightHover] = useState(false);
   const startPosRef = useRef<{ x: number; y: number; time: number } | null>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const interactionRef = useRef<HTMLDivElement>(null);
@@ -380,23 +374,6 @@ export default function TapZoneOverlay({
         pointerEvents: 'none',
       }}
     >
-      {/* Visual gradients (full height). Hidden when cannot navigate further. */}
-      <div
-        className="absolute left-0 top-0 bottom-0 w-[20%] pointer-events-none transition-opacity duration-150"
-        style={{
-          opacity: leftHover && canGoLeft ? 1 : 0,
-          backgroundImage:
-            'linear-gradient(to right, color-mix(in oklch, var(--primary) 12%, transparent), transparent)',
-        }}
-      />
-      <div
-        className="absolute right-0 top-0 bottom-0 w-[20%] pointer-events-none transition-opacity duration-150"
-        style={{
-          opacity: rightHover && canGoRight ? 1 : 0,
-          backgroundImage:
-            'linear-gradient(to left, color-mix(in oklch, var(--primary) 12%, transparent), transparent)',
-        }}
-      />
       {/* Interaction layer: excludes bottom safe area and accepts pointer events */}
       <div
         ref={interactionRef}
@@ -411,24 +388,8 @@ export default function TapZoneOverlay({
           overscrollBehavior: 'contain',
         }}
       >
-        {/* 左20%ゾーン（hoverトリガーのみ） */}
-        <div className="absolute left-0 top-0 bottom-0 w-[20%] cursor-pointer">
-          {/* hoverトリガー領域 */}
-          <div
-            className="absolute left-0 right-0 top-0 bottom-0"
-            onMouseEnter={() => setLeftHover(true)}
-            onMouseLeave={() => setLeftHover(false)}
-          />
-        </div>
-
-        {/* 右20%ゾーン（hoverトリガーのみ） */}
-        <div className="absolute right-0 top-0 bottom-0 w-[20%] cursor-pointer">
-          <div
-            className="absolute left-0 right-0 top-0 bottom-0"
-            onMouseEnter={() => setRightHover(true)}
-            onMouseLeave={() => setRightHover(false)}
-          />
-        </div>
+        <div className="absolute left-0 top-0 bottom-0 w-[20%] cursor-pointer" />
+        <div className="absolute right-0 top-0 bottom-0 w-[20%] cursor-pointer" />
       </div>
     </div>
   );

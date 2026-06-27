@@ -25,7 +25,9 @@ export interface PdfOriginalMeta {
   originalName: string;
   size: number;
   hash: string;
-  mimeType: 'application/pdf';
+  mimeType: string;
+  sourceFormat: 'pdf' | 'ai';
+  originalExtension: 'pdf' | 'ai';
   pageCount: number;
   rasterDpi: number;
   importId: string;
@@ -47,8 +49,22 @@ export interface PreparedPdfImport {
   cleanup: () => void;
 }
 
+export interface PreparePdfImportOptions {
+  dpi?: number;
+  sourceHash?: string;
+}
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const getImportExtension = (file: FileInput): 'pdf' | 'ai' =>
+  path.extname(file.originalname).toLowerCase() === '.ai' ? 'ai' : 'pdf';
+
+const getImportMimeType = (file: FileInput, originalExtension: 'pdf' | 'ai') => {
+  const mimeType = file.mimetype?.trim().toLowerCase();
+  if (mimeType && mimeType !== 'application/octet-stream') return mimeType;
+  return originalExtension === 'ai' ? 'application/pdf' : 'application/pdf';
+};
 
 const getErrorCode = (error: unknown): string | undefined => {
   if (!isRecord(error)) return undefined;
@@ -175,7 +191,8 @@ const isPdfOriginalMeta = (value: unknown): value is PdfOriginalMeta => {
 export const isPdfFileInput = async (file: FileInput) => {
   const mimeType = file.mimetype?.toLowerCase() ?? '';
   if (mimeType === 'application/pdf') return true;
-  if (path.extname(file.originalname).toLowerCase() === '.pdf') return true;
+  const extension = path.extname(file.originalname).toLowerCase();
+  if (extension === '.pdf' || extension === '.ai') return true;
 
   try {
     const handle = fs.openSync(file.path, 'r');
@@ -201,7 +218,7 @@ export const appendPdfOriginalMeta = (
   );
   return {
     ...base,
-    sourceType: 'pdf',
+    sourceType: original.sourceFormat,
     sourcePdf: original,
     sourcePdfs: [...existing, original],
   };
@@ -234,11 +251,13 @@ export const extractPdfOriginalsFromMeta = (meta: unknown): PdfOriginalMeta[] =>
 export const preparePdfImport = async (
   file: FileInput,
   dataSetId: number,
-  dpi = PDF_RASTER_DPI
+  options: PreparePdfImportOptions = {}
 ): Promise<PreparedPdfImport> => {
-  const pdfHash = await getHash(file.path);
+  const dpi = options.dpi ?? PDF_RASTER_DPI;
+  const pdfHash = options.sourceHash ?? (await getHash(file.path));
   const importId = randomUUID();
-  const originalKey = buildOriginalKey(dataSetId, pdfHash, 'pdf');
+  const originalExtension = getImportExtension(file);
+  const originalKey = buildOriginalKey(dataSetId, pdfHash, originalExtension);
   const originalPath = DataStorage.getPath(originalKey);
   fs.mkdirSync(path.dirname(originalPath), { recursive: true });
   let copiedOriginal = false;
@@ -277,7 +296,9 @@ export const preparePdfImport = async (
         originalName: file.originalname,
         size: file.size ?? fs.statSync(file.path).size,
         hash: pdfHash,
-        mimeType: 'application/pdf',
+        mimeType: getImportMimeType(file, originalExtension),
+        sourceFormat: originalExtension,
+        originalExtension,
         pageCount: pages.length,
         rasterDpi: dpi,
         importId,

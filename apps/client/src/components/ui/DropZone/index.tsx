@@ -3,32 +3,32 @@ import { useDrag } from '@/contexts/DragContext';
 import { STACK_IDS_MIME } from '@/lib/stack-drag-data';
 import { cn } from '@/lib/utils';
 
-interface FileSystemEntryBase {
+interface DropZoneFileSystemEntryBase {
   isFile: boolean;
   isDirectory: boolean;
   name: string;
   fullPath: string;
 }
 
-interface FileSystemFileEntry extends FileSystemEntryBase {
+interface DropZoneFileSystemFileEntry extends DropZoneFileSystemEntryBase {
   file: (
     successCallback: (file: File) => void,
     errorCallback?: (error: DOMException) => void
   ) => void;
 }
 
-interface FileSystemDirectoryReader {
+interface DropZoneFileSystemDirectoryReader {
   readEntries: (
-    successCallback: (entries: FileSystemEntry[]) => void,
+    successCallback: (entries: DropZoneFileSystemEntry[]) => void,
     errorCallback?: (error: DOMException) => void
   ) => void;
 }
 
-interface FileSystemDirectoryEntry extends FileSystemEntryBase {
-  createReader: () => FileSystemDirectoryReader;
+interface DropZoneFileSystemDirectoryEntry extends DropZoneFileSystemEntryBase {
+  createReader: () => DropZoneFileSystemDirectoryReader;
 }
 
-type FileSystemEntry = FileSystemFileEntry | FileSystemDirectoryEntry;
+type DropZoneFileSystemEntry = DropZoneFileSystemFileEntry | DropZoneFileSystemDirectoryEntry;
 
 type UrlDropHandler = (urls: string[], event: DragEvent) => void;
 
@@ -52,6 +52,39 @@ interface DropZoneProps {
   disabled?: boolean;
 }
 
+export const DEFAULT_ACCEPT = 'image/*,video/*,application/pdf,.pdf,.ai,.svg,.svgz,.dng';
+const ACCEPT_EXTENSION_GROUPS: Record<string, Set<string>> = {
+  image: new Set([
+    '.3fr',
+    '.arw',
+    '.avif',
+    '.bmp',
+    '.cr2',
+    '.cr3',
+    '.dng',
+    '.erf',
+    '.gif',
+    '.heic',
+    '.heif',
+    '.jpeg',
+    '.jpg',
+    '.nef',
+    '.nrw',
+    '.orf',
+    '.pef',
+    '.png',
+    '.raf',
+    '.rw2',
+    '.sr2',
+    '.srf',
+    '.svg',
+    '.svgz',
+    '.tif',
+    '.tiff',
+    '.webp',
+  ]),
+  video: new Set(['.avi', '.m4v', '.mkv', '.mov', '.mp4', '.mpeg', '.mpg', '.webm', '.wmv']),
+};
 const QUALITY_KEYWORDS = [
   'original',
   'orig',
@@ -86,6 +119,38 @@ const QUERY_KEYS_TO_STRIP = new Set([
   'format',
   'fit',
 ]);
+
+const getFileExtension = (name: string) => name.match(/\.([a-z0-9]+)$/i)?.[0]?.toLowerCase() ?? '';
+
+const matchesAcceptToken = (file: File, token: string) => {
+  const normalizedToken = token.toLowerCase();
+  const mimeType = file.type.toLowerCase();
+  const extension = getFileExtension(file.name);
+
+  if (normalizedToken.startsWith('.')) {
+    return extension === normalizedToken;
+  }
+
+  if (normalizedToken.endsWith('/*')) {
+    const baseType = normalizedToken.slice(0, -2);
+    if (mimeType.startsWith(`${baseType}/`)) return true;
+    return ACCEPT_EXTENSION_GROUPS[baseType]?.has(extension) ?? false;
+  }
+
+  return mimeType === normalizedToken;
+};
+
+const acceptsFile = (file: File, acceptedTypes: string[]) =>
+  acceptedTypes.length === 0 || acceptedTypes.some((type) => matchesAcceptToken(file, type));
+
+export function filterAcceptedFiles(files: File[], accept = DEFAULT_ACCEPT): File[] {
+  const acceptedTypes = accept
+    .split(',')
+    .map((type) => type.trim())
+    .filter((type) => type.length > 0);
+
+  return files.filter((file) => acceptsFile(file, acceptedTypes));
+}
 
 type CandidateInfo = {
   url: URL;
@@ -204,7 +269,7 @@ function extractRawUrlStrings(value: string): string[] {
   return extracted;
 }
 
-function extractUrlsFromDataTransfer(dataTransfer: DataTransfer | null): string[] {
+export function extractUrlsFromDataTransfer(dataTransfer: DataTransfer | null): string[] {
   if (!dataTransfer) return [];
 
   const rawUrls: string[] = [];
@@ -256,6 +321,10 @@ function extractUrlsFromDataTransfer(dataTransfer: DataTransfer | null): string[
 }
 
 function debugLogDroppedDataTransfer(dataTransfer: DataTransfer | null) {
+  if (!import.meta.env.DEV) {
+    return;
+  }
+
   if (!dataTransfer) {
     console.log('[DropZone] drop payload', { hasDataTransfer: false });
     return;
@@ -299,9 +368,9 @@ const RELATIVE_PATH_KEY = '__dropZoneRelativePath';
 const FILE_SCAN_NOTIFY_INTERVAL_MS = 120;
 const FILE_SCAN_YIELD_EVERY = 80;
 
-interface FileSystemEntryProvider extends DataTransferItem {
-  webkitGetAsEntry?: () => FileSystemEntry | null;
-}
+type FileSystemEntryProvider = Omit<DataTransferItem, 'webkitGetAsEntry'> & {
+  webkitGetAsEntry?: () => DropZoneFileSystemEntry | null;
+};
 
 interface FileScanContext {
   progress: DropZoneFileScanProgress;
@@ -316,16 +385,18 @@ function normalizeRelativePath(fullPath: string): string {
   return trimmed;
 }
 
-function getFileSystemEntry(item: DataTransferItem): FileSystemEntry | null {
+function getFileSystemEntry(item: DataTransferItem): DropZoneFileSystemEntry | null {
   const entryProvider = item as FileSystemEntryProvider;
   return entryProvider.webkitGetAsEntry?.() ?? null;
 }
 
-function isFileEntry(entry: FileSystemEntry): entry is FileSystemFileEntry {
+function isFileEntry(entry: DropZoneFileSystemEntry): entry is DropZoneFileSystemFileEntry {
   return entry.isFile;
 }
 
-function isDirectoryEntry(entry: FileSystemEntry): entry is FileSystemDirectoryEntry {
+function isDirectoryEntry(
+  entry: DropZoneFileSystemEntry
+): entry is DropZoneFileSystemDirectoryEntry {
   return entry.isDirectory;
 }
 
@@ -382,7 +453,7 @@ async function reportFileScanProgress(context: FileScanContext, force = false): 
   }
 }
 
-function readFileEntry(entry: FileSystemFileEntry): Promise<File> {
+function readFileEntry(entry: DropZoneFileSystemFileEntry): Promise<File> {
   return new Promise<File>((resolve, reject) => {
     entry.file((file) => {
       const relativePath = normalizeRelativePath(entry.fullPath || entry.name);
@@ -392,17 +463,19 @@ function readFileEntry(entry: FileSystemFileEntry): Promise<File> {
   });
 }
 
-function readEntryBatch(reader: FileSystemDirectoryReader): Promise<FileSystemEntry[]> {
-  return new Promise<FileSystemEntry[]>((resolve, reject) => {
+function readEntryBatch(
+  reader: DropZoneFileSystemDirectoryReader
+): Promise<DropZoneFileSystemEntry[]> {
+  return new Promise<DropZoneFileSystemEntry[]>((resolve, reject) => {
     reader.readEntries(resolve, reject);
   });
 }
 
 async function readEntriesRecursive(
-  reader: FileSystemDirectoryReader,
+  reader: DropZoneFileSystemDirectoryReader,
   context: FileScanContext
-): Promise<FileSystemEntry[]> {
-  const entries: FileSystemEntry[] = [];
+): Promise<DropZoneFileSystemEntry[]> {
+  const entries: DropZoneFileSystemEntry[] = [];
 
   while (true) {
     const batch = await readEntryBatch(reader);
@@ -415,11 +488,11 @@ async function readEntriesRecursive(
 }
 
 async function traverseFileSystemEntry(
-  rootEntry: FileSystemEntry,
+  rootEntry: DropZoneFileSystemEntry,
   context: FileScanContext
 ): Promise<File[]> {
   const files: File[] = [];
-  const pendingEntries: FileSystemEntry[] = [rootEntry];
+  const pendingEntries: DropZoneFileSystemEntry[] = [rootEntry];
 
   while (pendingEntries.length > 0) {
     const entry = pendingEntries.pop();
@@ -449,7 +522,7 @@ async function traverseFileSystemEntry(
   return files;
 }
 
-async function extractFilesFromDataTransfer(
+export async function extractFilesFromDataTransfer(
   dataTransfer: DataTransfer | null,
   onScanProgress: (progress: DropZoneFileScanProgress) => void
 ): Promise<File[]> {
@@ -539,7 +612,7 @@ export function DropZone({
   onFilesDrop,
   onUrlDrop,
   scanProgress,
-  accept = 'image/*,video/*,application/pdf',
+  accept = DEFAULT_ACCEPT,
   multiple = true,
   children,
   className,
@@ -596,7 +669,7 @@ export function DropZone({
       e.stopPropagation();
       try {
         // Cmd 併用時でも再投入を常に copy として受け付ける
-        e.dataTransfer.dropEffect = 'copy';
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
       } catch {}
     };
 
@@ -620,11 +693,6 @@ export function DropZone({
       setIsDragActive(false);
       dragCounter.current = 0;
 
-      const acceptedTypes = accept
-        .split(',')
-        .map((type) => type.trim())
-        .filter((type) => type.length > 0);
-
       void (async () => {
         if (hasFileHandler) {
           setInternalScanProgress({
@@ -638,17 +706,7 @@ export function DropZone({
           setInternalScanProgress(null);
 
           if (resolvedFiles.length > 0) {
-            const filteredFiles = acceptedTypes.length
-              ? resolvedFiles.filter((file) =>
-                  acceptedTypes.some((type) => {
-                    if (type.endsWith('/*')) {
-                      const baseType = type.slice(0, -2);
-                      return file.type.startsWith(baseType);
-                    }
-                    return file.type === type;
-                  })
-                )
-              : resolvedFiles;
+            const filteredFiles = filterAcceptedFiles(resolvedFiles, accept);
 
             if (filteredFiles.length > 0) {
               if (multiple) {
@@ -720,7 +778,7 @@ export function FullPageDropZone({
   onDrop,
   onFilesDrop,
   onUrlDrop,
-  accept = 'image/*,video/*,application/pdf',
+  accept = DEFAULT_ACCEPT,
   multiple = true,
   children,
   disabled = false,

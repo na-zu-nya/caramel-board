@@ -118,17 +118,16 @@ function CollectionViewContent() {
     const item = page.stacks?.[withinPageIndex];
     if (!item) return;
 
-    const ids = (page.stacks || [])
-      .map((s) =>
-        typeof s.id === 'string' ? Number.parseInt(s.id as string, 10) : (s.id as number)
-      )
-      .reverse();
+    const ids = (page.stacks || []).map((s) =>
+      typeof s.id === 'string' ? Number.parseInt(s.id as string, 10) : (s.id as number)
+    );
     const clickedId =
       typeof item.id === 'string' ? Number.parseInt(item.id as string, 10) : (item.id as number);
     const currentIndex = Math.max(0, ids.indexOf(clickedId));
+    const mediaType = item.mediaType;
     const token = genListToken({
       datasetId,
-      mediaType: (item as any).mediaType,
+      mediaType,
       filters: currentFilter,
       sort: currentSort,
       collectionId,
@@ -136,7 +135,7 @@ function CollectionViewContent() {
     saveViewContext({
       token,
       datasetId,
-      mediaType: (item as any).mediaType,
+      mediaType,
       filters: currentFilter,
       sort: currentSort,
       collectionId,
@@ -148,7 +147,7 @@ function CollectionViewContent() {
     navigate({
       to: '/library/$datasetId/stacks/$stackId',
       params: { datasetId, stackId: String(item.id) },
-      search: { page: 0, mediaType: (item as any).mediaType, listToken: token },
+      search: { page: 0, mediaType, listToken: token },
     });
   }, [collection, datasetId, currentFilter, currentSort, collectionId, navigate]);
 
@@ -190,7 +189,9 @@ function CollectionViewContent() {
         if (filterConfig.authorNames) restoredFilter.authors = filterConfig.authorNames;
         if (filterConfig.hasNoTags) restoredFilter.hasNoTags = filterConfig.hasNoTags;
         if (filterConfig.hasNoAuthor) restoredFilter.hasNoAuthor = filterConfig.hasNoAuthor;
-        if (filterConfig.mediaType) restoredFilter.mediaType = filterConfig.mediaType;
+        if (filterConfig.mediaCategory) restoredFilter.mediaCategory = filterConfig.mediaCategory;
+        if (Array.isArray(filterConfig.mediaTypes))
+          restoredFilter.mediaTypes = filterConfig.mediaTypes;
         if (filterConfig.colorFilter) restoredFilter.colorFilter = filterConfig.colorFilter;
 
         setCurrentFilter(restoredFilter);
@@ -222,7 +223,8 @@ function CollectionViewContent() {
       JSON.stringify(currentFilter.authors) !== JSON.stringify(originalConfig.authorNames) ||
       currentFilter.hasNoTags !== originalConfig.hasNoTags ||
       currentFilter.hasNoAuthor !== originalConfig.hasNoAuthor ||
-      currentFilter.mediaType !== originalConfig.mediaType ||
+      currentFilter.mediaCategory !== originalConfig.mediaCategory ||
+      JSON.stringify(currentFilter.mediaTypes) !== JSON.stringify(originalConfig.mediaTypes) ||
       JSON.stringify(currentFilter.colorFilter) !== JSON.stringify(originalConfig.colorFilter)
     );
   }, [collection, currentFilter]);
@@ -280,7 +282,8 @@ function CollectionViewContent() {
             filter: {
               datasetId,
               collectionId,
-              mediaType: currentFilter.mediaType,
+              mediaCategory: currentFilter.mediaCategory,
+              mediaTypes: currentFilter.mediaTypes,
               tags: currentFilter.tags,
               authors: currentFilter.authors,
               isFavorite: currentFilter.isFavorite,
@@ -334,7 +337,8 @@ function CollectionViewContent() {
         if (collection.type === 'MANUAL') {
           filterParams.collection = Number.parseInt(collectionId, 10);
         }
-        if (currentFilter.mediaType) filterParams.mediaType = currentFilter.mediaType;
+        if (currentFilter.mediaCategory) filterParams.mediaCategory = currentFilter.mediaCategory;
+        if (currentFilter.mediaTypes?.length) filterParams.mediaTypes = currentFilter.mediaTypes;
         if (currentFilter.tags && currentFilter.tags.length > 0)
           filterParams.tag = currentFilter.tags;
         if (currentFilter.authors && currentFilter.authors.length > 0)
@@ -527,19 +531,17 @@ function CollectionViewContent() {
       sort: currentSort,
     });
     console.log('Navigate to stack:', item.id);
-    // Build ids from loaded stacks
-    // StackViewerは右→左の順序で巡回するため、ID配列は反転させて保存する
-    const loadedIdsLtr = resolvedLoadedItems.map((it) =>
+    // Build ids from loaded stacks in grid-list order.
+    const loadedIds = resolvedLoadedItems.map((it) =>
       typeof it.id === 'string' ? Number.parseInt(it.id, 10) : (it.id as number)
     );
-    const loadedIds = loadedIdsLtr.slice().reverse();
     const clickedId =
       typeof item.id === 'string' ? Number.parseInt(item.id, 10) : (item.id as number);
     const currentIndex = Math.max(0, loadedIds.indexOf(clickedId));
 
     const token = genListToken({
       datasetId,
-      mediaType: currentFilter.mediaType,
+      mediaType: currentFilter.mediaCategory,
       filters: currentFilter,
       sort: currentSort,
       collectionId,
@@ -548,7 +550,7 @@ function CollectionViewContent() {
     saveViewContext({
       token,
       datasetId,
-      mediaType: currentFilter.mediaType as any,
+      mediaType: currentFilter.mediaCategory,
       filters: currentFilter,
       sort: currentSort,
       collectionId,

@@ -153,23 +153,22 @@ function AuthorDetailPage() {
       filter: effectiveFilter,
       sort: currentSort,
     });
-    // Cross-asset navigation: build ids from loaded items (right-to-left)
-    const loadedIdsLtr = (allItems || [])
+    // Cross-stack navigation: build ids from loaded items in grid-list order.
+    const ids = (allItems || [])
       .filter((it): it is MediaGridItem => !!it)
       .map((it) =>
         typeof it.id === 'string' ? Number.parseInt(it.id as string, 10) : (it.id as number)
       );
-    const ids = loadedIdsLtr.slice().reverse();
     const clickedId =
       typeof item.id === 'string' ? Number.parseInt(item.id as string, 10) : (item.id as number);
     const currentIndex = Math.max(0, ids.indexOf(clickedId));
 
-    const mediaType = (item as any).mediaType as string | undefined;
+    const mediaType = item.mediaType;
     const token = genListToken({ datasetId, mediaType, filters: authorFilter });
     saveViewContext({
       token,
       datasetId,
-      mediaType: mediaType as any,
+      mediaType,
       filters: authorFilter,
       ids,
       currentIndex,

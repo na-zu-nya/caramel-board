@@ -1,6 +1,5 @@
-import fs from 'node:fs';
-import axios, { type AxiosInstance } from 'axios';
-import FormData from 'form-data';
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
 
 interface TagPrediction {
   predicted_tags: string[];
@@ -13,13 +12,13 @@ interface TagPrediction {
 // Embedding/CLIP interfaces removed (AutoTag-only)
 
 export class AutoTagClient {
-  private client: AxiosInstance;
+  private baseURL: string;
+
+  private timeoutMs: number;
 
   constructor(baseURL: string = process.env.JOYTAG_SERVER_URL || 'http://localhost:5001') {
-    this.client = axios.create({
-      baseURL,
-      timeout: Number(process.env.JOYTAG_REQUEST_TIMEOUT_MS || 300000),
-    });
+    this.baseURL = baseURL.replace(/\/+$/, '');
+    this.timeoutMs = Number(process.env.JOYTAG_REQUEST_TIMEOUT_MS || 300000);
   }
 
   /**
@@ -30,8 +29,7 @@ export class AutoTagClient {
     services: Record<string, string>;
     version: string;
   }> {
-    const response = await this.client.get('/health');
-    return response.data;
+    return this.requestJson('/health');
   }
 
   /**
@@ -45,22 +43,25 @@ export class AutoTagClient {
       !imagePathOrKey.startsWith('/')
     ) {
       // Send as file key
-      const response = await this.client.post<TagPrediction>('/api/v1/tag', {
-        file_key: imagePathOrKey,
-        threshold,
+      return this.requestJson('/api/v1/tag', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          file_key: imagePathOrKey,
+          threshold,
+        }),
       });
-      return response.data;
     } else {
       // Send as file upload for absolute paths
+      const image = await readFile(imagePathOrKey);
       const formData = new FormData();
-      formData.append('image', fs.createReadStream(imagePathOrKey));
+      formData.append('image', new Blob([toBlobPart(image)]), path.basename(imagePathOrKey));
       formData.append('threshold', threshold.toString());
 
-      const response = await this.client.post<TagPrediction>('/api/v1/tag', formData, {
-        headers: formData.getHeaders(),
+      return this.requestJson('/api/v1/tag', {
+        method: 'POST',
+        body: formData,
       });
-
-      return response.data;
     }
   }
 
@@ -73,14 +74,13 @@ export class AutoTagClient {
     threshold = 0.4
   ): Promise<TagPrediction> {
     const formData = new FormData();
-    formData.append('image', imageBuffer, { filename });
+    formData.append('image', new Blob([toBlobPart(imageBuffer)]), filename);
     formData.append('threshold', threshold.toString());
 
-    const response = await this.client.post<TagPrediction>('/api/v1/tag', formData, {
-      headers: formData.getHeaders(),
+    return this.requestJson('/api/v1/tag', {
+      method: 'POST',
+      body: formData,
     });
-
-    return response.data;
   }
 
   /**
@@ -94,7 +94,64 @@ export class AutoTagClient {
   }
 
   // All embedding/CLIP methods removed. Only AutoTag endpoints remain.
+
+  private requestUrl(route: string): string {
+    return new URL(route, `${this.baseURL}/`).toString();
+  }
+
+  private async requestJson<TResponse>(route: string, init: RequestInit = {}): Promise<TResponse> {
+    const response = await fetch(this.requestUrl(route), {
+      ...init,
+      signal: AbortSignal.timeout(this.timeoutMs),
+    });
+    const data = await parseResponseBody(response);
+    if (!response.ok) {
+      throw new AutoTagHttpError(response, data);
+    }
+    return data as TResponse;
+  }
 }
+
+interface AutoTagHttpErrorResponse {
+  status: number;
+  data: unknown;
+}
+
+class AutoTagHttpError extends Error {
+  response: AutoTagHttpErrorResponse;
+
+  constructor(response: Response, data: unknown) {
+    super(formatHttpErrorMessage(response, data));
+    this.name = 'AutoTagHttpError';
+    this.response = {
+      status: response.status,
+      data,
+    };
+  }
+}
+
+const parseResponseBody = async (response: Response): Promise<unknown> => {
+  const text = await response.text();
+  if (!text) return null;
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return text;
+  }
+};
+
+const formatHttpErrorMessage = (response: Response, data: unknown) => {
+  const detail = typeof data === 'string' ? data : JSON.stringify(data);
+  return detail
+    ? `JoyTag request failed (${response.status} ${response.statusText}): ${detail}`
+    : `JoyTag request failed (${response.status} ${response.statusText})`;
+};
+
+const toBlobPart = (buffer: Buffer): Uint8Array<ArrayBuffer> => {
+  const bytes = new Uint8Array(buffer.byteLength);
+  bytes.set(buffer);
+  return bytes;
+};
 
 // Singleton instance
 let autoTagClient: AutoTagClient | null = null;

@@ -1,9 +1,11 @@
 const FPS_KEY = 'viewer.fps';
 const MUTED_KEY = 'viewer.muted';
 const VOLUME_KEY = 'viewer.volume';
+const COMIC_DISPLAY_MODE_KEY = 'viewer.comicDisplayMode';
 
 export const VIEWER_FPS_OPTIONS = [24, 30, 48, 60] as const;
 export type ViewerFps = (typeof VIEWER_FPS_OPTIONS)[number];
+export type ViewerComicDisplayMode = 'single' | 'spread';
 
 export function getViewerFps(): ViewerFps {
   try {
@@ -58,5 +60,19 @@ export function getViewerVolume(): number {
 export function setViewerVolume(volume: number) {
   try {
     localStorage.setItem(VOLUME_KEY, String(Math.min(Math.max(volume, 0), 1)));
+  } catch {}
+}
+
+export function getViewerComicDisplayMode(): ViewerComicDisplayMode {
+  try {
+    const raw = localStorage.getItem(COMIC_DISPLAY_MODE_KEY);
+    if (raw === 'single' || raw === 'spread') return raw;
+  } catch {}
+  return 'single';
+}
+
+export function setViewerComicDisplayMode(mode: ViewerComicDisplayMode) {
+  try {
+    localStorage.setItem(COMIC_DISPLAY_MODE_KEY, mode);
   } catch {}
 }

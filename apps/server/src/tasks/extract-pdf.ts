@@ -5,6 +5,7 @@ import 'source-map-support/register';
 import type { ArgumentsCamelCase } from 'yargs';
 
 import yargs from 'yargs';
+import { hideBin } from 'yargs/helpers';
 import { identifyFile } from './utils/imageMagick';
 
 dotenv.config();
@@ -20,7 +21,7 @@ interface ExtractOptions {
   basisHeight: number;
 }
 
-const argv = yargs
+const argv = yargs(hideBin(process.argv))
   .option('source', {
     alias: 's',
     type: 'string',

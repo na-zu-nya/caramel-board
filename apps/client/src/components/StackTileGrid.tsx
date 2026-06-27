@@ -1,8 +1,10 @@
+import { useQueryClient } from '@tanstack/react-query';
 import type { AriaRole, ReactElement } from 'react';
 import { useCallback } from 'react';
 import { StackTile } from '@/components/ui/Stack';
 import { useStackSelectionClick } from '@/hooks/features/useStackSelectionClick';
 import { useStackCollectionMenu } from '@/hooks/useStackCollectionMenu';
+import { apiClient } from '@/lib/api-client';
 import { useT } from '@/lib/i18n';
 import { getSourceImageFilename, getSourceImageUrl } from '@/lib/stack-drag-data';
 import { cn } from '@/lib/utils';
@@ -64,6 +66,7 @@ interface StackTileGridProps<TItem extends StackTileGridItemBase> {
   onAddToScratchItem?: (item: TItem) => void;
   onDownloadItem?: (item: TItem) => void;
   onDownloadSelected?: () => void;
+  onRefreshStacks?: (stackIds: StackTileGridItemId[]) => void | Promise<void>;
   onBulkEditSelected?: () => void;
   onMergeSelected?: () => void;
   onRemoveSelectedStacks?: () => void;
@@ -141,6 +144,7 @@ export function StackTileGrid<TItem extends StackTileGridItemBase>({
   onAddToScratchItem,
   onDownloadItem,
   onDownloadSelected,
+  onRefreshStacks,
   onBulkEditSelected,
   onMergeSelected,
   onRemoveSelectedStacks,
@@ -149,6 +153,7 @@ export function StackTileGrid<TItem extends StackTileGridItemBase>({
   getDragHandlers,
 }: StackTileGridProps<TItem>) {
   const t = useT();
+  const queryClient = useQueryClient();
   const hasCollectionMenu = datasetId !== undefined && datasetId !== null;
   const {
     collections,
@@ -167,6 +172,24 @@ export function StackTileGrid<TItem extends StackTileGridItemBase>({
     onSelectRange,
     onClick: onClickItem,
   });
+
+  const handleRefreshStacks = useCallback(
+    async (stackIds: StackTileGridItemId[]) => {
+      if (stackIds.length === 0) return;
+      if (onRefreshStacks) {
+        await onRefreshStacks(stackIds);
+        return;
+      }
+      await apiClient.refreshStacks(stackIds);
+      void Promise.allSettled([
+        queryClient.invalidateQueries({ queryKey: ['stack'] }),
+        queryClient.invalidateQueries({ queryKey: ['stacks'] }),
+        queryClient.invalidateQueries({ queryKey: ['library-counts', datasetId] }),
+        queryClient.invalidateQueries({ queryKey: ['dataset-overview', datasetId] }),
+      ]);
+    },
+    [datasetId, onRefreshStacks, queryClient]
+  );
 
   const renderTile = useCallback(
     (item: TItem) => {
@@ -221,6 +244,7 @@ export function StackTileGrid<TItem extends StackTileGridItemBase>({
           collectionMenu={collectionMenu}
           onDownload={onDownloadItem ? () => onDownloadItem(item) : undefined}
           onDownloadSelected={onDownloadSelected}
+          onRefresh={() => void handleRefreshStacks(contextStackIds)}
           onBulkEditSelected={onBulkEditSelected}
           onMergeSelected={onMergeSelected}
           onRemoveSelectedStacks={onRemoveSelectedStacks}
@@ -240,6 +264,7 @@ export function StackTileGrid<TItem extends StackTileGridItemBase>({
       collections,
       getDragHandlers,
       getLinkElement,
+      handleRefreshStacks,
       handleClick,
       hasCollectionMenu,
       isLoadingCollections,

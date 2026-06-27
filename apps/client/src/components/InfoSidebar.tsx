@@ -2,10 +2,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation, useNavigate, useParams } from '@tanstack/react-router';
 import { useAtom, useSetAtom } from 'jotai';
 import {
+  BookOpen,
   Calendar,
   ChevronDown,
   ChevronUp,
-  Clapperboard,
+  Columns2,
   Copy,
   Download,
   GalleryVerticalEnd,
@@ -16,7 +17,10 @@ import {
   Loader2,
   NotebookText,
   Palette,
+  PanelLeftOpen,
+  PanelRightOpen,
   RefreshCw,
+  Square,
   Star,
   Tag,
   Trash2,
@@ -28,6 +32,7 @@ import { AuthorLinkQuickAdd } from '@/components/authors/AuthorLinkQuickAdd';
 import { authorLinkStyles } from '@/components/authors/authorLinkStyles';
 import { AutoTagDisplay } from '@/components/ui/autotag-display';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { ColorPalette } from '@/components/ui/color-ball';
 import { Progress } from '@/components/ui/progress';
 import {
@@ -43,8 +48,9 @@ import { useScratch } from '@/hooks/useScratch';
 import { apiClient } from '@/lib/api-client';
 import { getAuthorLinkLabel, MAX_AUTHOR_LINKS } from '@/lib/author-links';
 import { copyText } from '@/lib/clipboard';
+import { normalizeComicReadingSettings } from '@/lib/comic-reading';
 import { downloadStackOriginals } from '@/lib/download-originals';
-import { useT } from '@/lib/i18n';
+import { getMediaTypeLabel, useT } from '@/lib/i18n';
 import { removeStackFromCache } from '@/lib/stack-cache';
 import { cn, hexForCopy } from '@/lib/utils';
 import {
@@ -55,7 +61,14 @@ import {
   selectedItemIdAtom,
 } from '@/stores/ui';
 import { addUploadNotificationAtom } from '@/stores/upload';
-import type { Author, DominantColor } from '@/types';
+import type {
+  Author,
+  ComicDisplayMode,
+  ComicOpeningDirection,
+  ComicReadingSettings,
+  DominantColor,
+  Stack,
+} from '@/types';
 
 interface InfoSidebarProps {
   hideThumbnails?: boolean;
@@ -74,6 +87,10 @@ const isSameEntityId = (left: string | number | undefined, right: string | numbe
   if (left === undefined || right === null) return false;
   return String(left) === String(right);
 };
+
+const PAGE_SETTING_CHOICE_BUTTON_CLASS =
+  'flex min-w-0 items-center justify-center gap-1.5 rounded-md px-2 py-2.5 text-xs font-medium leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60';
+const PAGE_SETTING_CHOICE_INACTIVE_CLASS = 'bg-gray-200/80 text-gray-700 hover:bg-gray-200';
 
 export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps) {
   const t = useT();
@@ -119,9 +136,9 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
   // Fetch selected item data
   const { data: selectedItem, isLoading } = useQuery({
     queryKey: ['stack', datasetId, selectedItemId],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       if (!selectedItemId) return null;
-      return apiClient.getStack(String(selectedItemId), datasetId);
+      return apiClient.getStack(String(selectedItemId), datasetId, { signal });
     },
     enabled: !!selectedItemId && isOpen,
   });
@@ -130,6 +147,16 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
     if (!selectedItem?.assets || selectedInfoAssetId === null) return undefined;
     return selectedItem.assets.find((asset) => isSameEntityId(asset.id, selectedInfoAssetId))?.id;
   }, [selectedInfoAssetId, selectedItem?.assets]);
+
+  const selectedItemAssetCount =
+    selectedItem?.assetsCount ?? selectedItem?.assetCount ?? selectedItem?.assets?.length ?? 0;
+  const canEditReadingSettings =
+    !!selectedItem && selectedItem.mediaType !== 'video' && selectedItemAssetCount > 1;
+  const readingSettings = useMemo(
+    () => normalizeComicReadingSettings(selectedItem?.meta?.reading),
+    [selectedItem?.meta?.reading]
+  );
+  const pageSettingDisplayMode = readingSettings.displayMode ?? 'spread';
 
   useEffect(() => {
     if (selectedInfoAssetId === null || !selectedItem?.assets) return;
@@ -183,18 +210,6 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
   ]);
 
   const previewGenerated = Boolean(selectedItem?.assets?.some((asset) => asset.preview));
-  const previewEligible = useMemo(() => {
-    if (!selectedItem?.assets) return false;
-    const previewable = new Set(['gif', 'mp4', 'mov', 'webm', 'm4v', 'avi', 'mkv']);
-    return selectedItem.assets.some((asset) => {
-      const ext = asset.fileType?.toLowerCase();
-      if (ext && previewable.has(ext)) return true;
-      const src = asset.file || asset.url || '';
-      const match = src.toLowerCase().match(/\.([a-z0-9]+)(?:$|[?#])/);
-      if (!match) return false;
-      return previewable.has(match[1]);
-    });
-  }, [selectedItem?.assets]);
 
   // State for editing
   const [tagInput, setTagInput] = useState('');
@@ -234,7 +249,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
   });
 
   // Save actions expanded state to sessionStorage
-  const _toggleActionsExpanded = () => {
+  const toggleActionsExpanded = () => {
     const newState = !actionsExpanded;
     setActionsExpanded(newState);
     try {
@@ -279,7 +294,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
   // Mutations for immediate updates
   const addTagMutation = useMutation({
     mutationFn: async ({ stackId, tag }: { stackId: number; tag: string }) => {
-      const response = await fetch(`/api/v1/stacks/${stackId}/tags`, {
+      const response = await fetch(`/api/v1/datasets/${datasetId}/stacks/${stackId}/tags`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tag }),
@@ -288,9 +303,9 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
       return response.json();
     },
     onSuccess: () => {
-      // Stack detail + list caches
-      queryClient.invalidateQueries({ queryKey: ['stack', datasetId, selectedItemId] });
-      queryClient.invalidateQueries({ queryKey: ['stacks'], refetchType: 'all' });
+      // Stack detail + stale list caches
+      queryClient.invalidateQueries({ queryKey: ['stack', datasetId] });
+      queryClient.invalidateQueries({ queryKey: ['stacks'], refetchType: 'none' });
       // Side menu counts/lists
       queryClient.invalidateQueries({ queryKey: ['tags', datasetId] });
       queryClient.invalidateQueries({ queryKey: ['library-counts', datasetId] });
@@ -306,16 +321,19 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
 
   const removeTagMutation = useMutation({
     mutationFn: async ({ stackId, tag }: { stackId: number; tag: string }) => {
-      const response = await fetch(`/api/v1/stacks/${stackId}/tags/${encodeURIComponent(tag)}`, {
-        method: 'DELETE',
-      });
+      const response = await fetch(
+        `/api/v1/datasets/${datasetId}/stacks/${stackId}/tags/${encodeURIComponent(tag)}`,
+        {
+          method: 'DELETE',
+        }
+      );
       if (!response.ok) throw new Error('Failed to remove tag');
       return response.json();
     },
     onSuccess: () => {
-      // Stack detail + list caches
-      queryClient.invalidateQueries({ queryKey: ['stack', datasetId, selectedItemId] });
-      queryClient.invalidateQueries({ queryKey: ['stacks'], refetchType: 'all' });
+      // Stack detail + stale list caches
+      queryClient.invalidateQueries({ queryKey: ['stack', datasetId] });
+      queryClient.invalidateQueries({ queryKey: ['stacks'], refetchType: 'none' });
       // Side menu counts/lists
       queryClient.invalidateQueries({ queryKey: ['tags', datasetId] });
       queryClient.invalidateQueries({ queryKey: ['library-counts', datasetId] });
@@ -342,7 +360,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
     onSuccess: () => {
       // Stack detail + list caches
       queryClient.invalidateQueries({ queryKey: ['stack', datasetId, selectedItemId] });
-      queryClient.invalidateQueries({ queryKey: ['stacks'], refetchType: 'all' });
+      queryClient.invalidateQueries({ queryKey: ['stacks'] });
       // Side menu authors list and counts
       queryClient.invalidateQueries({ queryKey: ['authors', datasetId] });
       queryClient.invalidateQueries({ queryKey: ['library-counts', datasetId] });
@@ -356,7 +374,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
     onSuccess: () => {
       setAuthorLinkQuickAddOpen(false);
       queryClient.invalidateQueries({ queryKey: ['stack', datasetId, selectedItemId] });
-      queryClient.invalidateQueries({ queryKey: ['stacks'], refetchType: 'all' });
+      queryClient.invalidateQueries({ queryKey: ['stacks'] });
       queryClient.invalidateQueries({ queryKey: ['authors', datasetId] });
       queryClient.invalidateQueries({ queryKey: ['authors', datasetId, 'management'] });
       addNotification({ type: 'success', message: t.info.authorLinkAdded });
@@ -405,6 +423,15 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['stack', datasetId, selectedItemId] });
+      queryClient.invalidateQueries({ queryKey: ['stacks'] });
+    },
+  });
+
+  const updateReadingSettingsMutation = useMutation({
+    mutationFn: async ({ stackId, meta }: { stackId: string | number; meta: Stack['meta'] }) =>
+      apiClient.updateStack(datasetId, stackId, { meta }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['stack'] });
       queryClient.invalidateQueries({ queryKey: ['stacks'] });
     },
   });
@@ -573,6 +600,43 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
     }
   };
 
+  const handleReadingSettingsChange = useCallback(
+    (patch: ComicReadingSettings) => {
+      if (!selectedItem) return;
+      updateReadingSettingsMutation.mutate({
+        stackId: selectedItem.id,
+        meta: {
+          ...(selectedItem.meta ?? {}),
+          reading: {
+            ...readingSettings,
+            ...patch,
+          },
+        },
+      });
+    },
+    [readingSettings, selectedItem, updateReadingSettingsMutation]
+  );
+
+  const handleSpreadDisplayEnabledChange = useCallback(
+    (checked: boolean) => {
+      handleReadingSettingsChange({
+        spreadDisplayEnabled: checked,
+        displayMode: checked ? pageSettingDisplayMode : readingSettings.displayMode,
+      });
+    },
+    [handleReadingSettingsChange, pageSettingDisplayMode, readingSettings.displayMode]
+  );
+
+  const handlePageDisplayModeChange = useCallback(
+    (displayMode: ComicDisplayMode) => {
+      handleReadingSettingsChange({
+        spreadDisplayEnabled: true,
+        displayMode,
+      });
+    },
+    [handleReadingSettingsChange]
+  );
+
   const likeMutation = useMutation({
     mutationFn: async ({ stackId, assetId }: { stackId: number; assetId?: string | number }) => {
       if (assetId !== undefined) {
@@ -643,10 +707,15 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
     },
   });
 
-  // Refresh (thumbnail + colors + auto-tags) in sequence (embeddings removed)
+  // Refresh (thumbnail + preview + colors + auto-tags) in sequence (embeddings removed)
   const refreshAllMutation = useMutation({
     mutationFn: async ({ stackId }: { stackId: number }) => {
       const thumbnailResult = await apiClient.refreshThumbnail(stackId);
+      const previewResult = await apiClient.regenerateStackPreview({
+        stackId,
+        datasetId,
+        force: true,
+      });
       const colorResult = await apiClient.updateStackColors(stackId);
       const autoTagResult = await apiClient.refreshStackAutoTags(stackId, {
         threshold: 0.4,
@@ -655,6 +724,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
 
       return {
         thumbnailResult,
+        previewResult,
         colorResult,
         autoTagResult,
       };
@@ -672,6 +742,20 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
             result.colorResult?.message || '色情報が未生成のため、カラー更新はスキップされました。',
         });
       }
+
+      if (result.previewResult?.failed?.length) {
+        addNotification({
+          type: 'info',
+          message: `プレビュー生成に失敗したアセットがあります: ${result.previewResult.failed.length} 件`,
+        });
+      }
+
+      if (result.thumbnailResult?.failed?.length) {
+        addNotification({
+          type: 'info',
+          message: `サムネイル生成に失敗したアセットがあります: ${result.thumbnailResult.failed.length} 件`,
+        });
+      }
     },
     onError: (error: unknown) => {
       const message =
@@ -679,16 +763,6 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
           ? error.message
           : 'リフレッシュ処理に失敗しました。時間を置いて再実行してください。';
       addNotification({ type: 'error', message });
-    },
-  });
-
-  const regeneratePreviewMutation = useMutation({
-    mutationFn: async ({ stackId, dataSetId }: { stackId: number; dataSetId: string }) => {
-      return apiClient.regenerateStackPreview({ stackId, datasetId: dataSetId, force: true });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['stack', datasetId, selectedItemId] });
-      queryClient.invalidateQueries({ queryKey: ['stacks'] });
     },
   });
 
@@ -734,590 +808,738 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
     onClose: () => setIsOpen(false),
   });
 
-  return (
-    <div
-      ref={swipeRef}
-      className={cn(
-        // Lower z-index so dialogs and modals appear above the sidebar
-        'fixed top-14 bottom-0 right-0 w-80 bg-white/95 backdrop-blur-sm border-l border-gray-200 shadow-xl z-[40]',
-        // Use broad transition-all for compatibility (some setups strip arbitrary variants)
-        'transform-gpu will-change-[transform,opacity] transition-all duration-300 ease-in-out',
-        isOpen ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0 pointer-events-none'
-      )}
-      style={{ touchAction: 'pan-y' }}
-    >
-      {!selectedItemId ? (
-        <div className="h-full flex items-center justify-center text-gray-400">
-          <div className="text-center">
-            <Image size={48} className="mx-auto mb-4 opacity-50" />
-            <p>{t.info.selectItem}</p>
-          </div>
-        </div>
-      ) : isLoading ? (
-        <div className="h-full flex items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
-        </div>
-      ) : selectedItem ? (
-        <div className="h-full flex flex-col">
-          {/* Header */}
-          <div className="p-4 border-b border-gray-200">
-            <div className="flex items-start justify-between">
-              <div className="flex-1 min-w-0">
-                <h2 className="text-lg font-semibold text-gray-900 truncate font-sans">
-                  {selectedItem.name}
-                </h2>
-                <p className="text-sm text-gray-500">ID: {selectedItem.id}</p>
-              </div>
-              <div className="flex items-center gap-2">
+  const pageSettingsSection = canEditReadingSettings ? (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+        <BookOpen size={16} />
+        {t.info.pageSettings}
+      </div>
+      <div className="space-y-3">
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium leading-none text-gray-500">
+            {t.info.openingDirection}
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            {(
+              [
+                {
+                  value: 'right-opening',
+                  label: t.viewerControls.rightOpening,
+                  Icon: PanelRightOpen,
+                },
+                {
+                  value: 'left-opening',
+                  label: t.viewerControls.leftOpening,
+                  Icon: PanelLeftOpen,
+                },
+              ] satisfies Array<{
+                value: ComicOpeningDirection;
+                label: string;
+                Icon: typeof PanelRightOpen;
+              }>
+            ).map(({ value, label, Icon }) => {
+              const isSelected = readingSettings.openingDirection === value;
+              return (
                 <button
+                  key={value}
                   type="button"
-                  onClick={handleToggleFavorite}
+                  aria-pressed={isSelected}
+                  disabled={updateReadingSettingsMutation.isPending}
+                  onClick={() => handleReadingSettingsChange({ openingDirection: value })}
                   className={cn(
-                    'p-2 rounded-md transition-colors',
-                    selectedItem.favorited ? 'text-yellow-500' : 'text-gray-400 hover:text-gray-600'
-                  )}
-                  disabled={toggleFavoriteMutation.isPending}
-                >
-                  <Star size={20} className={selectedItem.favorited ? 'fill-current' : ''} />
-                </button>
-                <button
-                  type="button"
-                  onClick={handleLike}
-                  className="flex items-center gap-1 p-2 rounded-md transition-colors hover:bg-gray-100"
-                  disabled={likeMutation.isPending}
-                >
-                  <Heart
-                    size={20}
-                    className={cn(
-                      selectedItem.liked && selectedItem.liked > 0
-                        ? 'text-like fill-current'
-                        : 'text-gray-400'
-                    )}
-                  />
-                  <span className="text-sm font-medium text-gray-700">
-                    {selectedItem.liked || 0}
-                  </span>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Content */}
-          <div className="flex-1 overflow-auto p-4 space-y-6">
-            {/* Thumbnail */}
-            {(selectedItem.thumbnailUrl || selectedItem.thumbnail) && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-sm font-medium text-gray-700">
-                  <div className="flex items-center gap-2">
-                    <Image size={16} />
-                    Thumbnail
-                  </div>
-                  <button
-                    type="button"
-                    onClick={toggleThumbnailExpanded}
-                    className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 transition-colors"
-                  >
-                    {thumbnailExpanded ? 'Hide' : 'Show'}
-                    {thumbnailExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                  </button>
-                </div>
-                <div
-                  className={cn(
-                    'overflow-hidden transition-all duration-300 ease-in-out',
-                    thumbnailExpanded ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
+                    PAGE_SETTING_CHOICE_BUTTON_CLASS,
+                    isSelected
+                      ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+                      : PAGE_SETTING_CHOICE_INACTIVE_CLASS
                   )}
                 >
-                  <div className="aspect-square w-full rounded-lg overflow-hidden bg-gray-100 mt-2">
-                    <img
-                      src={selectedItem.thumbnailUrl || selectedItem.thumbnail || ''}
-                      alt={selectedItem.name}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
+                  <Icon size={15} />
+                  <span>{label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
-            {/* Media Type */}
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                <Image size={16} />
-                {t.info.mediaType}
-              </div>
-              <Select value={selectedItem.mediaType || ''} onValueChange={handleMediaTypeChange}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder={t.info.selectMediaType} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="image">{t.info.image}</SelectItem>
-                  <SelectItem value="comic">{t.info.comic}</SelectItem>
-                  <SelectItem value="video">{t.info.video}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+        <div className="space-y-2.5">
+          <label className="flex min-h-7 items-center gap-2 text-sm font-medium text-gray-700">
+            <Checkbox
+              checked={readingSettings.spreadDisplayEnabled}
+              onCheckedChange={(checked) => handleSpreadDisplayEnabledChange(checked === true)}
+              disabled={updateReadingSettingsMutation.isPending}
+            />
+            <span>{t.info.useAutoSpreadDisplay}</span>
+          </label>
 
-            {/* Author */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between gap-2">
-                <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                  <Calendar size={16} />
-                  {t.info.author}
+          {readingSettings.spreadDisplayEnabled && (
+            <div className="space-y-2.5">
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium leading-none text-gray-500">
+                  {t.info.defaultDisplay}
                 </label>
-                {selectedAuthor && (
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-1 text-[11px] leading-4 text-gray-500 transition-colors hover:text-gray-700"
-                    onClick={handleOpenAuthorManagement}
-                  >
-                    <UserPen size={12} />
-                    {t.info.editAuthor}
-                  </button>
-                )}
+                <div className="grid grid-cols-2 gap-2">
+                  {(
+                    [
+                      {
+                        value: 'spread',
+                        label: t.viewerControls.spreadDisplayShort,
+                        Icon: Columns2,
+                      },
+                      {
+                        value: 'single',
+                        label: t.viewerControls.singlePageDisplayShort,
+                        Icon: Square,
+                      },
+                    ] satisfies Array<{
+                      value: ComicDisplayMode;
+                      label: string;
+                      Icon: typeof Columns2;
+                    }>
+                  ).map(({ value, label, Icon }) => {
+                    const isSelected = pageSettingDisplayMode === value;
+                    return (
+                      <button
+                        key={value}
+                        type="button"
+                        aria-pressed={isSelected}
+                        disabled={updateReadingSettingsMutation.isPending}
+                        onClick={() => handlePageDisplayModeChange(value)}
+                        className={cn(
+                          PAGE_SETTING_CHOICE_BUTTON_CLASS,
+                          isSelected
+                            ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+                            : PAGE_SETTING_CHOICE_INACTIVE_CLASS
+                        )}
+                      >
+                        <Icon size={15} />
+                        <span>{label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-              {!authorEditing ? (
-                <button
-                  type="button"
-                  className="w-full rounded px-3 py-1 text-left text-sm leading-5 text-gray-900 transition-colors hover:bg-gray-50"
-                  onClick={handleStartAuthorEditing}
-                >
-                  {(typeof selectedItem.author === 'string'
-                    ? selectedItem.author
-                    : (selectedItem.author as Author)?.name) || '—'}
-                </button>
-              ) : (
-                <SuggestInput
-                  value={authorInput}
-                  onChange={setAuthorInput}
-                  onSelect={handleAuthorSuggestionSelect}
-                  onSearch={handleAuthorSearch}
-                  onCancel={handleCancelAuthorEditing}
-                  placeholder={t.info.typeAuthorEnter}
-                  suggestions={authorSuggestions}
-                  loading={authorLoading}
-                  autoFocus
-                />
-              )}
-              {!authorEditing && selectedAuthor && (
-                <div className="flex flex-wrap items-center gap-1 px-3">
-                  {selectedAuthorLinks.map((link) => (
-                    <a
-                      key={link.id}
-                      href={link.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className={cn(authorLinkStyles.pillBase, authorLinkStyles.pillCompact)}
-                      title={link.url}
-                    >
-                      <LinkIcon size={10} className={authorLinkStyles.icon} />
-                      <span className="truncate">{getAuthorLinkLabel(link)}</span>
-                    </a>
-                  ))}
-                  {canAddAuthorLink && (
-                    <AuthorLinkQuickAdd
-                      open={authorLinkQuickAddOpen}
-                      addLabel={t.info.addAuthorLink}
-                      urlLabel={t.info.authorLinkUrl}
-                      urlPlaceholder={t.info.authorLinkUrlPlaceholder}
-                      submitLabel={t.common.add}
-                      submitting={addAuthorLinkMutation.isPending}
-                      onOpenChange={setAuthorLinkQuickAddOpen}
-                      onSubmit={handleAddAuthorLink}
-                    />
-                  )}
-                </div>
-              )}
-              {/* Recent Authors */}
-              {recentAuthors.length > 0 && (
-                <div className="mt-2">
-                  <p className="text-xs text-gray-500 mb-1">{t.info.recentAuthors}</p>
-                  <div className="flex flex-wrap gap-1">
-                    {recentAuthors.map((author) => (
-                      <button
-                        key={author}
-                        type="button"
-                        onClick={() => {
-                          setAuthorInput(author);
-                          handleAuthorChange(author);
-                        }}
-                        className="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded transition-colors"
-                      >
-                        {author}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
 
-            {/* Tags */}
-            <div className="space-y-2">
-              <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                <Tag size={16} />
-                {t.info.tags}
-              </label>
-              <div className="space-y-2">
-                <SuggestInput
-                  value={tagInput}
-                  onChange={setTagInput}
-                  onSelect={handleAddTag}
-                  onSearch={async (query) => {
-                    setTagLoading(true);
-                    try {
-                      const results = await apiClient.searchTags(query, datasetId);
-                      const suggestions = results
-                        .map((tag) => (typeof tag === 'string' ? tag : tag.title))
-                        .filter((title): title is string => title !== undefined && title !== null);
-                      setTagSuggestions(suggestions);
-                    } catch (error) {
-                      console.error('Error searching tags:', error);
-                      setTagSuggestions([]);
-                    } finally {
-                      setTagLoading(false);
-                    }
-                  }}
-                  placeholder={t.info.addTag}
-                  suggestions={tagSuggestions}
-                  loading={tagLoading}
-                />
-                {selectedItem.tags && selectedItem.tags.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {selectedItem.tags.map((tag, index) => {
-                      const tagName = getStackTagName(tag);
-                      if (!tagName) return null;
-                      return (
-                        <Badge
-                          key={typeof tag === 'string' ? tag : `tag-${index}`}
-                          variant="default"
-                          className="cursor-pointer hover:bg-primary/90 transition-colors flex items-center gap-1.5 pr-1 px-2.5 py-1 text-sm font-semibold"
-                          onClick={() => {
-                            // Apply tag filter
-                            setCurrentFilter({
-                              ...currentFilter,
-                              tags: [tagName],
-                            });
-                          }}
-                        >
-                          <span>#{tagName}</span>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleRemoveTag(tagName);
-                            }}
-                            className="p-0.5 rounded hover:bg-white/20 transition-colors"
-                          >
-                            <X size={12} />
-                          </button>
-                        </Badge>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-              {/* Recent Tags */}
-              {recentTags.length > 0 && (
-                <div className="mt-2">
-                  <p className="text-xs text-gray-500 mb-1">{t.info.recentTags}</p>
-                  <div className="flex flex-wrap gap-1">
-                    {recentTags.map((tag) => (
-                      <button
-                        key={tag}
-                        type="button"
-                        onClick={() => handleAddTag(tag)}
-                        className="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded transition-colors"
-                      >
-                        {tag}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {suggestedTags.length > 0 && (
-                <div className="mt-2">
-                  <p className="text-xs text-gray-500 mb-1">{t.info.suggestedTags}</p>
-                  <div className="flex flex-wrap gap-1">
-                    {suggestedTags.map((tag) => (
-                      <button
-                        key={tag}
-                        type="button"
-                        onClick={() => handleAddTag(tag)}
-                        className="px-2 py-1 text-xs bg-blue-50 text-blue-700 hover:bg-blue-100 rounded transition-colors"
-                      >
-                        {tag}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* AutoTags */}
-            {selectedItem.autoTags && selectedItem.autoTags.length > 0 && (
-              <AutoTagDisplay
-                autoTags={selectedItem.autoTags}
-                datasetId={datasetId}
-                onAddTag={(tag) => {
-                  // Check if tag already exists before adding
-                  const tagExists = selectedItem.tags?.some((existingTag) => {
-                    const tagName =
-                      typeof existingTag === 'string' ? existingTag : existingTag.name;
-                    return tagName === tag;
-                  });
-
-                  if (!tagExists) {
-                    handleAddTag(tag);
+              <label className="flex min-h-7 items-center gap-2 text-sm font-medium text-gray-700">
+                <Checkbox
+                  checked={readingSettings.firstPageSingle}
+                  onCheckedChange={(checked) =>
+                    handleReadingSettingsChange({ firstPageSingle: checked === true })
                   }
-                }}
-                sessionStorageKey="info-panel-autotags-expanded"
-              />
-            )}
+                  disabled={updateReadingSettingsMutation.isPending}
+                />
+                <span>{t.info.coverPageSingle}</span>
+              </label>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  ) : null;
 
-            {/* Dominant Colors */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-sm font-medium text-gray-700">
-                <div className="flex items-center gap-2">
-                  <Palette size={16} />
-                  {t.info.dominantColors}
+  return (
+    <>
+      {isOpen && (
+        <button
+          type="button"
+          className="right-panel-floating-backdrop"
+          aria-label={t.viewer.closeInfo}
+          onClick={() => setIsOpen(false)}
+        />
+      )}
+      <div
+        ref={swipeRef}
+        className={cn(
+          // Lower z-index so dialogs and modals appear above the sidebar
+          'app-right-panel fixed top-14 bottom-0 right-0 w-80 overflow-hidden bg-white/95 backdrop-blur-sm border-l border-gray-200 shadow-xl z-[40]',
+          // Use broad transition-all for compatibility (some setups strip arbitrary variants)
+          'transform-gpu will-change-[transform,opacity] transition-all duration-300 ease-in-out',
+          isOpen ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0 pointer-events-none'
+        )}
+        style={{ touchAction: 'pan-y' }}
+      >
+        {!selectedItemId ? (
+          <div className="flex h-full min-h-0 items-center justify-center text-gray-400">
+            <div className="text-center">
+              <Image size={48} className="mx-auto mb-4 opacity-50" />
+              <p>{t.info.selectItem}</p>
+            </div>
+          </div>
+        ) : isLoading ? (
+          <div className="flex h-full min-h-0 items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+          </div>
+        ) : selectedItem ? (
+          <div className="flex h-full min-h-0 flex-col">
+            {/* Header */}
+            <div className="shrink-0 p-4 border-b border-gray-200">
+              <div className="flex items-start justify-between">
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-lg font-semibold text-gray-900 truncate font-sans">
+                    {selectedItem.name}
+                  </h2>
+                  <p className="text-sm text-gray-500">ID: {selectedItem.id}</p>
                 </div>
-                {selectedItem.dominantColors && selectedItem.dominantColors.length > 0 && (
+                <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => setShowColorDetails(!showColorDetails)}
-                    className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 transition-colors"
+                    onClick={handleToggleFavorite}
+                    className={cn(
+                      'p-2 rounded-md transition-colors',
+                      selectedItem.favorited
+                        ? 'text-yellow-500'
+                        : 'text-gray-400 hover:text-gray-600'
+                    )}
+                    disabled={toggleFavoriteMutation.isPending}
                   >
-                    {t.info.detail}
-                    {showColorDetails ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                    <Star size={20} className={selectedItem.favorited ? 'fill-current' : ''} />
                   </button>
+                  <button
+                    type="button"
+                    onClick={handleLike}
+                    className="flex items-center gap-1 p-2 rounded-md transition-colors hover:bg-gray-100"
+                    disabled={likeMutation.isPending}
+                  >
+                    <Heart
+                      size={20}
+                      className={cn(
+                        selectedItem.liked && selectedItem.liked > 0
+                          ? 'text-like fill-current'
+                          : 'text-gray-400'
+                      )}
+                    />
+                    <span className="text-sm font-medium text-gray-700">
+                      {selectedItem.liked || 0}
+                    </span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 space-y-6">
+              {/* Thumbnail */}
+              {(selectedItem.thumbnailUrl || selectedItem.thumbnail) && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm font-medium text-gray-700">
+                    <div className="flex items-center gap-2">
+                      <Image size={16} />
+                      Thumbnail
+                    </div>
+                    <button
+                      type="button"
+                      onClick={toggleThumbnailExpanded}
+                      className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 transition-colors"
+                    >
+                      {thumbnailExpanded ? 'Hide' : 'Show'}
+                      {thumbnailExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                    </button>
+                  </div>
+                  <div
+                    className={cn(
+                      'overflow-hidden transition-all duration-300 ease-in-out',
+                      thumbnailExpanded ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
+                    )}
+                  >
+                    <div className="aspect-square w-full rounded-lg overflow-hidden bg-gray-100 mt-2">
+                      <img
+                        src={selectedItem.thumbnailUrl || selectedItem.thumbnail || ''}
+                        alt={selectedItem.name}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Media Category */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                  <Image size={16} />
+                  {t.info.mediaCategory}
+                </div>
+                <Select value={selectedItem.mediaType || ''} onValueChange={handleMediaTypeChange}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder={t.info.selectMediaCategory} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="image">{getMediaTypeLabel(t, 'image')}</SelectItem>
+                    <SelectItem value="comic">{getMediaTypeLabel(t, 'comic')}</SelectItem>
+                    <SelectItem value="video">{getMediaTypeLabel(t, 'video')}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Author */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                    <Calendar size={16} />
+                    {t.info.author}
+                  </label>
+                  {selectedAuthor && (
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1 text-[11px] leading-4 text-gray-500 transition-colors hover:text-gray-700"
+                      onClick={handleOpenAuthorManagement}
+                    >
+                      <UserPen size={12} />
+                      {t.info.editAuthor}
+                    </button>
+                  )}
+                </div>
+                {!authorEditing ? (
+                  <button
+                    type="button"
+                    className="w-full rounded px-3 py-1 text-left text-sm leading-5 text-gray-900 transition-colors hover:bg-gray-50"
+                    onClick={handleStartAuthorEditing}
+                  >
+                    {(typeof selectedItem.author === 'string'
+                      ? selectedItem.author
+                      : (selectedItem.author as Author)?.name) || '—'}
+                  </button>
+                ) : (
+                  <SuggestInput
+                    value={authorInput}
+                    onChange={setAuthorInput}
+                    onSelect={handleAuthorSuggestionSelect}
+                    onSearch={handleAuthorSearch}
+                    onCancel={handleCancelAuthorEditing}
+                    placeholder={t.info.typeAuthorEnter}
+                    suggestions={authorSuggestions}
+                    loading={authorLoading}
+                    autoFocus
+                  />
+                )}
+                {!authorEditing && selectedAuthor && (
+                  <div className="flex flex-wrap items-center gap-1 px-3">
+                    {selectedAuthorLinks.map((link) => (
+                      <a
+                        key={link.id}
+                        href={link.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className={cn(authorLinkStyles.pillBase, authorLinkStyles.pillCompact)}
+                        title={link.url}
+                      >
+                        <LinkIcon size={10} className={authorLinkStyles.icon} />
+                        <span className="truncate">{getAuthorLinkLabel(link)}</span>
+                      </a>
+                    ))}
+                    {canAddAuthorLink && (
+                      <AuthorLinkQuickAdd
+                        open={authorLinkQuickAddOpen}
+                        addLabel={t.info.addAuthorLink}
+                        urlLabel={t.info.authorLinkUrl}
+                        urlPlaceholder={t.info.authorLinkUrlPlaceholder}
+                        submitLabel={t.common.add}
+                        submitting={addAuthorLinkMutation.isPending}
+                        onOpenChange={setAuthorLinkQuickAddOpen}
+                        onSubmit={handleAddAuthorLink}
+                      />
+                    )}
+                  </div>
+                )}
+                {/* Recent Authors */}
+                {recentAuthors.length > 0 && (
+                  <div className="mt-2">
+                    <p className="text-xs text-gray-500 mb-1">{t.info.recentAuthors}</p>
+                    <div className="flex flex-wrap gap-1">
+                      {recentAuthors.map((author) => (
+                        <button
+                          key={author}
+                          type="button"
+                          onClick={() => {
+                            setAuthorInput(author);
+                            handleAuthorChange(author);
+                          }}
+                          className="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded transition-colors"
+                        >
+                          {author}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div>
-              <div className="space-y-3">
-                <ColorPalette
-                  colors={selectedItem.dominantColors || []}
-                  size="lg"
-                  onColorClick={handleColorClick}
-                  className="justify-start"
-                />
-                <div
-                  className={cn(
-                    'overflow-hidden transition-all duration-300 ease-in-out',
-                    showColorDetails ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
-                  )}
-                >
-                  {selectedItem.dominantColors && selectedItem.dominantColors.length > 0 && (
-                    <div className="space-y-3 text-xs text-gray-500 pt-2">
-                      {selectedItem.dominantColors.map((color, index) => (
-                        <div key={`${color.hex}-${index}`} className="space-y-2">
-                          <div className="flex justify-between items-center">
-                            <span className="flex items-center gap-2">
-                              <div
-                                className="w-3 h-3 rounded-full border border-gray-300"
-                                style={{ backgroundColor: color.hex }}
-                              />
-                              <button
-                                type="button"
-                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-gray-100 text-gray-800"
-                                onClick={async () => {
-                                  const copied = hexForCopy(color.hex);
-                                  const ok = await copyText(copied);
-                                  if (ok) {
-                                    addNotification({
-                                      type: 'success',
-                                      message: t.common.copiedToClipboard(copied),
-                                    });
-                                  } else {
-                                    addNotification({
-                                      type: 'error',
-                                      message: t.common.failedToCopy,
-                                    });
-                                  }
-                                }}
-                                title={t.info.copyHex}
-                              >
-                                <Copy size={12} />
-                                <span>{color.hex}</span>
-                              </button>
-                            </span>
-                            <span className="font-medium">
-                              {Math.round(color.percentage * 100)}%
-                            </span>
-                          </div>
-                          {color.lightness !== undefined && color.saturation !== undefined && (
-                            <div className="pl-5 space-y-2">
-                              <Progress
-                                value={color.lightness}
-                                max={100}
-                                label={t.info.brightness}
-                                size="sm"
-                                color="primary"
-                                className="text-gray-400"
-                              />
-                              <Progress
-                                value={color.saturation}
-                                max={100}
-                                label={t.info.saturation}
-                                size="sm"
-                                color="gray"
-                                className="text-gray-400"
-                              />
-                            </div>
-                          )}
-                        </div>
-                      ))}
+
+              {/* Tags */}
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                  <Tag size={16} />
+                  {t.info.tags}
+                </label>
+                <div className="space-y-2">
+                  <SuggestInput
+                    value={tagInput}
+                    onChange={setTagInput}
+                    onSelect={handleAddTag}
+                    onSearch={async (query) => {
+                      setTagLoading(true);
+                      try {
+                        const results = await apiClient.searchTags(query, datasetId);
+                        const suggestions = results
+                          .map((tag) => (typeof tag === 'string' ? tag : tag.title))
+                          .filter(
+                            (title): title is string => title !== undefined && title !== null
+                          );
+                        setTagSuggestions(suggestions);
+                      } catch (error) {
+                        console.error('Error searching tags:', error);
+                        setTagSuggestions([]);
+                      } finally {
+                        setTagLoading(false);
+                      }
+                    }}
+                    placeholder={t.info.addTag}
+                    suggestions={tagSuggestions}
+                    loading={tagLoading}
+                  />
+                  {selectedItem.tags && selectedItem.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {selectedItem.tags.map((tag, index) => {
+                        const tagName = getStackTagName(tag);
+                        if (!tagName) return null;
+                        return (
+                          <Badge
+                            key={typeof tag === 'string' ? tag : `tag-${index}`}
+                            variant="default"
+                            className="cursor-pointer hover:bg-primary/90 transition-colors flex items-center gap-1.5 pr-1 px-2.5 py-1 text-sm font-semibold"
+                            onClick={() => {
+                              // Apply tag filter
+                              setCurrentFilter({
+                                ...currentFilter,
+                                tags: [tagName],
+                              });
+                            }}
+                          >
+                            <span>#{tagName}</span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleRemoveTag(tagName);
+                              }}
+                              className="p-0.5 rounded hover:bg-white/20 transition-colors"
+                            >
+                              <X size={12} />
+                            </button>
+                          </Badge>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
-              </div>
-            </div>
-
-            {/* Stats */}
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                <Hash size={16} />
-                {t.info.stats}
-              </div>
-              <div className="space-y-1 text-sm text-gray-600">
-                <div className="flex justify-between">
-                  <span>{t.info.assets}</span>
-                  <span className="font-medium">{selectedItem.assetCount || 0}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>{t.info.likes}</span>
-                  <span className="font-medium">{selectedItem.liked || 0}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>{t.info.optimized}</span>
-                  <span className="font-medium">
-                    {previewGenerated ? (
-                      <span className="text-green-600">{t.info.yes}</span>
-                    ) : (
-                      <span className="text-gray-400">{t.info.no}</span>
-                    )}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span>{t.info.created}</span>
-                  <span className="font-medium">
-                    {new Date(selectedItem.createdAt).toLocaleDateString()}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="border-t border-gray-200">
-            {/* Header with toggle button */}
-            <div className="p-4 pb-2">
-              <div className="w-full flex items-center justify-between text-sm font-medium text-gray-700">
-                <span>{t.info.actions}</span>
-              </div>
-            </div>
-
-            {/* Expandable buttons */}
-            <div>
-              <div className="px-4 pb-4 space-y-2">
-                <button
-                  type="button"
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
-                  onClick={async () => {
-                    if (!selectedItem) return;
-                    const id =
-                      typeof selectedItem.id === 'string'
-                        ? parseInt(selectedItem.id, 10)
-                        : Number(selectedItem.id);
-                    await navigate({
-                      to: '/library/$datasetId/stacks/$stackId/similar',
-                      params: { datasetId, stackId: String(id) },
-                    });
-                  }}
-                  disabled={!selectedItem}
-                >
-                  <GalleryVerticalEnd size={16} />
-                  Find similar
-                </button>
-                <button
-                  type="button"
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
-                  onClick={() => {
-                    if (!selectedItem) return;
-                    downloadStackOriginals(datasetId, [selectedItem.id]);
-                  }}
-                  disabled={!selectedItem}
-                >
-                  <Download size={16} />
-                  {t.info.downloadAll}
-                </button>
-                <button
-                  type="button"
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
-                  onClick={async () => {
-                    if (!selectedItem) return;
-                    try {
-                      const sc = await ensureScratch();
-                      await apiClient.addStackToCollection(sc.id, Number(selectedItem.id));
-                      await queryClient.invalidateQueries({ queryKey: ['stacks'] });
-                      await queryClient.invalidateQueries({
-                        queryKey: ['library-counts', datasetId],
-                      });
-                    } catch (e) {
-                      console.error('Failed to add to Scratch', e);
-                    }
-                  }}
-                  disabled={!selectedItem}
-                >
-                  <NotebookText size={16} />
-                  {t.info.addToScratch}
-                </button>
-                {previewEligible && (
-                  <button
-                    type="button"
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
-                    onClick={() =>
-                      selectedItem &&
-                      regeneratePreviewMutation.mutate({
-                        stackId: Number(selectedItem.id),
-                        dataSetId: datasetId,
-                      })
-                    }
-                    disabled={!selectedItem || regeneratePreviewMutation.isPending}
-                  >
-                    {regeneratePreviewMutation.isPending ? (
-                      <Loader2 size={16} className="animate-spin" />
-                    ) : (
-                      <Clapperboard size={16} />
-                    )}
-                    {t.info.optimizeVideo}
-                  </button>
+                {/* Recent Tags */}
+                {recentTags.length > 0 && (
+                  <div className="mt-2">
+                    <p className="text-xs text-gray-500 mb-1">{t.info.recentTags}</p>
+                    <div className="flex flex-wrap gap-1">
+                      {recentTags.map((tag) => (
+                        <button
+                          key={tag}
+                          type="button"
+                          onClick={() => handleAddTag(tag)}
+                          className="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded transition-colors"
+                        >
+                          {tag}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 )}
-                <button
-                  type="button"
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
-                  onClick={() =>
-                    selectedItem && refreshAllMutation.mutate({ stackId: Number(selectedItem.id) })
-                  }
-                  disabled={!selectedItem || refreshAllMutation.isPending}
-                >
-                  {refreshAllMutation.isPending ? (
-                    <Loader2 size={16} className="animate-spin" />
-                  ) : (
-                    <RefreshCw size={16} />
+                {suggestedTags.length > 0 && (
+                  <div className="mt-2">
+                    <p className="text-xs text-gray-500 mb-1">{t.info.suggestedTags}</p>
+                    <div className="flex flex-wrap gap-1">
+                      {suggestedTags.map((tag) => (
+                        <button
+                          key={tag}
+                          type="button"
+                          onClick={() => handleAddTag(tag)}
+                          className="px-2 py-1 text-xs bg-blue-50 text-blue-700 hover:bg-blue-100 rounded transition-colors"
+                        >
+                          {tag}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* AutoTags */}
+              {selectedItem.autoTags && selectedItem.autoTags.length > 0 && (
+                <AutoTagDisplay
+                  autoTags={selectedItem.autoTags}
+                  datasetId={datasetId}
+                  onAddTag={(tag) => {
+                    // Check if tag already exists before adding
+                    const tagExists = selectedItem.tags?.some((existingTag) => {
+                      const tagName =
+                        typeof existingTag === 'string' ? existingTag : existingTag.name;
+                      return tagName === tag;
+                    });
+
+                    if (!tagExists) {
+                      handleAddTag(tag);
+                    }
+                  }}
+                  sessionStorageKey="info-panel-autotags-expanded"
+                />
+              )}
+
+              {/* Dominant Colors */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm font-medium text-gray-700">
+                  <div className="flex items-center gap-2">
+                    <Palette size={16} />
+                    {t.info.dominantColors}
+                  </div>
+                  {selectedItem.dominantColors && selectedItem.dominantColors.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowColorDetails(!showColorDetails)}
+                      className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 transition-colors"
+                    >
+                      {t.info.detail}
+                      {showColorDetails ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                    </button>
                   )}
-                  {t.info.refresh}
-                </button>
+                </div>
+                <div className="space-y-3">
+                  <ColorPalette
+                    colors={selectedItem.dominantColors || []}
+                    size="lg"
+                    onColorClick={handleColorClick}
+                    className="justify-start"
+                  />
+                  <div
+                    className={cn(
+                      'overflow-hidden transition-all duration-300 ease-in-out',
+                      showColorDetails ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
+                    )}
+                  >
+                    {selectedItem.dominantColors && selectedItem.dominantColors.length > 0 && (
+                      <div className="space-y-3 text-xs text-gray-500 pt-2">
+                        {selectedItem.dominantColors.map((color, index) => (
+                          <div key={`${color.hex}-${index}`} className="space-y-2">
+                            <div className="flex justify-between items-center">
+                              <span className="flex items-center gap-2">
+                                <div
+                                  className="w-3 h-3 rounded-full border border-gray-300"
+                                  style={{ backgroundColor: color.hex }}
+                                />
+                                <button
+                                  type="button"
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-gray-100 text-gray-800"
+                                  onClick={async () => {
+                                    const copied = hexForCopy(color.hex);
+                                    const ok = await copyText(copied);
+                                    if (ok) {
+                                      addNotification({
+                                        type: 'success',
+                                        message: t.common.copiedToClipboard(copied),
+                                      });
+                                    } else {
+                                      addNotification({
+                                        type: 'error',
+                                        message: t.common.failedToCopy,
+                                      });
+                                    }
+                                  }}
+                                  title={t.info.copyHex}
+                                >
+                                  <Copy size={12} />
+                                  <span>{color.hex}</span>
+                                </button>
+                              </span>
+                              <span className="font-medium">
+                                {Math.round(color.percentage * 100)}%
+                              </span>
+                            </div>
+                            {color.lightness !== undefined && color.saturation !== undefined && (
+                              <div className="pl-5 space-y-2">
+                                <Progress
+                                  value={color.lightness}
+                                  max={100}
+                                  label={t.info.brightness}
+                                  size="sm"
+                                  color="primary"
+                                  className="text-gray-400"
+                                />
+                                <Progress
+                                  value={color.saturation}
+                                  max={100}
+                                  label={t.info.saturation}
+                                  size="sm"
+                                  color="gray"
+                                  className="text-gray-400"
+                                />
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {pageSettingsSection}
+
+              {/* Stats */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                  <Hash size={16} />
+                  {t.info.stats}
+                </div>
+                <div className="space-y-1 text-sm text-gray-600">
+                  <div className="flex justify-between">
+                    <span>{t.info.assets}</span>
+                    <span className="font-medium">{selectedItem.assetCount || 0}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>{t.info.likes}</span>
+                    <span className="font-medium">{selectedItem.liked || 0}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>{t.info.optimized}</span>
+                    <span className="font-medium">
+                      {previewGenerated ? (
+                        <span className="text-green-600">{t.info.yes}</span>
+                      ) : (
+                        <span className="text-gray-400">{t.info.no}</span>
+                      )}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>{t.info.created}</span>
+                    <span className="font-medium">
+                      {new Date(selectedItem.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="min-w-0 shrink-0 border-t border-gray-200">
+              <div className="space-y-3 p-4">
+                <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+                  <span className="min-w-0 text-sm font-medium text-gray-700">
+                    {t.info.actions}
+                  </span>
+                  <div className="ml-auto flex shrink-0 items-center gap-2">
+                    <button
+                      type="button"
+                      className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-gray-300 bg-white text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                      onClick={() => {
+                        if (!selectedItem) return;
+                        downloadStackOriginals(datasetId, [selectedItem.id]);
+                      }}
+                      disabled={!selectedItem}
+                      title={t.info.downloadAll}
+                      aria-label={t.info.downloadAll}
+                    >
+                      <Download size={16} />
+                    </button>
+                    <button
+                      type="button"
+                      className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-gray-300 bg-white text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                      onClick={() =>
+                        selectedItem &&
+                        refreshAllMutation.mutate({ stackId: Number(selectedItem.id) })
+                      }
+                      disabled={!selectedItem || refreshAllMutation.isPending}
+                      title={t.info.refresh}
+                      aria-label={t.info.refresh}
+                    >
+                      {refreshAllMutation.isPending ? (
+                        <Loader2 size={16} className="animate-spin" />
+                      ) : (
+                        <RefreshCw size={16} />
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-red-300 bg-white text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                      onClick={handleRemoveStack}
+                      disabled={!selectedItem}
+                      title={t.info.removeStack}
+                      aria-label={t.info.removeStack}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </div>
+
                 <button
                   type="button"
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 bg-white border border-red-300 rounded-md hover:bg-red-50 transition-colors"
-                  onClick={handleRemoveStack}
-                  disabled={!selectedItem}
+                  className="flex w-full min-w-0 items-center justify-between gap-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100"
+                  onClick={toggleActionsExpanded}
+                  aria-expanded={actionsExpanded}
                 >
-                  <Trash2 size={16} />
-                  {t.info.removeStack}
+                  <span className="min-w-0">{t.info.moreActions}</span>
+                  {actionsExpanded ? (
+                    <ChevronUp size={16} className="shrink-0" />
+                  ) : (
+                    <ChevronDown size={16} className="shrink-0" />
+                  )}
                 </button>
+
+                <div
+                  className={cn(
+                    'overflow-hidden transition-all duration-300 ease-in-out',
+                    actionsExpanded ? 'max-h-40 opacity-100' : 'max-h-0 opacity-0'
+                  )}
+                >
+                  <div className="space-y-2 pt-1">
+                    <button
+                      type="button"
+                      className="flex w-full min-w-0 items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-left text-sm text-gray-700 transition-colors hover:bg-gray-50"
+                      onClick={async () => {
+                        if (!selectedItem) return;
+                        const id =
+                          typeof selectedItem.id === 'string'
+                            ? parseInt(selectedItem.id, 10)
+                            : Number(selectedItem.id);
+                        await navigate({
+                          to: '/library/$datasetId/stacks/$stackId/similar',
+                          params: { datasetId, stackId: String(id) },
+                        });
+                      }}
+                      disabled={!selectedItem}
+                    >
+                      <GalleryVerticalEnd size={16} className="shrink-0" />
+                      <span className="min-w-0 flex-1">{t.info.findSimilar}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="flex w-full min-w-0 items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-left text-sm text-gray-700 transition-colors hover:bg-gray-50"
+                      onClick={async () => {
+                        if (!selectedItem) return;
+                        try {
+                          const sc = await ensureScratch();
+                          await apiClient.addStackToCollection(sc.id, Number(selectedItem.id));
+                          await queryClient.invalidateQueries({ queryKey: ['stacks'] });
+                          await queryClient.invalidateQueries({
+                            queryKey: ['library-counts', datasetId],
+                          });
+                        } catch (e) {
+                          console.error('Failed to add to Scratch', e);
+                        }
+                      }}
+                      disabled={!selectedItem}
+                    >
+                      <NotebookText size={16} className="shrink-0" />
+                      <span className="min-w-0 flex-1">{t.info.addToScratch}</span>
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      ) : null}
-    </div>
+        ) : null}
+      </div>
+    </>
   );
 }

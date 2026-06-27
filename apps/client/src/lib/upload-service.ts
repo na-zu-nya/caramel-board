@@ -54,14 +54,15 @@ export class UploadService {
         chunk.map(async (file) => {
           try {
             updateProgress(file.id, 0, 'uploading');
+            const metadata = file.metadata ?? batch.metadata;
 
             const stack = await apiClient.createStackWithFile(file.file, {
               name: file.file.name,
-              datasetId: batch.metadata?.datasetId?.toString(),
-              mediaType: batch.metadata?.collectionId ? 'image' : batch.metadata?.mediaType,
-              tags: batch.metadata?.tags,
-              author: batch.metadata?.author,
-              collectionId: batch.metadata?.collectionId,
+              datasetId: metadata?.datasetId?.toString(),
+              mediaType: metadata?.collectionId ? 'image' : metadata?.mediaType,
+              tags: metadata?.tags,
+              author: metadata?.author,
+              collectionId: metadata?.collectionId,
               onProgress: (progress) => {
                 updateProgress(file.id, progress, 'uploading');
               },

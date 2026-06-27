@@ -1,6 +1,6 @@
 import { SquareStack, Volume2, VolumeX } from 'lucide-react';
 import type { MouseEvent, PointerEvent, KeyboardEvent as ReactKeyboardEvent } from 'react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -16,6 +16,7 @@ import TimeBadge from '@/components/ui/TimeBadge/TimeBadge';
 import { type Translations, useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import type { VideoMarker } from '@/types';
+import SeekTrack, { type SeekTrackMarker, type SeekTrackRenderMarkerParams } from './SeekTrack';
 
 const MARKER_COLOR_OPTIONS = [
   { key: 'white', hex: '#FFFFFF', label: 'White' },
@@ -32,6 +33,7 @@ const MARKER_COLOR_OPTIONS = [
 const VOLUME_DRAG_HEIGHT_PX = 96;
 
 type MarkerColorKey = (typeof MARKER_COLOR_OPTIONS)[number]['key'];
+type GetSeekValueFromClientX = (clientX: number, enableNudge?: boolean) => number;
 
 const getMarkerColorLabel = (t: Translations, key: MarkerColorKey) => {
   switch (key) {
@@ -119,10 +121,12 @@ export default function VideoSeekBar({
   const [isVolumeBarOpen, setIsVolumeBarOpen] = useState(false);
   const [isVolumeHover, setIsVolumeHover] = useState(false);
   const volumeHoverCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const dragTimeRef = useRef(0);
-  const isDraggingRef = useRef(false);
-  const activePointerIdRef = useRef<number | null>(null);
-  const markerDragRef = useRef<{ index: number; pointerId: number; time: number } | null>(null);
+  const markerDragRef = useRef<{
+    index: number;
+    pointerId: number;
+    time: number;
+    getValueFromClientX: GetSeekValueFromClientX;
+  } | null>(null);
   const volumeTrackRef = useRef<HTMLDivElement>(null);
   const volumeDragRef = useRef<{
     pointerId: number;
@@ -131,22 +135,6 @@ export default function VideoSeekBar({
     moved: boolean;
     source: 'button' | 'track';
   } | null>(null);
-  // 見た目は細いバーのまま、判定は2倍の高さに拡張
-  const seekAreaRef = useRef<HTMLDivElement>(null);
-
-  const NUDGE_PX = 8; // 近接ナッジのしきい値（px）
-  const TRACK_HEIGHT_PX = 4; // h-1 = 0.25rem = 4px（seekトラックの高さ）
-  const _ICON_HEIGHT_PX = 12; // MarkerIcon の実表示高さ（height=12）
-  const HIT_HEIGHT_PX = 16; // ヒットエリアの高さ（アイコンより少し高め）
-  // バー下端(50%+2px)から余白2pxの位置を基準（APEX）として、
-  // アイコン/ヒットエリアの「底辺」をそこに揃える。
-  // → top座標は APEX - 高さ
-  const APEX_CSS = `calc(50% + ${TRACK_HEIGHT_PX / 2}px + 2px)`; // 50% + 2px + 2px = 50% + 4px
-  // 仕様:「シークバーの下にマーカーの上端」が来るように、
-  // マーカーの top を APEX に合わせる（= 上端がバー直下）。
-  const iconTop = `${APEX_CSS}`;
-  // ヒットエリアはアイコンの上端に揃えつつ高さぶん上方向へ拡張
-  const _hitTop = `calc(${APEX_CSS} - ${HIT_HEIGHT_PX}px)`; // = calc(50% + 4px - 16px)
 
   useEffect(() => {
     const handleKeyDown = (event: globalThis.KeyboardEvent) => {
@@ -168,95 +156,45 @@ export default function VideoSeekBar({
     };
   }, []);
 
-  // Calculate progress percentage
-  const progress = duration > 0 ? (isDragging ? dragTime : currentTime) / duration : 0;
-  const progressPercent = Math.min(Math.max(progress * 100, 0), 100);
-
-  // Get time from mouse/touch position
-  // clientXから時間を算出（必要に応じてマーカーにナッジ）
-  const getSnappedTimeFromClientX = useCallback(
-    (clientX: number, enableNudge: boolean) => {
-      if (!seekAreaRef.current) return 0;
-      const rect = seekAreaRef.current.getBoundingClientRect();
-      const x = clientX - rect.left;
-      const percent = Math.min(Math.max(x / rect.width, 0), 1);
-      let t = percent * duration;
-      if (enableNudge && duration > 0 && markers.length > 0) {
-        // 近いマーカーがあれば時間に吸着
-        let best: { time: number; px: number } | null = null;
-        for (const m of markers) {
-          const px = Math.abs((m.time / duration) * rect.width - x);
-          if (px <= NUDGE_PX && (!best || px < best.px)) best = { time: m.time, px };
-        }
-        if (best) t = best.time;
-      }
-      return t;
-    },
-    [duration, markers]
+  const seekTrackMarkers = useMemo<Array<SeekTrackMarker<VideoMarker>>>(
+    () =>
+      markers.map((marker, index) => ({
+        key: `${index}:${marker.time}`,
+        value: draggingMarker?.index === index ? draggingMarker.time : marker.time,
+        data: marker,
+      })),
+    [draggingMarker, markers]
   );
 
-  const updateDragTime = useCallback(
-    (clientX: number, seekImmediately: boolean) => {
-      const time = getSnappedTimeFromClientX(clientX, true);
-      setDragTime(time);
-      dragTimeRef.current = time;
-      if (seekImmediately) onSeek(time);
-      return time;
-    },
-    [getSnappedTimeFromClientX, onSeek]
-  );
-
-  const finishDragging = useCallback(() => {
-    if (!isDraggingRef.current) return;
-    isDraggingRef.current = false;
-    activePointerIdRef.current = null;
-    setIsDragging(false);
-    onSeek(dragTimeRef.current);
-    onScrubEnd?.(dragTimeRef.current);
-  }, [onScrubEnd, onSeek]);
-
-  const handlePointerDown = useCallback(
-    (e: React.PointerEvent<HTMLDivElement>) => {
-      if (e.pointerType === 'mouse' && e.button !== 0) return;
-      e.preventDefault();
-      e.stopPropagation();
-
-      activePointerIdRef.current = e.pointerId;
-      isDraggingRef.current = true;
+  const handleSeekTrackScrubStart = useCallback(
+    (time: number) => {
       setIsDragging(true);
-      updateDragTime(e.clientX, false);
+      setDragTime(time);
       onScrubStart?.();
-
-      e.currentTarget.setPointerCapture(e.pointerId);
     },
-    [onScrubStart, updateDragTime]
+    [onScrubStart]
   );
 
-  const handlePointerMove = useCallback(
-    (e: React.PointerEvent<HTMLDivElement>) => {
-      if (!isDraggingRef.current || activePointerIdRef.current !== e.pointerId) return;
-      e.preventDefault();
-      e.stopPropagation();
-      updateDragTime(e.clientX, true);
-    },
-    [updateDragTime]
-  );
+  const handleSeekTrackScrubMove = useCallback((time: number) => {
+    setDragTime(time);
+  }, []);
 
-  const handlePointerEnd = useCallback(
-    (e: React.PointerEvent<HTMLDivElement>) => {
-      if (activePointerIdRef.current !== e.pointerId) return;
-      e.preventDefault();
-      e.stopPropagation();
-      finishDragging();
-      if (e.currentTarget.hasPointerCapture(e.pointerId)) {
-        e.currentTarget.releasePointerCapture(e.pointerId);
-      }
+  const handleSeekTrackScrubEnd = useCallback(
+    (time: number) => {
+      setDragTime(time);
+      setIsDragging(false);
+      onScrubEnd?.(time);
     },
-    [finishDragging]
+    [onScrubEnd]
   );
 
   const handleMarkerPointerDown = useCallback(
-    (e: React.PointerEvent<HTMLButtonElement>, marker: VideoMarker, index: number) => {
+    (
+      e: PointerEvent<HTMLButtonElement>,
+      marker: VideoMarker,
+      index: number,
+      getValueFromClientX: GetSeekValueFromClientX
+    ) => {
       e.stopPropagation();
       if (e.pointerType === 'mouse' && e.button !== 0) return;
 
@@ -266,29 +204,26 @@ export default function VideoSeekBar({
       }
 
       e.preventDefault();
-      const time = getSnappedTimeFromClientX(e.clientX, false);
-      markerDragRef.current = { index, pointerId: e.pointerId, time };
+      const time = getValueFromClientX(e.clientX, false);
+      markerDragRef.current = { index, pointerId: e.pointerId, time, getValueFromClientX };
       setDraggingMarker({ index, time });
       e.currentTarget.setPointerCapture(e.pointerId);
     },
-    [getSnappedTimeFromClientX, onMoveMarkerRequest, onSeek]
+    [onMoveMarkerRequest, onSeek]
   );
 
-  const handleMarkerPointerMove = useCallback(
-    (e: React.PointerEvent<HTMLButtonElement>) => {
-      const active = markerDragRef.current;
-      if (!active || active.pointerId !== e.pointerId) return;
-      e.preventDefault();
-      e.stopPropagation();
-      const time = getSnappedTimeFromClientX(e.clientX, false);
-      markerDragRef.current = { ...active, time };
-      setDraggingMarker({ index: active.index, time });
-    },
-    [getSnappedTimeFromClientX]
-  );
+  const handleMarkerPointerMove = useCallback((e: PointerEvent<HTMLButtonElement>) => {
+    const active = markerDragRef.current;
+    if (!active || active.pointerId !== e.pointerId) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const time = active.getValueFromClientX(e.clientX, false);
+    markerDragRef.current = { ...active, time };
+    setDraggingMarker({ index: active.index, time });
+  }, []);
 
   const finishMarkerDrag = useCallback(
-    (e?: React.PointerEvent<HTMLButtonElement>) => {
+    (e?: PointerEvent<HTMLButtonElement>) => {
       const active = markerDragRef.current;
       if (!active) return;
       markerDragRef.current = null;
@@ -302,7 +237,7 @@ export default function VideoSeekBar({
   );
 
   const handleMarkerPointerEnd = useCallback(
-    (e: React.PointerEvent<HTMLButtonElement>) => {
+    (e: PointerEvent<HTMLButtonElement>) => {
       const active = markerDragRef.current;
       if (!active || active.pointerId !== e.pointerId) return;
       e.preventDefault();
@@ -310,6 +245,116 @@ export default function VideoSeekBar({
       finishMarkerDrag(e);
     },
     [finishMarkerDrag]
+  );
+
+  const renderVideoMarker = useCallback(
+    ({
+      marker,
+      index,
+      iconTop,
+      hitHeightPx,
+      getValueFromClientX,
+    }: SeekTrackRenderMarkerParams<VideoMarker>) => (
+      <>
+        <ContextMenu onOpenChange={(open) => setContextMenuMarkerIndex(open ? index : null)}>
+          <ContextMenuTrigger asChild>
+            <div
+              className="group/marker pointer-events-auto absolute -translate-x-1/2"
+              style={{ top: 0, height: `${hitHeightPx}px`, width: '36px' }}
+              onContextMenu={(e) => e.stopPropagation()}
+              onDoubleClick={(e) => {
+                e.stopPropagation();
+                onEditMarkerRequest?.(marker, index);
+              }}
+            >
+              <button
+                type="button"
+                className={cn(
+                  'absolute inset-0',
+                  onMoveMarkerRequest && isMarkerMoveMode && 'cursor-grab active:cursor-grabbing'
+                )}
+                onPointerDown={(e) =>
+                  handleMarkerPointerDown(e, marker, index, getValueFromClientX)
+                }
+                onPointerMove={handleMarkerPointerMove}
+                onPointerUp={handleMarkerPointerEnd}
+                onPointerCancel={handleMarkerPointerEnd}
+                onLostPointerCapture={() => finishMarkerDrag()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                }}
+                aria-label={t.viewerControls.jumpTo(marker.time.toFixed(2))}
+              />
+            </div>
+          </ContextMenuTrigger>
+          <ContextMenuContent
+            className="w-40"
+            onPointerDown={(e) => e.stopPropagation()}
+            onPointerMove={(e) => e.stopPropagation()}
+            onPointerUp={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+            onContextMenu={(e) => e.stopPropagation()}
+          >
+            <ContextMenuItem onSelect={() => onEditMarkerRequest?.(marker, index)}>
+              {t.viewerControls.editMarker}
+            </ContextMenuItem>
+            <ContextMenuSub>
+              <ContextMenuSubTrigger>{t.viewerControls.color}</ContextMenuSubTrigger>
+              <ContextMenuSubContent
+                className="w-44"
+                onPointerDown={(e) => e.stopPropagation()}
+                onPointerMove={(e) => e.stopPropagation()}
+                onPointerUp={(e) => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
+                onContextMenu={(e) => e.stopPropagation()}
+              >
+                {MARKER_COLOR_OPTIONS.map((color) => (
+                  <ContextMenuItem
+                    key={color.key}
+                    onSelect={() => onChangeMarkerColorRequest?.(index, color.key)}
+                  >
+                    <span
+                      className="mr-2 h-3 w-3 rounded-full border border-gray-300"
+                      style={{ backgroundColor: color.hex }}
+                    />
+                    {getMarkerColorLabel(t, color.key)}
+                  </ContextMenuItem>
+                ))}
+              </ContextMenuSubContent>
+            </ContextMenuSub>
+            <ContextMenuSeparator />
+            <ContextMenuItem
+              className="text-red-600 focus:text-red-700"
+              onSelect={() => onDeleteMarkerRequest?.(index)}
+            >
+              {t.viewerControls.deleteMarker}
+            </ContextMenuItem>
+          </ContextMenuContent>
+        </ContextMenu>
+        <div
+          className={cn(
+            'pointer-events-none absolute -translate-x-1/2 rounded-sm transition-transform duration-200 ease-out group-hover/marker:scale-[1.4] will-change-transform motion-reduce:transition-none',
+            contextMenuMarkerIndex === index && 'outline outline-2 outline-white outline-offset-2'
+          )}
+          style={{ top: iconTop }}
+        >
+          <Marker color={marker.color} size={12} />
+        </div>
+      </>
+    ),
+    [
+      contextMenuMarkerIndex,
+      finishMarkerDrag,
+      handleMarkerPointerDown,
+      handleMarkerPointerEnd,
+      handleMarkerPointerMove,
+      isMarkerMoveMode,
+      onChangeMarkerColorRequest,
+      onDeleteMarkerRequest,
+      onEditMarkerRequest,
+      onMoveMarkerRequest,
+      t,
+    ]
   );
 
   const applyVolumeFromTrackY = useCallback(
@@ -597,146 +642,18 @@ export default function VideoSeekBar({
         {/* Current time */}
         <TimeBadge seconds={isDragging ? dragTime : currentTime} />
 
-        {/* Seek area (判定2倍), 内部に細いトラックを描画 */}
-        <div
-          ref={seekAreaRef}
-          className="group relative flex-1 h-6 cursor-pointer select-none pointer-events-auto"
-          style={{ touchAction: 'none' }}
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerEnd}
-          onPointerCancel={handlePointerEnd}
-          onLostPointerCapture={finishDragging}
-        >
-          {/* Visible track (細い) */}
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full h-1 bg-black/40 rounded-full overflow-hidden">
-              <div className="h-full bg-primary/80" style={{ width: `${progressPercent}%` }} />
-            </div>
-          </div>
-
-          {/* Markers (track centerより少し下) */}
-          {duration > 0 && markers.length > 0 && (
-            <div className="absolute inset-0 z-10 top-2.5">
-              {markers.map((m, idx) => {
-                const markerTime = draggingMarker?.index === idx ? draggingMarker.time : m.time;
-                const pct = Math.min(Math.max((markerTime / duration) * 100, 0), 100);
-                return (
-                  // biome-ignore lint/suspicious/noArrayIndexKey: Idx is acceptable here
-                  <div key={idx} className="absolute" style={{ left: `${pct}%` }}>
-                    <ContextMenu
-                      onOpenChange={(open) => setContextMenuMarkerIndex(open ? idx : null)}
-                    >
-                      <ContextMenuTrigger asChild>
-                        {/* Marker group: make hover affect icon while preserving hit area */}
-                        <div
-                          className="absolute -translate-x-1/2 group/marker pointer-events-auto"
-                          style={{ top: 0, height: `${HIT_HEIGHT_PX}px`, width: '36px' }}
-                          onContextMenu={(e) => e.stopPropagation()}
-                          onDoubleClick={(e) => {
-                            e.stopPropagation();
-                            onEditMarkerRequest?.(m, idx);
-                          }}
-                        >
-                          {/* Hit area below the bar (wide) */}
-                          <button
-                            type="button"
-                            className={cn(
-                              'absolute inset-0',
-                              onMoveMarkerRequest &&
-                                isMarkerMoveMode &&
-                                'cursor-grab active:cursor-grabbing'
-                            )}
-                            onPointerDown={(e) => handleMarkerPointerDown(e, m, idx)}
-                            onPointerMove={handleMarkerPointerMove}
-                            onPointerUp={handleMarkerPointerEnd}
-                            onPointerCancel={handleMarkerPointerEnd}
-                            onLostPointerCapture={() => finishMarkerDrag()}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                            }}
-                            aria-label={t.viewerControls.jumpTo(m.time.toFixed(2))}
-                          />
-                        </div>
-                      </ContextMenuTrigger>
-                      <ContextMenuContent
-                        className="w-40"
-                        onPointerDown={(e) => e.stopPropagation()}
-                        onPointerMove={(e) => e.stopPropagation()}
-                        onPointerUp={(e) => e.stopPropagation()}
-                        onClick={(e) => e.stopPropagation()}
-                        onContextMenu={(e) => e.stopPropagation()}
-                      >
-                        <ContextMenuItem onSelect={() => onEditMarkerRequest?.(m, idx)}>
-                          {t.viewerControls.editMarker}
-                        </ContextMenuItem>
-                        <ContextMenuSub>
-                          <ContextMenuSubTrigger>{t.viewerControls.color}</ContextMenuSubTrigger>
-                          <ContextMenuSubContent
-                            className="w-44"
-                            onPointerDown={(e) => e.stopPropagation()}
-                            onPointerMove={(e) => e.stopPropagation()}
-                            onPointerUp={(e) => e.stopPropagation()}
-                            onClick={(e) => e.stopPropagation()}
-                            onContextMenu={(e) => e.stopPropagation()}
-                          >
-                            {MARKER_COLOR_OPTIONS.map((color) => (
-                              <ContextMenuItem
-                                key={color.key}
-                                onSelect={() => onChangeMarkerColorRequest?.(idx, color.key)}
-                              >
-                                <span
-                                  className="mr-2 h-3 w-3 rounded-full border border-gray-300"
-                                  style={{ backgroundColor: color.hex }}
-                                />
-                                {getMarkerColorLabel(t, color.key)}
-                              </ContextMenuItem>
-                            ))}
-                          </ContextMenuSubContent>
-                        </ContextMenuSub>
-                        <ContextMenuSeparator />
-                        <ContextMenuItem
-                          className="text-red-600 focus:text-red-700"
-                          onSelect={() => onDeleteMarkerRequest?.(idx)}
-                        >
-                          {t.viewerControls.deleteMarker}
-                        </ContextMenuItem>
-                      </ContextMenuContent>
-                    </ContextMenu>
-                    {/* Visual icon: slightly below bar; scales on hover of group */}
-                    <div
-                      className={cn(
-                        'absolute -translate-x-1/2 pointer-events-none rounded-sm transition-transform duration-200 ease-out group-hover/marker:scale-[1.4] will-change-transform motion-reduce:transition-none',
-                        contextMenuMarkerIndex === idx &&
-                          'outline outline-2 outline-white outline-offset-2'
-                      )}
-                      style={{ top: iconTop }}
-                    >
-                      <Marker color={m.color} size={12} />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Handle: 普段非表示、バーhoverでscale-up、さらにhoverで少し拡大 */}
-          <div
-            className={cn('absolute top-1/2 -translate-y-1/2 -translate-x-1/2')}
-            style={{ left: `${progressPercent}%` }}
-          >
-            <div
-              className={cn(
-                'w-4 h-4 bg-primary rounded-full', // 判定1.2倍（w-4/h-4）
-                'transition-transform duration-150 ease-out',
-                isDragging
-                  ? 'opacity-100 scale-100' // ドラッグ中は常に表示
-                  : 'opacity-0 scale-0 group-hover:opacity-100 group-hover:scale-100', // バーhoverで表示
-                'hover:scale-110' // ハンドルhoverでさらに拡大
-              )}
-            />
-          </div>
-        </div>
+        <SeekTrack
+          value={currentTime}
+          max={duration}
+          markers={seekTrackMarkers}
+          className="flex-1"
+          markerLayerClassName="top-2.5"
+          onSeek={onSeek}
+          onScrubStart={handleSeekTrackScrubStart}
+          onScrubMove={handleSeekTrackScrubMove}
+          onScrubEnd={handleSeekTrackScrubEnd}
+          renderMarker={renderVideoMarker}
+        />
 
         {/* Duration */}
         <TimeBadge seconds={duration} />

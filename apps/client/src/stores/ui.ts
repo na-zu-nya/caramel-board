@@ -47,7 +47,7 @@ export const currentFilterAtom = atom<StackFilter>({});
 export const hasActiveFiltersAtom = atom((get) => {
   const filter = get(currentFilterAtom);
   return Object.keys(filter).some(
-    (key) => key !== 'datasetId' && key !== 'mediaType' && filter[key as keyof StackFilter]
+    (key) => key !== 'datasetId' && key !== 'mediaCategory' && filter[key as keyof StackFilter]
   );
 });
 

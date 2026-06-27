@@ -22,8 +22,6 @@ const meta: Meta<typeof TapZoneOverlay> = {
   ],
   args: {
     contentArea: { top: 56, left: 0, right: 0, bottom: 96 },
-    canGoLeft: true,
-    canGoRight: true,
     onLeftTap: () => console.log('left tap'),
     onRightTap: () => console.log('right tap'),
     onCenterTap: () => console.log('center tap'),

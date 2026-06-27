@@ -1,7 +1,3 @@
-fn default_docker_database_url() -> String {
-    String::from("postgresql://caramel_user:caramel_pass@localhost:5432/caramel_board_db")
-}
-
 fn default_language() -> String {
     let lang = std::env::var("LANG").unwrap_or_default().to_lowercase();
     normalize_language(&lang)
@@ -25,6 +21,10 @@ fn default_auto_tag_port() -> u16 {
 
 fn default_auto_tag_threshold() -> f64 {
     0.4
+}
+
+fn default_auto_tag_use_gpu() -> bool {
+    cfg!(target_os = "macos")
 }
 
 fn normalize_settings(mut settings: AppSettings) -> AppSettings {
@@ -95,14 +95,8 @@ fn default_settings(app: &AppHandle) -> Result<AppSettings, String> {
         basic_auth_enabled: false,
         basic_auth_username: String::new(),
         basic_auth_password: String::new(),
-        docker_database_url: default_docker_database_url(),
-        docker_storage_root: repo_root()
-            .join("data/assets")
-            .to_string_lossy()
-            .into_owned(),
-        docker_dataset_id: String::new(),
-        docker_verify_files: true,
         auto_tag_enabled: false,
+        auto_tag_use_gpu: default_auto_tag_use_gpu(),
         auto_tag_port: default_auto_tag_port(),
         auto_tag_repo_dir: data_dir
             .join("autotag")

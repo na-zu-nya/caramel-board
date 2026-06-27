@@ -28,6 +28,7 @@ import { HeaderIconButton } from '@/components/ui/Header/HeaderIconButton';
 import { JoyTagStatus } from '@/components/ui/JoyTagStatus';
 import { SelectItem } from '@/components/ui/select';
 import { SelectionActionBar } from '@/components/ui/selection-action-bar';
+import { useRightPanelPushesContent } from '@/hooks/useSidebarLayoutMode';
 import { useStackTile } from '@/hooks/useStackTile';
 import { useKeyboardShortcuts } from '@/hooks/utils/useKeyboardShortcut';
 import { apiClient } from '@/lib/api-client';
@@ -127,6 +128,9 @@ function AutoTagConfigPage() {
   const [selectionMode, setSelectionMode] = useAtom(selectionModeAtom);
   const [selectedItems, setSelectedItems] = useState<Set<string | number>>(new Set());
   const [isEditPanelOpen, setIsEditPanelOpen] = useState(false);
+  const rightPanelPushesContent = useRightPanelPushesContent(
+    (!selectionMode && infoSidebarOpen) || (selectionMode && isEditPanelOpen)
+  );
   const debounceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [filterOpen, setFilterOpen] = useAtom(filterOpenAtom);
   const [_currentFilter, setCurrentFilter] = useAtom(currentFilterAtom);
@@ -394,6 +398,7 @@ function AutoTagConfigPage() {
     hasNextPage,
     isFetchingNextPage,
     isLoading: stacksLoading,
+    refetch: refetchAutoTagStacks,
   } = useInfiniteQuery<AutoTagStackPage>({
     queryKey: ['autotag-stacks', datasetId, selectedAutoTag, localFilter],
     queryFn: async ({ pageParam = 0 }) => {
@@ -735,6 +740,38 @@ function AutoTagConfigPage() {
     downloadStackOriginals(datasetId, selectedStackIds);
   }, [datasetId, selectedStackIds]);
 
+  const handleRefreshStacks = useCallback(
+    async (stackIds: Array<string | number>) => {
+      if (stackIds.length === 0) return;
+
+      try {
+        await apiClient.refreshStacks(stackIds);
+        await Promise.allSettled([
+          queryClient.invalidateQueries({
+            queryKey: ['autotag-stacks', datasetId, selectedAutoTag, localFilter],
+          }),
+          queryClient.invalidateQueries({ queryKey: ['stacks'] }),
+          queryClient.invalidateQueries({ queryKey: ['library-counts', datasetId] }),
+          queryClient.invalidateQueries({ queryKey: ['dataset-overview', datasetId] }),
+        ]);
+        await refetchAutoTagStacks();
+        exitSelectionMode();
+      } catch (error) {
+        console.error('Error refreshing auto-tag stacks:', error);
+        alert(t.grid.refreshFailed);
+      }
+    },
+    [
+      datasetId,
+      exitSelectionMode,
+      localFilter,
+      queryClient,
+      refetchAutoTagStacks,
+      selectedAutoTag,
+      t,
+    ]
+  );
+
   const handleRemoveSelectedStacks = useCallback(async () => {
     if (selectedStackIds.length === 0) return;
 
@@ -770,19 +807,28 @@ function AutoTagConfigPage() {
         copy: {
           bulkEdit: t.grid.bulkEdit,
           downloadSelected: t.contextMenu.downloadSelected,
+          addToScratch: t.contextMenu.addToScratch,
+          addToCollection: t.contextMenu.addToCollection,
+          createNewCollection: t.contextMenu.createNewCollection,
+          collectionLoading: t.collection.loading,
+          noCollectionsAvailable: t.contextMenu.noCollectionsAvailable,
           mergeStacks: t.grid.mergeStacks,
-          refreshThumbnails: t.grid.refreshThumbnails,
-          optimizeVideo: t.grid.optimizeVideo,
+          refresh: t.grid.refresh,
+          removeFromCollection: t.contextMenu.removeFromCollection,
+          removeFromScratch: t.contextMenu.removeFromScratch,
           deleteStacks: t.grid.deleteStacks,
           deleteStacksConfirm: t.grid.deleteStacksConfirm,
         },
         bulkEdit: { onSelect: toggleEditPanel },
         downloadSelected: { onSelect: handleDownloadSelectedStacks },
+        refresh: { onSelect: () => handleRefreshStacks(selectedStackIds) },
         deleteStacks: { onSelect: handleRemoveSelectedStacks },
       }),
     [
       handleDownloadSelectedStacks,
+      handleRefreshStacks,
       handleRemoveSelectedStacks,
+      selectedStackIds,
       selectedItems.size,
       t,
       toggleEditPanel,
@@ -965,8 +1011,7 @@ function AutoTagConfigPage() {
           ref={scrollContainerRef}
           className={cn(
             'flex-1 min-w-0 h-full overflow-y-auto bg-gray-50 transition-all duration-300 ease-in-out',
-            infoSidebarOpen && !selectionMode ? 'mr-80' : 'mr-0',
-            isEditPanelOpen && selectionMode ? 'mr-80' : ''
+            rightPanelPushesContent ? 'mr-80' : 'mr-0'
           )}
         >
           <div className="p-4">
@@ -1076,6 +1121,7 @@ function AutoTagConfigPage() {
                     onAddToScratchItem={handleAddToScratchStack}
                     onDownloadItem={handleDownloadStack}
                     onDownloadSelected={handleDownloadSelectedStacks}
+                    onRefreshStacks={handleRefreshStacks}
                     onBulkEditSelected={toggleEditPanel}
                     onRemoveSelectedStacks={handleRemoveSelectedStacks}
                     onToggleFavoriteItem={handleToggleFavoriteStack}
@@ -1136,8 +1182,7 @@ function AutoTagConfigPage() {
         <div
           className={cn(
             'flex-1 min-w-0 h-full flex items-center justify-center bg-gray-50 transition-all duration-300 ease-in-out',
-            infoSidebarOpen && !selectionMode ? 'mr-80' : 'mr-0',
-            isEditPanelOpen && selectionMode ? 'mr-80' : ''
+            rightPanelPushesContent ? 'mr-80' : 'mr-0'
           )}
         >
           <div className="text-center">
@@ -1261,6 +1306,14 @@ function appendFilterParams(target: URLSearchParams, filter: StackFilter) {
   }
   if (filter.isFavorite !== undefined) {
     target.append('isFavorite', filter.isFavorite.toString());
+  }
+  if (filter.mediaCategory) {
+    target.append('mediaCategory', filter.mediaCategory);
+  }
+  if (Array.isArray(filter.mediaTypes)) {
+    for (const mediaType of filter.mediaTypes) {
+      target.append('mediaTypes', mediaType);
+    }
   }
   if (filter.search) {
     target.append('search', filter.search);

@@ -8,10 +8,11 @@ import { useDataset } from '@/hooks/useDatasets';
 import { useHeaderActions } from '@/hooks/useHeaderActions';
 import { useRangeBasedQuery } from '@/hooks/useRangeBasedQuery';
 import { useT } from '@/lib/i18n';
+import { areStackFiltersEqual } from '@/lib/stack-filter';
 import { navigationStateAtom } from '@/stores/navigation';
 import { currentFilterAtom } from '@/stores/ui';
 import { genListToken, saveViewContext } from '@/stores/view-context';
-import type { MediaGridItem, MediaType, StackFilter } from '@/types';
+import type { MediaCategory, MediaGridItem, StackFilter } from '@/types';
 
 export const Route = createFileRoute('/library/$datasetId/media-type/$mediaType')({
   component: MediaTypeList,
@@ -29,6 +30,7 @@ function MediaTypeList() {
     authors?: string[];
     hasNoTags?: boolean;
     hasNoAuthor?: boolean;
+    mediaTypes?: StackFilter['mediaTypes'];
     colorFilter?: string;
   };
   const { data: dataset } = useDataset(datasetId);
@@ -68,14 +70,14 @@ function MediaTypeList() {
   useEffect(() => {
     // If we're returning from stack viewer (nav state exists for this path), preserve the filter
     if (navigationState && navigationState.lastPath === window.location.pathname) {
-      console.log('📌 Preserving filter state from navigation');
       return;
     }
 
     // Otherwise, initialize from URL params
     const newFilter: StackFilter = {
       datasetId,
-      mediaType: mediaType as MediaType,
+      mediaCategory: mediaType as MediaCategory,
+      mediaTypes: search.mediaTypes,
       // Preserve explicit false/empty values correctly; avoid `|| undefined` which drops false
       tags: search.tags ?? undefined,
       search: search.search ?? undefined,
@@ -86,7 +88,9 @@ function MediaTypeList() {
       hasNoAuthor: search.hasNoAuthor ?? undefined,
       colorFilter: search.colorFilter ? JSON.parse(search.colorFilter) : undefined,
     };
-    setCurrentFilter(newFilter);
+    setCurrentFilter((previousFilter) =>
+      areStackFiltersEqual(previousFilter, newFilter) ? previousFilter : newFilter
+    );
   }, [
     datasetId,
     mediaType,
@@ -97,6 +101,7 @@ function MediaTypeList() {
     search.authors,
     search.hasNoTags,
     search.hasNoAuthor,
+    search.mediaTypes,
     search.colorFilter,
     setCurrentFilter,
     navigationState,
@@ -132,10 +137,10 @@ function MediaTypeList() {
       const item = page?.stacks?.[withinPageIndex] ?? allItems[targetIndex];
       if (!item) return;
 
-      // Build a local ids window from the fetched page (right→left order)
-      const ids = (page?.stacks || [])
-        .map((s) => (typeof s.id === 'string' ? Number.parseInt(s.id, 10) : (s.id as number)))
-        .reverse();
+      // Build a local ids window in the same order as the grid list.
+      const ids = (page?.stacks || []).map((s) =>
+        typeof s.id === 'string' ? Number.parseInt(s.id, 10) : (s.id as number)
+      );
       const token = genListToken({
         datasetId,
         mediaType,
@@ -148,7 +153,7 @@ function MediaTypeList() {
       saveViewContext({
         token,
         datasetId,
-        mediaType: mediaType as any,
+        mediaType: mediaType as MediaCategory,
         filters: currentFilter,
         sort: currentSort,
         ids,
@@ -204,8 +209,6 @@ function MediaTypeList() {
   useEffect(() => {
     // We treat presence of navigationState for this path as "returning"
     if (navigationState && navigationState.lastPath === window.location.pathname) {
-      console.log('📌 Restoring navigation state');
-
       // Restore filter and sort state
       if (navigationState.filter) {
         setCurrentFilter(navigationState.filter);
@@ -266,7 +269,6 @@ function MediaTypeList() {
         const startIndex = Math.max(0, (startRow - bufferRows) * itemsPerRow);
         const endIndex = Math.min((endRow + bufferRows) * itemsPerRow - 1, total - 1);
 
-        console.log(`📌 Loading previously visible range: ${startIndex}-${endIndex}`);
         void (async () => {
           await loadRange(startIndex, endIndex);
           // After range is loaded, ensure final restoration
@@ -284,9 +286,11 @@ function MediaTypeList() {
   // Handle filter changes
   const handleFilterChange = useCallback(
     (newFilter: StackFilter) => {
-      setCurrentFilter(newFilter);
+      setCurrentFilter((previousFilter) =>
+        areStackFiltersEqual(previousFilter, newFilter) ? previousFilter : newFilter
+      );
       // Clear navigation state on filter change
-      setNavigationState(null);
+      setNavigationState((previousState) => (previousState === null ? previousState : null));
 
       // Update URL with new filter params
       const searchParams: Record<string, any> = {};
@@ -310,6 +314,9 @@ function MediaTypeList() {
       }
       if (newFilter.hasNoAuthor !== undefined) {
         searchParams.hasNoAuthor = newFilter.hasNoAuthor;
+      }
+      if (newFilter.mediaTypes?.length) {
+        searchParams.mediaTypes = newFilter.mediaTypes;
       }
       if (newFilter.colorFilter) {
         searchParams.colorFilter = JSON.stringify(newFilter.colorFilter);
@@ -347,8 +354,6 @@ function MediaTypeList() {
 
   const handleItemClick = useCallback(
     (item: MediaGridItem) => {
-      console.log('Navigate to stack:', item.id);
-
       // Save current state before navigation
       setNavigationState({
         scrollPosition: window.scrollY,
@@ -359,14 +364,10 @@ function MediaTypeList() {
         sort: currentSort,
       });
 
-      // Build ViewContext ids window from currently loaded items
-      // StackViewerは右→左の順序を厳守するため、
-      // ビュー文脈のID配列は右から左へ進む並びにする。
-      // ここではグリッドの読み込み順（左→右）から反転させる。
-      const loadedIdsLtr = (allItems || [])
+      // Build ViewContext ids window from currently loaded items in grid-list order.
+      const loadedIds = (allItems || [])
         .filter((it): it is MediaGridItem => !!it)
         .map((it) => (typeof it.id === 'string' ? Number.parseInt(it.id, 10) : (it.id as number)));
-      const loadedIds = loadedIdsLtr.slice().reverse();
       const clickedId =
         typeof item.id === 'string' ? Number.parseInt(item.id, 10) : (item.id as number);
       const currentIndex = Math.max(0, loadedIds.indexOf(clickedId));
@@ -381,7 +382,7 @@ function MediaTypeList() {
       saveViewContext({
         token,
         datasetId,
-        mediaType: mediaType as any,
+        mediaType: mediaType as MediaCategory,
         filters: currentFilter,
         sort: currentSort,
         ids: loadedIds,
@@ -463,6 +464,7 @@ function MediaTypeList() {
         onLoadRange={handleLoadRange}
         onRefreshAll={refreshAll}
         dataset={dataset}
+        uploadMediaCategory={mediaType as MediaCategory}
         onItemClick={handleItemClick}
         containerRef={containerRef}
         useWindowScroll

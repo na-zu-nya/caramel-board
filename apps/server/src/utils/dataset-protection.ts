@@ -1,7 +1,6 @@
 import crypto from 'node:crypto';
 import type { Context } from 'hono';
 import { getCookie, setCookie } from 'hono/cookie';
-import { prisma } from '../shared/di';
 
 const TOKEN_PREFIX = 'ds_auth_';
 
@@ -42,23 +41,6 @@ export function isDatasetAuthorizedFromState(
   const expected = signToken(datasetId, ds.passwordHash);
   if (token.length !== expected.length) return false;
   return crypto.timingSafeEqual(Buffer.from(token, 'hex'), Buffer.from(expected, 'hex'));
-}
-
-export async function isDatasetAuthorized(c: Context, datasetId: number): Promise<boolean> {
-  const ds = await prisma.dataSet.findUnique({
-    where: { id: datasetId },
-    select: { isProtected: true, passwordHash: true },
-  });
-  if (!ds) return false;
-  return isDatasetAuthorizedFromState(c, datasetId, ds);
-}
-
-export async function ensureDatasetAuthorized(c: Context, datasetId: number) {
-  const ok = await isDatasetAuthorized(c, datasetId);
-  if (!ok) {
-    return c.json({ error: 'Protected dataset', protected: true }, 401);
-  }
-  return null;
 }
 
 export function setDatasetAuthCookie(c: Context, datasetId: number, passwordHash: string) {

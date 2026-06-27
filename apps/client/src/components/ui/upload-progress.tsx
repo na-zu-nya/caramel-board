@@ -16,14 +16,16 @@ export function UploadProgress() {
     <>
       {/* Upload Progress Indicator */}
       {progress && (
-        <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-[120]">
-          <div className="bg-white rounded-lg shadow-lg p-4 min-w-[300px] max-w-[400px]">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium">
+        <div className="fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+0.75rem)] z-[120] flex justify-center sm:inset-x-auto sm:left-1/2 sm:w-80 sm:-translate-x-1/2 lg:bottom-4 lg:w-[400px]">
+          <div className="w-full rounded-lg bg-white p-3 shadow-lg lg:p-4">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <span className="text-xs font-medium leading-snug lg:text-sm">
                 アップロード中 ({progress.completed}/{progress.total})
               </span>
               {progress.errors > 0 && (
-                <span className="text-sm text-red-500">{progress.errors}件のエラー</span>
+                <span className="shrink-0 text-xs text-red-500 lg:text-sm">
+                  {progress.errors}件のエラー
+                </span>
               )}
             </div>
 
@@ -31,19 +33,23 @@ export function UploadProgress() {
 
             <div className="flex justify-between text-xs text-gray-500">
               <span>進行状況: {Math.round(progress.progress)}%</span>
-              {progress.isUploading && <span className="animate-pulse">アップロード中...</span>}
+              {progress.isUploading ? (
+                <span className="animate-pulse">アップロード中...</span>
+              ) : progress.pending > 0 ? (
+                <span>待機中...</span>
+              ) : null}
             </div>
           </div>
         </div>
       )}
 
       {/* Notification Ticker */}
-      <div className="fixed top-4 right-4 z-[120] space-y-2">
+      <div className="fixed left-3 right-3 top-[calc(env(safe-area-inset-top)+0.75rem)] z-[120] space-y-2 sm:left-auto sm:right-4 sm:w-80 lg:top-4 lg:w-96">
         {notifications.map((notification) => (
           <div
             key={notification.id}
             className={cn(
-              'flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg animate-slide-in-right',
+              'flex items-start gap-2 rounded-lg px-3 py-2.5 shadow-lg animate-slide-in-right lg:px-4 lg:py-3',
               {
                 'bg-green-50 text-green-800 border border-green-200':
                   notification.type === 'success',
@@ -52,11 +58,19 @@ export function UploadProgress() {
               }
             )}
           >
-            {notification.type === 'success' && <CheckCircle className="w-5 h-5" />}
-            {notification.type === 'error' && <AlertCircle className="w-5 h-5" />}
-            {notification.type === 'info' && <AlertCircle className="w-5 h-5" />}
+            {notification.type === 'success' && (
+              <CheckCircle className="h-4 w-4 shrink-0 lg:h-5 lg:w-5" />
+            )}
+            {notification.type === 'error' && (
+              <AlertCircle className="h-4 w-4 shrink-0 lg:h-5 lg:w-5" />
+            )}
+            {notification.type === 'info' && (
+              <AlertCircle className="h-4 w-4 shrink-0 lg:h-5 lg:w-5" />
+            )}
 
-            <span className="text-sm font-medium">{notification.message}</span>
+            <span className="min-w-0 text-xs font-medium leading-snug lg:text-sm">
+              {notification.message}
+            </span>
           </div>
         ))}
       </div>

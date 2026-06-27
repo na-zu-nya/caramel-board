@@ -1,10 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { usePrisma } from '../shared/di';
-import { NavigationPinService } from '../shared/services/NavigationPinService';
-import { ensureSuperUser } from '../shared/services/UserService';
-import { StandaloneLibraryRepository } from '../standalone/library-repository';
-import { isStandaloneSqliteEnabled } from '../standalone/sqlite';
+import { StandaloneLibraryRepository } from '../repositories/sqlite/library-repository';
 
 // リクエストボディのスキーマ定義
 const createNavigationPinSchema = z.object({
@@ -16,6 +12,16 @@ const createNavigationPinSchema = z.object({
   collectionId: z.number().int().positive().optional(),
   mediaType: z.string().max(50).optional(),
 });
+
+type CreateNavigationPinInput = {
+  type: 'COLLECTION' | 'MEDIA_TYPE' | 'OVERVIEW' | 'FAVORITES' | 'LIKES';
+  name: string;
+  icon: string;
+  order: number;
+  dataSetId: number;
+  collectionId?: number;
+  mediaType?: string;
+};
 
 const updateNavigationPinSchema = z.object({
   name: z.string().min(1).max(255).optional(),
@@ -32,7 +38,12 @@ const updateOrderSchema = z.object({
   ),
 });
 
+type NavigationPinOrderInput = {
+  pins: Array<{ id: number; order: number }>;
+};
+
 export const navigationPinsRouter = new Hono();
+const libraryRepository = new StandaloneLibraryRepository();
 
 // Root helper to avoid 500s on direct access
 navigationPinsRouter.get('/', (c) => {
@@ -57,15 +68,7 @@ navigationPinsRouter.get('/dataset/:dataSetId', async (c) => {
   }
 
   try {
-    if (isStandaloneSqliteEnabled()) {
-      const pins = new StandaloneLibraryRepository().getNavigationPins(dataSetId);
-      console.log(`Found ${pins.length} navigation pins for dataset ${dataSetId}`);
-      return c.json(pins);
-    }
-    const prisma = usePrisma(c);
-    const userId = await ensureSuperUser(prisma);
-    const navigationPinService = new NavigationPinService(prisma, userId);
-    const pins = await navigationPinService.findByDataSet(dataSetId);
+    const pins = libraryRepository.getNavigationPins(dataSetId);
     console.log(`Found ${pins.length} navigation pins for dataset ${dataSetId}`);
     return c.json(pins);
   } catch (error) {
@@ -78,17 +81,8 @@ navigationPinsRouter.post('/', async (c) => {
   try {
     const body = await c.req.json();
     console.log('POST /navigation-pins - body:', body);
-    const validatedData = createNavigationPinSchema.parse(body);
-    if (isStandaloneSqliteEnabled()) {
-      const pin = new StandaloneLibraryRepository().upsertNavigationPin(validatedData);
-      console.log('Created/Updated navigation pin:', pin);
-      return c.json(pin, 201);
-    }
-
-    const prisma = usePrisma(c);
-    const userId = await ensureSuperUser(prisma);
-    const navigationPinService = new NavigationPinService(prisma, userId);
-    const pin = await navigationPinService.upsert(validatedData);
+    const validatedData = createNavigationPinSchema.parse(body) as CreateNavigationPinInput;
+    const pin = libraryRepository.upsertNavigationPin(validatedData);
     console.log('Created/Updated navigation pin:', pin);
     return c.json(pin, 201);
   } catch (error) {
@@ -103,16 +97,8 @@ navigationPinsRouter.post('/', async (c) => {
 navigationPinsRouter.put('/order', async (c) => {
   try {
     const body = await c.req.json();
-    const validatedData = updateOrderSchema.parse(body);
-    if (isStandaloneSqliteEnabled()) {
-      new StandaloneLibraryRepository().updateNavigationPinOrder(validatedData.pins);
-      return c.json({ success: true });
-    }
-
-    const prisma = usePrisma(c);
-    const userId = await ensureSuperUser(prisma);
-    const navigationPinService = new NavigationPinService(prisma, userId);
-    await navigationPinService.updateOrder(validatedData.pins);
+    const validatedData = updateOrderSchema.parse(body) as NavigationPinOrderInput;
+    libraryRepository.updateNavigationPinOrder(validatedData.pins);
     return c.json({ success: true });
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -133,16 +119,8 @@ navigationPinsRouter.put('/:id', async (c) => {
   try {
     const body = await c.req.json();
     const validatedData = updateNavigationPinSchema.parse(body);
-    if (isStandaloneSqliteEnabled()) {
-      const pin = new StandaloneLibraryRepository().updateNavigationPin(id, validatedData);
-      if (!pin) return c.json({ error: 'Navigation pin not found' }, 404);
-      return c.json(pin);
-    }
-
-    const prisma = usePrisma(c);
-    const userId = await ensureSuperUser(prisma);
-    const navigationPinService = new NavigationPinService(prisma, userId);
-    const pin = await navigationPinService.update(id, validatedData);
+    const pin = libraryRepository.updateNavigationPin(id, validatedData);
+    if (!pin) return c.json({ error: 'Navigation pin not found' }, 404);
     return c.json(pin);
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -161,15 +139,8 @@ navigationPinsRouter.delete('/:id', async (c) => {
   }
 
   try {
-    if (isStandaloneSqliteEnabled()) {
-      const ok = new StandaloneLibraryRepository().deleteNavigationPin(id);
-      if (!ok) return c.json({ error: 'Navigation pin not found' }, 404);
-      return c.json({ success: true });
-    }
-    const prisma = usePrisma(c);
-    const userId = await ensureSuperUser(prisma);
-    const navigationPinService = new NavigationPinService(prisma, userId);
-    await navigationPinService.delete(id);
+    const ok = libraryRepository.deleteNavigationPin(id);
+    if (!ok) return c.json({ error: 'Navigation pin not found' }, 404);
     return c.json({ success: true });
   } catch (error) {
     console.error('Error deleting navigation pin:', error);

@@ -148,10 +148,11 @@ export const CreateAssetSchema = z.object({
 // Tag schemas
 export const CreateTagSchema = z.object({
   title: z.string().min(1),
-  dataSetId: z.coerce.number().int().positive().optional(),
+  dataSetId: z.coerce.number().int().positive(),
 });
 
 export const TagStackSchema = z.object({
+  dataSetId: z.coerce.number().int().positive(),
   stackId: z.number().int().positive(),
   tagIds: z.array(z.number().int().positive()),
 });

@@ -18,19 +18,19 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { getMediaTypeLabel, useT } from '@/lib/i18n';
-import type { AvailableIcon, MediaType } from '@/types';
+import type { AvailableIcon, MediaCategory } from '@/types';
 import { AVAILABLE_ICONS } from '@/types';
 
 interface MediaTypeContextMenuProps {
   children: React.ReactNode;
-  mediaType: MediaType;
+  mediaType: MediaCategory;
   datasetId: string;
   isPinned?: boolean;
   onPin?: (iconName: string) => void;
   onUnpin?: () => void;
 }
 
-const DEFAULT_MEDIA_TYPE_ICONS: Record<MediaType, AvailableIcon> = {
+const DEFAULT_MEDIA_TYPE_ICONS: Record<MediaCategory, AvailableIcon> = {
   image: 'Image',
   comic: 'BookOpen',
   video: 'Film',

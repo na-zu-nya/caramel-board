@@ -55,14 +55,17 @@ export function useSparseInfiniteScroll({
     isFetching: isCountFetching,
   } = useQuery({
     queryKey: ['stacks', 'count', datasetId, mediaType, filter, sort],
-    queryFn: async () => {
-      const result = await apiClient.getStacks({
-        datasetId,
-        filter,
-        sort,
-        limit: 1,
-        offset: 0,
-      });
+    queryFn: async ({ signal }) => {
+      const result = await apiClient.getStacks(
+        {
+          datasetId,
+          filter,
+          sort,
+          limit: 1,
+          offset: 0,
+        },
+        { signal }
+      );
       return { total: result.total };
     },
     staleTime: 5 * 60 * 1000,
@@ -98,9 +101,6 @@ export function useSparseInfiniteScroll({
           (normalizedEnd >= loadingStart && normalizedEnd <= loadingEnd) ||
           (loadingStart >= normalizedStart && loadingStart <= normalizedEnd)
         ) {
-          console.log(
-            `⏭️ Skipping range ${normalizedStart}-${normalizedEnd}, overlaps with loading range ${key}`
-          );
           return;
         }
       }
@@ -110,8 +110,6 @@ export function useSparseInfiniteScroll({
       try {
         const offset = normalizedStart;
         const limit = normalizedEnd - normalizedStart + 1;
-
-        console.log(`🔄 Loading range ${normalizedStart}-${normalizedEnd} (${limit} items)`);
 
         const result = await apiClient.getStacks({
           datasetId,
@@ -138,10 +136,6 @@ export function useSparseInfiniteScroll({
           });
           return newItems;
         });
-
-        console.log(
-          `✅ Loaded ${result.stacks.length} items for range ${normalizedStart}-${normalizedEnd}`
-        );
       } catch (error) {
         console.error(`❌ Failed to load range ${normalizedStart}-${normalizedEnd}:`, error);
       } finally {
@@ -238,8 +232,6 @@ export function useSparseInfiniteScroll({
 
   // Force refresh all loaded data
   const refreshAll = useCallback(async () => {
-    console.log('🔄 Force refreshing all data...');
-
     // Invalidate count query
     await queryClient.invalidateQueries({
       queryKey: ['stacks', 'count', datasetId, mediaType, filter, sort],

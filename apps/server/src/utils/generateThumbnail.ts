@@ -9,20 +9,33 @@ import { getFFMPEGPath, probeDurationSec } from './ffmpeg';
 const THUMBNAIL_SIZE = 512;
 const THUMBNAIL_QUALITY = 70;
 
+interface GenerateThumbnailOptions {
+  outputKey?: string;
+  videoTimeSeconds?: number;
+}
+
 function getFileType(ext: string): 'movie' | 'image' {
   return /(mov|mp4|m4v|avi|mkv|webm|mpeg|mpg|wmv)$/i.test(ext) ? 'movie' : 'image';
 }
+
+const formatVideoSeekTime = (timeSeconds: number, duration: number | null) => {
+  const safeTime = Number.isFinite(timeSeconds) ? Math.max(0, timeSeconds) : 0;
+  const maxTime = duration !== null ? Math.max(0, duration - 0.001) : safeTime;
+  return Math.min(safeTime, maxTime).toFixed(3);
+};
 
 export async function generateThumbnail(
   fileKey: string,
   ext: string,
   forceUpdate = false,
-  dataSetId = 1
+  dataSetId = 1,
+  options: GenerateThumbnailOptions = {}
 ) {
   console.log('generateThumbnail:fileKey', fileKey);
 
-  const digest = await DataStorage.getHash(fileKey, dataSetId);
-  const key = buildThumbnailKey(dataSetId, digest);
+  const key =
+    options.outputKey ??
+    buildThumbnailKey(dataSetId, await DataStorage.getHash(fileKey, dataSetId));
   const type = getFileType(ext);
 
   if (!forceUpdate && DataStorage.exists(key, dataSetId)) {
@@ -78,37 +91,53 @@ export async function generateThumbnail(
   } else if (type === 'movie') {
     console.log('thumbnail: movie');
     const frameKey = `${key}.frame.jpg`;
+    const framePath = DataStorage.getPath(frameKey);
     const inputPath = DataStorage.getPath(fileKey);
+    mkdirpSync(path.dirname(framePath));
 
     // 1秒以上の動画は t=1s のフレーム、それ未満は2フレーム目を抽出
     const duration = probeDurationSec(inputPath);
     const isShort = duration !== null ? duration < 1 : false;
+    const hasRequestedTime = options.videoTimeSeconds !== undefined;
 
-    const args = isShort
+    const args = hasRequestedTime
       ? [
           '-hide_banner',
           '-loglevel',
           'error',
           '-i',
           inputPath,
-          '-vf',
-          'select=eq(n,1)',
-          '-frames:v',
-          '1',
-          DataStorage.getPath(frameKey),
-        ]
-      : [
-          '-hide_banner',
-          '-loglevel',
-          'error',
-          '-i',
-          inputPath,
           '-ss',
-          '1',
+          formatVideoSeekTime(options.videoTimeSeconds ?? 0, duration),
           '-frames:v',
           '1',
-          DataStorage.getPath(frameKey),
-        ];
+          framePath,
+        ]
+      : isShort
+        ? [
+            '-hide_banner',
+            '-loglevel',
+            'error',
+            '-i',
+            inputPath,
+            '-vf',
+            'select=eq(n,1)',
+            '-frames:v',
+            '1',
+            framePath,
+          ]
+        : [
+            '-hide_banner',
+            '-loglevel',
+            'error',
+            '-i',
+            inputPath,
+            '-ss',
+            '1',
+            '-frames:v',
+            '1',
+            framePath,
+          ];
 
     const ff = getFFMPEGPath();
     console.log(ff, args.join(' '));
@@ -116,7 +145,7 @@ export async function generateThumbnail(
       execFileSync(ff, args, { stdio: 'ignore' });
     } catch (_error) {
       // 失敗時に候補パスでもう一度だけ試行
-      const candidates = ['/usr/bin/ffmpeg', '/usr/local/bin/ffmpeg'];
+      const candidates = ['/opt/homebrew/bin/ffmpeg', '/usr/local/bin/ffmpeg', '/usr/bin/ffmpeg'];
       for (const c of candidates) {
         if (c === ff) continue;
         try {
@@ -131,7 +160,7 @@ export async function generateThumbnail(
     const outputPath = DataStorage.getPath(key);
     // 出力ディレクトリを確実に作成
     mkdirpSync(path.dirname(outputPath));
-    await sharp(DataStorage.getPath(frameKey))
+    await sharp(framePath)
       .resize(THUMBNAIL_SIZE, THUMBNAIL_SIZE, {
         fit: 'cover',
       })

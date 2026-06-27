@@ -1,13 +1,11 @@
 import { zValidator } from '@hono/zod-validator';
 import { Hono } from 'hono';
 import { z } from 'zod';
+import { StandaloneActivityRepository } from '../repositories/sqlite/activity-repository';
 import { PaginationSchema } from '../schemas/index.js';
-import { ActivityService } from '../shared/services/ActivityService';
-import { StandaloneActivityRepository } from '../standalone/activity-repository';
-import { isStandaloneSqliteEnabled } from '../standalone/sqlite';
 
 export const activitiesRoute = new Hono();
-const activityService = new ActivityService();
+const activityRepository = new StandaloneActivityRepository();
 
 const YearlyLikesSchema = z.object({
   year: z.coerce.number().int().min(1900).max(2100),
@@ -23,11 +21,7 @@ const LikeActivityParamSchema = z.object({
 activitiesRoute.get('/', zValidator('query', PaginationSchema), async (c) => {
   try {
     const { limit, offset } = c.req.valid('query');
-    if (isStandaloneSqliteEnabled()) {
-      const result = new StandaloneActivityRepository().getGroupedByCategory({ limit, offset });
-      return c.json(result);
-    }
-    const result = await activityService.getGroupedByCategory({ limit, offset });
+    const result = activityRepository.getGroupedByCategory({ limit, offset });
     return c.json(result);
   } catch (error) {
     console.error('Error getting activities:', error);
@@ -39,11 +33,7 @@ activitiesRoute.get('/', zValidator('query', PaginationSchema), async (c) => {
 activitiesRoute.get('/likes', zValidator('query', PaginationSchema), async (c) => {
   try {
     const { limit, offset } = c.req.valid('query');
-    if (isStandaloneSqliteEnabled()) {
-      const result = new StandaloneActivityRepository().getLikes({ limit, offset });
-      return c.json(result.activities);
-    }
-    const result = await activityService.getLikes({ limit, offset });
+    const result = activityRepository.getLikes({ limit, offset });
     return c.json(result.activities); // Return only activities array for backward compatibility
   } catch (error) {
     console.error('Error getting like activities:', error);
@@ -55,11 +45,7 @@ activitiesRoute.get('/likes', zValidator('query', PaginationSchema), async (c) =
 activitiesRoute.get('/likes/yearly', zValidator('query', YearlyLikesSchema), async (c) => {
   try {
     const { year, datasetId, search } = c.req.valid('query');
-    if (isStandaloneSqliteEnabled()) {
-      const result = new StandaloneActivityRepository().getLikesByYear({ year, datasetId, search });
-      return c.json(result);
-    }
-    const result = await activityService.getLikesByYear({ year, datasetId, search });
+    const result = activityRepository.getLikesByYear({ year, datasetId, search });
     return c.json(result);
   } catch (error) {
     console.error('Error getting yearly like activities:', error);
@@ -71,14 +57,7 @@ activitiesRoute.get('/likes/yearly', zValidator('query', YearlyLikesSchema), asy
 activitiesRoute.delete('/likes/:id', zValidator('param', LikeActivityParamSchema), async (c) => {
   try {
     const { id } = c.req.valid('param');
-    if (isStandaloneSqliteEnabled()) {
-      const result = new StandaloneActivityRepository().removeLikeActivity(id);
-      if (!result) {
-        return c.json({ error: 'Like activity not found' }, 404);
-      }
-      return c.json(result);
-    }
-    const result = await activityService.removeLikeActivity(id);
+    const result = activityRepository.removeLikeActivity(id);
 
     if (!result) {
       return c.json({ error: 'Like activity not found' }, 404);

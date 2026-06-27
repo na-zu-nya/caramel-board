@@ -21,8 +21,7 @@ export function useSparseStackGrid({
   sort,
   pageSize = 50,
 }: UseSparseStackGridOptions) {
-  const location = useLocation();
-  const currentPath = location.pathname;
+  const currentPath = useLocation({ select: (location) => location.pathname });
   const [navigationState, setNavigationState] = useAtom(navigationStateAtom);
   const scrollRestoredRef = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -37,14 +36,17 @@ export function useSparseStackGrid({
   // トータル数を取得
   const { data: countData } = useQuery({
     queryKey: ['stacks', 'count', datasetId, mediaType, filter, sort],
-    queryFn: async () => {
-      const result = await apiClient.getStacks({
-        datasetId,
-        filter,
-        sort,
-        limit: 1,
-        offset: 0,
-      });
+    queryFn: async ({ signal }) => {
+      const result = await apiClient.getStacks(
+        {
+          datasetId,
+          filter,
+          sort,
+          limit: 1,
+          offset: 0,
+        },
+        { signal }
+      );
       return { total: result.total };
     },
     staleTime: 5 * 60 * 1000,
@@ -62,7 +64,6 @@ export function useSparseStackGrid({
     if (total > 0) {
       if (shouldRestore && navigationState) {
         // 保存された状態から復元
-        console.log('📌 Restoring navigation state');
         setItems(navigationState.items);
         setLoadedPages(new Set()); // ページ情報は再計算が必要
 
@@ -73,7 +74,6 @@ export function useSparseStackGrid({
         }
       } else if (items.length !== total) {
         // 新規作成
-        console.log('📌 Creating sparse array with total:', total);
         setItems(new Array(total).fill(undefined));
         setLoadedPages(new Set());
         scrollRestoredRef.current = false;

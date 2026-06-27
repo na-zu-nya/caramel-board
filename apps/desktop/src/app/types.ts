@@ -10,11 +10,8 @@ export interface AppSettings {
   basicAuthEnabled: boolean;
   basicAuthUsername: string;
   basicAuthPassword: string;
-  dockerDatabaseUrl: string;
-  dockerStorageRoot: string;
-  dockerDatasetId: string;
-  dockerVerifyFiles: boolean;
   autoTagEnabled: boolean;
+  autoTagUseGpu: boolean;
   autoTagPort: number;
   autoTagRepoDir: string;
   autoTagModelDir: string;
@@ -32,35 +29,6 @@ export interface SidecarStatus {
   startedAt: number | null;
 }
 
-export interface DockerMigrationProgress {
-  running: boolean;
-  completed: boolean;
-  phase: string;
-  message: string;
-  percent: number;
-  lastLog: string;
-  exportDir: string | null;
-  dbPath: string | null;
-  error: string | null;
-}
-
-export interface DockerDatasetSummary {
-  id: number;
-  name: string;
-}
-
-export interface DockerSourceDetection {
-  available: boolean;
-  databaseUrl: string;
-  storageRoot: string;
-  storageRootExists: boolean;
-  datasetCount: number;
-  stackCount: number;
-  assetCount: number;
-  datasets: DockerDatasetSummary[];
-  message: string;
-}
-
 export interface AutoTagStatus {
   enabled: boolean;
   running: boolean;
@@ -72,6 +40,9 @@ export interface AutoTagStatus {
   repositoryReady: boolean;
   modelReady: boolean;
   ready: boolean;
+  gpuAvailable: boolean;
+  gpuPreferenceSupported: boolean;
+  runtimeMode: string;
   message: string;
 }
 
@@ -128,13 +99,10 @@ export type TextSettingKey =
   | 'autoTagRepoDir'
   | 'autoTagModelDir'
   | 'ffmpegPath'
-  | 'pdfRasterizerPath'
-  | 'dockerDatabaseUrl'
-  | 'dockerStorageRoot'
-  | 'dockerDatasetId';
+  | 'pdfRasterizerPath';
 export type BooleanSettingKey =
   | 'allowExternalNetwork'
   | 'basicAuthEnabled'
-  | 'dockerVerifyFiles'
   | 'autoTagEnabled'
+  | 'autoTagUseGpu'
   | 'launchOnStartup';
