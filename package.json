@@ -10,6 +10,7 @@
   "scripts": {
     "dev": "node scripts/dev-desktop.mjs",
     "build": "npm run -w @caramelboard/desktop build:app",
+    "build:ci": "turbo run build",
     "lint": "turbo run lint",
     "format": "turbo run format",
     "typecheck": "turbo run typecheck",
