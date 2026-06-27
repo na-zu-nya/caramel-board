@@ -1,6 +1,6 @@
 import { createFactory } from 'hono/factory';
 import { hasValidClipperApiKey } from '../shared/services/ClipperApiKeyService';
-import { isAllowedBrowserExtensionOrigin } from './cors';
+import { isBrowserExtensionOrigin } from './cors';
 
 const factory = createFactory();
 
@@ -8,7 +8,7 @@ const PUBLIC_EXTENSION_PATHS = new Set(['/api/v1/health']);
 
 export const clipperApiKeyGuard = factory.createMiddleware(async (c, next) => {
   const origin = c.req.header('origin');
-  if (!origin || !isAllowedBrowserExtensionOrigin(origin)) {
+  if (!origin || !isBrowserExtensionOrigin(origin)) {
     return await next();
   }
 
