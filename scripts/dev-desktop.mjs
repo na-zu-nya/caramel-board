@@ -1,15 +1,25 @@
 #!/usr/bin/env node
 
-import { spawn, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
+import { npmArgs, spawnNpm, terminateChild } from './npm-runner.mjs';
 
-const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+const isWindows = process.platform === 'win32';
+const npmCommand = isWindows ? (process.env.ComSpec || 'cmd.exe') : 'npm';
 
-const preflight = spawnSync(npmCommand, ['run', '-w', '@caramelboard/server', 'build'], {
+const preflightArgs = ['run', '-w', '@caramelboard/server', 'build'];
+const preflight = spawnSync(npmCommand, npmArgs(preflightArgs), {
   env: process.env,
   stdio: 'inherit',
 });
 
 if (preflight.status !== 0) {
+  if (preflight.error) {
+    console.error(`[dev] preflight failed: ${preflight.error.message}`);
+  } else if (preflight.signal) {
+    console.error(`[dev] preflight exited with signal ${preflight.signal}`);
+  } else {
+    console.error(`[dev] preflight exited with code ${preflight.status ?? 1}`);
+  }
   process.exit(preflight.status ?? 1);
 }
 
@@ -25,6 +35,9 @@ const commands = [
   {
     name: 'storybook',
     args: ['run', '-w', '@caramelboard/client', 'dev:storybook'],
+    env: {
+      STORYBOOK_DISABLE_TELEMETRY: process.env.STORYBOOK_DISABLE_TELEMETRY || '1',
+    },
   },
 ];
 
@@ -44,22 +57,39 @@ const stopAll = (signal = 'SIGTERM') => {
   }
   shuttingDown = true;
   for (const child of children.values()) {
-    if (!child.killed) {
-      child.kill(signal);
-    }
+    terminateChild(child, signal);
   }
   exitIfDone();
 };
 
 for (const command of commands) {
-  const child = spawn(npmCommand, command.args, {
-    env: process.env,
-    stdio: 'inherit',
+  console.log(`[dev] starting ${command.name}: npm ${command.args.join(' ')}`);
+  const child = spawnNpm(command.args, {
+    env: {
+      ...(command.env ?? {}),
+    },
   });
   children.set(command.name, child);
 
+  child.on('error', (error) => {
+    children.delete(command.name);
+    console.error(`[dev] failed to start ${command.name}: ${error.message}`);
+    if (exitCode === 0) {
+      exitCode = 1;
+    }
+    if (shuttingDown) {
+      exitIfDone();
+      return;
+    }
+    stopAll();
+  });
+
   child.on('exit', (code, signal) => {
     children.delete(command.name);
+    if (!shuttingDown) {
+      const reason = signal ? `signal ${signal}` : `code ${code ?? 0}`;
+      console.error(`[dev] ${command.name} exited with ${reason}; stopping remaining processes`);
+    }
     if (code && code !== 0) {
       exitCode = code;
     } else if (signal && exitCode === 0) {
