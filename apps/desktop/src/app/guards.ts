@@ -20,4 +20,5 @@ export const isBooleanSettingKey = (value: string | undefined): value is Boolean
   value === 'allowExternalNetwork' ||
   value === 'basicAuthEnabled' ||
   value === 'autoTagEnabled' ||
+  value === 'autoTagUseGpu' ||
   value === 'launchOnStartup';

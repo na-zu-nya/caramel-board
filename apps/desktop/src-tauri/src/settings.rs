@@ -23,6 +23,10 @@ fn default_auto_tag_threshold() -> f64 {
     0.4
 }
 
+fn default_auto_tag_use_gpu() -> bool {
+    cfg!(target_os = "macos")
+}
+
 fn normalize_settings(mut settings: AppSettings) -> AppSettings {
     settings.language = normalize_language(&settings.language);
     if settings.resident_mode != "taskbar" && settings.resident_mode != "tray" {
@@ -92,6 +96,7 @@ fn default_settings(app: &AppHandle) -> Result<AppSettings, String> {
         basic_auth_username: String::new(),
         basic_auth_password: String::new(),
         auto_tag_enabled: false,
+        auto_tag_use_gpu: default_auto_tag_use_gpu(),
         auto_tag_port: default_auto_tag_port(),
         auto_tag_repo_dir: data_dir
             .join("autotag")

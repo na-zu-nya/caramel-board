@@ -7,6 +7,9 @@ export interface AutoTagSettingsCopy {
   title: string;
   description: string;
   enable: string;
+  useGpu: string;
+  gpuAvailable: string;
+  gpuUnavailable: string;
   threshold: string;
   thresholdLess: string;
   thresholdMore: string;
@@ -63,6 +66,10 @@ export function AutoTagSettingsSection({
   onChooseModelFolder,
   onPortChange,
 }: AutoTagSettingsSectionProps) {
+  const gpuPreferenceSupported = status?.gpuPreferenceSupported ?? false;
+  const gpuAvailable = status?.gpuAvailable ?? false;
+  const gpuChecked = gpuAvailable && settings.autoTagUseGpu;
+
   return (
     <div id="section-autotag" className="section-panel">
       <div className="section-heading">
@@ -83,6 +90,22 @@ export function AutoTagSettingsSection({
         />
         <span>{copy.enable}</span>
       </label>
+
+      {gpuPreferenceSupported ? (
+        <div className="toggle-stack">
+          <label className="toggle-row">
+            <input
+              type="checkbox"
+              checked={gpuChecked}
+              disabled={disabled || !gpuAvailable}
+              data-setting="autoTagUseGpu"
+              onChange={onBooleanSettingChange}
+            />
+            <span>{copy.useGpu}</span>
+          </label>
+          <span className="muted">{gpuAvailable ? copy.gpuAvailable : copy.gpuUnavailable}</span>
+        </div>
+      ) : null}
 
       <label className="field">
         <span>{copy.threshold}</span>

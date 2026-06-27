@@ -11,6 +11,7 @@ export interface AppSettings {
   basicAuthUsername: string;
   basicAuthPassword: string;
   autoTagEnabled: boolean;
+  autoTagUseGpu: boolean;
   autoTagPort: number;
   autoTagRepoDir: string;
   autoTagModelDir: string;
@@ -39,6 +40,9 @@ export interface AutoTagStatus {
   repositoryReady: boolean;
   modelReady: boolean;
   ready: boolean;
+  gpuAvailable: boolean;
+  gpuPreferenceSupported: boolean;
+  runtimeMode: string;
   message: string;
 }
 
@@ -100,4 +104,5 @@ export type BooleanSettingKey =
   | 'allowExternalNetwork'
   | 'basicAuthEnabled'
   | 'autoTagEnabled'
+  | 'autoTagUseGpu'
   | 'launchOnStartup';

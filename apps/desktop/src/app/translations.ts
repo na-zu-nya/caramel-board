@@ -85,7 +85,7 @@ export const translations = {
     autoTagInstallIntroDetail:
       'This feature uses a pre-trained model to generate tags from images.',
     autoTagCudaNote:
-      'CUDA is not required for normal CPU tagging. If you want GPU acceleration and CUDA setup fails, install the latest NVIDIA driver and CUDA Toolkit, then try again.',
+      'CUDA is not required for CPU tagging. GPU tagging can be enabled from AutoTag settings when a usable NVIDIA GPU is detected.',
     autoTagInstallIntroLocal:
       'All processing runs locally. Images are not transferred outside this computer.',
     autoTagInstallIntroTraining: 'Images used with this feature are not used for training.',
@@ -114,6 +114,9 @@ export const translations = {
     autoTagThreshold: 'How easily tags appear',
     autoTagThresholdLess: 'Stricter',
     autoTagThresholdMore: 'Looser',
+    autoTagUseGpu: 'Generate tags with GPU',
+    autoTagGpuAvailable: 'NVIDIA GPU detected.',
+    autoTagGpuUnavailable: 'No usable NVIDIA GPU was detected.',
     autoTagAdvancedDescription:
       'Usually not needed. Change this only when using a custom JoyTag location or port.',
     autoTagCodeFolderSelected: 'AutoTag code folder selected.',
@@ -285,7 +288,7 @@ export const translations = {
     autoTagInstallIntroDetail:
       'この機能により、事前に学習されたモデルを使用し、画像のタグを生成します。',
     autoTagCudaNote:
-      'CPU でのタグ付けに CUDA は不要です。GPU 高速化を使いたい場合に CUDA のセットアップで失敗したら、最新の NVIDIA ドライバーと CUDA Toolkit をインストールしてから再試行してください。',
+      'CPU でのタグ付けに CUDA は不要です。利用できる NVIDIA GPU が検出された場合は、自動タグ設定から GPU でのタグ生成を有効にできます。',
     autoTagInstallIntroLocal:
       '動作は全てローカルで完結し、画像が外部に転送されることはありません。',
     autoTagInstallIntroTraining: 'この機能で使用された画像が学習されることはありません。',
@@ -314,6 +317,9 @@ export const translations = {
     autoTagThreshold: 'タグの出やすさ',
     autoTagThresholdLess: '厳選',
     autoTagThresholdMore: '多め',
+    autoTagUseGpu: 'GPUでタグを生成する',
+    autoTagGpuAvailable: 'NVIDIA GPUを検出しました。',
+    autoTagGpuUnavailable: '利用できるNVIDIA GPUは検出されませんでした。',
     autoTagAdvancedDescription:
       '通常は変更不要です。JoyTagの保存先やポートを変える場合だけ使います。',
     autoTagCodeFolderSelected: '自動タグのコード保存先を選択しました。',

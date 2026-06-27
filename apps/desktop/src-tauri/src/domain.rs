@@ -33,6 +33,8 @@ struct AppSettings {
     basic_auth_password: String,
     #[serde(default)]
     auto_tag_enabled: bool,
+    #[serde(default = "default_auto_tag_use_gpu")]
+    auto_tag_use_gpu: bool,
     #[serde(default = "default_auto_tag_port")]
     auto_tag_port: u16,
     #[serde(default)]
@@ -121,6 +123,9 @@ struct AutoTagStatus {
     repository_ready: bool,
     model_ready: bool,
     ready: bool,
+    gpu_available: bool,
+    gpu_preference_supported: bool,
+    runtime_mode: String,
     message: String,
 }
 

@@ -97,15 +97,16 @@ Caramel Board で設定します。
 3. `モデルをインストール` を押します。
 4. ダウンロード容量を確認して、インストールを開始します。
 
-## CUDA
+## CUDA / GPU
 
-AutoTag を NVIDIA GPU で高速化する場合は、NVIDIA ドライバーと CUDA Toolkit を導入します。AutoTag のインストール中に CUDA 関連のエラーが表示された場合も、この手順で導入します。
+AutoTag は CPU でも利用できます。NVIDIA GPU でタグ生成する場合は、Caramel Board Desktop の `自動タグ` 設定で `GPUでタグを生成する` を有効にします。
+
+この項目は、利用できる NVIDIA GPU が検出された場合だけ選択できます。選択できない場合は、まず NVIDIA ドライバーを更新してください。
 
 1. [NVIDIA Driver Downloads](https://www.nvidia.com/Download/index.aspx) から GPU に合うドライバーをインストールします。
-2. [CUDA Toolkit Downloads](https://developer.nvidia.com/cuda-downloads) を開きます。
-3. `Operating System` は `Windows` を選びます。
-4. `Architecture` は `x86_64` を選びます。
-5. `Installer Type` は `exe (local)` か `exe (network)` を選びます。
-6. ダウンロードした installer を開き、標準設定で進めます。
-7. Windows を再起動します。
-8. Caramel Board Desktop を開き直し、`自動タグ` からもう一度インストールします。
+2. Windows を再起動します。
+3. Caramel Board Desktop を開き直します。
+4. `自動タグ` 設定で `状態を確認` を押します。
+5. `GPUでタグを生成する` が選択可能になったらチェックを入れます。
+
+通常の利用では CUDA Toolkit の手動インストールは不要です。GPU 実行時に必要な PyTorch は、AutoTag の起動時に Caramel Board が CUDA 対応版を選択します。

@@ -86,6 +86,9 @@ interface AutoTagStatus {
   repositoryReady: boolean;
   modelReady: boolean;
   ready: boolean;
+  gpuAvailable: boolean;
+  gpuPreferenceSupported: boolean;
+  runtimeMode: string;
   message: string;
 }
 
@@ -113,6 +116,7 @@ type FullSettings = AppSettingsLike & {
   ffmpegPath: string;
   pdfRasterizerPath: string;
   autoTagEnabled: boolean;
+  autoTagUseGpu: boolean;
 };
 
 type WizardMode = 'new' | 'existing';
@@ -236,7 +240,7 @@ const wizardCopy = {
     autoTagBody:
       'Caramel Board can automatically tag imported images and enable similar-image search using the open-source JoyTag model. Everything runs on this computer — your images are never sent anywhere, and they are never used to train AI.',
     autoTagCudaNote:
-      'CUDA is not required for normal CPU tagging. If you want GPU acceleration and CUDA setup fails, install the latest NVIDIA driver and CUDA Toolkit, then try again.',
+      'CUDA is not required for CPU tagging. GPU tagging can be enabled from AutoTag settings when a usable NVIDIA GPU is detected.',
     aboutJoyTag: 'About JoyTag',
     autoTagEnable: 'I want to use auto-tagging',
     autoTagEnableHint:
@@ -365,7 +369,7 @@ const wizardCopy = {
     autoTagBody:
       '自動タグを使うと、取り込んだ画像に自動でタグを付け、類似画像検索など画像ベースの検索に活用できます。オープンソースの JoyTag モデルでローカル処理し、画像が外部に送信されたり、AI の学習に使われたりすることはありません。',
     autoTagCudaNote:
-      'CPU でのタグ付けに CUDA は不要です。GPU 高速化を使いたい場合に CUDA のセットアップで失敗したら、最新の NVIDIA ドライバーと CUDA Toolkit をインストールしてから再試行してください。',
+      'CPU でのタグ付けに CUDA は不要です。利用できる NVIDIA GPU が検出された場合は、自動タグ設定から GPU でのタグ生成を有効にできます。',
     aboutJoyTag: 'JoyTag について',
     autoTagEnable: '自動タグを使う',
     autoTagEnableHint:
