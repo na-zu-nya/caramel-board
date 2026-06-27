@@ -6,6 +6,7 @@ import { ExtensionIntegrationSection } from '@/components/settings/ExtensionInte
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useHeaderActions } from '@/hooks/useHeaderActions';
 import { apiClient, type ClipperApiKeyState } from '@/lib/api-client';
+import { resolveBrowserRenderingProfile } from '@/lib/browser-rendering';
 import { type AppLanguage, isAppLanguage, useLanguage, useSetLanguage, useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
@@ -14,6 +15,8 @@ export const Route = createFileRoute('/settings/general')({
 });
 
 const CLIPPER_API_KEY_QUERY_KEY = ['clipper-api-key'] as const;
+const CLIPPER_CHROME_WEB_STORE_URL =
+  'https://chromewebstore.google.com/detail/caramel-board-clipper-bet/hmbbjgdimepjnnpbedcdhidcfhgllcjo';
 
 const copyTextToClipboard = async (value: string) => {
   if (navigator.clipboard && window.isSecureContext) {
@@ -48,6 +51,11 @@ function GeneralSettings() {
   const queryClient = useQueryClient();
   const [generatedApiKey, setGeneratedApiKey] = useState<string | null>(null);
   const [clipperFeedback, setClipperFeedback] = useState<string | null>(null);
+  const isChrome = useMemo(
+    () =>
+      typeof navigator !== 'undefined' && resolveBrowserRenderingProfile(navigator) === 'chrome',
+    []
+  );
 
   const clipperApiKeyQuery = useQuery({
     queryKey: CLIPPER_API_KEY_QUERY_KEY,
@@ -144,6 +152,7 @@ function GeneralSettings() {
       regenerateKey: t.settings.extensionIntegrationRegenerateKey,
       revokeKey: t.settings.extensionIntegrationRevokeKey,
       copyKey: t.settings.extensionIntegrationCopyKey,
+      addExtension: t.settings.extensionIntegrationAddExtension,
       generatedKeyLabel: t.settings.extensionIntegrationGeneratedKeyLabel,
       generatedKeyHint: t.settings.extensionIntegrationGeneratedKeyHint,
     }),
@@ -162,7 +171,7 @@ function GeneralSettings() {
 
         <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
           <div className="border-b border-gray-100 px-6 py-5">
-            <div className="flex items-start gap-3">
+            <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
                 <Languages size={20} />
               </div>
@@ -215,6 +224,7 @@ function GeneralSettings() {
             revoking={revokeClipperApiKeyMutation.isPending}
             copy={extensionIntegrationCopy}
             feedback={clipperFeedback}
+            chromeWebStoreUrl={isChrome ? CLIPPER_CHROME_WEB_STORE_URL : null}
             onIssueKey={handleIssueClipperApiKey}
             onRevokeKey={handleRevokeClipperApiKey}
             onCopyGeneratedKey={handleCopyGeneratedApiKey}

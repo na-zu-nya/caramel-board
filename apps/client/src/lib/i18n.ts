@@ -246,7 +246,8 @@ const en = {
     languageJapanese: 'Japanese',
     languageEnglish: 'English',
     extensionIntegrationTitle: 'Browser Extension Key Settings',
-    extensionIntegrationDescription: '',
+    extensionIntegrationDescription:
+      'Install the Caramel Board Clipper browser extension to right-click images on other websites and add them to your library.',
     extensionIntegrationConfigured: 'Configured',
     extensionIntegrationNotConfigured: 'Not configured',
     extensionIntegrationKeyPreview: 'Key',
@@ -255,6 +256,7 @@ const en = {
     extensionIntegrationRegenerateKey: 'Regenerate key',
     extensionIntegrationRevokeKey: 'Revoke key',
     extensionIntegrationCopyKey: 'Copy',
+    extensionIntegrationAddExtension: 'Add extension',
     extensionIntegrationGeneratedKeyLabel: 'New Clipper key',
     extensionIntegrationGeneratedKeyHint:
       'Paste this key into the Clipper options page. You can copy it again while the key is stored.',
@@ -1035,7 +1037,8 @@ const ja: Translations = {
     languageJapanese: '日本語',
     languageEnglish: '英語',
     extensionIntegrationTitle: 'ブラウザ拡張 キー設定',
-    extensionIntegrationDescription: '',
+    extensionIntegrationDescription:
+      'ブラウザ拡張のCaramel Board Clipperをインストールすると、他のWebサイトの画像を右クリックしてライブラリに追加することができます。',
     extensionIntegrationConfigured: '設定済み',
     extensionIntegrationNotConfigured: '未設定',
     extensionIntegrationKeyPreview: 'キー',
@@ -1044,6 +1047,7 @@ const ja: Translations = {
     extensionIntegrationRegenerateKey: 'キーを再発行',
     extensionIntegrationRevokeKey: 'キーを無効化',
     extensionIntegrationCopyKey: 'コピー',
+    extensionIntegrationAddExtension: '拡張機能を追加',
     extensionIntegrationGeneratedKeyLabel: '新しいClipper連携キー',
     extensionIntegrationGeneratedKeyHint:
       'Clipperの設定画面へ貼り付けてください。キーが保存されている間は再コピーできます。',
