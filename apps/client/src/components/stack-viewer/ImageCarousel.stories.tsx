@@ -12,6 +12,7 @@ const makeAsset = (id: number): Asset => ({
   stackId: 1,
   file: sampleImage,
   createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-02T00:00:00.000Z',
 });
 
 const makeLabeledAsset = (id: number, label: string, color: string): Asset => ({
@@ -25,6 +26,7 @@ const makeLabeledAsset = (id: number, label: string, color: string): Asset => ({
     </svg>
   `)}`,
   createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-02T00:00:00.000Z',
 });
 
 const makeVideoAsset = (id: number): Asset => ({
@@ -40,6 +42,7 @@ const makeVideoAsset = (id: number): Asset => ({
     ],
   },
   createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-02T00:00:00.000Z',
 });
 
 const makeSvgAsset = (id: number): Asset => ({
@@ -51,6 +54,7 @@ const makeSvgAsset = (id: number): Asset => ({
   preview: sampleImage,
   thumbnail: sampleImage,
   createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-02T00:00:00.000Z',
 });
 
 const makeRawAsset = (id: number): Asset => ({
@@ -63,6 +67,7 @@ const makeRawAsset = (id: number): Asset => ({
   preview: sampleImage,
   thumbnail: sampleImage,
   createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-02T00:00:00.000Z',
 });
 
 const meta: Meta<typeof ImageCarousel> = {

@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { getImageDisplaySource, isRawAsset, isSvgAsset, isVideoAsset } from '@/lib/media';
+import {
+  getImageDisplaySource,
+  isContentAddressedAssetSource,
+  isRawAsset,
+  isSvgAsset,
+  isVideoAsset,
+} from '@/lib/media';
 import type { Asset } from '@/types';
 
 const makeAsset = (overrides: Partial<Asset>): Asset => ({
@@ -78,5 +84,24 @@ describe('media helpers', () => {
         })
       )
     ).toBe('/files/thumbnails/raw-reference.jpg');
+  });
+
+  it('detects content-addressed local original sources', () => {
+    expect(
+      isContentAddressedAssetSource(
+        '/files/library/2/assets/42/420fa985758d2fa1eedbb4a307321ea0fa38a9ad600097afc14bc7970745c4ef.jpg'
+      )
+    ).toBe(true);
+    expect(
+      isContentAddressedAssetSource(
+        'http://127.0.0.1:6777/files/library/2/originals/aa/aa0fa985758d2fa1eedbb4a307321ea0fa38a9ad600097afc14bc7970745c4ef.png?cb=1'
+      )
+    ).toBe(true);
+    expect(
+      isContentAddressedAssetSource(
+        '/files/library/2/preview/42/420fa985758d2fa1eedbb4a307321ea0fa38a9ad600097afc14bc7970745c4ef.jpg'
+      )
+    ).toBe(false);
+    expect(isContentAddressedAssetSource('/files/reference.png')).toBe(false);
   });
 });

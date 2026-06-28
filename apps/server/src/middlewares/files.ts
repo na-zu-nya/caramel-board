@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { Readable } from 'node:stream';
 import { createFactory } from 'hono/factory';
 
 const factory = createFactory();
@@ -43,6 +44,12 @@ const storageCandidatesFor = (relativePath: string) => {
   ]);
 };
 
+const createFileBody = (
+  filePath: string,
+  options?: { start?: number; end?: number }
+): ReadableStream<Uint8Array> =>
+  Readable.toWeb(fs.createReadStream(filePath, options)) as ReadableStream<Uint8Array>;
+
 export const fileServer = factory.createMiddleware(async (c) => {
   const rel = c.req.path.replace(/^\/files\//, '');
   const candidates = storageCandidatesFor(rel);
@@ -84,19 +91,31 @@ export const fileServer = factory.createMiddleware(async (c) => {
   const size = fs.statSync(full).size;
   const range = c.req.header('range');
 
-  // ---- Range request (video) ----
-  if (range && type.startsWith('video/')) {
+  // ---- Range request ----
+  if (range) {
     const [startStr, endStr] = range.replace(/bytes=/, '').split('-');
-    const start = Number(startStr);
-    const end = endStr ? Number(endStr) : size - 1;
+    const start = Number.parseInt(startStr, 10);
+    const requestedEnd = endStr ? Number.parseInt(endStr, 10) : size - 1;
+    const end = Math.min(requestedEnd, size - 1);
+
+    if (
+      !Number.isInteger(start) ||
+      !Number.isInteger(end) ||
+      start < 0 ||
+      end < start ||
+      start >= size
+    ) {
+      return new Response(null, {
+        status: 416,
+        headers: {
+          'Content-Range': `bytes */${size}`,
+          'Accept-Ranges': 'bytes',
+        },
+      });
+    }
+
     const chunk = end - start + 1;
-
-    const buf = Buffer.alloc(chunk);
-    const fd = fs.openSync(full, 'r');
-    fs.readSync(fd, buf, 0, chunk, start);
-    fs.closeSync(fd);
-
-    return new Response(new Blob([new Uint8Array(buf)]), {
+    return new Response(createFileBody(full, { start, end }), {
       status: 206,
       headers: {
         'Content-Range': `bytes ${start}-${end}/${size}`,
@@ -109,7 +128,7 @@ export const fileServer = factory.createMiddleware(async (c) => {
   }
 
   // ---- Normal file ----
-  return new Response(new Blob([new Uint8Array(fs.readFileSync(full))]), {
+  return new Response(createFileBody(full), {
     headers: {
       'Content-Type': type,
       ...(ext === '.svgz' ? { 'Content-Encoding': 'gzip' } : {}),
