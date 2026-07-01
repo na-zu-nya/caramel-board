@@ -16,6 +16,15 @@ export const Route = createFileRoute('/library/$datasetId/autotag/$autoTagKey')(
   component: AutoTagStacksPage,
 });
 
+function copySparseItems<T>(items: readonly T[] | null | undefined, total: number): T[] {
+  const source = Array.isArray(items) ? items : [];
+  const next = source.length === total && total > 0 ? source.slice() : new Array<T>(total);
+  if (next.length < total) {
+    next.length = total;
+  }
+  return next;
+}
+
 function AutoTagStacksPage() {
   const t = useT();
   const { datasetId, autoTagKey } = Route.useParams();
@@ -156,11 +165,7 @@ function AutoTagStacksPage() {
           return;
         }
         setItems((prev) => {
-          const totalLen = totalFromServer;
-          const base =
-            prev.length === totalLen && totalLen > 0
-              ? [...prev]
-              : new Array(totalLen).fill(undefined);
+          const base = copySparseItems(prev, totalFromServer);
           res.stacks.forEach((s, idx) => {
             const i = offset + idx;
             if (i < base.length) {

@@ -14,6 +14,7 @@ interface TapZoneOverlayProps {
   onPinchEnd?: () => void;
   onZoomPan?: (deltaX: number, deltaY: number) => void;
   onDoubleTap?: () => void;
+  onAltDragStart?: (point: PointerPosition) => boolean;
   onContextMenuCancelRequest?: () => void;
   enabled?: boolean;
   contentArea?: {
@@ -60,6 +61,7 @@ export default function TapZoneOverlay({
   onPinchEnd,
   onZoomPan,
   onDoubleTap,
+  onAltDragStart,
   onContextMenuCancelRequest,
   enabled = true,
   contentArea = { top: 0, left: 0, right: 0, bottom: 0 },
@@ -90,6 +92,17 @@ export default function TapZoneOverlay({
   useEffect(() => {
     const overlay = interactionRef.current;
     if (!enabled || !overlay) return;
+
+    const resetPointerState = (pointerId: number) => {
+      try {
+        overlay.releasePointerCapture(pointerId);
+      } catch {}
+      activePointersRef.current.delete(pointerId);
+      activePointerRef.current = null;
+      startPosRef.current = null;
+      isDraggingRef.current = false;
+      dragDirectionRef.current = null;
+    };
 
     const handlePointerDown = (e: PointerEvent) => {
       // Ignore non-primary mouse buttons and context-click (e.g., Ctrl+Click on macOS)
@@ -167,6 +180,21 @@ export default function TapZoneOverlay({
       const deltaY = e.clientY - startPosRef.current.y;
       const absDeltaX = Math.abs(deltaX);
       const absDeltaY = Math.abs(deltaY);
+
+      if (
+        e.altKey &&
+        onAltDragStart &&
+        (absDeltaX > DIRECTION_LOCK_THRESHOLD || absDeltaY > DIRECTION_LOCK_THRESHOLD)
+      ) {
+        const consumed = onAltDragStart({ x: e.clientX, y: e.clientY });
+        if (consumed) {
+          e.preventDefault();
+          e.stopPropagation();
+          onContextMenuCancelRequest?.();
+          resetPointerState(e.pointerId);
+          return;
+        }
+      }
 
       if (isZoomed) {
         if (
@@ -355,6 +383,7 @@ export default function TapZoneOverlay({
     onPinchEnd,
     onZoomPan,
     onDoubleTap,
+    onAltDragStart,
     onContextMenuCancelRequest,
   ]);
 

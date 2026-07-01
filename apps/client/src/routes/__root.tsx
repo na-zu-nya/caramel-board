@@ -6,9 +6,8 @@ import {
   useNavigate,
   useParams,
 } from '@tanstack/react-router';
-import { TanStackRouterDevtools } from '@tanstack/react-router-devtools';
 import { useAtom } from 'jotai';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -26,6 +25,15 @@ import { useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { currentDatasetAtom, selectionModeAtom, sidebarOpenAtom } from '@/stores/ui';
 import InfoSidebar from '../components/InfoSidebar';
+
+const ROUTER_DEVTOOLS_ENABLED =
+  import.meta.env.DEV && import.meta.env.VITE_ROUTER_DEVTOOLS === 'true';
+const RouterDevtools = ROUTER_DEVTOOLS_ENABLED
+  ? lazy(async () => {
+      const { TanStackRouterDevtools } = await import('@tanstack/react-router-devtools');
+      return { default: TanStackRouterDevtools };
+    })
+  : null;
 
 export const Route = createRootRoute({
   component: RootLayout,
@@ -131,7 +139,11 @@ function RootLayout() {
       {/* Keep InfoSidebar mounted globally; open/close via classes for smooth transitions.
           setup ルートでもチュートリアル内の埋め込みビューワーから利用する */}
       <InfoSidebar />
-      <TanStackRouterDevtools />
+      {RouterDevtools ? (
+        <Suspense fallback={null}>
+          <RouterDevtools />
+        </Suspense>
+      ) : null}
 
       {/* Password Modal */}
       <Dialog

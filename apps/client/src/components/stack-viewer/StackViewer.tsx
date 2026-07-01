@@ -38,6 +38,7 @@ import { downloadAssetOriginals, downloadStackOriginals } from '@/lib/download-o
 import { useT } from '@/lib/i18n';
 import { isVideoAsset } from '@/lib/media';
 import { cn } from '@/lib/utils';
+import { normalizeVideoMarkers } from '@/lib/video-markers';
 import { getViewerComicDisplayMode, setViewerComicDisplayMode } from '@/lib/viewerSettings';
 import {
   infoSidebarOpenAtom,
@@ -379,6 +380,8 @@ export default function StackViewer({
     onDragEnd,
     onLeftTap,
     onRightTap,
+    onNextStack,
+    onPrevStack,
   } = useStackViewerInteractions({
     datasetId,
     mediaType,
@@ -422,7 +425,7 @@ export default function StackViewer({
   const getMarkersFor = useCallback(
     (asset?: Asset) => {
       if (!asset) return [] as VideoMarker[];
-      return optimisticMarkers[asset.id] ?? (asset.meta?.markers || []);
+      return normalizeVideoMarkers(optimisticMarkers[asset.id] ?? asset.meta?.markers);
     },
     [optimisticMarkers]
   );
@@ -649,6 +652,20 @@ export default function StackViewer({
     setIsPenMode(false);
     setIsColorPickerManual((prev) => !prev);
   }, [canUseImageTools]);
+  const handleAltColorPickerDragStart = useCallback(() => {
+    if (!canUseImageTools) return false;
+    setIsColorPickerAlt(true);
+    return true;
+  }, [canUseImageTools]);
+  const handleAltStackNavigation = useCallback(
+    (key: 'ArrowLeft' | 'ArrowRight') => {
+      hidePageSeekBar();
+      hideEdgeAffordance();
+      setIsColorPickerAlt(false);
+      return key === 'ArrowRight' ? onNextStack() : onPrevStack();
+    },
+    [hideEdgeAffordance, hidePageSeekBar, onNextStack, onPrevStack]
+  );
   const handleInfoSidebarToggle = useCallback(() => {
     if (!isInfoSidebarOpen) setSelectionMode(false);
     setIsInfoSidebarOpen(!isInfoSidebarOpen);
@@ -1005,8 +1022,9 @@ export default function StackViewer({
     (nextMarkers: VideoMarker[], playback = getCurrentVideoPlayback()) => {
       const asset = currentAsset;
       if (!asset) return;
+      const normalizedMarkers = normalizeVideoMarkers(nextMarkers);
 
-      setOptimisticMarkers((prev) => ({ ...prev, [asset.id]: nextMarkers }));
+      setOptimisticMarkers((prev) => ({ ...prev, [asset.id]: normalizedMarkers }));
       if (playback) {
         imageCarouselRef.current?.requestRestorePlayback(playback);
       }
@@ -1016,7 +1034,7 @@ export default function StackViewer({
           datasetId,
           stackId,
           assetId: asset.id,
-          meta: { ...(asset.meta || {}), markers: nextMarkers },
+          meta: { ...(asset.meta || {}), markers: normalizedMarkers },
         })
         .then(async () => {
           await refetch();
@@ -1121,7 +1139,7 @@ export default function StackViewer({
     };
   }, []);
 
-  // Keyboard: Left=next, Right=previous, ESC=Back/CancelPicker, z=toggle list, e=toggle info, s=shuffle
+  // Keyboard: 左右=ページ移動、Alt+左右=一覧順の隣接スタック移動、ESC=戻る/Picker解除
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
@@ -1142,11 +1160,20 @@ export default function StackViewer({
       if (e.key === 'Meta') {
         setIsMetaNativeMode(true);
       }
-      if (e.key === 'Alt' && canUseImageTools) {
+
+      if (
+        e.altKey &&
+        !e.metaKey &&
+        !e.ctrlKey &&
+        !e.shiftKey &&
+        (e.key === 'ArrowLeft' || e.key === 'ArrowRight')
+      ) {
         e.preventDefault();
-        setIsColorPickerAlt(true);
+        e.stopPropagation();
+        handleAltStackNavigation(e.key);
         return;
       }
+
       if (isColorPicker && e.key === 'Escape') {
         e.stopPropagation();
         e.preventDefault();
@@ -1219,7 +1246,7 @@ export default function StackViewer({
           // 近接無し → 追加して即保存（従来どおり）
           const existing = arr.slice();
           const newMarker: VideoMarker = { time: t, color: 'white', label: '' };
-          const nextMarkers = [...existing, newMarker].sort((a, b) => a.time - b.time);
+          const nextMarkers = existing.concat(newMarker).sort((a, b) => a.time - b.time);
           setOptimisticMarkers((prev) => ({ ...prev, [asset.id]: nextMarkers }));
           // Immediate restore (guard against any incidental re-render)
           imageCarouselRef.current?.requestRestorePlayback(pb);
@@ -1311,6 +1338,7 @@ export default function StackViewer({
     setIsListMode,
     handleLeftTap,
     handleRightTap,
+    handleAltStackNavigation,
     handleShuffle,
     isColorPicker,
     canUseImageTools,
@@ -1573,6 +1601,7 @@ export default function StackViewer({
                 }
                 onZoomPan={canUseZoomInteraction && !isViewerContextMenuOpen ? panBy : undefined}
                 onDoubleTap={isZoomed ? resetZoom : undefined}
+                onAltDragStart={handleAltColorPickerDragStart}
                 onContextMenuCancelRequest={handleContextMenuCancelRequest}
                 onCenterTap={() => {
                   hideEdgeAffordance();

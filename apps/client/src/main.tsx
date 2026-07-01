@@ -4,6 +4,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 // Import the generated route tree
 import { applyBrowserRenderingProfile } from './lib/browser-rendering';
+import { installCaramelDebugConsoleCommands } from './lib/debug';
 import { initializeLanguagePreference } from './lib/language';
 import { installThumbnailBlurConsoleCommand } from './lib/thumbnail-blur';
 import { routeTree } from './routeTree.gen';
@@ -22,6 +23,7 @@ const applyInitialLanguage = () => {
 
 applyInitialLanguage();
 applyBrowserRenderingProfile(document, navigator);
+installCaramelDebugConsoleCommands(window);
 installThumbnailBlurConsoleCommand(window);
 
 // Create a QueryClient instance

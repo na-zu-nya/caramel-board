@@ -1,8 +1,17 @@
 import type { ColorFilter, StackFilter } from '@/types';
 
-function sortedValues<T extends string>(values: T[] | undefined): T[] | undefined {
-  if (!values || values.length === 0) return undefined;
-  return [...values].sort();
+function sortedValues(values: unknown): string[] | undefined {
+  if (values == null) return undefined;
+
+  if (typeof values === 'string') {
+    return values.length > 0 ? [values] : undefined;
+  }
+
+  if (!Array.isArray(values)) return undefined;
+
+  const normalized = values.filter((value): value is string => typeof value === 'string');
+  if (normalized.length === 0) return undefined;
+  return normalized.slice().sort();
 }
 
 function normalizeColorFilter(colorFilter: ColorFilter | undefined) {

@@ -1,8 +1,8 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import { useViewContext } from '@/hooks/useViewContext';
-import { apiClient } from '@/lib/api-client';
+import { apiClient, isApiNotFoundError } from '@/lib/api-client';
 import { getRepresentativeAsset, type ReadingUnit } from '@/lib/comic-reading';
 import type { Asset, Stack } from '@/types';
 
@@ -79,8 +79,9 @@ export function useStackViewerInteractions(params: {
     onBoundaryNavigationAttempt,
     onNavigateStack,
   } = params;
-  const { ctx, restore, prefetchAround, moveIndex } = useViewContext();
+  const { ctx, restore, prefetchAround, moveIndex, removeIds } = useViewContext();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const restoredTokenRef = useRef<string | null>(null);
   const prefetchKeyRef = useRef<string | null>(null);
@@ -109,18 +110,65 @@ export function useStackViewerInteractions(params: {
     index >= 0 && index < (ctx?.ids.length ?? 0) - 1 ? ctx!.ids[index + 1] : undefined;
   const prevNeighborId = index > 0 ? ctx!.ids[index - 1] : undefined;
 
-  const { data: nextNeighborStack } = useQuery({
-    queryKey: nextNeighborId ? ['stack', datasetId, String(nextNeighborId)] : ['noop-next'],
-    queryFn: () => apiClient.getStack(String(nextNeighborId!), datasetId),
-    enabled: crossStackEnabled && !!nextNeighborId,
+  const getStackQueryKey = useCallback(
+    (targetStackId: number | string) => ['stack', datasetId, String(targetStackId)] as const,
+    [datasetId]
+  );
+  const fetchStackForCache = useCallback(
+    (targetStackId: number | string) => apiClient.getStack(String(targetStackId), datasetId),
+    [datasetId]
+  );
+  const retryNeighborStackQuery = useCallback(
+    (failureCount: number, error: unknown) => !isApiNotFoundError(error) && failureCount < 2,
+    []
+  );
+  const { data: nextNeighborStack, error: nextNeighborError } = useQuery({
+    queryKey: nextNeighborId !== undefined ? getStackQueryKey(nextNeighborId) : ['noop-next'],
+    queryFn: () => fetchStackForCache(nextNeighborId!),
+    enabled: crossStackEnabled && nextNeighborId !== undefined,
+    retry: retryNeighborStackQuery,
     staleTime: 60_000,
   });
-  const { data: prevNeighborStack } = useQuery({
-    queryKey: prevNeighborId ? ['stack', datasetId, String(prevNeighborId)] : ['noop-prev'],
-    queryFn: () => apiClient.getStack(String(prevNeighborId!), datasetId),
-    enabled: crossStackEnabled && !!prevNeighborId,
+  const { data: prevNeighborStack, error: prevNeighborError } = useQuery({
+    queryKey: prevNeighborId !== undefined ? getStackQueryKey(prevNeighborId) : ['noop-prev'],
+    queryFn: () => fetchStackForCache(prevNeighborId!),
+    enabled: crossStackEnabled && prevNeighborId !== undefined,
+    retry: retryNeighborStackQuery,
     staleTime: 60_000,
   });
+
+  useEffect(() => {
+    if (nextNeighborId !== undefined && isApiNotFoundError(nextNeighborError)) {
+      removeIds([nextNeighborId]);
+    }
+  }, [nextNeighborError, nextNeighborId, removeIds]);
+
+  useEffect(() => {
+    if (prevNeighborId !== undefined && isApiNotFoundError(prevNeighborError)) {
+      removeIds([prevNeighborId]);
+    }
+  }, [prevNeighborError, prevNeighborId, removeIds]);
+
+  const prefetchStack = useCallback(
+    async (targetStackId: number | undefined) => {
+      if (targetStackId === undefined) return false;
+      try {
+        await queryClient.ensureQueryData({
+          queryKey: getStackQueryKey(targetStackId),
+          queryFn: () => fetchStackForCache(targetStackId),
+          staleTime: 60_000,
+        });
+        return true;
+      } catch (error) {
+        if (isApiNotFoundError(error)) {
+          removeIds([targetStackId]);
+          return false;
+        }
+        return true;
+      }
+    },
+    [fetchStackForCache, getStackQueryKey, queryClient, removeIds]
+  );
 
   const currentUnit = readingUnits?.[currentPage];
   const nextUnit = readingUnits?.[currentPage + 1];
@@ -346,18 +394,26 @@ export function useStackViewerInteractions(params: {
       animateToOffset(getStackOffset(listDelta), () => {
         currentDragOffsetRef.current = 0;
         imageCarouselRef.current?.prepareTranslateX(0);
+        imageCarouselRef.current?.updateTranslateX(0);
         notifyHorizontalOffsetChange(0);
-        if (ctx) moveIndex(listDelta);
-        if (onNavigateStack) {
-          onNavigateStack(String(targetStackId));
-        } else {
-          navigate({
-            to: '/library/$datasetId/stacks/$stackId',
-            params: { datasetId, stackId: String(targetStackId) },
-            search: { page: 0, mediaType, listToken, returnTo },
-            replace: true,
-          });
-        }
+        void (async () => {
+          const canNavigate = await prefetchStack(targetStackId);
+          if (!canNavigate) {
+            onHorizontalInteractionSettled?.();
+            return;
+          }
+          if (ctx) moveIndex(listDelta);
+          if (onNavigateStack) {
+            onNavigateStack(String(targetStackId));
+          } else {
+            navigate({
+              to: '/library/$datasetId/stacks/$stackId',
+              params: { datasetId, stackId: String(targetStackId) },
+              search: { page: 0, mediaType, listToken, returnTo },
+              replace: true,
+            });
+          }
+        })();
       });
     },
     [
@@ -370,8 +426,45 @@ export function useStackViewerInteractions(params: {
       moveIndex,
       navigate,
       notifyHorizontalOffsetChange,
+      onHorizontalInteractionSettled,
       onNavigateStack,
+      prefetchStack,
       returnTo,
+    ]
+  );
+
+  const prefetchAdjacentStackChain = useCallback(
+    (listDelta: 1 | -1, targetStackId: number) => {
+      void prefetchStack(targetStackId);
+      if (!ctx) return;
+
+      const chainIndex = index + listDelta * 2;
+      if (chainIndex < 0 || chainIndex >= ctx.ids.length) return;
+
+      const chainId = ctx.ids[chainIndex];
+      void prefetchStack(chainId);
+    },
+    [ctx, index, prefetchStack]
+  );
+
+  const goToAdjacentStack = useCallback(
+    (listDelta: 1 | -1) => {
+      if (!crossStackEnabled) return false;
+
+      const targetStackId = listDelta > 0 ? nextNeighborId : prevNeighborId;
+      if (targetStackId === undefined) return false;
+
+      const numericTargetStackId = Number(targetStackId);
+      prefetchAdjacentStackChain(listDelta, numericTargetStackId);
+      navigateCrossStackAfterAnimation(listDelta, numericTargetStackId);
+      return true;
+    },
+    [
+      crossStackEnabled,
+      navigateCrossStackAfterAnimation,
+      nextNeighborId,
+      prefetchAdjacentStackChain,
+      prevNeighborId,
     ]
   );
 
@@ -396,18 +489,18 @@ export function useStackViewerInteractions(params: {
       notifyHorizontalOffsetChange(currentDragOffsetRef.current);
       if (crossStackEnabled) {
         if (deltaX < 0 && rightEdgeKind === 'stack-boundary' && nextNeighborId) {
-          void apiClient.getStack(String(nextNeighborId), datasetId);
+          void prefetchStack(nextNeighborId);
         } else if (deltaX > 0 && leftEdgeKind === 'stack-boundary' && prevNeighborId) {
-          void apiClient.getStack(String(prevNeighborId), datasetId);
+          void prefetchStack(prevNeighborId);
         }
       }
     },
     [
       crossStackEnabled,
-      datasetId,
       leftEdgeKind,
       nextNeighborId,
       notifyHorizontalOffsetChange,
+      prefetchStack,
       prevNeighborId,
       rightEdgeKind,
     ]
@@ -454,11 +547,7 @@ export function useStackViewerInteractions(params: {
           animateToCenter();
           return;
         }
-        void apiClient.getStack(String(prevNeighborId), datasetId);
-        if (ctx && index - 2 >= 0) {
-          const chainId = ctx.ids[index - 2];
-          if (chainId !== undefined) void apiClient.getStack(String(chainId), datasetId);
-        }
+        prefetchAdjacentStackChain(-1, Number(prevNeighborId));
         navigateCrossStackAfterAnimation(-1, Number(prevNeighborId));
         return;
       }
@@ -468,11 +557,7 @@ export function useStackViewerInteractions(params: {
           animateToCenter();
           return;
         }
-        void apiClient.getStack(String(nextNeighborId), datasetId);
-        if (ctx && index + 2 < (ctx.ids?.length ?? 0)) {
-          const chainId = ctx.ids[index + 2];
-          if (chainId !== undefined) void apiClient.getStack(String(chainId), datasetId);
-        }
+        prefetchAdjacentStackChain(1, Number(nextNeighborId));
         navigateCrossStackAfterAnimation(1, Number(nextNeighborId));
         return;
       }
@@ -484,16 +569,14 @@ export function useStackViewerInteractions(params: {
       animateHorizontalPageChange,
       animateToCenter,
       crossStackEnabled,
-      ctx,
-      datasetId,
       getPageDeltaFromDrag,
       hasNextInStack,
       hasPrevInStack,
-      index,
       leftEdgeKind,
       navigateCrossStackAfterAnimation,
       nextNeighborId,
       notifyPageTransitionCommit,
+      prefetchAdjacentStackChain,
       prevNeighborId,
       rightEdgeKind,
       shouldAllowBoundaryNavigation,
@@ -548,6 +631,10 @@ export function useStackViewerInteractions(params: {
     goByPageDelta(openingDirection === 'right-opening' ? -1 : 1, 'right');
   }, [goByPageDelta, openingDirection]);
 
+  const onNextStack = useCallback(() => goToAdjacentStack(1), [goToAdjacentStack]);
+
+  const onPrevStack = useCallback(() => goToAdjacentStack(-1), [goToAdjacentStack]);
+
   useEffect(() => {
     if (!stack || !crossStackEnabled) return;
     const last = unitCount - 1;
@@ -574,5 +661,7 @@ export function useStackViewerInteractions(params: {
     onDragEnd,
     onLeftTap,
     onRightTap,
+    onNextStack,
+    onPrevStack,
   };
 }

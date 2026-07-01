@@ -36,6 +36,25 @@ type ApiFetchOptions = RequestInit & { timeoutMs?: number };
 type ApiRequestOptions = {
   signal?: AbortSignal;
 };
+
+export class ApiClientError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly statusText: string
+  ) {
+    super(message);
+    this.name = 'ApiClientError';
+  }
+}
+
+export const isApiNotFoundError = (error: unknown): boolean =>
+  (error instanceof ApiClientError && error.status === 404) ||
+  (typeof error === 'object' &&
+    error !== null &&
+    'status' in error &&
+    (error as { status?: unknown }).status === 404);
+
 export type ClipperApiKeyState = {
   configured: boolean;
   keyPreview: string | null;
@@ -75,7 +94,10 @@ function appendSortParams(
   queryParams.append('order', normalizeSortOrder(sort.order));
 }
 
-function createRequestSignal(signal: AbortSignal | undefined, timeoutMs: number | undefined) {
+function createRequestSignal(
+  signal: AbortSignal | null | undefined,
+  timeoutMs: number | undefined
+) {
   if (timeoutMs === undefined) {
     return {
       signal,
@@ -965,7 +987,7 @@ class ApiClient {
       } catch {
         // JSONが無い場合は既定メッセージを使用
       }
-      throw new Error(errorMessage);
+      throw new ApiClientError(errorMessage, response.status, response.statusText);
     }
 
     return response.json();
@@ -1752,7 +1774,7 @@ class ApiClient {
       } catch {
         // Ignore JSON parse errors
       }
-      throw new Error(errorMessage);
+      throw new ApiClientError(errorMessage, response.status, response.statusText);
     }
 
     return response.json();

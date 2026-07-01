@@ -1,6 +1,7 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { useAtom } from 'jotai';
 import { useCallback, useMemo } from 'react';
-import { apiClient } from '@/lib/api-client';
+import { apiClient, isApiNotFoundError } from '@/lib/api-client';
 import {
   loadViewContext,
   saveViewContext,
@@ -10,6 +11,7 @@ import {
 
 export function useViewContext() {
   const [ctx, setCtx] = useAtom(viewContextAtom);
+  const queryClient = useQueryClient();
 
   const restore = useCallback(
     (token: string) => {
@@ -65,26 +67,65 @@ export function useViewContext() {
     [ctx, setCtx]
   );
 
+  const removeIds = useCallback(
+    (stackIds: readonly (number | string)[]) => {
+      const removeSet = new Set<number>();
+      for (const stackId of stackIds) {
+        const id = Number(stackId);
+        if (Number.isFinite(id)) removeSet.add(id);
+      }
+      if (removeSet.size === 0) return;
+
+      setCtx((prev) => {
+        if (!prev) return prev;
+        const ids = prev.ids.filter((id) => !removeSet.has(id));
+        if (ids.length === prev.ids.length) return prev;
+        if (ids.length === 0) return null;
+
+        const currentId = prev.ids[prev.currentIndex];
+        const currentIndex =
+          currentId !== undefined && !removeSet.has(currentId)
+            ? Math.max(0, ids.indexOf(currentId))
+            : Math.min(prev.currentIndex, ids.length - 1);
+        const next = { ...prev, ids, currentIndex, createdAt: Date.now() };
+        saveViewContext(next);
+        return next;
+      });
+    },
+    [setCtx]
+  );
+
   // Optional prefetch for smoother UX
   const prefetchAround = useCallback(
     async (datasetId: string | number, windowSize = 1) => {
       if (!ctx) return;
-      const promises: Promise<any>[] = [];
+      const ids: number[] = [];
       for (
         let i = Math.max(0, ctx.currentIndex - windowSize);
         i <= Math.min(ctx.ids.length - 1, ctx.currentIndex + windowSize);
         i++
       ) {
         const id = ctx.ids[i];
-        promises.push(apiClient.getStack(id, datasetId));
+        if (id !== undefined) ids.push(id);
       }
-      try {
-        await Promise.all(promises);
-      } catch {
-        /* ignore */
-      }
+
+      const missingIds: number[] = [];
+      await Promise.all(
+        ids.map(async (id) => {
+          try {
+            await queryClient.ensureQueryData({
+              queryKey: ['stack', String(datasetId), String(id)],
+              queryFn: () => apiClient.getStack(String(id), String(datasetId)),
+              staleTime: 60_000,
+            });
+          } catch (error) {
+            if (isApiNotFoundError(error)) missingIds.push(id);
+          }
+        })
+      );
+      removeIds(missingIds);
     },
-    [ctx]
+    [ctx, queryClient, removeIds]
   );
 
   return {
@@ -95,6 +136,7 @@ export function useViewContext() {
     currentId,
     neighbors,
     moveIndex,
+    removeIds,
     prefetchAround,
   };
 }

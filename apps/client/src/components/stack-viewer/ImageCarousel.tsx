@@ -14,8 +14,10 @@ import VideoSeekBar from '@/components/ui/SeekBar/VideoSeekBar';
 import { VideoTransportControls } from '@/components/ui/VideoTransportControls';
 import { useVideoPausedSeekFrameFlush } from '@/hooks/features/useVideoPausedSeekFrameFlush';
 import type { LogicalPage, ReadingUnit } from '@/lib/comic-reading';
+import { debugLog, setDebugSnapshot } from '@/lib/debug';
 import { getImageDisplaySource, isContentAddressedAssetSource, isVideoAsset } from '@/lib/media';
 import { cn } from '@/lib/utils';
+import { normalizeVideoMarkers } from '@/lib/video-markers';
 import {
   cycleViewerFps,
   getViewerFps,
@@ -200,7 +202,18 @@ const createAssetReadingUnit = (asset: Asset | undefined): ReadingUnit | undefin
 };
 
 const getUnitAssets = (unit: ReadingUnit | undefined) =>
-  unit?.pages.map((page) => page.asset) ?? [];
+  Array.isArray(unit?.pages) ? unit.pages.map((page) => page.asset) : [];
+
+const uniqueStrings = (values: readonly string[]): string[] => {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const value of values) {
+    if (seen.has(value)) continue;
+    seen.add(value);
+    result.push(value);
+  }
+  return result;
+};
 
 const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
   (
@@ -265,6 +278,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
     const imageLoadAttemptsRef = useRef<Map<string, number>>(new Map());
     const isMountedRef = useRef(true);
     const autoplayVideoKeyRef = useRef<string | null>(null);
+    const lastLoaderDebugSignatureRef = useRef<string | null>(null);
     const lastPlaybackRef = useRef<{ time: number; wasPlaying: boolean }>({
       time: 0,
       wasPlaying: false,
@@ -295,9 +309,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
     const getPreloadTarget = useCallback((asset?: Asset | null) => {
       if (!asset) return null;
       if (isVideoAsset(asset)) {
-        return (
-          asset.thumbnail || asset.thumbnailUrl || asset.preview || asset.file || asset.url || null
-        );
+        return null;
       }
       const source = getImageDisplaySource(asset);
       return source ? withImageRefreshKey(source, asset.updatedAt) : null;
@@ -309,13 +321,14 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
     );
 
     const getUnitPreloadTargets = useCallback(
-      (unit: ReadingUnit | undefined) => [
-        ...new Set(
-          getUnitAssets(unit)
-            .map((asset) => getPreloadTarget(asset))
-            .filter((src): src is string => Boolean(src))
-        ),
-      ],
+      (unit: ReadingUnit | undefined) => {
+        const targets: string[] = [];
+        for (const asset of getUnitAssets(unit)) {
+          const target = getPreloadTarget(asset);
+          if (target) targets.push(target);
+        }
+        return uniqueStrings(targets);
+      },
       [getPreloadTarget]
     );
 
@@ -344,6 +357,15 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
       });
     }, []);
 
+    const markImageLoadedIfComplete = useCallback(
+      (element: HTMLImageElement | null, source: string) => {
+        if (!element || !source) return;
+        if (!element.complete || element.naturalWidth <= 0) return;
+        markImageLoaded(source);
+      },
+      [markImageLoaded]
+    );
+
     const requestImageRetry = useCallback(
       (baseSrc: string, loadSrc: string) => {
         preloadingImagesRef.current.delete(loadSrc);
@@ -365,10 +387,11 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
     );
 
     useEffect(() => {
+      isMountedRef.current = true;
       return () => {
         isMountedRef.current = false;
       };
-    }, []);
+    });
 
     const clearResumeAfterSeekTimer = useCallback(() => {
       if (resumeAfterSeekTimerRef.current) {
@@ -863,12 +886,17 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
     // Preload images
     useEffect(() => {
       const currentTargets = getUnitPreloadTargets(resolvedCurrentUnit);
-      const neighborTargets = isUnitLoaded(resolvedCurrentUnit)
-        ? [...getUnitPreloadTargets(resolvedNextUnit), ...getUnitPreloadTargets(resolvedPrevUnit)]
-        : [];
-      const targets = [...new Set([...currentTargets, ...neighborTargets])];
+      const targets = currentTargets.slice();
+      if (isUnitLoaded(resolvedCurrentUnit)) {
+        for (const target of getUnitPreloadTargets(resolvedNextUnit)) {
+          targets.push(target);
+        }
+        for (const target of getUnitPreloadTargets(resolvedPrevUnit)) {
+          targets.push(target);
+        }
+      }
 
-      for (const baseSrc of targets) {
+      for (const baseSrc of uniqueStrings(targets)) {
         const src = getImageLoadSrc(baseSrc);
         if (!loadedImages.has(src) && !preloadingImagesRef.current.has(src)) {
           preloadingImagesRef.current.add(src);
@@ -1389,6 +1417,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
             >
               <div className="w-full h-full flex items-center justify-center" style={zoomStyle}>
                 <img
+                  ref={(element) => markImageLoadedIfComplete(element, source)}
                   src={source || undefined}
                   alt={asset.preview || asset.file || asset.url || ''}
                   className="max-w-full max-h-full w-full h-full object-contain select-none"
@@ -1426,6 +1455,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
       if (page.segment === 'full') {
         return (
           <img
+            ref={(element) => markImageLoadedIfComplete(element, source)}
             src={source || undefined}
             alt={asset.preview || asset.file || asset.url || ''}
             className="max-w-full max-h-full w-full h-full object-contain select-none"
@@ -1444,6 +1474,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
       return (
         <div className="relative h-full w-full overflow-hidden">
           <img
+            ref={(element) => markImageLoadedIfComplete(element, source)}
             src={source || undefined}
             alt={asset.preview || asset.file || asset.url || ''}
             className="absolute top-0 h-full w-[200%] max-w-none select-none object-fill"
@@ -1517,11 +1548,76 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
     };
 
     const isCurrentVideo = isVideoAsset(currentAsset);
-    const currentLoadKeys = getUnitPreloadTargets(resolvedCurrentUnit).map((src) =>
-      getImageLoadSrc(src)
-    );
+    const currentLoadStates = getUnitPreloadTargets(resolvedCurrentUnit).map((baseSrc) => {
+      const loadSrc = getImageLoadSrc(baseSrc);
+      return {
+        baseSrc,
+        loadSrc,
+        loaded: loadedImages.has(loadSrc),
+        preloading: preloadingImagesRef.current.has(loadSrc),
+        attempts: imageLoadAttemptsRef.current.get(baseSrc) ?? 0,
+        retryToken: imageRetryTokens.get(baseSrc) ?? 0,
+      };
+    });
     const shouldShowLoader = Boolean(
-      currentAsset && currentLoadKeys.some((src) => !loadedImages.has(src))
+      currentAsset && currentLoadStates.some(({ loaded }) => !loaded)
+    );
+    const loaderDebugSnapshot = useMemo(
+      () => ({
+        currentAsset: currentAsset
+          ? {
+              id: currentAsset.id,
+              stackId: currentAsset.stackId,
+              file: currentAsset.file,
+              url: currentAsset.url,
+              preview: currentAsset.preview,
+              thumbnail: currentAsset.thumbnail,
+              thumbnailUrl: currentAsset.thumbnailUrl,
+              fileType: currentAsset.fileType,
+              mimeType: currentAsset.mimeType,
+              updatedAt: currentAsset.updatedAt,
+              isVideo: isVideoAsset(currentAsset),
+            }
+          : null,
+        currentUnit: resolvedCurrentUnit
+          ? {
+              id: resolvedCurrentUnit.id,
+              kind: resolvedCurrentUnit.kind,
+              pages: resolvedCurrentUnit.pages.map((page) => ({
+                id: page.id,
+                assetId: page.asset.id,
+                segment: page.segment,
+                isVideo: isVideoAsset(page.asset),
+                preloadTarget: getPreloadTarget(page.asset),
+              })),
+            }
+          : null,
+        isCurrentVideo,
+        shouldShowLoader,
+        currentLoadStates,
+        loadedImagesSize: loadedImages.size,
+        preloadingImages: Array.from(preloadingImagesRef.current),
+        isMountedRef: isMountedRef.current,
+      }),
+      [
+        currentAsset,
+        currentLoadStates,
+        getPreloadTarget,
+        isCurrentVideo,
+        loadedImages.size,
+        resolvedCurrentUnit,
+        shouldShowLoader,
+      ]
+    );
+    const loaderDebugSignature = useMemo(
+      () =>
+        JSON.stringify({
+          currentAssetId: currentAsset?.id ?? null,
+          currentUnitId: resolvedCurrentUnit?.id ?? null,
+          shouldShowLoader,
+          currentLoadStates,
+        }),
+      [currentAsset?.id, currentLoadStates, resolvedCurrentUnit?.id, shouldShowLoader]
     );
     const _currentAssetIdKey = useMemo(
       () => (currentAsset ? String(currentAsset.id) : null),
@@ -1539,6 +1635,13 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
       currentAsset,
       getVideoSource,
     ]);
+
+    useEffect(() => {
+      setDebugSnapshot('viewer-loader', loaderDebugSnapshot);
+      if (lastLoaderDebugSignatureRef.current === loaderDebugSignature) return;
+      lastLoaderDebugSignatureRef.current = loaderDebugSignature;
+      debugLog('viewer-loader', 'ImageCarousel loader state changed', loaderDebugSnapshot);
+    }, [loaderDebugSignature, loaderDebugSnapshot]);
 
     // 現在動画のホストに、ネイティブ video 要素を安定配置（再レンダで破棄しない）
     useEffect(() => {
@@ -1808,7 +1911,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
                 onVolumeChange={handleVolumeChange}
                 fps={fps}
                 onToggleFps={handleToggleFps}
-                markers={markers ?? (currentAsset?.meta?.markers || [])}
+                markers={normalizeVideoMarkers(markers ?? currentAsset?.meta?.markers)}
                 onEditMarkerRequest={onEditMarkerRequest}
                 onMoveMarkerRequest={onMoveMarkerRequest}
                 onDeleteMarkerRequest={onDeleteMarkerRequest}
@@ -1852,7 +1955,10 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
 
         {/* Loading indicators for images not yet loaded */}
         {shouldShowLoader && (
-          <div className="absolute inset-0 flex items-center justify-center">
+          <div
+            className="absolute inset-0 flex items-center justify-center"
+            data-caramel-debug="image-carousel-loader"
+          >
             <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin" />
           </div>
         )}

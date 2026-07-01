@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiClient } from '@/lib/api-client';
+import { addSetValue, removeSetValue } from '@/lib/set-utils';
 import type { MediaGridItem, StackFilter } from '@/types';
 
 interface SparseInfiniteScrollOptions {
@@ -16,6 +17,15 @@ interface LoadRequest {
   startIndex: number;
   endIndex: number;
   timestamp: number;
+}
+
+function copySparseItems<T>(items: readonly T[] | null | undefined, total: number): T[] {
+  const source = Array.isArray(items) ? items : [];
+  const next = source.slice();
+  if (next.length < total) {
+    next.length = total;
+  }
+  return next;
 }
 
 export function useSparseInfiniteScroll({
@@ -105,7 +115,7 @@ export function useSparseInfiniteScroll({
         }
       }
 
-      setLoadingRanges((prev) => new Set([...prev, rangeKey]));
+      setLoadingRanges((prev) => addSetValue(prev, rangeKey));
 
       try {
         const offset = normalizedStart;
@@ -121,7 +131,7 @@ export function useSparseInfiniteScroll({
 
         // Update sparse array with loaded items
         setSparseItems((prev) => {
-          const newItems = [...prev];
+          const newItems = copySparseItems(prev, total);
           result.stacks.forEach((item, index) => {
             const targetIndex = normalizedStart + index;
             if (targetIndex < newItems.length) {
@@ -139,11 +149,7 @@ export function useSparseInfiniteScroll({
       } catch (error) {
         console.error(`❌ Failed to load range ${normalizedStart}-${normalizedEnd}:`, error);
       } finally {
-        setLoadingRanges((prev) => {
-          const next = new Set(prev);
-          next.delete(rangeKey);
-          return next;
-        });
+        setLoadingRanges((prev) => removeSetValue(prev, rangeKey));
       }
     },
     [total, datasetId, filter, sort, loadingRanges]

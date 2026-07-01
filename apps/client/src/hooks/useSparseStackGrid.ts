@@ -3,8 +3,9 @@ import { useLocation } from '@tanstack/react-router';
 import { useAtom } from 'jotai';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiClient } from '@/lib/api-client';
+import { addSetValue } from '@/lib/set-utils';
 import { navigationStateAtom } from '@/stores/navigation';
-import type { MediaGridItem, StackFilter } from '@/types';
+import type { MediaGridItem, Stack, StackFilter } from '@/types';
 
 interface UseSparseStackGridOptions {
   datasetId: string;
@@ -12,6 +13,23 @@ interface UseSparseStackGridOptions {
   filter: StackFilter;
   sort: any;
   pageSize?: number;
+}
+
+function copySparseItems<T>(items: readonly T[] | null | undefined, total: number): T[] {
+  const source = Array.isArray(items) ? items : [];
+  const next = source.slice();
+  if (next.length < total) {
+    next.length = total;
+  }
+  return next;
+}
+
+function toMediaGridItem(stack: Stack): MediaGridItem {
+  return {
+    ...stack,
+    favorited: stack.favorited ?? stack.isFavorite,
+    isFavorite: stack.isFavorite ?? stack.favorited,
+  };
 }
 
 export function useSparseStackGrid({
@@ -64,7 +82,7 @@ export function useSparseStackGrid({
     if (total > 0) {
       if (shouldRestore && navigationState) {
         // 保存された状態から復元
-        setItems(navigationState.items);
+        setItems(Array.isArray(navigationState.items) ? navigationState.items : []);
         setLoadedPages(new Set()); // ページ情報は再計算が必要
 
         // スクロール位置を復元
@@ -107,17 +125,17 @@ export function useSparseStackGrid({
 
         // Sparse配列に結果を配置
         setItems((prev) => {
-          const newItems = [...prev];
+          const newItems = copySparseItems(prev, total);
           result.stacks.forEach((item, index) => {
             const targetIndex = offset + index;
             if (targetIndex < newItems.length) {
-              newItems[targetIndex] = item;
+              newItems[targetIndex] = toMediaGridItem(item);
             }
           });
           return newItems;
         });
 
-        setLoadedPages((prev) => new Set([...prev, pageIndex]));
+        setLoadedPages((prev) => addSetValue(prev, pageIndex));
       } catch (error) {
         console.error('Failed to load page:', pageIndex, error);
       }

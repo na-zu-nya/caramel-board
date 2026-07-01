@@ -1,6 +1,7 @@
 import { isCancelledError, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiClient } from '@/lib/api-client';
+import { addSetValue } from '@/lib/set-utils';
 import { getStackFilterKey } from '@/lib/stack-filter';
 import type { MediaGridItem, StackFilter } from '@/types';
 
@@ -128,7 +129,7 @@ export function useRangeBasedQuery({
         });
 
         if (currentQueryKeyRef.current === requestQueryKey) {
-          setLoadedPages((prev) => new Set([...prev, pageIndex]));
+          setLoadedPages((prev) => addSetValue(prev, pageIndex));
         }
         return result as unknown as PageData;
       })()
