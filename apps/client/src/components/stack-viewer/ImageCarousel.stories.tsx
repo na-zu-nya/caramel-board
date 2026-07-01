@@ -173,6 +173,26 @@ export const SplitWideSpreadSinglePage: Story = {
   },
 };
 
+export const SplitWideSpreadSinglePageNarrow: Story = {
+  args: {
+    currentAsset: makeWideSpreadAsset(33),
+    currentUnit: {
+      id: '33:right',
+      index: 0,
+      kind: 'single',
+      pages: [{ id: '33:right', asset: makeWideSpreadAsset(33), assetIndex: 0, segment: 'right' }],
+    },
+    openingDirection: 'right-opening',
+  },
+  decorators: [
+    (Story) => (
+      <div className="h-[420px] w-[280px] overflow-hidden rounded-lg bg-black">
+        <Story />
+      </div>
+    ),
+  ],
+};
+
 export const SplitWideSpreadUnit: Story = {
   args: {
     currentAsset: makeWideSpreadAsset(31),
@@ -187,6 +207,29 @@ export const SplitWideSpreadUnit: Story = {
     },
     openingDirection: 'right-opening',
   },
+};
+
+export const SplitWideSpreadUnitWideViewport: Story = {
+  args: {
+    currentAsset: makeWideSpreadAsset(34),
+    currentUnit: {
+      id: '34:right|34:left',
+      index: 0,
+      kind: 'spread',
+      pages: [
+        { id: '34:right', asset: makeWideSpreadAsset(34), assetIndex: 0, segment: 'right' },
+        { id: '34:left', asset: makeWideSpreadAsset(34), assetIndex: 0, segment: 'left' },
+      ],
+    },
+    openingDirection: 'right-opening',
+  },
+  decorators: [
+    (Story) => (
+      <div className="h-[320px] w-[960px] overflow-hidden rounded-lg bg-black">
+        <Story />
+      </div>
+    ),
+  ],
 };
 
 export const SplitWideSpreadUnitLeftOpening: Story = {

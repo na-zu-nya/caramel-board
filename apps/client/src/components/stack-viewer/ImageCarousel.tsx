@@ -13,7 +13,7 @@ import { createPortal } from 'react-dom';
 import VideoSeekBar from '@/components/ui/SeekBar/VideoSeekBar';
 import { VideoTransportControls } from '@/components/ui/VideoTransportControls';
 import { useVideoPausedSeekFrameFlush } from '@/hooks/features/useVideoPausedSeekFrameFlush';
-import type { LogicalPage, ReadingUnit } from '@/lib/comic-reading';
+import { getAssetAspectRatio, type LogicalPage, type ReadingUnit } from '@/lib/comic-reading';
 import { debugLog, setDebugSnapshot } from '@/lib/debug';
 import { getImageDisplaySource, isContentAddressedAssetSource, isVideoAsset } from '@/lib/media';
 import { cn } from '@/lib/utils';
@@ -211,8 +211,50 @@ const isSplitSpreadUnitFromSingleAsset = (unit: ReadingUnit | undefined) => {
   );
 };
 
-const canRenderSplitSpreadAsOriginalImage = (pages: LogicalPage[]) =>
-  pages.length === 2 && pages[0]?.segment === 'left' && pages[1]?.segment === 'right';
+const canRenderSplitPagesFromSingleAsset = (pages: LogicalPage[]) => {
+  const firstPage = pages[0];
+  if (!firstPage || firstPage.segment === 'full') return false;
+  return pages.every(
+    (page) => page.segment !== 'full' && String(page.asset.id) === String(firstPage.asset.id)
+  );
+};
+
+const formatCssNumber = (value: number) => Number(value.toFixed(6)).toString();
+
+const getContainedAspectBoxStyle = (aspectRatio: number | null): CSSProperties | undefined => {
+  if (aspectRatio === null || !Number.isFinite(aspectRatio) || aspectRatio <= 0) {
+    return undefined;
+  }
+
+  return {
+    aspectRatio: formatCssNumber(aspectRatio),
+    width: `min(100cqw, ${formatCssNumber(aspectRatio * 100)}cqh)`,
+    height: `min(100cqh, ${formatCssNumber(100 / aspectRatio)}cqw)`,
+  };
+};
+
+const getSplitPageAspectRatio = (asset: Asset) => {
+  const aspectRatio = getAssetAspectRatio(asset);
+  return aspectRatio === null ? null : aspectRatio / 2;
+};
+
+const getSplitPageBoxSize = (asset: Asset, pageCount: number) => {
+  const assetWidth = Number(asset.width);
+  const assetHeight = Number(asset.height);
+  if (
+    !Number.isFinite(assetWidth) ||
+    !Number.isFinite(assetHeight) ||
+    assetWidth <= 0 ||
+    assetHeight <= 0
+  ) {
+    return null;
+  }
+
+  return {
+    width: pageCount === 1 ? assetWidth / 2 : assetWidth,
+    height: assetHeight,
+  };
+};
 
 const getUnitAssets = (unit: ReadingUnit | undefined) =>
   Array.isArray(unit?.pages) ? unit.pages.map((page) => page.asset) : [];
@@ -1515,7 +1557,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
       );
     };
 
-    const renderSplitSpreadPagesFromSingleAsset = (
+    const renderSplitPagesFromSingleAsset = (
       visualPages: LogicalPage[],
       shouldLoadSource = true
     ) => {
@@ -1524,44 +1566,62 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
 
       const baseSource = withImageRefreshKey(getImageDisplaySource(asset), asset.updatedAt);
       const source = shouldLoadSource ? getImageLoadSrc(baseSource) : '';
+      const splitPageAspectRatio = getSplitPageAspectRatio(asset);
+      const aspectRatio =
+        visualPages.length === 1 ? splitPageAspectRatio : getAssetAspectRatio(asset);
+      const boxSize = getSplitPageBoxSize(asset, visualPages.length);
       const dragStyle: DragImageStyle = {
         cursor: nativeDragEnabled ? 'grab' : 'default',
         WebkitUserDrag: nativeDragEnabled ? 'element' : 'none',
       };
 
       return (
-        <div className="relative max-h-full max-w-full overflow-hidden">
-          <div className="absolute inset-0 grid grid-cols-2 overflow-hidden">
-            {visualPages.map((page) => (
+        <div
+          className="relative max-h-full max-w-full overflow-hidden"
+          style={getContainedAspectBoxStyle(aspectRatio)}
+        >
+          {boxSize && (
+            <svg
+              aria-hidden="true"
+              className="block h-auto max-h-full max-w-full opacity-0"
+              width={boxSize.width}
+              height={boxSize.height}
+              viewBox={`0 0 ${boxSize.width} ${boxSize.height}`}
+            />
+          )}
+          <div
+            className={cn(
+              'absolute inset-0 overflow-hidden',
+              visualPages.length === 2 && 'grid grid-cols-2'
+            )}
+          >
+            {visualPages.map((page, index) => (
               <div key={page.id} className="relative h-full min-w-0 overflow-hidden">
                 <img
+                  ref={
+                    index === 0
+                      ? (element) => markImageLoadedIfComplete(element, source)
+                      : undefined
+                  }
                   src={source || undefined}
-                  alt=""
-                  aria-hidden="true"
+                  alt={index === 0 ? asset.preview || asset.file || asset.url || '' : ''}
+                  aria-hidden={index !== 0}
                   className="absolute top-0 h-full w-[200%] max-w-none select-none object-fill"
                   draggable={nativeDragEnabled}
                   style={{
                     ...dragStyle,
                     left: page.segment === 'left' ? 0 : '-100%',
                   }}
+                  onLoad={() => {
+                    if (source) markImageLoaded(source);
+                  }}
+                  onError={() => {
+                    if (baseSource && source) requestImageRetry(baseSource, source);
+                  }}
                 />
               </div>
             ))}
           </div>
-          <img
-            ref={(element) => markImageLoadedIfComplete(element, source)}
-            src={source || undefined}
-            alt={asset.preview || asset.file || asset.url || ''}
-            className="block max-h-full max-w-full select-none object-contain opacity-0"
-            draggable={nativeDragEnabled}
-            style={dragStyle}
-            onLoad={() => {
-              if (source) markImageLoaded(source);
-            }}
-            onError={() => {
-              if (baseSource && source) requestImageRetry(baseSource, source);
-            }}
-          />
         </div>
       );
     };
@@ -1589,14 +1649,8 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
         : undefined;
       const visualPages = getVisualPages(unit.pages);
       const isSingleAssetSplitSpread = isSplitSpreadUnitFromSingleAsset(unit);
-
-      if (
-        isSingleAssetSplitSpread &&
-        canRenderSplitSpreadAsOriginalImage(visualPages) &&
-        unit.pages[0]
-      ) {
-        return renderAsset(unit.pages[0].asset, position);
-      }
+      const shouldRenderSplitPagesFromSingleAsset =
+        isSingleAssetSplitSpread || canRenderSplitPagesFromSingleAsset(visualPages);
 
       return (
         <div
@@ -1607,11 +1661,11 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
         >
           <div
             ref={isCurrentUnit ? currentImageSurfaceRef : undefined}
-            className="max-w-full max-h-full w-full h-full flex items-center justify-center"
+            className="max-w-full max-h-full w-full h-full flex items-center justify-center [container-type:size]"
           >
-            {isSingleAssetSplitSpread ? (
+            {shouldRenderSplitPagesFromSingleAsset ? (
               <div className="flex h-full w-full items-center justify-center" style={zoomStyle}>
-                {renderSplitSpreadPagesFromSingleAsset(visualPages, shouldLoadSource)}
+                {renderSplitPagesFromSingleAsset(visualPages, shouldLoadSource)}
               </div>
             ) : (
               <div

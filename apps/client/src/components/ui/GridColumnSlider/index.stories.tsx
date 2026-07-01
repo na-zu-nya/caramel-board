@@ -3,9 +3,9 @@ import type { CSSProperties } from 'react';
 import { useCallback, useState } from 'react';
 import { GridColumnSlider } from './index';
 
-const themedPrimaryStyle = {
+const themedPrimaryStyle: CSSProperties & Record<'--primary', string> = {
   '--primary': 'oklch(0.646 0.222 41.116)',
-} satisfies CSSProperties & Record<'--primary', string>;
+};
 
 const meta: Meta<typeof GridColumnSlider> = {
   title: 'UI/GridColumnSlider',
