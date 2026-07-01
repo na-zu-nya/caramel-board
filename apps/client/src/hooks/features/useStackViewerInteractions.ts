@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
+import { flushSync } from 'react-dom';
 import { useViewContext } from '@/hooks/useViewContext';
 import { apiClient, isApiNotFoundError } from '@/lib/api-client';
 import { getRepresentativeAsset, type ReadingUnit } from '@/lib/comic-reading';
@@ -36,6 +37,16 @@ interface ViewerEdgeKinds {
   leftEdgeKind: ViewerEdgeKind;
   rightEdgeKind: ViewerEdgeKind;
 }
+
+interface PendingCrossStackAnimation {
+  datasetId: string;
+  stackId: string;
+  listToken?: string;
+  initialOffset: number;
+  createdAt: number;
+}
+
+let pendingCrossStackAnimation: PendingCrossStackAnimation | null = null;
 
 export function useStackViewerInteractions(params: {
   datasetId: string;
@@ -338,6 +349,36 @@ export function useStackViewerInteractions(params: {
     [lerp, notifyHorizontalOffsetChange]
   );
 
+  useLayoutEffect(() => {
+    const pending = pendingCrossStackAnimation;
+    if (!pending) return;
+    if (pending.datasetId !== datasetId) return;
+    if (pending.stackId !== String(stackId)) return;
+    if (pending.listToken !== listToken) return;
+    if (!stack || !imageCarouselRef.current) return;
+    if (Date.now() - pending.createdAt > 1500) {
+      pendingCrossStackAnimation = null;
+      return;
+    }
+
+    pendingCrossStackAnimation = null;
+    currentDragOffsetRef.current = pending.initialOffset;
+    imageCarouselRef.current.prepareTranslateX(pending.initialOffset);
+    imageCarouselRef.current.updateTranslateX(pending.initialOffset);
+    notifyHorizontalOffsetChange(pending.initialOffset);
+    animateToOffset(0, () => {
+      onHorizontalInteractionSettled?.();
+    });
+  }, [
+    animateToOffset,
+    datasetId,
+    listToken,
+    notifyHorizontalOffsetChange,
+    onHorizontalInteractionSettled,
+    stack,
+    stackId,
+  ]);
+
   const commitPageChange = useCallback(
     (direction: 1 | -1) => {
       currentDragOffsetRef.current = 0;
@@ -379,9 +420,28 @@ export function useStackViewerInteractions(params: {
 
   const animateHorizontalPageChange = useCallback(
     (direction: 1 | -1) => {
-      animateToOffset(getPageOffset(direction), () => commitPageChange(direction));
+      const pageOffset = getPageOffset(direction);
+      const initialOffset = -pageOffset;
+
+      currentDragOffsetRef.current = initialOffset;
+      imageCarouselRef.current?.prepareTranslateX(initialOffset);
+      // アニメーション中の追加入力を、見えている遷移先ページ基準で処理する。
+      flushSync(() => {
+        setCurrentPage((page) => page + direction);
+      });
+      imageCarouselRef.current?.updateTranslateX(initialOffset);
+      notifyHorizontalOffsetChange(initialOffset);
+      animateToOffset(0, () => {
+        onHorizontalInteractionSettled?.();
+      });
     },
-    [animateToOffset, commitPageChange, getPageOffset]
+    [
+      animateToOffset,
+      getPageOffset,
+      notifyHorizontalOffsetChange,
+      onHorizontalInteractionSettled,
+      setCurrentPage,
+    ]
   );
 
   const getStackOffset = useCallback((listDelta: 1 | -1) => {
@@ -389,35 +449,42 @@ export function useStackViewerInteractions(params: {
     return listDelta > 0 ? -viewportWidth : viewportWidth;
   }, []);
 
-  const navigateCrossStackAfterAnimation = useCallback(
+  const navigateCrossStackWithAnimation = useCallback(
     (listDelta: 1 | -1, targetStackId: number) => {
-      animateToOffset(getStackOffset(listDelta), () => {
-        currentDragOffsetRef.current = 0;
-        imageCarouselRef.current?.prepareTranslateX(0);
-        imageCarouselRef.current?.updateTranslateX(0);
-        notifyHorizontalOffsetChange(0);
-        void (async () => {
-          const canNavigate = await prefetchStack(targetStackId);
-          if (!canNavigate) {
-            onHorizontalInteractionSettled?.();
-            return;
-          }
-          if (ctx) moveIndex(listDelta);
-          if (onNavigateStack) {
-            onNavigateStack(String(targetStackId));
-          } else {
-            navigate({
-              to: '/library/$datasetId/stacks/$stackId',
-              params: { datasetId, stackId: String(targetStackId) },
-              search: { page: 0, mediaType, listToken, returnTo },
-              replace: true,
-            });
-          }
-        })();
+      const stackOffset = getStackOffset(listDelta);
+      const initialOffset = -stackOffset;
+
+      currentDragOffsetRef.current = initialOffset;
+      imageCarouselRef.current?.prepareTranslateX(initialOffset);
+      notifyHorizontalOffsetChange(initialOffset);
+      void prefetchStack(targetStackId);
+      pendingCrossStackAnimation = {
+        datasetId,
+        stackId: String(targetStackId),
+        listToken,
+        initialOffset,
+        createdAt: Date.now(),
+      };
+
+      flushSync(() => {
+        if (ctx) moveIndex(listDelta);
+        if (onNavigateStack) {
+          onNavigateStack(String(targetStackId));
+        }
+      });
+
+      if (onNavigateStack) {
+        return;
+      }
+
+      navigate({
+        to: '/library/$datasetId/stacks/$stackId',
+        params: { datasetId, stackId: String(targetStackId) },
+        search: { page: 0, mediaType, listToken, returnTo },
+        replace: true,
       });
     },
     [
-      animateToOffset,
       ctx,
       datasetId,
       getStackOffset,
@@ -426,7 +493,6 @@ export function useStackViewerInteractions(params: {
       moveIndex,
       navigate,
       notifyHorizontalOffsetChange,
-      onHorizontalInteractionSettled,
       onNavigateStack,
       prefetchStack,
       returnTo,
@@ -456,12 +522,12 @@ export function useStackViewerInteractions(params: {
 
       const numericTargetStackId = Number(targetStackId);
       prefetchAdjacentStackChain(listDelta, numericTargetStackId);
-      navigateCrossStackAfterAnimation(listDelta, numericTargetStackId);
+      navigateCrossStackWithAnimation(listDelta, numericTargetStackId);
       return true;
     },
     [
       crossStackEnabled,
-      navigateCrossStackAfterAnimation,
+      navigateCrossStackWithAnimation,
       nextNeighborId,
       prefetchAdjacentStackChain,
       prevNeighborId,
@@ -516,12 +582,16 @@ export function useStackViewerInteractions(params: {
       const threshold = viewportWidth * 0.3;
       const velocityThreshold = 300;
 
-      if (Math.abs(totalDelta) <= threshold && Math.abs(velocity) <= velocityThreshold) {
+      const effectiveDelta = currentDragOffsetRef.current || totalDelta;
+      const isVelocityCommit = Math.abs(velocity) > velocityThreshold;
+      const intentDelta = isVelocityCommit ? velocity : effectiveDelta;
+
+      if (Math.abs(effectiveDelta) <= threshold && !isVelocityCommit) {
         animateToCenter();
         return;
       }
 
-      const pageDelta = getPageDeltaFromDrag(totalDelta);
+      const pageDelta = getPageDeltaFromDrag(intentDelta);
       if (pageDelta > 0 && hasNextInStack) {
         notifyPageTransitionCommit(1);
         animateHorizontalPageChange(1);
@@ -533,7 +603,7 @@ export function useStackViewerInteractions(params: {
         return;
       }
 
-      const dragSide: ViewerEdgeSide = totalDelta < 0 ? 'right' : 'left';
+      const dragSide: ViewerEdgeSide = intentDelta < 0 ? 'right' : 'left';
       const dragSideEdgeKind = dragSide === 'left' ? leftEdgeKind : rightEdgeKind;
 
       if (!crossStackEnabled) {
@@ -548,7 +618,7 @@ export function useStackViewerInteractions(params: {
           return;
         }
         prefetchAdjacentStackChain(-1, Number(prevNeighborId));
-        navigateCrossStackAfterAnimation(-1, Number(prevNeighborId));
+        navigateCrossStackWithAnimation(-1, Number(prevNeighborId));
         return;
       }
 
@@ -558,7 +628,7 @@ export function useStackViewerInteractions(params: {
           return;
         }
         prefetchAdjacentStackChain(1, Number(nextNeighborId));
-        navigateCrossStackAfterAnimation(1, Number(nextNeighborId));
+        navigateCrossStackWithAnimation(1, Number(nextNeighborId));
         return;
       }
 
@@ -573,7 +643,7 @@ export function useStackViewerInteractions(params: {
       hasNextInStack,
       hasPrevInStack,
       leftEdgeKind,
-      navigateCrossStackAfterAnimation,
+      navigateCrossStackWithAnimation,
       nextNeighborId,
       notifyPageTransitionCommit,
       prefetchAdjacentStackChain,
@@ -598,12 +668,12 @@ export function useStackViewerInteractions(params: {
       const sideEdgeKind = side === 'left' ? leftEdgeKind : rightEdgeKind;
       if (side === 'right' && crossStackEnabled && nextNeighborId !== undefined) {
         if (!shouldAllowBoundaryNavigation(side, sideEdgeKind)) return;
-        navigateCrossStackAfterAnimation(1, Number(nextNeighborId));
+        navigateCrossStackWithAnimation(1, Number(nextNeighborId));
         return;
       }
       if (side === 'left' && crossStackEnabled && prevNeighborId !== undefined) {
         if (!shouldAllowBoundaryNavigation(side, sideEdgeKind)) return;
-        navigateCrossStackAfterAnimation(-1, Number(prevNeighborId));
+        navigateCrossStackWithAnimation(-1, Number(prevNeighborId));
         return;
       }
       shouldAllowBoundaryNavigation(side, sideEdgeKind);
@@ -614,7 +684,7 @@ export function useStackViewerInteractions(params: {
       hasNextInStack,
       hasPrevInStack,
       leftEdgeKind,
-      navigateCrossStackAfterAnimation,
+      navigateCrossStackWithAnimation,
       nextNeighborId,
       notifyPageTransitionCommit,
       prevNeighborId,

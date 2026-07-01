@@ -340,7 +340,7 @@ export default function StackViewer({
         rightEdgeKind: edgeKinds.rightEdgeKind,
       });
       setEdgeBoundaryArmedSide(getStackBoundarySide(edgeKinds));
-      setIsEdgeAffordanceSuppressed(false);
+      setIsEdgeAffordanceSuppressed(!edgeKinds.leftEdgeKind && !edgeKinds.rightEdgeKind);
       setIsEdgeAffordanceReady(false);
     },
     []
@@ -399,8 +399,12 @@ export default function StackViewer({
     onNavigateStack: embedded ? onNavigateStack : undefined,
   });
   const displayedCurrentPage = optimisticReadingPage?.pageIndex ?? currentPage;
-  const displayedLeftEdgeKind = optimisticReadingPage?.leftEdgeKind ?? leftEdgeKind;
-  const displayedRightEdgeKind = optimisticReadingPage?.rightEdgeKind ?? rightEdgeKind;
+  const displayedLeftEdgeKind = optimisticReadingPage
+    ? optimisticReadingPage.leftEdgeKind
+    : leftEdgeKind;
+  const displayedRightEdgeKind = optimisticReadingPage
+    ? optimisticReadingPage.rightEdgeKind
+    : rightEdgeKind;
   const edgeAffordanceResetKey = `${stack?.id ?? 'none'}:${displayedCurrentPage}:${isListMode ? 'list' : 'viewer'}:${displayedLeftEdgeKind ?? 'none'}:${displayedRightEdgeKind ?? 'none'}`;
 
   useEffect(() => {
