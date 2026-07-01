@@ -137,14 +137,17 @@ export class StackBulkService {
             .get(targetId) as CountRow | undefined
         )?.count ?? -1;
       let nextOrder = maxOrder + 1;
+      const sourceOrderCases = sourceIds.map((_, index) => `WHEN ? THEN ${index}`).join(' ');
       const sourceAssetRows = this.db
         .prepare(
           `SELECT id
            FROM assets
            WHERE stack_id IN (${placeholders(sourceIds)})
-           ORDER BY stack_id ASC, order_in_stack ASC, id ASC`
+           ORDER BY CASE stack_id ${sourceOrderCases} ELSE ${sourceIds.length} END,
+                    order_in_stack ASC,
+                    id ASC`
         )
-        .all(...sourceIds) as Array<{ id: number }>;
+        .all(...sourceIds, ...sourceIds) as Array<{ id: number }>;
       const updateAsset = this.db.prepare(
         'UPDATE assets SET stack_id = ?, order_in_stack = ?, updated_at = ? WHERE id = ?'
       );

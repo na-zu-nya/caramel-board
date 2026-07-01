@@ -7,8 +7,9 @@
   "scripts": {
     "start": "nodemon dist/entry.node.mjs",
     "start:prod": "node dist/entry.node.mjs",
-    "dev": "npm run build && node ../../scripts/dev-server.mjs",
-    "dev:next": "npm run build && node ../../scripts/dev-server.mjs next",
+    "dev": "node ../../scripts/dev-server.mjs",
+    "dev:next": "node ../../scripts/dev-server.mjs next",
+    "dev:standalone": "node ../../scripts/dev-server.mjs standalone",
     "build": "esbuild src/entry.node.ts --sourcemap --bundle --platform=node --format=esm --external:sharp --external:dotenv --external:fs-extra --outfile=dist/entry.node.mjs",
     "watch": "npm run build -- --watch",
     "import:standalone": "node scripts/import-standalone-sqlite.mjs",

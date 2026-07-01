@@ -1,32 +1,18 @@
 #!/usr/bin/env node
 
-import { spawnSync } from 'node:child_process';
-import { npmArgs, spawnNpm, terminateChild } from './npm-runner.mjs';
-
-const isWindows = process.platform === 'win32';
-const npmCommand = isWindows ? (process.env.ComSpec || 'cmd.exe') : 'npm';
-
-const preflightArgs = ['run', '-w', '@caramelboard/server', 'build'];
-const preflight = spawnSync(npmCommand, npmArgs(preflightArgs), {
-  env: process.env,
-  stdio: 'inherit',
-});
-
-if (preflight.status !== 0) {
-  if (preflight.error) {
-    console.error(`[dev] preflight failed: ${preflight.error.message}`);
-  } else if (preflight.signal) {
-    console.error(`[dev] preflight exited with signal ${preflight.signal}`);
-  } else {
-    console.error(`[dev] preflight exited with code ${preflight.status ?? 1}`);
-  }
-  process.exit(preflight.status ?? 1);
-}
+import { spawnNpm, terminateChild } from './npm-runner.mjs';
 
 const commands = [
   {
+    name: 'server',
+    args: ['run', '-w', '@caramelboard/server', 'dev:standalone'],
+  },
+  {
     name: 'desktop',
     args: ['run', '-w', '@caramelboard/desktop', 'dev'],
+    env: {
+      CARAMEL_DEV_EXTERNAL_SERVER: '1',
+    },
   },
   {
     name: 'client',

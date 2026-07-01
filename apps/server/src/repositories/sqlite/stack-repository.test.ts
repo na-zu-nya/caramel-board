@@ -146,6 +146,28 @@ describe('StandaloneStackRepository search', () => {
     ]);
   });
 
+  it('merges source stack assets in the provided source id order', () => {
+    const merged = repository.mergeStacks(1, [3, 2]);
+    expect(merged?.id).toBe(1);
+
+    const assets = db
+      .prepare(
+        `SELECT original_name, order_in_stack
+         FROM assets
+         WHERE stack_id = ?
+         ORDER BY order_in_stack ASC`
+      )
+      .all(1) as Array<{ original_name: string; order_in_stack: number }>;
+
+    expect(assets.map((asset) => asset.original_name)).toEqual([
+      'landscape.png',
+      'motion.mp4',
+      'portrait-1.png',
+      'portrait-2.jpg',
+    ]);
+    expect(assets.map((asset) => asset.order_in_stack)).toEqual([0, 1, 2, 3]);
+  });
+
   it('refreshes actual media types for a dataset', () => {
     db.prepare('UPDATE stacks SET actual_media_type = NULL').run();
 

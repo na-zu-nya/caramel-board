@@ -14,8 +14,10 @@ fn status_from(
     }
 
     let settings = sidecar.settings.as_ref().unwrap_or(fallback);
+    let external_dev_server_running =
+        external_dev_server_enabled() && http_health_ok(settings.port);
     Ok(SidecarStatus {
-        running: sidecar.child.is_some(),
+        running: sidecar.child.is_some() || external_dev_server_running,
         url: server_url(settings),
         pid: sidecar.child.as_ref().map(std::process::Child::id),
         started_at: sidecar.started_at,
@@ -26,6 +28,53 @@ fn emit_sidecar_status_changed(app: &AppHandle, status: &SidecarStatus) {
     if let Err(error) = app.emit("sidecar-status-changed", status.clone()) {
         eprintln!("Emit sidecar status failed: {error}");
     }
+}
+
+fn sidecar_server_command(app: &AppHandle, server_root: &Path) -> Result<Command, String> {
+    if cfg!(debug_assertions) {
+        let dev_runner = repo_root().join("scripts/dev-server.mjs");
+        if !dev_runner.exists() {
+            return Err(String::from(
+                "開発用サーバーの起動スクリプトが見つかりません。リポジトリ直下で npm run dev を実行してください。",
+            ));
+        }
+
+        let mut command = node_command(app);
+        command
+            .arg(child_process_path(dev_runner))
+            .current_dir(child_process_path(server_root));
+        return Ok(command);
+    }
+
+    let server_entry = server_root.join("dist/entry.node.mjs");
+    if !server_entry.exists() {
+        return Err(String::from(
+            "Caramel Board の起動に必要なファイルが見つかりません。先にアプリをビルドしてください。",
+        ));
+    }
+
+    let mut command = node_command(app);
+    command
+        .arg(child_process_path(server_entry))
+        .current_dir(child_process_path(server_root));
+    Ok(command)
+}
+
+fn configure_sidecar_stdio(command: &mut Command) {
+    command.stdin(Stdio::null());
+    if cfg!(debug_assertions) {
+        command.stdout(Stdio::inherit()).stderr(Stdio::inherit());
+    } else {
+        command.stdout(Stdio::null()).stderr(Stdio::null());
+    }
+}
+
+fn external_dev_server_enabled() -> bool {
+    cfg!(debug_assertions)
+        && matches!(
+            env::var("CARAMEL_DEV_EXTERNAL_SERVER").as_deref(),
+            Ok("1") | Ok("true")
+        )
 }
 
 fn start_sidecar_for_settings(
@@ -39,7 +88,6 @@ fn start_sidecar_for_settings(
             return Ok(current);
         }
     }
-    terminate_listeners_on_port(settings.port, &[]);
 
     let migration_status = standalone_migration_status_for_settings(app, &settings)?;
     if migration_status.status != "ready" {
@@ -49,23 +97,27 @@ fn start_sidecar_for_settings(
         ));
     }
 
-    let server_root = resource_or_repo_path(app, "server", "apps/server");
-    let server_entry = server_root.join("dist/entry.node.mjs");
-    if !server_entry.exists() {
-        return Err(String::from(
-            "Caramel Board の起動に必要なファイルが見つかりません。先にアプリをビルドしてください。",
-        ));
+    if external_dev_server_enabled() {
+        sidecar.settings = Some(settings.clone());
+        if !http_health_ok(settings.port) {
+            return Err(String::from(
+                "開発用サーバーが起動していません。リポジトリ直下の npm run dev を確認してください。",
+            ));
+        }
+        return status_from(sidecar, &settings);
     }
+
+    terminate_listeners_on_port(settings.port, &[]);
+
+    let server_root = resource_or_repo_path(app, "server", "apps/server");
 
     ensure_parent(Path::new(&settings.db_path))?;
     fs::create_dir_all(&settings.library_path)
         .map_err(|error| format!("ライブラリディレクトリを作成できません: {error}"))?;
 
     let client_dist = resource_or_repo_path(app, "client/dist", "apps/client/dist");
-    let mut command = node_command(app);
+    let mut command = sidecar_server_command(app, &server_root)?;
     command
-        .arg(child_process_path(&server_entry))
-        .current_dir(child_process_path(&server_root))
         .env("PORT", settings.port.to_string())
         .env(
             "HOST",
@@ -98,10 +150,8 @@ fn start_sidecar_for_settings(
             },
         )
         .env("CARAMEL_BASIC_AUTH_USERNAME", &settings.basic_auth_username)
-        .env("CARAMEL_BASIC_AUTH_PASSWORD", &settings.basic_auth_password)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null());
+        .env("CARAMEL_BASIC_AUTH_PASSWORD", &settings.basic_auth_password);
+    configure_sidecar_stdio(&mut command);
 
     if let Some(ffmpeg_path) = effective_ffmpeg_path(&settings) {
         command.env("FFMPEG_PATH", &ffmpeg_path);
@@ -131,6 +181,10 @@ fn stop_sidecar_for_settings(
     sidecar: &mut ManagedSidecar,
     settings: &AppSettings,
 ) -> Result<SidecarStatus, String> {
+    if external_dev_server_enabled() && sidecar.child.is_none() {
+        return status_from(sidecar, settings);
+    }
+
     if let Some(mut child) = sidecar.child.take() {
         child
             .kill()
