@@ -146,6 +146,28 @@ describe('StandaloneStackRepository search', () => {
     ]);
   });
 
+  it('returns page bookmark state and page like counts with stack assets', () => {
+    repository.toggleAssetFavorite(2, true);
+    repository.likeAsset(2);
+    repository.likeAsset(2);
+    repository.likeAsset(3);
+
+    const stack = repository.getById(2, 1);
+
+    expect(stack?.liked).toBe(3);
+    expect(
+      stack?.assets.map((asset) => ({
+        id: asset.id,
+        favorited: asset.favorited,
+        liked: asset.liked,
+        likeCount: asset.likeCount,
+      }))
+    ).toEqual([
+      { id: 2, favorited: true, liked: 2, likeCount: 2 },
+      { id: 3, favorited: false, liked: 1, likeCount: 1 },
+    ]);
+  });
+
   it('merges source stack assets in the provided source id order', () => {
     const merged = repository.mergeStacks(1, [3, 2]);
     expect(merged?.id).toBe(1);
@@ -166,6 +188,80 @@ describe('StandaloneStackRepository search', () => {
       'portrait-2.jpg',
     ]);
     expect(assets.map((asset) => asset.order_in_stack)).toEqual([0, 1, 2, 3]);
+  });
+
+  it('creates a new stack from selected assets in the provided asset order', () => {
+    const now = '2026-06-20T00:00:00.000Z';
+    db.prepare(
+      `INSERT INTO assets
+         (id, stack_id, file, thumbnail, file_type, original_name, hash, order_in_stack, created_at, updated_at)
+       VALUES
+         (5, 2, '/tmp/portrait-3.jpg', '', 'jpg', 'portrait-3.jpg', 'hash-5', 2, ?, ?)`
+    ).run(now, now);
+
+    const created = repository.createStackFromAssets([3, 2]);
+    expect(created?.id).not.toBe(2);
+
+    const createdAssets = db
+      .prepare(
+        `SELECT original_name, order_in_stack
+         FROM assets
+         WHERE stack_id = ?
+         ORDER BY order_in_stack ASC`
+      )
+      .all(created?.id) as Array<{ original_name: string; order_in_stack: number }>;
+    const remainingAssets = db
+      .prepare(
+        `SELECT original_name, order_in_stack
+         FROM assets
+         WHERE stack_id = 2
+         ORDER BY order_in_stack ASC`
+      )
+      .all() as Array<{ original_name: string; order_in_stack: number }>;
+
+    expect(createdAssets.map((asset) => asset.original_name)).toEqual([
+      'portrait-2.jpg',
+      'portrait-1.png',
+    ]);
+    expect(createdAssets.map((asset) => asset.order_in_stack)).toEqual([0, 1]);
+    expect(remainingAssets).toEqual([{ original_name: 'portrait-3.jpg', order_in_stack: 0 }]);
+  });
+
+  it('separates selected assets into individual stacks without losing source order', () => {
+    const now = '2026-06-20T00:00:00.000Z';
+    db.prepare(
+      `INSERT INTO assets
+         (id, stack_id, file, thumbnail, file_type, original_name, hash, order_in_stack, created_at, updated_at)
+       VALUES
+         (5, 2, '/tmp/portrait-3.jpg', '', 'jpg', 'portrait-3.jpg', 'hash-5', 2, ?, ?)`
+    ).run(now, now);
+
+    const createdStacks = repository.separateAssets([3, 2]);
+    expect(createdStacks?.map((stack) => stack.name)).toEqual(['portrait-2', 'portrait-1']);
+
+    const createdAssetRows = db
+      .prepare(
+        `SELECT s.name, a.original_name, a.order_in_stack
+         FROM stacks s
+         JOIN assets a ON a.stack_id = s.id
+         WHERE s.id NOT IN (1, 2, 3)
+         ORDER BY s.id ASC`
+      )
+      .all() as Array<{ name: string; original_name: string; order_in_stack: number }>;
+    const remainingAssets = db
+      .prepare(
+        `SELECT original_name, order_in_stack
+         FROM assets
+         WHERE stack_id = 2
+         ORDER BY order_in_stack ASC`
+      )
+      .all() as Array<{ original_name: string; order_in_stack: number }>;
+
+    expect(createdAssetRows).toEqual([
+      { name: 'portrait-2', original_name: 'portrait-2.jpg', order_in_stack: 0 },
+      { name: 'portrait-1', original_name: 'portrait-1.png', order_in_stack: 0 },
+    ]);
+    expect(remainingAssets).toEqual([{ original_name: 'portrait-3.jpg', order_in_stack: 0 }]);
   });
 
   it('refreshes actual media types for a dataset', () => {

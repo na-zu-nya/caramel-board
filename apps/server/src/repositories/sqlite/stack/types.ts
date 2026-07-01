@@ -67,6 +67,7 @@ export interface AssetRow {
   created_at: string;
   updated_at: string;
   is_favorite?: number;
+  like_count?: number;
 }
 
 export interface OriginalAssetRow {

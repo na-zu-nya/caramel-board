@@ -202,5 +202,31 @@ export function buildComicReadingModel(params: {
 
 export const getRepresentativeAsset = (unit: ReadingUnit | undefined) => unit?.pages[0]?.asset;
 
+export const getLowerLogicalPage = (unit: ReadingUnit | undefined) => unit?.pages[0] ?? null;
+
+export const findReadingUnitIndexForLogicalPage = (
+  model: ComicReadingModel,
+  page: LogicalPage | null | undefined
+) => {
+  if (!page) return null;
+
+  const candidateIndexes = model.assetIdToUnitIndexes.get(page.asset.id) ?? [];
+  for (const index of candidateIndexes) {
+    const unit = model.units[index];
+    if (
+      unit?.pages.some(
+        (candidate) =>
+          candidate.assetIndex === page.assetIndex &&
+          candidate.asset.id === page.asset.id &&
+          candidate.segment === page.segment
+      )
+    ) {
+      return index;
+    }
+  }
+
+  return null;
+};
+
 export const getUnitBookmarkState = (unit: ReadingUnit | undefined) =>
   Boolean(unit?.pages.some((page) => page.asset.favorited ?? page.asset.isFavorite));

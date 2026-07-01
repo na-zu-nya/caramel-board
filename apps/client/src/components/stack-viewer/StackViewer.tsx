@@ -36,6 +36,8 @@ import { apiClient } from '@/lib/api-client';
 import {
   buildComicReadingModel,
   createAutoSpreadDetectionContext,
+  findReadingUnitIndexForLogicalPage,
+  getLowerLogicalPage,
   isAutoSpreadAsset,
   normalizeComicReadingSettings,
 } from '@/lib/comic-reading';
@@ -103,6 +105,13 @@ interface OptimisticReadingPage {
   leftEdgeKind: ViewerEdgeKind;
   rightEdgeKind: ViewerEdgeKind;
 }
+
+interface AssetSelectionState {
+  stackKey: string;
+  ids: Set<Asset['id']>;
+}
+
+const EMPTY_ASSET_SELECTION = new Set<Asset['id']>();
 
 const getStackBoundarySide = (edgeKinds: {
   leftEdgeKind: ViewerEdgeKind;
@@ -218,7 +227,7 @@ export default function StackViewer({
   const sidebarLeftInset = sidebarPushesContent ? 320 : 0;
   const infoSidebarPushesContent = useRightPanelPushesContent(isInfoSidebarOpen);
   const infoSidebarRightInset = infoSidebarPushesContent ? 320 : 0;
-  const setSelectionMode = useSetAtom(selectionModeAtom);
+  const [isSelectionMode, setSelectionMode] = useAtom(selectionModeAtom);
   const addFilesToQueue = useSetAtom(addFilesToQueueAtom);
   const uploadNotifications = useAtomValue(uploadNotificationsAtom);
   const addNotification = useSetAtom(addUploadNotificationAtom);
@@ -229,6 +238,11 @@ export default function StackViewer({
   const [optimisticOrder, setOptimisticOrder] = useState<Asset[] | null>(null);
   const assetOrderPersistQueueRef = useRef<Promise<void>>(Promise.resolve());
   const assetOrderPersistVersionRef = useRef(0);
+  const [assetSelection, setAssetSelection] = useState<AssetSelectionState>(() => ({
+    stackKey: '',
+    ids: new Set(),
+  }));
+  const selectedAssetAnchorIdRef = useRef<Asset['id'] | null>(null);
   const [isPageSeekBarVisible, setIsPageSeekBarVisible] = useState(false);
   const [isEdgeAffordanceSuppressed, setIsEdgeAffordanceSuppressed] = useState(false);
   const [isEdgeAffordanceReady, setIsEdgeAffordanceReady] = useState(false);
@@ -286,6 +300,101 @@ export default function StackViewer({
   const readingUnits = readingModel.units;
   const hasMultipleAssets =
     (stack?.assetsCount ?? stack?.assetCount ?? stack?.assets.length ?? 0) > 1;
+  const listModeAssets = useMemo(
+    () => optimisticOrder ?? stack?.assets ?? [],
+    [optimisticOrder, stack?.assets]
+  );
+  const isAssetSelectionMode = isListMode && isSelectionMode;
+  const selectedAssetIds =
+    isAssetSelectionMode && assetSelection.stackKey === currentStackKey
+      ? assetSelection.ids
+      : EMPTY_ASSET_SELECTION;
+  const clearAssetSelection = useCallback(() => {
+    selectedAssetAnchorIdRef.current = null;
+    setAssetSelection({ stackKey: currentStackKey, ids: new Set() });
+  }, [currentStackKey]);
+  const getSelectedAssetIdsInOrder = useCallback(
+    (assetIds: ReadonlySet<Asset['id']>) =>
+      listModeAssets.filter((asset) => assetIds.has(asset.id)).map((asset) => asset.id),
+    [listModeAssets]
+  );
+  const handleToggleAssetSelection = useCallback(
+    (assetId: Asset['id']) => {
+      setAssetSelection((current) => {
+        const currentIds =
+          current.stackKey === currentStackKey && isListMode ? current.ids : EMPTY_ASSET_SELECTION;
+        const next = new Set(currentIds);
+        if (next.has(assetId)) {
+          next.delete(assetId);
+        } else {
+          next.add(assetId);
+        }
+        selectedAssetAnchorIdRef.current = next.size > 0 ? assetId : null;
+        return { stackKey: currentStackKey, ids: next };
+      });
+    },
+    [currentStackKey, isListMode]
+  );
+  const handleEnterAssetSelectionMode = useCallback(
+    (assetId: Asset['id']) => {
+      selectedAssetAnchorIdRef.current = assetId;
+      setSelectionMode(true);
+      setAssetSelection({ stackKey: currentStackKey, ids: new Set([assetId]) });
+    },
+    [currentStackKey, setSelectionMode]
+  );
+  const handleSelectAssetRange = useCallback(
+    (assetId: Asset['id']) => {
+      const targetIndex = listModeAssets.findIndex((asset) => String(asset.id) === String(assetId));
+      if (targetIndex < 0) return;
+
+      const anchorId = selectedAssetAnchorIdRef.current ?? assetId;
+      const anchorIndex = listModeAssets.findIndex(
+        (asset) => String(asset.id) === String(anchorId)
+      );
+      if (anchorIndex < 0) {
+        handleEnterAssetSelectionMode(assetId);
+        return;
+      }
+
+      const start = Math.min(anchorIndex, targetIndex);
+      const end = Math.max(anchorIndex, targetIndex);
+      const rangeIds = listModeAssets.slice(start, end + 1).map((asset) => asset.id);
+      selectedAssetAnchorIdRef.current = assetId;
+      setAssetSelection((current) => {
+        const currentIds =
+          current.stackKey === currentStackKey && isListMode ? current.ids : EMPTY_ASSET_SELECTION;
+        return {
+          stackKey: currentStackKey,
+          ids: new Set([...getSelectedAssetIdsInOrder(currentIds), ...rangeIds]),
+        };
+      });
+    },
+    [
+      currentStackKey,
+      getSelectedAssetIdsInOrder,
+      handleEnterAssetSelectionMode,
+      isListMode,
+      listModeAssets,
+    ]
+  );
+
+  useEffect(() => {
+    if (isAssetSelectionMode || assetSelection.ids.size === 0) return;
+    clearAssetSelection();
+  }, [assetSelection.ids.size, clearAssetSelection, isAssetSelectionMode]);
+
+  const handleListModeToggle = useCallback(() => {
+    setIsListMode((prev) => {
+      const next = !prev;
+      if (!next) {
+        clearAssetSelection();
+        setSelectionMode(false);
+      }
+      return next;
+    });
+  }, [clearAssetSelection, setIsListMode, setSelectionMode]);
+
   const autoSpreadDetectionContext = useMemo(
     () => createAutoSpreadDetectionContext(stack?.assets ?? []),
     [stack?.assets]
@@ -309,7 +418,7 @@ export default function StackViewer({
   useEffect(() => {
     if (!stack || readingUnits.length === 0) return;
     const requestedAssetIndex = Number(routeSearch.page) || 0;
-    const applyKey = `${stack.id}:${effectiveComicDisplayMode}:${requestedAssetIndex}:${readingUnits.length}`;
+    const applyKey = `${stack.id}:${requestedAssetIndex}`;
     if (appliedRoutePageKeyRef.current === applyKey) return;
     appliedRoutePageKeyRef.current = applyKey;
     const nextUnitIndex =
@@ -318,7 +427,6 @@ export default function StackViewer({
     setEdgeBoundaryArmedSide(null);
     setCurrentPage(nextUnitIndex);
   }, [
-    effectiveComicDisplayMode,
     readingModel.assetIndexToUnitIndex,
     readingUnits.length,
     routeSearch.page,
@@ -522,13 +630,37 @@ export default function StackViewer({
   );
 
   const handleDisplayModeToggle = useCallback(() => {
+    if (!stack) return;
+
     const nextMode: ComicDisplayMode = effectiveComicDisplayMode === 'single' ? 'spread' : 'single';
+    const nextReadingModel = buildComicReadingModel({
+      assets: stack.assets,
+      displayMode: nextMode,
+      settings: readingSettings,
+    });
+    const nextPage = findReadingUnitIndexForLogicalPage(
+      nextReadingModel,
+      getLowerLogicalPage(readingUnits[displayedCurrentPage])
+    );
+
     setComicDisplayModeOverride({ stackId: currentStackKey, mode: nextMode });
     setComicDisplayModeState(nextMode);
     setViewerComicDisplayMode(nextMode);
+    if (nextPage !== null) {
+      setCurrentPage(nextPage);
+    }
     setEdgeBoundaryArmedSide(null);
     hidePageSeekBar();
-  }, [currentStackKey, effectiveComicDisplayMode, hidePageSeekBar]);
+  }, [
+    currentStackKey,
+    displayedCurrentPage,
+    effectiveComicDisplayMode,
+    hidePageSeekBar,
+    readingSettings,
+    readingUnits,
+    setCurrentPage,
+    stack,
+  ]);
 
   const handleLeftTap = useCallback(() => {
     hidePageSeekBar();
@@ -550,32 +682,54 @@ export default function StackViewer({
     setSelectedInfoAssetId(currentAsset?.id ?? null);
   }, [currentAsset?.id, setSelectedInfoAssetId]);
 
+  const handleAssetFavoriteToggle = useCallback(
+    async (assetId: Asset['id']) => {
+      const asset = stack?.assets.find((item) => String(item.id) === String(assetId));
+      const currentFavorited = Boolean(asset?.favorited ?? asset?.isFavorite);
+
+      try {
+        await apiClient.toggleAssetFavorite(assetId, !currentFavorited);
+        await refetch();
+        await queryClient.invalidateQueries({ queryKey: ['favorite-items', datasetId] });
+      } catch (error) {
+        console.error('Failed to toggle page favorite:', error);
+      }
+    },
+    [datasetId, queryClient, refetch, stack?.assets]
+  );
+
   const handleCurrentAssetFavoriteToggle = useCallback(async () => {
     if (!currentAsset) return;
-    try {
-      const currentFavorited = Boolean(currentAsset.favorited ?? currentAsset.isFavorite);
-      await apiClient.toggleAssetFavorite(currentAsset.id, !currentFavorited);
-      await refetch();
-      await queryClient.invalidateQueries({ queryKey: ['favorite-items', datasetId] });
-    } catch (error) {
-      console.error('Failed to toggle page favorite:', error);
-    }
-  }, [currentAsset, datasetId, queryClient, refetch]);
+    await handleAssetFavoriteToggle(currentAsset.id);
+  }, [currentAsset, handleAssetFavoriteToggle]);
+
+  const handleAssetLike = useCallback(
+    async (assetId: Asset['id']) => {
+      try {
+        await apiClient.likeAsset(assetId);
+        await refetch();
+        await queryClient.invalidateQueries({ queryKey: ['likes', 'yearly'] });
+      } catch (error) {
+        console.error('Failed to like asset:', error);
+      }
+    },
+    [queryClient, refetch]
+  );
 
   const handleCurrentLikeToggle = useCallback(async () => {
     if (!stack) return;
     try {
       if (!isListMode && currentAsset) {
-        await apiClient.likeAsset(currentAsset.id);
-      } else {
-        await apiClient.likeStack(stack.id);
+        await handleAssetLike(currentAsset.id);
+        return;
       }
+      await apiClient.likeStack(stack.id);
       await refetch();
       await queryClient.invalidateQueries({ queryKey: ['likes', 'yearly'] });
     } catch (error) {
       console.error('Failed to like stack:', error);
     }
-  }, [currentAsset, isListMode, queryClient, refetch, stack]);
+  }, [currentAsset, handleAssetLike, isListMode, queryClient, refetch, stack]);
 
   const persistAssetOrder = useCallback(
     (orderedAssets: Asset[]) => {
@@ -880,36 +1034,100 @@ export default function StackViewer({
     }
   }, []);
 
-  const handleSeparateAsset = useCallback(
-    async (assetId: string | number) => {
+  const refreshAfterAssetMutation = useCallback(async () => {
+    clearAssetSelection();
+    setOptimisticOrder(null);
+    await refetch();
+    await Promise.allSettled([
+      queryClient.invalidateQueries({ queryKey: ['stack'] }),
+      queryClient.invalidateQueries({ queryKey: ['stacks'] }),
+      queryClient.invalidateQueries({ queryKey: ['library-counts', datasetId] }),
+      queryClient.invalidateQueries({ queryKey: ['favorite-items', datasetId] }),
+      queryClient.invalidateQueries({ queryKey: ['dataset-overview', datasetId] }),
+    ]);
+  }, [clearAssetSelection, datasetId, queryClient, refetch]);
+
+  const handleDownloadAssets = useCallback(
+    (assetIds: Array<string | number>) => {
+      downloadAssetOriginals(datasetId, assetIds);
+    },
+    [datasetId]
+  );
+
+  const handleSeparateAssets = useCallback(
+    async (assetIds: Array<string | number>) => {
+      if (assetIds.length === 0) return;
+
       try {
-        await apiClient.separateAsset(assetId);
-        await refetch();
-        setOptimisticOrder(null);
-        await queryClient.invalidateQueries({ queryKey: ['stacks'] });
-        await queryClient.invalidateQueries({ queryKey: ['library-counts', datasetId] });
+        if (assetIds.length === 1) {
+          await apiClient.separateAsset(assetIds[0]);
+        } else {
+          await apiClient.separateAssets(assetIds);
+        }
+        await refreshAfterAssetMutation();
       } catch (error) {
-        console.error('Failed to separate asset:', error);
+        console.error('Failed to separate assets:', error);
       }
     },
-    [datasetId, queryClient, refetch]
+    [refreshAfterAssetMutation]
+  );
+
+  const handleSeparateAsset = useCallback(
+    async (assetId: string | number) => {
+      await handleSeparateAssets([assetId]);
+    },
+    [handleSeparateAssets]
+  );
+
+  const handleCreateStackFromAssets = useCallback(
+    async (assetIds: Array<string | number>) => {
+      if (assetIds.length === 0) return;
+
+      try {
+        await apiClient.createStackFromAssets(assetIds);
+        await refreshAfterAssetMutation();
+      } catch (error) {
+        console.error('Failed to create stack from assets:', error);
+      }
+    },
+    [refreshAfterAssetMutation]
+  );
+
+  const handleRemoveAssets = useCallback(
+    async (assetIds: Array<string | number>) => {
+      if (assetIds.length === 0) return;
+
+      const confirmed =
+        assetIds.length === 1
+          ? (() => {
+              const asset = stack?.assets.find((item) => String(item.id) === String(assetIds[0]));
+              const assetName = asset
+                ? getAssetSortName(asset) || String(assetIds[0])
+                : String(assetIds[0]);
+              return window.confirm(t.viewerControls.removeAssetConfirm(assetName));
+            })()
+          : window.confirm(t.viewerControls.removeSelectedAssetsConfirm(assetIds.length));
+      if (!confirmed) return;
+
+      try {
+        if (assetIds.length === 1) {
+          await apiClient.removeAsset(assetIds[0]);
+        } else {
+          await apiClient.removeAssets(assetIds);
+        }
+        await refreshAfterAssetMutation();
+      } catch (error) {
+        console.error('Failed to remove assets:', error);
+      }
+    },
+    [refreshAfterAssetMutation, stack?.assets, t]
   );
 
   const handleRemoveAsset = useCallback(
     async (assetId: string | number) => {
-      const asset = stack?.assets.find((item) => String(item.id) === String(assetId));
-      const assetName = asset ? getAssetSortName(asset) || String(assetId) : String(assetId);
-      if (!window.confirm(t.viewerControls.removeAssetConfirm(assetName))) return;
-
-      try {
-        await apiClient.removeAsset(assetId);
-        await refetch();
-        setOptimisticOrder(null);
-      } catch (error) {
-        console.error('Failed to remove asset:', error);
-      }
+      await handleRemoveAssets([assetId]);
     },
-    [refetch, stack?.assets, t]
+    [handleRemoveAssets]
   );
 
   const handleDeleteCurrentStack = useCallback(async () => {
@@ -1191,7 +1409,7 @@ export default function StackViewer({
   useHeaderActions({
     showShuffle: true,
     showFilter: false,
-    showSelection: false,
+    showSelection: isListMode,
     onShuffle: handleShuffle,
   });
 
@@ -1363,7 +1581,7 @@ export default function StackViewer({
           navigateBack();
           break;
         case 'z':
-          setIsListMode((prev) => !prev);
+          handleListModeToggle();
           break;
         case 'e':
           setIsInfoSidebarOpen(!isInfoSidebarOpen);
@@ -1422,7 +1640,7 @@ export default function StackViewer({
     navigateBack,
     isInfoSidebarOpen,
     setIsInfoSidebarOpen,
-    setIsListMode,
+    handleListModeToggle,
     handleLeftTap,
     handleRightTap,
     handleAltStackNavigation,
@@ -1817,10 +2035,24 @@ export default function StackViewer({
                 setCurrentPage(
                   readingModel.assetIndexToUnitIndex.get(targetAssetIndex) ?? targetAssetIndex
                 );
+                clearAssetSelection();
+                setSelectionMode(false);
                 setIsListMode(false);
               }}
               onSortPresetSelect={handleSortPresetSelect}
               canSortAssets={stack.assets.length >= 2}
+              isSelectionMode={isAssetSelectionMode}
+              selectedAssetIds={selectedAssetIds}
+              onEnterAssetSelectionMode={handleEnterAssetSelectionMode}
+              onToggleAssetSelection={handleToggleAssetSelection}
+              onSelectAssetRange={handleSelectAssetRange}
+              onClearAssetSelection={clearAssetSelection}
+              onDownloadAssets={handleDownloadAssets}
+              onSeparateAssets={handleSeparateAssets}
+              onCreateStackFromAssets={handleCreateStackFromAssets}
+              onToggleAssetFavorite={handleAssetFavoriteToggle}
+              onLikeAsset={handleAssetLike}
+              onRemoveAssets={handleRemoveAssets}
               onSeparateAsset={handleSeparateAsset}
               onRemoveAsset={handleRemoveAsset}
               onReorderAssets={handleAssetOrderChange}
@@ -1925,7 +2157,7 @@ export default function StackViewer({
             onStackFavoriteToggle={handleFavoriteToggle}
             onAssetFavoriteToggle={handleCurrentAssetFavoriteToggle}
             onLikeToggle={handleCurrentLikeToggle}
-            onListModeToggle={() => setIsListMode((prev) => !prev)}
+            onListModeToggle={handleListModeToggle}
             displayMode={effectiveComicDisplayMode}
             onDisplayModeToggle={canToggleComicDisplayMode ? handleDisplayModeToggle : undefined}
             leadingAction={

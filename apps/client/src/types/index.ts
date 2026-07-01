@@ -142,6 +142,8 @@ export interface Asset {
   preview?: string | null; // プレイバック用プレビュー
   favorited?: boolean;
   isFavorite?: boolean;
+  liked?: number;
+  likeCount?: number;
   width?: number;
   height?: number;
   size?: number;

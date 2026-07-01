@@ -18,6 +18,7 @@ interface SelectionActionBarProps {
   selectedCount: number;
   onClearSelection: () => void;
   onExitSelectionMode: () => void;
+  isActive?: boolean;
   onRemoveFromCollection?: () => void;
   showRemoveFromCollection?: boolean;
   actions?: SelectionAction[];
@@ -39,6 +40,7 @@ export function SelectionActionBar({
   selectedCount,
   onClearSelection,
   onExitSelectionMode,
+  isActive,
   onRemoveFromCollection,
   showRemoveFromCollection = false,
   actions,
@@ -47,7 +49,9 @@ export function SelectionActionBar({
   const [selectionMode] = useAtom(selectionModeAtom);
   const [menuOpen, setMenuOpen] = useState(false);
 
-  if (!selectionMode || selectedCount === 0) {
+  const shouldShow = isActive ?? selectionMode;
+
+  if (!shouldShow || selectedCount === 0) {
     return null;
   }
 

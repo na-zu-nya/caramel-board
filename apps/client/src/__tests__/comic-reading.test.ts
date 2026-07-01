@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildComicReadingModel,
+  findReadingUnitIndexForLogicalPage,
+  getLowerLogicalPage,
   inferSinglePageAspectRatio,
   normalizeComicReadingSettings,
 } from '@/lib/comic-reading';
@@ -210,5 +212,64 @@ describe('comic reading model', () => {
     expect(model.assetIdToUnitIndexes.get(1)).toEqual([0]);
     expect(model.assetIdToUnitIndexes.get(2)).toEqual([0]);
     expect(model.assetIdToUnitIndexes.get(3)).toEqual([1]);
+  });
+
+  it('maps the current single page to the spread that contains it', () => {
+    const assets = [1, 2, 3, 4, 5].map((id) => makeAsset(id));
+    const settings = { spreadDisplayEnabled: true, firstPageSingle: true };
+    const singleModel = buildComicReadingModel({
+      assets,
+      displayMode: 'single',
+      settings,
+    });
+    const spreadModel = buildComicReadingModel({
+      assets,
+      displayMode: 'spread',
+      settings,
+    });
+
+    expect(findReadingUnitIndexForLogicalPage(spreadModel, singleModel.units[2]?.pages[0])).toBe(1);
+  });
+
+  it('uses the lower page when mapping a spread back to single page display', () => {
+    const assets = [1, 2, 3, 4, 5].map((id) => makeAsset(id));
+    const settings = { spreadDisplayEnabled: true, firstPageSingle: true };
+    const spreadModel = buildComicReadingModel({
+      assets,
+      displayMode: 'spread',
+      settings,
+    });
+    const singleModel = buildComicReadingModel({
+      assets,
+      displayMode: 'single',
+      settings,
+    });
+
+    const lowerPage = getLowerLogicalPage(spreadModel.units[1]);
+
+    expect(lowerPage?.asset.id).toBe(2);
+    expect(findReadingUnitIndexForLogicalPage(singleModel, lowerPage)).toBe(1);
+  });
+
+  it('maps a split spread half back to its combined spread unit', () => {
+    const assets = [makeAsset(1, 1600, 1200), makeAsset(2)];
+    const settings = {
+      spreadDisplayEnabled: true,
+      firstPageSingle: true,
+      openingDirection: 'right-opening' as const,
+    };
+    const singleModel = buildComicReadingModel({
+      assets,
+      displayMode: 'single',
+      settings,
+    });
+    const spreadModel = buildComicReadingModel({
+      assets,
+      displayMode: 'spread',
+      settings,
+    });
+
+    expect(singleModel.units[1]?.pages[0]?.segment).toBe('left');
+    expect(findReadingUnitIndexForLogicalPage(spreadModel, singleModel.units[1]?.pages[0])).toBe(0);
   });
 });

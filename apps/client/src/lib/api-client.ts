@@ -579,6 +579,18 @@ class ApiClient {
     });
   }
 
+  async removeAssets(
+    assetIds: Array<string | number>
+  ): Promise<{ success: boolean; removed: number }> {
+    const numericIds = assetIds.map((id) =>
+      typeof id === 'string' ? Number.parseInt(id, 10) : id
+    );
+    return this.fetch<{ success: boolean; removed: number }>('/api/v1/assets/bulk/remove', {
+      method: 'DELETE',
+      body: JSON.stringify({ assetIds: numericIds }),
+    });
+  }
+
   async separateAsset(
     assetId: string | number
   ): Promise<{ success: boolean; stack: Stack | null }> {
@@ -586,6 +598,33 @@ class ApiClient {
       `/api/v1/assets/${assetId}/separate`,
       {
         method: 'POST',
+      }
+    );
+  }
+
+  async separateAssets(
+    assetIds: Array<string | number>
+  ): Promise<{ success: boolean; stacks: Stack[] }> {
+    const numericIds = assetIds.map((id) =>
+      typeof id === 'string' ? Number.parseInt(id, 10) : id
+    );
+    return this.fetch<{ success: boolean; stacks: Stack[] }>('/api/v1/assets/bulk/separate', {
+      method: 'POST',
+      body: JSON.stringify({ assetIds: numericIds }),
+    });
+  }
+
+  async createStackFromAssets(
+    assetIds: Array<string | number>
+  ): Promise<{ success: boolean; stack: Stack | null }> {
+    const numericIds = assetIds.map((id) =>
+      typeof id === 'string' ? Number.parseInt(id, 10) : id
+    );
+    return this.fetch<{ success: boolean; stack: Stack | null }>(
+      '/api/v1/assets/bulk/create-stack',
+      {
+        method: 'POST',
+        body: JSON.stringify({ assetIds: numericIds }),
       }
     );
   }

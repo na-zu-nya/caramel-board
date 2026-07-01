@@ -5,6 +5,45 @@ import { StandaloneStackRepository } from '../repositories/sqlite/stack-reposito
 export const assetsLiteRoute = new Hono();
 const stackRepository = new StandaloneStackRepository();
 
+const BulkAssetIdsSchema = z.object({
+  assetIds: z
+    .array(z.number().int().positive())
+    .min(1)
+    .refine((assetIds) => new Set(assetIds).size === assetIds.length, {
+      message: 'assetIds must be unique',
+    }),
+});
+
+// DELETE /assets/bulk/remove
+assetsLiteRoute.delete('/bulk/remove', async (c) => {
+  const parse = BulkAssetIdsSchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!parse.success) return c.json({ error: 'Invalid body', details: parse.error }, 400);
+
+  const result = stackRepository.deleteAssets(parse.data.assetIds);
+  if (!result) return c.json({ error: 'Asset not found' }, 404);
+  return c.json(result);
+});
+
+// POST /assets/bulk/separate
+assetsLiteRoute.post('/bulk/separate', async (c) => {
+  const parse = BulkAssetIdsSchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!parse.success) return c.json({ error: 'Invalid body', details: parse.error }, 400);
+
+  const stacks = stackRepository.separateAssets(parse.data.assetIds);
+  if (!stacks) return c.json({ error: 'Asset not found' }, 404);
+  return c.json({ success: true, stacks });
+});
+
+// POST /assets/bulk/create-stack
+assetsLiteRoute.post('/bulk/create-stack', async (c) => {
+  const parse = BulkAssetIdsSchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!parse.success) return c.json({ error: 'Invalid body', details: parse.error }, 400);
+
+  const stack = stackRepository.createStackFromAssets(parse.data.assetIds);
+  if (!stack) return c.json({ error: 'Assets must exist and belong to the same stack' }, 404);
+  return c.json({ success: true, stack });
+});
+
 // DELETE /assets/:assetId
 assetsLiteRoute.delete('/:assetId', async (c) => {
   const assetId = Number.parseInt(c.req.param('assetId'), 10);

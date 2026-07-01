@@ -1,4 +1,14 @@
-import { ChevronDown, SplitSquareHorizontal, Trash2, X } from 'lucide-react';
+import {
+  Bookmark,
+  Check,
+  ChevronDown,
+  Download,
+  Heart,
+  Plus,
+  SplitSquareHorizontal,
+  Trash2,
+  X,
+} from 'lucide-react';
 import React, { useCallback, useState } from 'react';
 import {
   ContextMenu,
@@ -14,6 +24,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { type SelectionAction, SelectionActionBar } from '@/components/ui/selection-action-bar';
 import { useT } from '@/lib/i18n';
 import { isVideoAsset } from '@/lib/media';
 import { cn } from '@/lib/utils';
@@ -35,6 +46,18 @@ interface AssetGridProps {
   onSelectPage: (page: number, asset: Asset) => void;
   onRemoveAsset?: (assetId: string | number) => void;
   onSeparateAsset?: (assetId: string | number) => void;
+  selectedAssetIds?: ReadonlySet<Asset['id']>;
+  isSelectionMode?: boolean;
+  onEnterAssetSelectionMode?: (assetId: Asset['id']) => void;
+  onToggleAssetSelection?: (assetId: Asset['id']) => void;
+  onSelectAssetRange?: (assetId: Asset['id']) => void;
+  onClearAssetSelection?: () => void;
+  onDownloadAssets?: (assetIds: Array<Asset['id']>) => void;
+  onRemoveAssets?: (assetIds: Array<Asset['id']>) => void;
+  onSeparateAssets?: (assetIds: Array<Asset['id']>) => void;
+  onCreateStackFromAssets?: (assetIds: Array<Asset['id']>) => void;
+  onToggleAssetFavorite?: (assetId: Asset['id']) => void;
+  onLikeAsset?: (assetId: Asset['id']) => void;
   onReorderAssets?: (assets: Asset[]) => void;
   className?: string;
   // Top action bar (list mode)
@@ -52,11 +75,28 @@ const getAssetDisplayName = (asset: Asset) => {
   return segments[segments.length - 1] || '';
 };
 
+const getAssetLikeCount = (asset: Asset) => {
+  const likeCount = asset.likeCount ?? asset.liked ?? 0;
+  return Number.isFinite(likeCount) ? likeCount : 0;
+};
+
 export default function AssetGrid({
   assets,
   onSelectPage,
   onRemoveAsset,
   onSeparateAsset,
+  selectedAssetIds,
+  isSelectionMode = false,
+  onEnterAssetSelectionMode,
+  onToggleAssetSelection,
+  onSelectAssetRange,
+  onClearAssetSelection,
+  onDownloadAssets,
+  onRemoveAssets,
+  onSeparateAssets,
+  onCreateStackFromAssets,
+  onToggleAssetFavorite,
+  onLikeAsset,
   onReorderAssets,
   className,
   onSortPresetSelect,
@@ -67,7 +107,16 @@ export default function AssetGrid({
   const [dropTarget, setDropTarget] = useState<AssetGridDropTarget | null>(null);
   const [isDropSettling, setIsDropSettling] = useState(false);
   const dropSettlingFrameRef = React.useRef<number | null>(null);
-  const canReorderAssets = !!onReorderAssets && assets.length >= 2;
+  const selectedAssetCount = selectedAssetIds?.size ?? 0;
+  const hasAssetSelection = selectedAssetCount > 0;
+  const canReorderAssets = !!onReorderAssets && assets.length >= 2 && !hasAssetSelection;
+  const canSelectAssets =
+    !!onEnterAssetSelectionMode && !!onToggleAssetSelection && !!onSelectAssetRange;
+  const showAssetSelectionControls = canSelectAssets && isSelectionMode;
+  const selectedAssetIdsInOrder = React.useMemo(
+    () => assets.filter((asset) => selectedAssetIds?.has(asset.id)).map((asset) => asset.id),
+    [assets, selectedAssetIds]
+  );
 
   const handleDragStart = useCallback(
     (e: React.DragEvent, assetId: Asset['id']) => {
@@ -311,6 +360,133 @@ export default function AssetGrid({
     [beginDropSettling, commitDropTarget, draggedAssetId, updateDropTargetFromPoint]
   );
 
+  const getAssetActionIds = useCallback(
+    (assetId: Asset['id']) => {
+      if (selectedAssetIds?.has(assetId) && selectedAssetIdsInOrder.length > 0) {
+        return selectedAssetIdsInOrder;
+      }
+      return [assetId];
+    },
+    [selectedAssetIds, selectedAssetIdsInOrder]
+  );
+
+  const handleAssetClick = useCallback(
+    (event: React.MouseEvent, index: number, asset: Asset) => {
+      if (!canSelectAssets) {
+        onSelectPage(index, asset);
+        return;
+      }
+
+      if (event.shiftKey) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (isSelectionMode) {
+          onSelectAssetRange?.(asset.id);
+          return;
+        }
+        onEnterAssetSelectionMode?.(asset.id);
+        return;
+      }
+
+      if (isSelectionMode) {
+        event.preventDefault();
+        event.stopPropagation();
+        onToggleAssetSelection?.(asset.id);
+        return;
+      }
+
+      onSelectPage(index, asset);
+    },
+    [
+      canSelectAssets,
+      isSelectionMode,
+      onEnterAssetSelectionMode,
+      onSelectAssetRange,
+      onSelectPage,
+      onToggleAssetSelection,
+    ]
+  );
+
+  const handleAssetSelectionButtonClick = useCallback(
+    (event: React.MouseEvent, assetId: Asset['id']) => {
+      event.preventDefault();
+      event.stopPropagation();
+      onToggleAssetSelection?.(assetId);
+    },
+    [onToggleAssetSelection]
+  );
+
+  const selectionActions = React.useMemo<SelectionAction[]>(() => {
+    if (selectedAssetIdsInOrder.length === 0) return [];
+
+    const actions: SelectionAction[] = [];
+
+    if (onDownloadAssets) {
+      actions.push({
+        label: t.viewerControls.downloadSelectedAssets(selectedAssetIdsInOrder.length),
+        value: 'download-selected-assets',
+        onSelect: () => onDownloadAssets(selectedAssetIdsInOrder),
+        icon: <Download size={12} />,
+        group: 'primary',
+      });
+    }
+
+    if (onSeparateAssets || onSeparateAsset) {
+      actions.push({
+        label: t.viewerControls.separateSelectedAssets(selectedAssetIdsInOrder.length),
+        value: 'separate-selected-assets',
+        onSelect: () => {
+          if (selectedAssetIdsInOrder.length === 1) {
+            onSeparateAsset?.(selectedAssetIdsInOrder[0]);
+            return;
+          }
+          onSeparateAssets?.(selectedAssetIdsInOrder);
+        },
+        icon: <SplitSquareHorizontal size={12} />,
+        group: 'secondary',
+        disabled: selectedAssetIdsInOrder.length > 1 && !onSeparateAssets,
+      });
+    }
+
+    if (selectedAssetIdsInOrder.length >= 2 && onCreateStackFromAssets) {
+      actions.push({
+        label: t.viewerControls.createStackFromSelectedAssets(selectedAssetIdsInOrder.length),
+        value: 'create-stack-from-selected-assets',
+        onSelect: () => onCreateStackFromAssets(selectedAssetIdsInOrder),
+        icon: <Plus size={12} />,
+        group: 'secondary',
+      });
+    }
+
+    if (onRemoveAssets || onRemoveAsset) {
+      actions.push({
+        label: t.viewerControls.removeSelectedAssets(selectedAssetIdsInOrder.length),
+        value: 'remove-selected-assets',
+        onSelect: () => {
+          if (selectedAssetIdsInOrder.length === 1) {
+            onRemoveAsset?.(selectedAssetIdsInOrder[0]);
+            return;
+          }
+          onRemoveAssets?.(selectedAssetIdsInOrder);
+        },
+        icon: <Trash2 size={12} />,
+        destructive: true,
+        disabled: selectedAssetIdsInOrder.length > 1 && !onRemoveAssets,
+      });
+    }
+
+    return actions;
+  }, [
+    onCreateStackFromAssets,
+    onDownloadAssets,
+    onRemoveAsset,
+    onRemoveAssets,
+    onSeparateAsset,
+    onSeparateAssets,
+    selectedAssetIdsInOrder,
+    t,
+  ]);
+
   return (
     <div
       ref={containerRef}
@@ -380,6 +556,18 @@ export default function AssetGrid({
           const videoSrc = asset.preview || asset.file || asset.url;
           const thumbnailSrc = asset.thumbnail || asset.thumbnailUrl || videoSrc || asset.file;
           const isDragging = draggedAssetId !== null && String(draggedAssetId) === String(asset.id);
+          const isAssetSelected = selectedAssetIds?.has(asset.id) ?? false;
+          const contextActionIds = getAssetActionIds(asset.id);
+          const contextActionCount = contextActionIds.length;
+          const canSeparateAction =
+            contextActionCount === 1 ? !!onSeparateAsset : !!onSeparateAssets;
+          const canRemoveAction = contextActionCount === 1 ? !!onRemoveAsset : !!onRemoveAssets;
+          const isAssetFavorited = Boolean(asset.favorited ?? asset.isFavorite);
+          const assetLikeCount = getAssetLikeCount(asset);
+          const showAssetFavoriteButton =
+            !isSelectionMode && (!!onToggleAssetFavorite || isAssetFavorited);
+          const showAssetLikeBadge = !isSelectionMode && assetLikeCount > 0;
+          const showInlineRemoveButton = !!onRemoveAsset && !hasAssetSelection && !isSelectionMode;
           const displayName = getAssetDisplayName(asset);
           const previewTransform = getPreviewTransform(index);
           const isDragPlaceholder = isDragging && !!dropTarget;
@@ -387,16 +575,15 @@ export default function AssetGrid({
           const content = (
             <div
               className={cn(
-                'relative overflow-hidden rounded-lg cursor-pointer group aspect-square',
+                'relative overflow-hidden cursor-pointer group aspect-square',
                 'bg-gray-800 transform-gpu',
                 isDropSettling ? 'transition-none' : 'transition-transform duration-150 ease-out',
                 isDragging &&
                   (isDragPlaceholder ? 'opacity-0 scale-[0.98]' : 'opacity-50 scale-[0.98]'),
+                isAssetSelected && 'ring-2 ring-blue-400 ring-inset',
                 canReorderAssets && 'cursor-move'
               )}
-              onClick={() => {
-                onSelectPage(index, asset);
-              }}
+              onClick={(event) => handleAssetClick(event, index, asset)}
               draggable={canReorderAssets}
               onDragStart={(e) => handleDragStart(e, asset.id)}
               onDragEnd={handleDragEnd}
@@ -428,10 +615,71 @@ export default function AssetGrid({
               </div>
               {/* No page index badge in list grid */}
 
+              {(showAssetFavoriteButton || showAssetLikeBadge) && (
+                <div className="absolute top-2 left-2 z-10 flex items-center gap-1">
+                  {showAssetFavoriteButton && (
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        onToggleAssetFavorite?.(asset.id);
+                      }}
+                      className={cn(
+                        'p-1 rounded-full transition-all duration-200',
+                        isAssetFavorited
+                          ? 'bg-sky-500 text-white'
+                          : 'bg-white/80 text-gray-700 hover:bg-white'
+                      )}
+                      aria-label={
+                        isAssetFavorited
+                          ? t.viewerControls.removeAssetBookmark
+                          : t.viewerControls.bookmarkAsset
+                      }
+                    >
+                      <Bookmark size={14} className={isAssetFavorited ? 'fill-current' : ''} />
+                    </button>
+                  )}
+
+                  {showAssetLikeBadge && (
+                    <div className="flex items-center gap-1 bg-like text-white px-2 py-1 rounded-full text-xs font-medium">
+                      <Heart size={12} className="fill-current" />
+                      <span>{assetLikeCount}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {isAssetSelected && (
+                <div className="absolute inset-0 bg-blue-500/20 transition-opacity pointer-events-none" />
+              )}
+
+              {showAssetSelectionControls && (
+                <button
+                  type="button"
+                  onClick={(event) => handleAssetSelectionButtonClick(event, asset.id)}
+                  className={cn(
+                    'absolute top-2 right-2 z-20 flex h-7 w-7 items-center justify-center rounded-full border transition-colors',
+                    isAssetSelected
+                      ? 'border-blue-300 bg-blue-500 text-white'
+                      : 'border-white/45 bg-black/45 text-white hover:bg-black/65'
+                  )}
+                  aria-label={
+                    isAssetSelected ? t.viewerControls.deselectAsset : t.viewerControls.selectAsset
+                  }
+                >
+                  {isAssetSelected ? (
+                    <Check size={16} />
+                  ) : (
+                    <span className="h-3.5 w-3.5 rounded-full border border-current" />
+                  )}
+                </button>
+              )}
+
               {/* Original filename overlay (bottom-left) */}
               {displayName && (
                 <div
-                  className="absolute bottom-1 left-1 max-w-[calc(100%-0.5rem)] px-1.5 py-0.5 rounded bg-black/55 text-white text-[10px] leading-tight pointer-events-none truncate"
+                  className="absolute bottom-1 left-1 max-w-[calc(100%-0.5rem)] px-1.5 py-0.5 bg-black/55 text-white text-[10px] leading-tight pointer-events-none truncate"
                   title={displayName}
                 >
                   {displayName}
@@ -439,20 +687,28 @@ export default function AssetGrid({
               )}
 
               {/* Remove button (shown when removal is enabled by parent) */}
-              {onRemoveAsset && (
+              {showInlineRemoveButton && (
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
                     onRemoveAsset(asset.id);
                   }}
-                  className="absolute bottom-1 right-1 z-20 bg-red-500/80 hover:bg-red-500 text-white p-1 rounded opacity-0 group-hover:opacity-100 transition-all"
+                  className={cn(
+                    'absolute z-20 bg-red-500/80 hover:bg-red-500 text-white p-1 rounded opacity-0 group-hover:opacity-100 transition-all',
+                    'bottom-1 right-1'
+                  )}
                 >
                   <X size={16} />
                 </button>
               )}
 
               {/* Hover overlay */}
-              <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-10 transition-opacity pointer-events-none" />
+              <div
+                className={cn(
+                  'absolute inset-0 bg-white opacity-0 group-hover:opacity-10 transition-opacity pointer-events-none',
+                  isAssetSelected && 'group-hover:opacity-0'
+                )}
+              />
             </div>
           );
 
@@ -472,34 +728,104 @@ export default function AssetGrid({
                   {content}
                 </div>
               </ContextMenuTrigger>
-              <ContextMenuContent className="w-40">
+              <ContextMenuContent className="w-56">
+                {contextActionCount === 1 && onToggleAssetFavorite && (
+                  <ContextMenuItem
+                    onClick={(event) => {
+                      event.preventDefault();
+                      onToggleAssetFavorite(contextActionIds[0]);
+                    }}
+                  >
+                    <Bookmark className={cn('w-4 h-4 mr-2', isAssetFavorited && 'fill-current')} />
+                    {isAssetFavorited
+                      ? t.viewerControls.removeAssetBookmark
+                      : t.viewerControls.bookmarkAsset}
+                  </ContextMenuItem>
+                )}
+                {contextActionCount === 1 && onLikeAsset && (
+                  <ContextMenuItem
+                    onClick={(event) => {
+                      event.preventDefault();
+                      onLikeAsset(contextActionIds[0]);
+                    }}
+                  >
+                    <Heart className="w-4 h-4 mr-2" />
+                    {t.viewerControls.likeAsset}
+                  </ContextMenuItem>
+                )}
+                {contextActionCount === 1 && (onToggleAssetFavorite || onLikeAsset) && (
+                  <ContextMenuSeparator />
+                )}
+                {onDownloadAssets && (
+                  <ContextMenuItem
+                    onClick={(event) => {
+                      event.preventDefault();
+                      onDownloadAssets(contextActionIds);
+                    }}
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    {contextActionCount > 1
+                      ? t.viewerControls.downloadSelectedAssets(contextActionCount)
+                      : t.viewer.downloadPage}
+                  </ContextMenuItem>
+                )}
                 <ContextMenuItem
                   onClick={(event) => {
                     event.preventDefault();
-                    onSeparateAsset?.(asset.id);
+                    if (contextActionCount === 1) {
+                      onSeparateAsset?.(contextActionIds[0]);
+                      return;
+                    }
+                    onSeparateAssets?.(contextActionIds);
                   }}
-                  disabled={!onSeparateAsset}
+                  disabled={!canSeparateAction}
                 >
                   <SplitSquareHorizontal className="w-4 h-4 mr-2" />
-                  {t.viewerControls.separateAsset}
+                  {contextActionCount > 1
+                    ? t.viewerControls.separateSelectedAssets(contextActionCount)
+                    : t.viewerControls.separateAsset}
                 </ContextMenuItem>
+                {contextActionCount >= 2 && onCreateStackFromAssets && (
+                  <ContextMenuItem
+                    onClick={(event) => {
+                      event.preventDefault();
+                      onCreateStackFromAssets(contextActionIds);
+                    }}
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    {t.viewerControls.createStackFromSelectedAssets(contextActionCount)}
+                  </ContextMenuItem>
+                )}
                 <ContextMenuSeparator />
                 <ContextMenuItem
                   className="text-red-600 focus:text-red-600 hover:text-red-600"
                   onClick={(event) => {
                     event.preventDefault();
-                    onRemoveAsset?.(asset.id);
+                    if (contextActionCount === 1) {
+                      onRemoveAsset?.(contextActionIds[0]);
+                      return;
+                    }
+                    onRemoveAssets?.(contextActionIds);
                   }}
-                  disabled={!onRemoveAsset}
+                  disabled={!canRemoveAction}
                 >
                   <Trash2 className="w-4 h-4 mr-2" />
-                  {t.viewerControls.removeAsset}
+                  {contextActionCount > 1
+                    ? t.viewerControls.removeSelectedAssets(contextActionCount)
+                    : t.viewerControls.removeAsset}
                 </ContextMenuItem>
               </ContextMenuContent>
             </ContextMenu>
           );
         })}
       </div>
+      <SelectionActionBar
+        isActive={hasAssetSelection}
+        selectedCount={selectedAssetCount}
+        onClearSelection={onClearAssetSelection ?? (() => {})}
+        onExitSelectionMode={onClearAssetSelection ?? (() => {})}
+        actions={selectionActions}
+      />
     </div>
   );
 }

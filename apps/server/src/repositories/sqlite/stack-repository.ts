@@ -195,8 +195,20 @@ export class StandaloneStackRepository {
     return this.assetService.deleteAsset(assetId);
   }
 
+  deleteAssets(assetIds: number[]) {
+    return this.assetService.deleteAssets(assetIds);
+  }
+
   separateAsset(assetId: number) {
     return this.assetService.separateAsset(assetId, (id) => this.getById(id));
+  }
+
+  separateAssets(assetIds: number[]) {
+    return this.assetService.separateAssets(assetIds, (id) => this.getById(id));
+  }
+
+  createStackFromAssets(assetIds: number[]) {
+    return this.assetService.createStackFromAssets(assetIds, (id) => this.getById(id));
   }
 
   bulkAddTags(stackIds: number[], tags: string[]) {
