@@ -797,8 +797,12 @@ function TagsPage() {
   );
 
   const getStackDragHandlers = useCallback(
-    (stack: StackItem, sourceImageUrl: string | null, sourceImageFilename: string | undefined) =>
-      dragProps(stack.id, sourceImageUrl, sourceImageFilename),
+    (
+      stack: StackItem,
+      sourceImageUrl: string | null,
+      sourceImageFilename: string | undefined,
+      stackIds: Array<string | number>
+    ) => dragProps(stack.id, sourceImageUrl, sourceImageFilename, stackIds),
     [dragProps]
   );
 
@@ -1175,6 +1179,7 @@ function TagsPage() {
                       cornerRadius="rounded"
                       isSelectionMode={selectionMode}
                       selectedItems={selectedStackItems}
+                      selectedStackIdsInOrder={selectedStackIds}
                       selectedInfoItemId={selectedItemId}
                       selectedActionCount={selectedStackItems.size}
                       getLinkElement={infoSidebarOpen ? undefined : getStackLinkElement}

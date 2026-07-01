@@ -16,6 +16,23 @@ import {
 import { navigationStateAtom } from '@/stores/navigation';
 import { infoSidebarOpenAtom, selectedItemIdAtom } from '@/stores/ui';
 
+type StackDragId = string | number;
+
+function getStackDragIds(stackId: StackDragId, stackIds?: readonly StackDragId[]): StackDragId[] {
+  const candidates = stackIds && stackIds.length > 0 ? stackIds : [stackId];
+  const dragIds: StackDragId[] = [];
+  const seen = new Set<string>();
+
+  for (const candidate of candidates) {
+    const key = String(candidate).trim();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    dragIds.push(candidate);
+  }
+
+  return dragIds.length > 0 ? dragIds : [stackId];
+}
+
 export function useStackTile(datasetId: string) {
   const t = useT();
   const navigate = useNavigate();
@@ -215,31 +232,39 @@ export function useStackTile(datasetId: string) {
     [invalidateAfterRemoval, queryClient, selectedInfoId, setInfoOpen, setSelectedItemId, t]
   );
 
-  const dragProps = (
-    stackId: number | string,
-    sourceImageUrl?: string | null,
-    sourceImageFilename = `stack-${stackId}.jpg`
-  ) => ({
-    draggable: true as const,
-    onDragStart: (e: React.DragEvent) => {
-      if ((e.target as HTMLElement | null)?.dataset.nativeImageDrag === 'true') {
-        setIsDragging(true);
-        setDragKind('native-image');
-        setDraggedStack({ stackId, collectionIds: [] });
-        setNativeImageDragPreview(e.dataTransfer, e.currentTarget);
-        return;
-      }
+  const dragProps = useCallback(
+    (
+      stackId: StackDragId,
+      sourceImageUrl?: string | null,
+      sourceImageFilename = `stack-${stackId}.jpg`,
+      stackIds?: readonly StackDragId[]
+    ) => ({
+      draggable: true as const,
+      onDragStart: (e: React.DragEvent) => {
+        const dragStackIds = getStackDragIds(stackId, stackIds);
+        const primaryStackId = dragStackIds[0] ?? stackId;
 
-      try {
-        setIsDragging(true);
-        setDraggedStack({ stackId, collectionIds: [] });
-        setStackDragData(e.dataTransfer, [stackId]);
-        setExternalImageDragData(e.dataTransfer, sourceImageUrl ?? null, sourceImageFilename);
-        e.dataTransfer.effectAllowed = 'copyMove';
-      } catch {}
-    },
-    onDragEnd: () => setIsDragging(false),
-  });
+        if ((e.target as HTMLElement | null)?.dataset.nativeImageDrag === 'true') {
+          setIsDragging(true);
+          setDragKind('native-image');
+          setDraggedStack({ stackId: primaryStackId, collectionIds: [] });
+          setNativeImageDragPreview(e.dataTransfer, e.currentTarget);
+          return;
+        }
+
+        try {
+          setIsDragging(true);
+          setDragKind('stack');
+          setDraggedStack({ stackId: primaryStackId, collectionIds: [] });
+          setStackDragData(e.dataTransfer, dragStackIds);
+          setExternalImageDragData(e.dataTransfer, sourceImageUrl ?? null, sourceImageFilename);
+          e.dataTransfer.effectAllowed = 'copyMove';
+        } catch {}
+      },
+      onDragEnd: () => setIsDragging(false),
+    }),
+    [setDragKind, setDraggedStack, setIsDragging]
+  );
 
   const onRemoveLike = async ({
     activityId,

@@ -420,8 +420,12 @@ function CollectionSimilarRoute() {
   );
 
   const getStackDragHandlers = useCallback(
-    (item: MediaGridItem, sourceImageUrl: string | null, sourceImageFilename: string | undefined) =>
-      dragProps(item.id, sourceImageUrl, sourceImageFilename),
+    (
+      item: MediaGridItem,
+      sourceImageUrl: string | null,
+      sourceImageFilename: string | undefined,
+      stackIds: Array<string | number>
+    ) => dragProps(item.id, sourceImageUrl, sourceImageFilename, stackIds),
     [dragProps]
   );
 
@@ -510,6 +514,7 @@ function CollectionSimilarRoute() {
           cornerRadius="none"
           isSelectionMode={selectionMode}
           selectedItems={selectedItems}
+          selectedStackIdsInOrder={selectedStackIdsInOrder}
           selectedInfoItemId={selectedItemId}
           selectedActionCount={selectedItems.size}
           getLinkElement={getStackLinkElement}

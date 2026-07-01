@@ -689,8 +689,12 @@ function AutoTagConfigPage() {
   );
 
   const getStackDragHandlers = useCallback(
-    (stack: AutoTagStack, sourceImageUrl: string | null, sourceImageFilename: string | undefined) =>
-      dragProps(stack.id, sourceImageUrl, sourceImageFilename),
+    (
+      stack: AutoTagStack,
+      sourceImageUrl: string | null,
+      sourceImageFilename: string | undefined,
+      stackIds: Array<string | number>
+    ) => dragProps(stack.id, sourceImageUrl, sourceImageFilename, stackIds),
     [dragProps]
   );
 
@@ -1108,6 +1112,7 @@ function AutoTagConfigPage() {
                     cornerRadius="rounded"
                     isSelectionMode={selectionMode}
                     selectedItems={selectedItems}
+                    selectedStackIdsInOrder={selectedStackIds}
                     selectedActionCount={selectedItems.size}
                     getLinkElement={infoSidebarOpen ? undefined : getStackLinkElement}
                     onClickItem={handleTileDefaultClick}

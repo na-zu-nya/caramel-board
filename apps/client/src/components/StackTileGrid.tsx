@@ -13,6 +13,7 @@ type StackTileGridItemId = string | number;
 
 interface StackTileGridItemBase {
   id: StackTileGridItemId;
+  stackId?: unknown;
   name?: unknown;
   title?: unknown;
   thumbnail?: unknown;
@@ -52,6 +53,7 @@ interface StackTileGridProps<TItem extends StackTileGridItemBase> {
   hasMore?: boolean;
   isSelectionMode?: boolean;
   selectedItems?: ReadonlySet<StackTileGridItemId>;
+  selectedStackIdsInOrder?: readonly StackTileGridItemId[];
   selectedInfoItemId?: StackTileGridItemId | null;
   selectedActionCount?: number;
   getLinkElement?: (item: TItem) => ReactElement;
@@ -75,7 +77,8 @@ interface StackTileGridProps<TItem extends StackTileGridItemBase> {
   getDragHandlers?: (
     item: TItem,
     sourceImageUrl: string | null,
-    sourceImageFilename: string | undefined
+    sourceImageFilename: string | undefined,
+    stackIds: StackTileGridItemId[]
   ) => StackTileDragHandlers | undefined;
 }
 
@@ -118,6 +121,46 @@ function getFavorited(item: StackTileGridItemBase): boolean {
   return Boolean(item.favorited ?? item.isFavorite);
 }
 
+function getOperationStackId(item: StackTileGridItemBase): StackTileGridItemId {
+  return typeof item.stackId === 'string' || typeof item.stackId === 'number'
+    ? item.stackId
+    : item.id;
+}
+
+function appendUniqueId(
+  target: StackTileGridItemId[],
+  seen: Set<string>,
+  id: StackTileGridItemId
+): void {
+  const key = String(id).trim();
+  if (!key || seen.has(key)) return;
+  seen.add(key);
+  target.push(id);
+}
+
+function getSelectedOperationStackIds<TItem extends StackTileGridItemBase>(
+  items: readonly TItem[],
+  selectedItems: ReadonlySet<StackTileGridItemId>,
+  selectedStackIdsInOrder?: readonly StackTileGridItemId[]
+): StackTileGridItemId[] {
+  const ids: StackTileGridItemId[] = [];
+  const seen = new Set<string>();
+
+  if (selectedStackIdsInOrder && selectedStackIdsInOrder.length > 0) {
+    for (const stackId of selectedStackIdsInOrder) {
+      appendUniqueId(ids, seen, stackId);
+    }
+    return ids;
+  }
+
+  for (const selectedItemId of selectedItems) {
+    const item = items.find((candidate) => String(candidate.id) === String(selectedItemId));
+    appendUniqueId(ids, seen, item ? getOperationStackId(item) : selectedItemId);
+  }
+
+  return ids;
+}
+
 export function StackTileGrid<TItem extends StackTileGridItemBase>({
   items,
   datasetId,
@@ -130,6 +173,7 @@ export function StackTileGrid<TItem extends StackTileGridItemBase>({
   hasMore = false,
   isSelectionMode = false,
   selectedItems,
+  selectedStackIdsInOrder,
   selectedInfoItemId,
   selectedActionCount,
   getLinkElement,
@@ -204,8 +248,8 @@ export function StackTileGrid<TItem extends StackTileGridItemBase>({
       const isSelected = selectedItems?.has(item.id) ?? false;
       const contextStackIds =
         isSelectionMode && isSelected && selectedItems && selectedItems.size > 0
-          ? Array.from(selectedItems)
-          : [item.id];
+          ? getSelectedOperationStackIds(items, selectedItems, selectedStackIdsInOrder)
+          : [getOperationStackId(item)];
       const collectionMenu = hasCollectionMenu
         ? {
             collections,
@@ -252,7 +296,12 @@ export function StackTileGrid<TItem extends StackTileGridItemBase>({
             onToggleFavoriteItem ? () => onToggleFavoriteItem(item, favorited) : undefined
           }
           onLike={onLikeItem ? () => onLikeItem(item) : undefined}
-          dragHandlers={getDragHandlers?.(item, sourceImageUrl, sourceImageFilename)}
+          dragHandlers={getDragHandlers?.(
+            item,
+            sourceImageUrl,
+            sourceImageFilename,
+            contextStackIds
+          )}
         >
           {linkElement}
         </StackTile>
@@ -269,6 +318,7 @@ export function StackTileGrid<TItem extends StackTileGridItemBase>({
       hasCollectionMenu,
       isLoadingCollections,
       isSelectionMode,
+      items,
       onAddToScratchItem,
       onBulkEditSelected,
       onDownloadItem,
@@ -285,6 +335,7 @@ export function StackTileGrid<TItem extends StackTileGridItemBase>({
       resolvedSelectedActionCount,
       selectedInfoItemId,
       selectedItems,
+      selectedStackIdsInOrder,
     ]
   );
 

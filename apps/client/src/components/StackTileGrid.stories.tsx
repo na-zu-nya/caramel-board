@@ -124,6 +124,7 @@ function SelectableStackTileGrid({ cornerRadius }: { cornerRadius: 'rounded' | '
   const [selectedItems, setSelectedItems] = useState<Set<string | number>>(
     () => new Set(cornerRadius === 'none' ? selectedPreviewItemIds : [])
   );
+  const selectedStackIdsInOrder = useMemo(() => Array.from(selectedItems), [selectedItems]);
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -136,6 +137,7 @@ function SelectableStackTileGrid({ cornerRadius }: { cornerRadius: 'rounded' | '
             cornerRadius={cornerRadius}
             isSelectionMode={isSelectionMode}
             selectedItems={selectedItems}
+            selectedStackIdsInOrder={selectedStackIdsInOrder}
             selectedActionCount={selectedItems.size}
             getLinkElement={(item) => <a href={`/library/1/stacks/${item.id}`} />}
             onEnterSelectionMode={(itemId) => {
@@ -178,6 +180,15 @@ function SelectableStackTileGrid({ cornerRadius }: { cornerRadius: 'rounded' | '
             }}
             onToggleFavoriteItem={() => undefined}
             onLikeItem={() => undefined}
+            getDragHandlers={(_item, _sourceImageUrl, _sourceImageFilename, stackIds) => ({
+              draggable: true,
+              onDragStart: (event) => {
+                event.dataTransfer.setData('text/plain', `stack-items:${stackIds.join(',')}`);
+              },
+              onDragEnd: () => {
+                console.log('drag stack ids', stackIds);
+              },
+            })}
           />
         </div>
       </RouterContextProvider>
