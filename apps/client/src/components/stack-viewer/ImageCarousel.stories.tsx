@@ -29,6 +29,24 @@ const makeLabeledAsset = (id: number, label: string, color: string): Asset => ({
   updatedAt: '2026-01-02T00:00:00.000Z',
 });
 
+const makeWideSpreadAsset = (id: number): Asset => ({
+  id,
+  stackId: 1,
+  file: `data:image/svg+xml,${encodeURIComponent(`
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1800 1000">
+      <rect width="900" height="1000" fill="#375f8f"/>
+      <rect x="900" width="900" height="1000" fill="#8f4f37"/>
+      <line x1="900" y1="0" x2="900" y2="1000" stroke="white" stroke-width="16" stroke-dasharray="28 28" opacity="0.75"/>
+      <text x="450" y="520" text-anchor="middle" font-family="system-ui, sans-serif" font-size="118" font-weight="800" fill="white">LEFT</text>
+      <text x="1350" y="520" text-anchor="middle" font-family="system-ui, sans-serif" font-size="118" font-weight="800" fill="white">RIGHT</text>
+    </svg>
+  `)}`,
+  width: 1800,
+  height: 1000,
+  createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-02T00:00:00.000Z',
+});
+
 const makeVideoAsset = (id: number): Asset => ({
   id,
   stackId: 1,
@@ -139,6 +157,51 @@ export const SpreadUnit: Story = {
       ],
     },
     openingDirection: 'right-opening',
+  },
+};
+
+export const SplitWideSpreadSinglePage: Story = {
+  args: {
+    currentAsset: makeWideSpreadAsset(30),
+    currentUnit: {
+      id: '30:right',
+      index: 0,
+      kind: 'single',
+      pages: [{ id: '30:right', asset: makeWideSpreadAsset(30), assetIndex: 0, segment: 'right' }],
+    },
+    openingDirection: 'right-opening',
+  },
+};
+
+export const SplitWideSpreadUnit: Story = {
+  args: {
+    currentAsset: makeWideSpreadAsset(31),
+    currentUnit: {
+      id: '31:right|31:left',
+      index: 0,
+      kind: 'spread',
+      pages: [
+        { id: '31:right', asset: makeWideSpreadAsset(31), assetIndex: 0, segment: 'right' },
+        { id: '31:left', asset: makeWideSpreadAsset(31), assetIndex: 0, segment: 'left' },
+      ],
+    },
+    openingDirection: 'right-opening',
+  },
+};
+
+export const SplitWideSpreadUnitLeftOpening: Story = {
+  args: {
+    currentAsset: makeWideSpreadAsset(32),
+    currentUnit: {
+      id: '32:right|32:left',
+      index: 0,
+      kind: 'spread',
+      pages: [
+        { id: '32:right', asset: makeWideSpreadAsset(32), assetIndex: 0, segment: 'right' },
+        { id: '32:left', asset: makeWideSpreadAsset(32), assetIndex: 0, segment: 'left' },
+      ],
+    },
+    openingDirection: 'left-opening',
   },
 };
 

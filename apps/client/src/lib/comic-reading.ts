@@ -1,14 +1,11 @@
-import type {
-  Asset,
-  ComicDisplayMode,
-  ComicOpeningDirection,
-  ComicReadingSettings,
-  ComicSourceMode,
-} from '@/types';
+import type { Asset, ComicDisplayMode, ComicOpeningDirection, ComicReadingSettings } from '@/types';
 
 export const DEFAULT_COMIC_OPENING_DIRECTION: ComicOpeningDirection = 'right-opening';
-export const DEFAULT_COMIC_SOURCE_MODE: ComicSourceMode = 'single-pages';
-export const DEFAULT_WIDE_ASPECT_RATIO_THRESHOLD = 1.35;
+const AUTO_SPREAD_ASPECT_RATIO_MIN = 1.25;
+const AUTO_SPREAD_ASPECT_RATIO_MAX = 2.2;
+const SINGLE_PAGE_ASPECT_RATIO_MIN = 0.45;
+const SINGLE_PAGE_ASPECT_RATIO_MAX = 0.95;
+const SPLIT_PAGE_ASPECT_RATIO_TOLERANCE = 0.2;
 
 export type LogicalPageSegment = 'full' | 'left' | 'right';
 
@@ -36,9 +33,11 @@ export interface NormalizedComicReadingSettings {
   openingDirection: ComicOpeningDirection;
   spreadDisplayEnabled: boolean;
   displayMode?: ComicDisplayMode;
-  sourceMode: ComicSourceMode;
   firstPageSingle: boolean;
-  wideAspectRatioThreshold: number;
+}
+
+export interface AutoSpreadDetectionContext {
+  singlePageAspectRatio: number | null;
 }
 
 export const normalizeComicReadingSettings = (
@@ -47,10 +46,7 @@ export const normalizeComicReadingSettings = (
   openingDirection: settings?.openingDirection ?? DEFAULT_COMIC_OPENING_DIRECTION,
   spreadDisplayEnabled: settings?.spreadDisplayEnabled ?? false,
   displayMode: settings?.displayMode,
-  sourceMode: settings?.sourceMode ?? DEFAULT_COMIC_SOURCE_MODE,
   firstPageSingle: settings?.firstPageSingle ?? true,
-  wideAspectRatioThreshold:
-    settings?.wideAspectRatioThreshold ?? DEFAULT_WIDE_ASPECT_RATIO_THRESHOLD,
 });
 
 export const getAssetAspectRatio = (asset: Asset) => {
@@ -62,29 +58,59 @@ export const getAssetAspectRatio = (asset: Asset) => {
   return width / height;
 };
 
-export const isWideSpreadAsset = (asset: Asset, threshold: number) => {
-  const ratio = getAssetAspectRatio(asset);
-  return ratio !== null && ratio >= threshold;
+const getMedian = (values: number[]) => {
+  if (values.length === 0) return null;
+  const sortedValues = [...values].sort((left, right) => left - right);
+  const centerIndex = Math.floor(sortedValues.length / 2);
+  if (sortedValues.length % 2 === 1) return sortedValues[centerIndex];
+  return (sortedValues[centerIndex - 1] + sortedValues[centerIndex]) / 2;
 };
 
-const getSplitSegmentOrder = (
-  openingDirection: ComicOpeningDirection
-): ['left' | 'right', 'left' | 'right'] =>
-  openingDirection === 'right-opening' ? ['right', 'left'] : ['left', 'right'];
+const isSinglePageAspectRatioCandidate = (ratio: number) =>
+  ratio >= SINGLE_PAGE_ASPECT_RATIO_MIN && ratio <= SINGLE_PAGE_ASPECT_RATIO_MAX;
+
+export const inferSinglePageAspectRatio = (assets: Asset[]) =>
+  getMedian(
+    assets
+      .map((asset) => getAssetAspectRatio(asset))
+      .filter((ratio): ratio is number => ratio !== null && isSinglePageAspectRatioCandidate(ratio))
+  );
+
+export const createAutoSpreadDetectionContext = (assets: Asset[]): AutoSpreadDetectionContext => ({
+  singlePageAspectRatio: inferSinglePageAspectRatio(assets),
+});
+
+export const isAutoSpreadAsset = (
+  asset: Asset,
+  context: AutoSpreadDetectionContext = createAutoSpreadDetectionContext([asset])
+) => {
+  const ratio = getAssetAspectRatio(asset);
+  if (ratio === null || ratio < AUTO_SPREAD_ASPECT_RATIO_MIN) return false;
+
+  if (context.singlePageAspectRatio !== null) {
+    const splitPageAspectRatio = ratio / 2;
+    const relativeDelta =
+      Math.abs(splitPageAspectRatio - context.singlePageAspectRatio) /
+      context.singlePageAspectRatio;
+    return relativeDelta <= SPLIT_PAGE_ASPECT_RATIO_TOLERANCE;
+  }
+
+  return ratio <= AUTO_SPREAD_ASPECT_RATIO_MAX;
+};
+
+const getSplitSegmentOrder = (): ['right', 'left'] => ['right', 'left'];
 
 const createLogicalPages = (
   assets: Asset[],
   settings: NormalizedComicReadingSettings
 ): LogicalPage[] => {
-  const splitOrder = getSplitSegmentOrder(settings.openingDirection);
+  const splitOrder = getSplitSegmentOrder();
+  const autoSpreadDetectionContext = createAutoSpreadDetectionContext(assets);
   const pages: LogicalPage[] = [];
 
   for (const [assetIndex, asset] of assets.entries()) {
     const assetKey = String(asset.id);
-    if (
-      settings.sourceMode === 'mixed-spreads' &&
-      isWideSpreadAsset(asset, settings.wideAspectRatioThreshold)
-    ) {
+    if (settings.spreadDisplayEnabled && isAutoSpreadAsset(asset, autoSpreadDetectionContext)) {
       for (const segment of splitOrder) {
         pages.push({
           id: `${assetKey}:${segment}`,

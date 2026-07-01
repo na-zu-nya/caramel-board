@@ -150,12 +150,12 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
 
   const selectedItemAssetCount =
     selectedItem?.assetsCount ?? selectedItem?.assetCount ?? selectedItem?.assets?.length ?? 0;
-  const canEditReadingSettings =
-    !!selectedItem && selectedItem.mediaType !== 'video' && selectedItemAssetCount > 1;
   const readingSettings = useMemo(
     () => normalizeComicReadingSettings(selectedItem?.meta?.reading),
     [selectedItem?.meta?.reading]
   );
+  const canEditReadingSettings =
+    !!selectedItem && selectedItem.mediaType !== 'video' && selectedItemAssetCount > 0;
   const pageSettingDisplayMode = readingSettings.displayMode ?? 'spread';
 
   useEffect(() => {

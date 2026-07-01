@@ -33,7 +33,12 @@ import { useScratch } from '@/hooks/useScratch';
 import { useRightPanelPushesContent, useSidebarPushesContent } from '@/hooks/useSidebarLayoutMode';
 import { useViewContext } from '@/hooks/useViewContext';
 import { apiClient } from '@/lib/api-client';
-import { buildComicReadingModel, normalizeComicReadingSettings } from '@/lib/comic-reading';
+import {
+  buildComicReadingModel,
+  createAutoSpreadDetectionContext,
+  isAutoSpreadAsset,
+  normalizeComicReadingSettings,
+} from '@/lib/comic-reading';
 import { downloadAssetOriginals, downloadStackOriginals } from '@/lib/download-originals';
 import { useT } from '@/lib/i18n';
 import { isVideoAsset } from '@/lib/media';
@@ -281,12 +286,24 @@ export default function StackViewer({
   const readingUnits = readingModel.units;
   const hasMultipleAssets =
     (stack?.assetsCount ?? stack?.assetCount ?? stack?.assets.length ?? 0) > 1;
+  const autoSpreadDetectionContext = useMemo(
+    () => createAutoSpreadDetectionContext(stack?.assets ?? []),
+    [stack?.assets]
+  );
+  const hasAutoSpreadAsset = Boolean(
+    stack?.assets?.some((asset) => isAutoSpreadAsset(asset, autoSpreadDetectionContext))
+  );
+  const hasMultipleReadingUnits = readingUnits.length > 1;
+  const canToggleComicDisplayMode =
+    mediaType !== 'video' &&
+    readingSettings.spreadDisplayEnabled &&
+    (hasMultipleAssets || hasAutoSpreadAsset);
 
   useEffect(() => {
-    if (!hasMultipleAssets || isListMode) {
+    if (!hasMultipleReadingUnits || isListMode) {
       setIsPageSeekBarVisible(false);
     }
-  }, [hasMultipleAssets, isListMode]);
+  }, [hasMultipleReadingUnits, isListMode]);
 
   const appliedRoutePageKeyRef = useRef('');
   useEffect(() => {
@@ -348,7 +365,7 @@ export default function StackViewer({
 
   const handleBoundaryNavigationAttempt = useCallback(
     ({ side, kind }: { side: ViewerEdgeSide; kind: Exclude<ViewerEdgeKind, null> }) => {
-      if (!hasMultipleAssets || readingUnits.length <= 1) return true;
+      if (!hasMultipleReadingUnits) return true;
       if (kind === 'stack-boundary' && edgeBoundaryArmedSide !== side) return true;
       if (kind === 'stack-boundary' && isEdgeAffordanceReady) return true;
 
@@ -360,7 +377,7 @@ export default function StackViewer({
       }));
       return false;
     },
-    [edgeBoundaryArmedSide, hasMultipleAssets, isEdgeAffordanceReady, readingUnits.length]
+    [edgeBoundaryArmedSide, hasMultipleReadingUnits, isEdgeAffordanceReady]
   );
 
   // Interactions + neighbors + animations
@@ -483,10 +500,10 @@ export default function StackViewer({
 
   const showPageSeekBar = useCallback(() => {
     cancelPageSeekBarHoverClose();
-    if (hasMultipleAssets && readingUnits.length > 1 && !isListMode) {
+    if (hasMultipleReadingUnits && !isListMode) {
       setIsPageSeekBarVisible(true);
     }
-  }, [cancelPageSeekBarHoverClose, hasMultipleAssets, isListMode, readingUnits.length]);
+  }, [cancelPageSeekBarHoverClose, hasMultipleReadingUnits, isListMode]);
 
   useEffect(() => {
     return () => {
@@ -1529,7 +1546,7 @@ export default function StackViewer({
               }}
               {...(isNativeInteractionMode ? {} : viewerContextMenuTriggerProps)}
             >
-              {hasMultipleAssets && (
+              {hasMultipleReadingUnits && (
                 <>
                   <div
                     className="absolute inset-x-0 top-0 z-30 h-16"
@@ -1710,7 +1727,7 @@ export default function StackViewer({
                   }
                 }}
               />
-              {hasMultipleAssets && (
+              {hasMultipleReadingUnits && (
                 <EdgeNavigationAffordance
                   leftKind={displayedLeftEdgeKind}
                   rightKind={displayedRightEdgeKind}
@@ -1905,11 +1922,7 @@ export default function StackViewer({
             onLikeToggle={handleCurrentLikeToggle}
             onListModeToggle={() => setIsListMode((prev) => !prev)}
             displayMode={effectiveComicDisplayMode}
-            onDisplayModeToggle={
-              mediaType === 'video' || !hasMultipleAssets || !readingSettings.spreadDisplayEnabled
-                ? undefined
-                : handleDisplayModeToggle
-            }
+            onDisplayModeToggle={canToggleComicDisplayMode ? handleDisplayModeToggle : undefined}
             leadingAction={
               <FloatingUploadAction
                 variant="toolbar"

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { buildComicReadingModel, normalizeComicReadingSettings } from '@/lib/comic-reading';
+import {
+  buildComicReadingModel,
+  inferSinglePageAspectRatio,
+  normalizeComicReadingSettings,
+} from '@/lib/comic-reading';
 import type { Asset } from '@/types';
 
 const makeAsset = (id: number, width = 800, height = 1200): Asset => ({
@@ -19,7 +23,7 @@ describe('comic reading model', () => {
     const model = buildComicReadingModel({
       assets: [1, 2, 3, 4, 5].map((id) => makeAsset(id)),
       displayMode: 'spread',
-      settings: { sourceMode: 'single-pages', firstPageSingle: true },
+      settings: { spreadDisplayEnabled: true, firstPageSingle: true },
     });
 
     expect(model.units.map((unit) => unit.pages.map((page) => page.asset.id))).toEqual([
@@ -29,32 +33,164 @@ describe('comic reading model', () => {
     ]);
   });
 
-  it('splits wide mixed-spread assets by right-opening order', () => {
+  it('keeps wide assets intact when automatic spread display is off', () => {
     const model = buildComicReadingModel({
       assets: [makeAsset(1, 1800, 1000)],
       displayMode: 'single',
-      settings: { sourceMode: 'mixed-spreads', openingDirection: 'right-opening' },
+      settings: { spreadDisplayEnabled: false },
+    });
+
+    expect(model.units.map((unit) => unit.pages[0]?.segment)).toEqual(['full']);
+  });
+
+  it('splits wide assets by right-opening order when no page ratio can be inferred', () => {
+    const model = buildComicReadingModel({
+      assets: [makeAsset(1, 1800, 1000)],
+      displayMode: 'single',
+      settings: { spreadDisplayEnabled: true, openingDirection: 'right-opening' },
     });
 
     expect(model.units.map((unit) => unit.pages[0]?.segment)).toEqual(['right', 'left']);
   });
 
-  it('splits wide mixed-spread assets by left-opening order', () => {
+  it('keeps the logical split order stable when switching to left-opening', () => {
     const model = buildComicReadingModel({
       assets: [makeAsset(1, 1800, 1000)],
       displayMode: 'single',
-      settings: { sourceMode: 'mixed-spreads', openingDirection: 'left-opening' },
+      settings: { spreadDisplayEnabled: true, openingDirection: 'left-opening' },
     });
 
-    expect(model.units.map((unit) => unit.pages[0]?.segment)).toEqual(['left', 'right']);
+    expect(model.units.map((unit) => unit.pages[0]?.segment)).toEqual(['right', 'left']);
+  });
+
+  it('does not split extremely wide assets outside the automatic spread range', () => {
+    const model = buildComicReadingModel({
+      assets: [makeAsset(1, 3000, 1000)],
+      displayMode: 'single',
+      settings: { spreadDisplayEnabled: true },
+    });
+
+    expect(model.units.map((unit) => unit.pages[0]?.segment)).toEqual(['full']);
+  });
+
+  it('infers B5-like single page ratio from the stack', () => {
+    const assets = [
+      makeAsset(1, 2150, 3035),
+      makeAsset(2, 4299, 3035),
+      makeAsset(3, 4299, 3035),
+      makeAsset(4, 2150, 3035),
+    ];
+
+    expect(inferSinglePageAspectRatio(assets)).toBeCloseTo(2150 / 3035);
+  });
+
+  it('splits B5-like spread scans against the inferred single page ratio', () => {
+    const model = buildComicReadingModel({
+      assets: [
+        makeAsset(1, 2150, 3035),
+        makeAsset(2, 4299, 3035),
+        makeAsset(3, 4299, 3035),
+        makeAsset(4, 2150, 3035),
+      ],
+      displayMode: 'single',
+      settings: { spreadDisplayEnabled: true, openingDirection: 'right-opening' },
+    });
+
+    expect(
+      model.units.map((unit) =>
+        unit.pages.map((page) => ({ assetId: page.asset.id, segment: page.segment }))
+      )
+    ).toEqual([
+      [{ assetId: 1, segment: 'full' }],
+      [{ assetId: 2, segment: 'right' }],
+      [{ assetId: 2, segment: 'left' }],
+      [{ assetId: 3, segment: 'right' }],
+      [{ assetId: 3, segment: 'left' }],
+      [{ assetId: 4, segment: 'full' }],
+    ]);
+  });
+
+  it('does not let a square cover prevent automatic B5-like spread detection', () => {
+    const model = buildComicReadingModel({
+      assets: [makeAsset(1, 3000, 3000), makeAsset(2, 4299, 3035)],
+      displayMode: 'single',
+      settings: { spreadDisplayEnabled: true, openingDirection: 'right-opening' },
+    });
+
+    expect(
+      model.units.map((unit) =>
+        unit.pages.map((page) => ({ assetId: page.asset.id, segment: page.segment }))
+      )
+    ).toEqual([
+      [{ assetId: 1, segment: 'full' }],
+      [{ assetId: 2, segment: 'right' }],
+      [{ assetId: 2, segment: 'left' }],
+    ]);
+  });
+
+  it('keeps B5-like split scans as their original spread units in spread display', () => {
+    const model = buildComicReadingModel({
+      assets: [
+        makeAsset(1, 2150, 3035),
+        makeAsset(2, 4299, 3035),
+        makeAsset(3, 4299, 3035),
+        makeAsset(4, 2150, 3035),
+      ],
+      displayMode: 'spread',
+      settings: {
+        spreadDisplayEnabled: true,
+        firstPageSingle: true,
+        openingDirection: 'right-opening',
+      },
+    });
+
+    expect(
+      model.units.map((unit) =>
+        unit.pages.map((page) => ({ assetId: page.asset.id, segment: page.segment }))
+      )
+    ).toEqual([
+      [{ assetId: 1, segment: 'full' }],
+      [
+        { assetId: 2, segment: 'right' },
+        { assetId: 2, segment: 'left' },
+      ],
+      [
+        { assetId: 3, segment: 'right' },
+        { assetId: 3, segment: 'left' },
+      ],
+      [{ assetId: 4, segment: 'full' }],
+    ]);
+  });
+
+  it('keeps B5-like split scans in the same logical order for left-opening display', () => {
+    const model = buildComicReadingModel({
+      assets: [
+        makeAsset(0, 2150, 3035),
+        makeAsset(21, 4299, 3035),
+        makeAsset(43, 4299, 3035),
+        makeAsset(5, 2150, 3035),
+      ],
+      displayMode: 'spread',
+      settings: {
+        spreadDisplayEnabled: true,
+        firstPageSingle: true,
+        openingDirection: 'left-opening',
+      },
+    });
+
+    expect(
+      model.units.map((unit) =>
+        unit.pages.map((page) => `${String(page.asset.id)}:${page.segment}`)
+      )
+    ).toEqual([['0:full'], ['21:right', '21:left'], ['43:right', '43:left'], ['5:full']]);
   });
 
   it('keeps split halves together in spread display', () => {
     const model = buildComicReadingModel({
-      assets: [makeAsset(1, 1800, 1000), makeAsset(2)],
+      assets: [makeAsset(1, 1600, 1200), makeAsset(2)],
       displayMode: 'spread',
       settings: {
-        sourceMode: 'mixed-spreads',
+        spreadDisplayEnabled: true,
         firstPageSingle: true,
         openingDirection: 'right-opening',
       },
@@ -68,7 +204,7 @@ describe('comic reading model', () => {
     const model = buildComicReadingModel({
       assets: [makeAsset(1), makeAsset(2), makeAsset(3)],
       displayMode: 'spread',
-      settings: { sourceMode: 'single-pages', firstPageSingle: false },
+      settings: { spreadDisplayEnabled: true, firstPageSingle: false },
     });
 
     expect(model.assetIdToUnitIndexes.get(1)).toEqual([0]);

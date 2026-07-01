@@ -22,15 +22,12 @@ export type MediaType = 'image' | 'video' | 'multipleImages';
 
 export type ComicOpeningDirection = 'right-opening' | 'left-opening';
 export type ComicDisplayMode = 'single' | 'spread';
-export type ComicSourceMode = 'single-pages' | 'mixed-spreads';
 
 export interface ComicReadingSettings {
   openingDirection?: ComicOpeningDirection;
   spreadDisplayEnabled?: boolean;
   displayMode?: ComicDisplayMode;
-  sourceMode?: ComicSourceMode;
   firstPageSingle?: boolean;
-  wideAspectRatioThreshold?: number;
 }
 
 export interface StackMeta {

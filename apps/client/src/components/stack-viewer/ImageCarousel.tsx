@@ -201,6 +201,19 @@ const createAssetReadingUnit = (asset: Asset | undefined): ReadingUnit | undefin
   };
 };
 
+const isSplitSpreadUnitFromSingleAsset = (unit: ReadingUnit | undefined) => {
+  if (unit?.pages.length !== 2) return false;
+  const [firstPage, secondPage] = unit.pages;
+  return (
+    firstPage.asset.id === secondPage.asset.id &&
+    firstPage.segment !== 'full' &&
+    secondPage.segment !== 'full'
+  );
+};
+
+const canRenderSplitSpreadAsOriginalImage = (pages: LogicalPage[]) =>
+  pages.length === 2 && pages[0]?.segment === 'left' && pages[1]?.segment === 'right';
+
 const getUnitAssets = (unit: ReadingUnit | undefined) =>
   Array.isArray(unit?.pages) ? unit.pages.map((page) => page.asset) : [];
 
@@ -1451,6 +1464,15 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
       };
       const objectPosition =
         visualIndex === 0 ? 'right center' : visualIndex === 1 ? 'left center' : undefined;
+      const assetWidth = Number(asset.width);
+      const assetHeight = Number(asset.height);
+      const splitPageAspectRatio =
+        Number.isFinite(assetWidth) &&
+        Number.isFinite(assetHeight) &&
+        assetWidth > 0 &&
+        assetHeight > 0
+          ? `${assetWidth / 2} / ${assetHeight}`
+          : '1 / 1';
 
       if (page.segment === 'full') {
         return (
@@ -1472,22 +1494,72 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
       }
 
       return (
-        <div className="relative h-full w-full overflow-hidden">
+        <img
+          ref={(element) => markImageLoadedIfComplete(element, source)}
+          src={source || undefined}
+          alt={asset.preview || asset.file || asset.url || ''}
+          className="h-full max-h-full max-w-full select-none object-cover"
+          draggable={nativeDragEnabled}
+          onLoad={() => {
+            if (source) markImageLoaded(source);
+          }}
+          onError={() => {
+            if (baseSource && source) requestImageRetry(baseSource, source);
+          }}
+          style={{
+            ...dragStyle,
+            aspectRatio: splitPageAspectRatio,
+            objectPosition: page.segment === 'left' ? 'left center' : 'right center',
+          }}
+        />
+      );
+    };
+
+    const renderSplitSpreadPagesFromSingleAsset = (
+      visualPages: LogicalPage[],
+      shouldLoadSource = true
+    ) => {
+      const asset = visualPages[0]?.asset;
+      if (!asset) return null;
+
+      const baseSource = withImageRefreshKey(getImageDisplaySource(asset), asset.updatedAt);
+      const source = shouldLoadSource ? getImageLoadSrc(baseSource) : '';
+      const dragStyle: DragImageStyle = {
+        cursor: nativeDragEnabled ? 'grab' : 'default',
+        WebkitUserDrag: nativeDragEnabled ? 'element' : 'none',
+      };
+
+      return (
+        <div className="relative max-h-full max-w-full overflow-hidden">
+          <div className="absolute inset-0 grid grid-cols-2 overflow-hidden">
+            {visualPages.map((page) => (
+              <div key={page.id} className="relative h-full min-w-0 overflow-hidden">
+                <img
+                  src={source || undefined}
+                  alt=""
+                  aria-hidden="true"
+                  className="absolute top-0 h-full w-[200%] max-w-none select-none object-fill"
+                  draggable={nativeDragEnabled}
+                  style={{
+                    ...dragStyle,
+                    left: page.segment === 'left' ? 0 : '-100%',
+                  }}
+                />
+              </div>
+            ))}
+          </div>
           <img
             ref={(element) => markImageLoadedIfComplete(element, source)}
             src={source || undefined}
             alt={asset.preview || asset.file || asset.url || ''}
-            className="absolute top-0 h-full w-[200%] max-w-none select-none object-fill"
+            className="block max-h-full max-w-full select-none object-contain opacity-0"
             draggable={nativeDragEnabled}
+            style={dragStyle}
             onLoad={() => {
               if (source) markImageLoaded(source);
             }}
             onError={() => {
               if (baseSource && source) requestImageRetry(baseSource, source);
-            }}
-            style={{
-              ...dragStyle,
-              left: page.segment === 'left' ? 0 : '-100%',
             }}
           />
         </div>
@@ -1516,6 +1588,15 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
           }
         : undefined;
       const visualPages = getVisualPages(unit.pages);
+      const isSingleAssetSplitSpread = isSplitSpreadUnitFromSingleAsset(unit);
+
+      if (
+        isSingleAssetSplitSpread &&
+        canRenderSplitSpreadAsOriginalImage(visualPages) &&
+        unit.pages[0]
+      ) {
+        return renderAsset(unit.pages[0].asset, position);
+      }
 
       return (
         <div
@@ -1528,20 +1609,29 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
             ref={isCurrentUnit ? currentImageSurfaceRef : undefined}
             className="max-w-full max-h-full w-full h-full flex items-center justify-center"
           >
-            <div className="flex h-full w-full items-center justify-center gap-0" style={zoomStyle}>
-              {visualPages.map((page, visualIndex) => (
-                <div
-                  key={page.id}
-                  className="flex h-full min-w-0 flex-1 items-center justify-center overflow-hidden"
-                >
-                  {renderLogicalPageImage(
-                    page,
-                    visualPages.length === 2 ? visualIndex : undefined,
-                    shouldLoadSource
-                  )}
-                </div>
-              ))}
-            </div>
+            {isSingleAssetSplitSpread ? (
+              <div className="flex h-full w-full items-center justify-center" style={zoomStyle}>
+                {renderSplitSpreadPagesFromSingleAsset(visualPages, shouldLoadSource)}
+              </div>
+            ) : (
+              <div
+                className="flex h-full w-full items-center justify-center gap-0"
+                style={zoomStyle}
+              >
+                {visualPages.map((page, visualIndex) => (
+                  <div
+                    key={page.id}
+                    className="flex h-full min-w-0 flex-1 items-center justify-center overflow-hidden"
+                  >
+                    {renderLogicalPageImage(
+                      page,
+                      visualPages.length === 2 ? visualIndex : undefined,
+                      shouldLoadSource
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       );
