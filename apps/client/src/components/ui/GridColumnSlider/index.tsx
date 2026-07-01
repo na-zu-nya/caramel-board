@@ -70,7 +70,7 @@ export function GridColumnSlider({
         step={1}
         value={sliderValue}
         disabled={disabled || loading}
-        className="h-5 min-w-0 flex-1 accent-gray-900 dark:accent-white"
+        className="h-5 min-w-0 flex-1 accent-primary"
         onChange={handleChange}
       />
       {badgeLabel && (

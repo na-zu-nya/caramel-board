@@ -1,6 +1,11 @@
 import type { Meta, StoryObj } from '@storybook/react';
+import type { CSSProperties } from 'react';
 import { useCallback, useState } from 'react';
 import { GridColumnSlider } from './index';
+
+const themedPrimaryStyle = {
+  '--primary': 'oklch(0.646 0.222 41.116)',
+} satisfies CSSProperties & Record<'--primary', string>;
 
 const meta: Meta<typeof GridColumnSlider> = {
   title: 'UI/GridColumnSlider',
@@ -34,6 +39,18 @@ export const WithBadge: Story = {
     value: 8,
     badgeLabel: 'custom',
   },
+};
+
+export const ThemedPrimary: Story = {
+  args: {
+    value: 10,
+    badgeLabel: 'primary',
+  },
+  render: (args) => (
+    <div style={themedPrimaryStyle}>
+      <GridColumnSlider {...args} />
+    </div>
+  ),
 };
 
 export const Empty: Story = {
