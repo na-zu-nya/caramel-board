@@ -1,4 +1,4 @@
-import { ArrowUpDown, ChevronDown, SplitSquareHorizontal, Trash2, X } from 'lucide-react';
+import { ChevronDown, SplitSquareHorizontal, Trash2, X } from 'lucide-react';
 import React, { useCallback, useState } from 'react';
 import {
   ContextMenu,
@@ -18,28 +18,28 @@ import { useT } from '@/lib/i18n';
 import { isVideoAsset } from '@/lib/media';
 import { cn } from '@/lib/utils';
 import type { Asset } from '@/types';
+import {
+  type AssetGridDropTarget,
+  findAssetGridSourceIndex,
+  getAssetGridCellIndexFromPoint,
+  getAssetGridInsertionIndexForPlaceholder,
+  getAssetGridPreviewIndex,
+  isAssetGridInsertionNoop,
+  reorderAssetsByInsertionIndex,
+} from './asset-grid-reorder';
 import type { AssetSortPreset } from './StackToolbar';
 
 interface AssetGridProps {
   assets: Asset[];
   currentPage: number;
-  onSelectPage: (page: number) => void;
+  onSelectPage: (page: number, asset: Asset) => void;
   onRemoveAsset?: (assetId: string | number) => void;
   onSeparateAsset?: (assetId: string | number) => void;
   onReorderAssets?: (assets: Asset[]) => void;
-  isEditMode?: boolean;
   className?: string;
-  reorderBanner?: {
-    show: boolean;
-    canSave: boolean;
-    saving?: boolean;
-    onSave: () => void;
-    onCancel: () => void;
-  };
   // Top action bar (list mode)
   onSortPresetSelect?: (preset: AssetSortPreset) => void;
   canSortAssets?: boolean;
-  onReorderToggle?: () => void;
 }
 
 const getAssetDisplayName = (asset: Asset) => {
@@ -58,73 +58,93 @@ export default function AssetGrid({
   onRemoveAsset,
   onSeparateAsset,
   onReorderAssets,
-  isEditMode = false,
   className,
-  reorderBanner,
   onSortPresetSelect,
   canSortAssets = false,
-  onReorderToggle,
 }: AssetGridProps) {
   const t = useT();
-  const [draggedItem, setDraggedItem] = useState<number | null>(null);
-  const [hoverDividerIndex, setHoverDividerIndex] = useState<number | null>(null);
+  const [draggedAssetId, setDraggedAssetId] = useState<Asset['id'] | null>(null);
+  const [dropTarget, setDropTarget] = useState<AssetGridDropTarget | null>(null);
+  const [isDropSettling, setIsDropSettling] = useState(false);
+  const dropSettlingFrameRef = React.useRef<number | null>(null);
+  const canReorderAssets = !!onReorderAssets && assets.length >= 2;
 
-  // Handle drag start
   const handleDragStart = useCallback(
-    (e: React.DragEvent, index: number) => {
-      if (!isEditMode || !onReorderAssets) return;
-      setDraggedItem(index);
+    (e: React.DragEvent, assetId: Asset['id']) => {
+      if (!canReorderAssets) return;
+      setDraggedAssetId(assetId);
+      setDropTarget(null);
       e.dataTransfer.effectAllowed = 'move';
       try {
-        // Safari requires data to be set to initiate drag
-        e.dataTransfer.setData('text/plain', 'drag');
+        // Safari は dataTransfer に値がないとドラッグが開始されない
+        e.dataTransfer.setData('text/plain', String(assetId));
       } catch {}
     },
-    [isEditMode, onReorderAssets]
+    [canReorderAssets]
   );
 
-  // Divider drag over
-  const handleDividerDragOver = useCallback(
-    (e: React.DragEvent, insertIndex: number) => {
-      if (!isEditMode || !onReorderAssets || draggedItem === null) return;
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
-      setHoverDividerIndex(insertIndex);
+  const commitDropTarget = useCallback(
+    (target: AssetGridDropTarget | null) => {
+      if (!onReorderAssets || draggedAssetId === null || !target) return;
+
+      const reorderedAssets = reorderAssetsByInsertionIndex(
+        assets,
+        draggedAssetId,
+        target.insertionIndex
+      );
+      if (reorderedAssets) {
+        onReorderAssets(reorderedAssets);
+      }
     },
-    [isEditMode, onReorderAssets, draggedItem]
+    [assets, draggedAssetId, onReorderAssets]
   );
 
-  // Handle drop on divider (insert at index)
-  const handleDividerDrop = useCallback(
-    (e: React.DragEvent, insertIndexRaw: number) => {
-      if (!isEditMode || !onReorderAssets || draggedItem === null) return;
+  const beginDropSettling = useCallback(() => {
+    setIsDropSettling(true);
+    if (dropSettlingFrameRef.current !== null) {
+      window.cancelAnimationFrame(dropSettlingFrameRef.current);
+    }
+    dropSettlingFrameRef.current = window.requestAnimationFrame(() => {
+      dropSettlingFrameRef.current = window.requestAnimationFrame(() => {
+        dropSettlingFrameRef.current = null;
+        setIsDropSettling(false);
+      });
+    });
+  }, []);
+
+  const handleDropPlaceholderDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'move';
+  }, []);
+
+  const handleDropPlaceholderDrop = useCallback(
+    (e: React.DragEvent<HTMLDivElement>) => {
+      if (!canReorderAssets) return;
       e.preventDefault();
-      let newAssets = [...assets];
-      const targetIndex = Math.max(0, Math.min(newAssets.length, insertIndexRaw));
-      const [draggedAsset] = newAssets.splice(draggedItem, 1);
-      let insertIndex = targetIndex;
-      if (draggedItem < targetIndex) insertIndex -= 1; // account for removal shift
-      newAssets.splice(insertIndex, 0, draggedAsset);
-
-      // Reindex order
-      newAssets = newAssets.map((a, i) => ({ ...a, orderInStack: i }));
-
-      onReorderAssets(newAssets);
-
-      setDraggedItem(null);
-      setHoverDividerIndex(null);
+      e.stopPropagation();
+      beginDropSettling();
+      commitDropTarget(dropTarget);
+      setDraggedAssetId(null);
+      setDropTarget(null);
     },
-    [isEditMode, onReorderAssets, draggedItem, assets]
+    [beginDropSettling, canReorderAssets, commitDropTarget, dropTarget]
   );
 
-  // Handle drag end
   const handleDragEnd = useCallback(() => {
-    setDraggedItem(null);
-    setHoverDividerIndex(null);
+    setDraggedAssetId(null);
+    setDropTarget(null);
+  }, []);
+
+  const handleGridDragLeave = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    const nextTarget = e.relatedTarget;
+    if (nextTarget instanceof Node && e.currentTarget.contains(nextTarget)) return;
+    setDropTarget(null);
   }, []);
 
   // Responsive columns computed from container width and preferred size
   const containerRef = React.useRef<HTMLDivElement>(null);
+  const gridRef = React.useRef<HTMLDivElement>(null);
   const [columns, setColumns] = React.useState<number>(4);
   const preferred = 15 * 16; // 15em
   const minimum = 8 * 16; // 8em
@@ -132,7 +152,8 @@ export default function AssetGrid({
   const rowGap = 12; // px vertical gap
 
   const recomputeColumns = React.useCallback(() => {
-    const w = containerRef.current?.clientWidth ?? window.innerWidth;
+    const w =
+      gridRef.current?.clientWidth ?? containerRef.current?.clientWidth ?? window.innerWidth;
     let cols = Math.max(1, Math.round((w + dividerBase) / (preferred + dividerBase)));
     const itemW = Math.floor((w - (cols - 1) * dividerBase) / cols);
     if (itemW < minimum) {
@@ -148,24 +169,157 @@ export default function AssetGrid({
     return () => window.removeEventListener('resize', onResize);
   }, [recomputeColumns]);
 
-  const isReorderMode = isEditMode;
+  React.useEffect(
+    () => () => {
+      if (dropSettlingFrameRef.current !== null) {
+        window.cancelAnimationFrame(dropSettlingFrameRef.current);
+      }
+    },
+    []
+  );
+
   const showSortControl = !!onSortPresetSelect && canSortAssets;
-  const showReorderControl = !!onReorderToggle;
-  const showSaveCancel = !!reorderBanner?.show;
-  const showTopBar = showSortControl || showReorderControl || showSaveCancel;
+  const showTopBar = showSortControl;
+  const gridTopPadding = showTopBar ? 48 : 4;
+  const gridWidth = gridRef.current?.clientWidth ?? 0;
+  const itemSize =
+    gridWidth > 0
+      ? Math.floor((gridWidth - (Math.max(1, columns) - 1) * dividerBase) / Math.max(1, columns))
+      : 0;
+  const dragSourceIndex =
+    draggedAssetId === null ? -1 : findAssetGridSourceIndex(assets, draggedAssetId);
+  const placeholderIndex = dropTarget && itemSize > 0 ? dropTarget.placeholderIndex : null;
+  const placeholderStyle =
+    placeholderIndex === null
+      ? undefined
+      : {
+          width: `${itemSize}px`,
+          height: `${itemSize}px`,
+          transform: `translate3d(${
+            (placeholderIndex % Math.max(1, columns)) * (itemSize + dividerBase)
+          }px, ${
+            gridTopPadding +
+            Math.floor(placeholderIndex / Math.max(1, columns)) * (itemSize + rowGap)
+          }px, 0)`,
+        };
+
+  const getPreviewTransform = useCallback(
+    (index: number) => {
+      if (!dropTarget || dragSourceIndex < 0 || itemSize <= 0) return undefined;
+      const previewIndex = getAssetGridPreviewIndex(
+        index,
+        dragSourceIndex,
+        dropTarget.insertionIndex,
+        assets.length
+      );
+      if (previewIndex === index) return undefined;
+
+      const currentColumn = index % Math.max(1, columns);
+      const currentRow = Math.floor(index / Math.max(1, columns));
+      const previewColumn = previewIndex % Math.max(1, columns);
+      const previewRow = Math.floor(previewIndex / Math.max(1, columns));
+      const horizontalStep = itemSize + dividerBase;
+      const verticalStep = itemSize + rowGap;
+      const translateX = (previewColumn - currentColumn) * horizontalStep;
+      const translateY = (previewRow - currentRow) * verticalStep;
+
+      return `translate3d(${translateX}px, ${translateY}px, 0)`;
+    },
+    [assets.length, columns, dragSourceIndex, dropTarget, itemSize]
+  );
+
+  const updateDropTargetFromPoint = useCallback(
+    (e: React.DragEvent<HTMLDivElement>) => {
+      if (!canReorderAssets || draggedAssetId === null || itemSize <= 0 || dragSourceIndex < 0) {
+        return dropTarget;
+      }
+
+      const gridElement = gridRef.current;
+      if (!gridElement) return dropTarget;
+
+      const gridRect = gridElement.getBoundingClientRect();
+      const nextPlaceholderIndex = getAssetGridCellIndexFromPoint({
+        clientX: e.clientX,
+        clientY: e.clientY,
+        gridLeft: gridRect.left,
+        gridTop: gridRect.top,
+        columns: Math.max(1, columns),
+        itemSize,
+        columnGap: dividerBase,
+        rowGap,
+        topPadding: gridTopPadding,
+        length: assets.length,
+      });
+      if (nextPlaceholderIndex === null) return dropTarget;
+
+      const insertionIndex = getAssetGridInsertionIndexForPlaceholder(
+        dragSourceIndex,
+        nextPlaceholderIndex,
+        assets.length
+      );
+      if (
+        insertionIndex === null ||
+        isAssetGridInsertionNoop(assets, draggedAssetId, insertionIndex)
+      ) {
+        setDropTarget(null);
+        return null;
+      }
+
+      const nextTarget = { placeholderIndex: nextPlaceholderIndex, insertionIndex };
+      setDropTarget((current) =>
+        current &&
+        current.placeholderIndex === nextTarget.placeholderIndex &&
+        current.insertionIndex === nextTarget.insertionIndex
+          ? current
+          : nextTarget
+      );
+      return nextTarget;
+    },
+    [
+      assets,
+      canReorderAssets,
+      columns,
+      dragSourceIndex,
+      draggedAssetId,
+      dropTarget,
+      gridTopPadding,
+      itemSize,
+    ]
+  );
+
+  const handleGridDragOver = useCallback(
+    (e: React.DragEvent<HTMLDivElement>) => {
+      if (draggedAssetId === null) return;
+      e.preventDefault();
+      e.stopPropagation();
+      e.dataTransfer.dropEffect = 'move';
+      updateDropTargetFromPoint(e);
+    },
+    [draggedAssetId, updateDropTargetFromPoint]
+  );
+
+  const handleGridDrop = useCallback(
+    (e: React.DragEvent<HTMLDivElement>) => {
+      if (draggedAssetId === null) return;
+      e.preventDefault();
+      e.stopPropagation();
+      beginDropSettling();
+      commitDropTarget(updateDropTargetFromPoint(e));
+      setDraggedAssetId(null);
+      setDropTarget(null);
+    },
+    [beginDropSettling, commitDropTarget, draggedAssetId, updateDropTargetFromPoint]
+  );
 
   return (
-    <div ref={containerRef} className={cn('p-4 overflow-auto h-full bg-gray-900', className)}>
+    <div
+      ref={containerRef}
+      className={cn('relative p-4 overflow-auto h-full bg-gray-900', className)}
+    >
       {showTopBar && (
         <div className="absolute top-0 left-0 z-20 w-full">
           <div className="w-full bg-black/60 text-white px-4 py-2 flex items-center justify-between gap-2 backdrop-blur-sm border-b border-white/10">
-            <span className="text-sm">
-              {isReorderMode
-                ? `${t.viewerControls.reorderMode} ${
-                    reorderBanner?.canSave ? `(${t.viewerControls.changed})` : ''
-                  }`
-                : t.viewerControls.list}
-            </span>
+            <span className="text-sm">{t.viewerControls.list}</span>
             <div className="flex items-center gap-2">
               {showSortControl && (
                 <DropdownMenu>
@@ -196,119 +350,62 @@ export default function AssetGrid({
                   </DropdownMenuContent>
                 </DropdownMenu>
               )}
-              {showReorderControl && !showSaveCancel && (
-                <button
-                  type="button"
-                  onClick={onReorderToggle}
-                  className={cn(
-                    'p-2 rounded-full transition-colors',
-                    isReorderMode
-                      ? 'bg-green-500 text-white'
-                      : 'bg-white/10 text-white hover:bg-white/20'
-                  )}
-                  aria-label={
-                    isReorderMode
-                      ? t.viewerControls.exitReorderMode
-                      : t.viewerControls.enterReorderMode
-                  }
-                >
-                  <ArrowUpDown size={16} />
-                </button>
-              )}
-              {showSaveCancel && reorderBanner && (
-                <>
-                  <button
-                    type="button"
-                    onClick={reorderBanner.onCancel}
-                    className="px-3 py-1 rounded bg-white/10 hover:bg-white/20 transition"
-                  >
-                    {t.common.cancel}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={!reorderBanner.canSave || reorderBanner.saving}
-                    onClick={reorderBanner.onSave}
-                    className={cn(
-                      'px-3 py-1 rounded transition',
-                      reorderBanner.canSave && !reorderBanner.saving
-                        ? 'bg-blue-500 hover:bg-blue-600'
-                        : 'bg-white/20 cursor-not-allowed'
-                    )}
-                  >
-                    {reorderBanner.saving ? t.common.saving : t.common.save}
-                  </button>
-                </>
-              )}
             </div>
           </div>
         </div>
       )}
       <div
-        className={cn('grid', showTopBar ? 'pt-12' : 'pt-1')}
+        ref={gridRef}
+        className="relative grid"
         style={{
           gridTemplateColumns: `repeat(${Math.max(1, columns)}, 1fr)`,
           columnGap: `${dividerBase}px`,
           rowGap: `${rowGap}px`,
+          paddingTop: `${gridTopPadding}px`,
         }}
+        onDragOver={handleGridDragOver}
+        onDragLeave={handleGridDragLeave}
+        onDrop={handleGridDrop}
       >
+        {placeholderStyle && (
+          <div
+            className="pointer-events-auto absolute left-0 top-0 z-30 rounded-lg border-2 border-blue-400 bg-blue-400/10 shadow-[0_0_0_1px_rgba(59,130,246,0.35),0_0_16px_rgba(96,165,250,0.35)] transition-transform duration-150 ease-out"
+            style={placeholderStyle}
+            onDragOver={handleDropPlaceholderDragOver}
+            onDrop={handleDropPlaceholderDrop}
+          />
+        )}
         {assets.map((asset, index) => {
           const isVideo = isVideoAsset(asset);
           const videoSrc = asset.preview || asset.file || asset.url;
           const thumbnailSrc = asset.thumbnail || asset.thumbnailUrl || videoSrc || asset.file;
-          const isDragging = draggedItem === index;
+          const isDragging = draggedAssetId !== null && String(draggedAssetId) === String(asset.id);
           const displayName = getAssetDisplayName(asset);
-          // Grid handles item sizing; maintain 1:1 via aspect-square
-
-          // Visual shift around hovered divider (no layout shift)
-          let translateX = 0;
-          if (isEditMode && hoverDividerIndex !== null) {
-            if (index === hoverDividerIndex - 1) translateX = -6; // left of divider
-            if (index === hoverDividerIndex) translateX = 6; // right of divider
-          }
-
-          // Drop indicator bars: show one bar at hovered divider position
-          const showLeftBar = isEditMode && hoverDividerIndex === index;
-          const showRightBar =
-            isEditMode && hoverDividerIndex === assets.length && index === assets.length - 1;
+          const previewTransform = getPreviewTransform(index);
+          const isDragPlaceholder = isDragging && !!dropTarget;
 
           const content = (
             <div
               className={cn(
                 'relative overflow-hidden rounded-lg cursor-pointer group aspect-square',
-                'bg-gray-800 transform-gpu transition-transform duration-150 ease-out',
-                isDragging && 'opacity-50 scale-[0.98]',
-                isEditMode && 'cursor-move'
+                'bg-gray-800 transform-gpu',
+                isDropSettling ? 'transition-none' : 'transition-transform duration-150 ease-out',
+                isDragging &&
+                  (isDragPlaceholder ? 'opacity-0 scale-[0.98]' : 'opacity-50 scale-[0.98]'),
+                canReorderAssets && 'cursor-move'
               )}
-              style={{ transform: `translateX(${translateX}px)` }}
               onClick={() => {
-                if (isEditMode) return;
-                onSelectPage(index);
+                onSelectPage(index, asset);
               }}
-              draggable={isEditMode}
-              onDragStart={(e) => handleDragStart(e, index)}
+              draggable={canReorderAssets}
+              onDragStart={(e) => handleDragStart(e, asset.id)}
               onDragEnd={handleDragEnd}
             >
-              {isEditMode && (
-                <>
-                  {/* Left half = insert BEFORE this item */}
-                  <div
-                    className="absolute inset-y-0 left-0 w-1/2 z-10"
-                    onDragOver={(e) => handleDividerDragOver(e, index)}
-                    onDrop={(e) => handleDividerDrop(e, index)}
-                  />
-                  {/* Right half = insert AFTER this item */}
-                  <div
-                    className="absolute inset-y-0 right-0 w-1/2 z-10"
-                    onDragOver={(e) => handleDividerDragOver(e, index + 1)}
-                    onDrop={(e) => handleDividerDrop(e, index + 1)}
-                  />
-                </>
-              )}
-              {/* Thumbnail with slight shrink in edit mode to create spacing */}
+              {/* ドラッグ先の表示が埋もれないよう、並び替え可能なときは少し内側に収める */}
               <div
                 className={cn(
                   'w-full h-full transition-transform',
-                  isEditMode ? 'scale-[0.96]' : 'gap-0'
+                  canReorderAssets ? 'scale-[0.96]' : 'gap-0'
                 )}
               >
                 {isVideo ? (
@@ -348,7 +445,7 @@ export default function AssetGrid({
                     e.stopPropagation();
                     onRemoveAsset(asset.id);
                   }}
-                  className="absolute bottom-1 right-1 bg-red-500/80 hover:bg-red-500 text-white p-1 rounded opacity-0 group-hover:opacity-100 transition-all"
+                  className="absolute bottom-1 right-1 z-20 bg-red-500/80 hover:bg-red-500 text-white p-1 rounded opacity-0 group-hover:opacity-100 transition-all"
                 >
                   <X size={16} />
                 </button>
@@ -359,29 +456,22 @@ export default function AssetGrid({
             </div>
           );
 
-          if (isEditMode) {
-            return (
-              <div key={asset.id} className="relative">
-                {content}
-                {showLeftBar && (
-                  <div
-                    className="absolute top-1 bottom-1 w-1 bg-blue-500 rounded-full pointer-events-none shadow-[0_0_8px_rgba(59,130,246,0.8)]"
-                    style={{ left: '-8px' }}
-                  />
-                )}
-                {showRightBar && (
-                  <div
-                    className="absolute top-1 bottom-1 w-1 bg-blue-500 rounded-full pointer-events-none shadow-[0_0_8px_rgba(59,130,246,0.8)]"
-                    style={{ right: '-8px' }}
-                  />
-                )}
-              </div>
-            );
-          }
-
           return (
             <ContextMenu key={asset.id}>
-              <ContextMenuTrigger asChild>{content}</ContextMenuTrigger>
+              <ContextMenuTrigger asChild>
+                <div
+                  className={cn(
+                    'relative transform-gpu',
+                    isDropSettling
+                      ? 'transition-none'
+                      : 'transition-transform duration-150 ease-out',
+                    isDragPlaceholder && 'pointer-events-none'
+                  )}
+                  style={previewTransform ? { transform: previewTransform } : undefined}
+                >
+                  {content}
+                </div>
+              </ContextMenuTrigger>
               <ContextMenuContent className="w-40">
                 <ContextMenuItem
                   onClick={(event) => {

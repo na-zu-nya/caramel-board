@@ -225,10 +225,10 @@ export default function StackViewer({
   const { ensureScratch } = useScratch(datasetId);
   const queryClient = useQueryClient();
 
-  // Reorder mode state
-  const [isReorderMode, setIsReorderMode] = useState(false);
-  const [pendingOrder, setPendingOrder] = useState<Asset[] | null>(null);
-  const [isSavingOrder, setIsSavingOrder] = useState(false);
+  // アセット順の変更は即時反映し、サーバ保存中だけローカル順を保持する
+  const [optimisticOrder, setOptimisticOrder] = useState<Asset[] | null>(null);
+  const assetOrderPersistQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const assetOrderPersistVersionRef = useRef(0);
   const [isPageSeekBarVisible, setIsPageSeekBarVisible] = useState(false);
   const [isEdgeAffordanceSuppressed, setIsEdgeAffordanceSuppressed] = useState(false);
   const [isEdgeAffordanceReady, setIsEdgeAffordanceReady] = useState(false);
@@ -565,7 +565,7 @@ export default function StackViewer({
   const handleCurrentLikeToggle = useCallback(async () => {
     if (!stack) return;
     try {
-      if (currentAsset) {
+      if (!isListMode && currentAsset) {
         await apiClient.likeAsset(currentAsset.id);
       } else {
         await apiClient.likeStack(stack.id);
@@ -575,19 +575,67 @@ export default function StackViewer({
     } catch (error) {
       console.error('Failed to like stack:', error);
     }
-  }, [currentAsset, queryClient, refetch, stack]);
+  }, [currentAsset, isListMode, queryClient, refetch, stack]);
+
+  const persistAssetOrder = useCallback(
+    (orderedAssets: Asset[]) => {
+      const nextAssets = orderedAssets.map((asset, index) => ({ ...asset, orderInStack: index }));
+      const version = assetOrderPersistVersionRef.current + 1;
+      assetOrderPersistVersionRef.current = version;
+      setOptimisticOrder(nextAssets);
+
+      const refetchAssetOrder = async () => {
+        try {
+          await refetch();
+        } catch (error) {
+          console.error('Failed to refetch asset order:', error);
+        }
+      };
+
+      const persistTask = assetOrderPersistQueueRef.current
+        .catch((error) => {
+          console.error('Previous asset order persistence failed:', error);
+        })
+        .then(async () => {
+          try {
+            for (const asset of nextAssets) {
+              await apiClient.updateAssetOrder(asset.id, asset.orderInStack ?? 0);
+            }
+            if (assetOrderPersistVersionRef.current === version) {
+              await refetchAssetOrder();
+              setOptimisticOrder(null);
+            }
+          } catch (error) {
+            console.error('Failed to persist asset order:', error);
+            if (assetOrderPersistVersionRef.current === version) {
+              setOptimisticOrder(null);
+              await refetchAssetOrder();
+            }
+          }
+        });
+      assetOrderPersistQueueRef.current = persistTask;
+    },
+    [refetch]
+  );
 
   const handleSortPresetSelect = useCallback(
     (preset: AssetSortPreset) => {
       if (!stack || stack.assets.length < 2) return;
 
-      setIsReorderMode(true);
-      setPendingOrder((prev) => {
-        const source = prev && prev.length > 0 ? prev : stack.assets.map((asset) => ({ ...asset }));
-        return sortAssetsByPreset(source, preset);
-      });
+      const source =
+        optimisticOrder && optimisticOrder.length > 0
+          ? optimisticOrder
+          : stack.assets.map((asset) => ({ ...asset }));
+      persistAssetOrder(sortAssetsByPreset(source, preset));
     },
-    [stack]
+    [optimisticOrder, persistAssetOrder, stack]
+  );
+
+  const handleAssetOrderChange = useCallback(
+    (reorderedAssets: Asset[]) => {
+      persistAssetOrder(reorderedAssets);
+    },
+    [persistAssetOrder]
   );
 
   // Navigation
@@ -837,6 +885,7 @@ export default function StackViewer({
       try {
         await apiClient.separateAsset(assetId);
         await refetch();
+        setOptimisticOrder(null);
         await queryClient.invalidateQueries({ queryKey: ['stacks'] });
         await queryClient.invalidateQueries({ queryKey: ['library-counts', datasetId] });
       } catch (error) {
@@ -844,6 +893,23 @@ export default function StackViewer({
       }
     },
     [datasetId, queryClient, refetch]
+  );
+
+  const handleRemoveAsset = useCallback(
+    async (assetId: string | number) => {
+      const asset = stack?.assets.find((item) => String(item.id) === String(assetId));
+      const assetName = asset ? getAssetSortName(asset) || String(assetId) : String(assetId);
+      if (!window.confirm(t.viewerControls.removeAssetConfirm(assetName))) return;
+
+      try {
+        await apiClient.removeAsset(assetId);
+        await refetch();
+        setOptimisticOrder(null);
+      } catch (error) {
+        console.error('Failed to remove asset:', error);
+      }
+    },
+    [refetch, stack?.assets, t]
   );
 
   const handleDeleteCurrentStack = useCallback(async () => {
@@ -1489,7 +1555,7 @@ export default function StackViewer({
 
   return (
     <ViewerShell
-      isReorderMode={isReorderMode}
+      isReorderMode={false}
       isPenMode={isPenMode}
       isNativeInteractionMode={isNativeInteractionMode}
       onDrop={handleFileDrop}
@@ -1742,83 +1808,22 @@ export default function StackViewer({
             </div>
           ) : (
             <AssetGrid
-              assets={isReorderMode && pendingOrder ? pendingOrder : stack.assets}
+              assets={optimisticOrder ?? stack.assets}
               currentPage={currentAssetIndex}
-              onSelectPage={(page) => {
+              onSelectPage={(page, asset) => {
+                const savedAssetIndex = stack.assets.findIndex((item) => item.id === asset.id);
+                const targetAssetIndex = savedAssetIndex >= 0 ? savedAssetIndex : page;
                 setEdgeBoundaryArmedSide(null);
-                setCurrentPage(readingModel.assetIndexToUnitIndex.get(page) ?? page);
+                setCurrentPage(
+                  readingModel.assetIndexToUnitIndex.get(targetAssetIndex) ?? targetAssetIndex
+                );
                 setIsListMode(false);
               }}
-              // Reorder mode decoupled from Info panel; we allow reordering only in explicit mode
-              isEditMode={isReorderMode}
               onSortPresetSelect={handleSortPresetSelect}
               canSortAssets={stack.assets.length >= 2}
-              onReorderToggle={() => {
-                setIsReorderMode((prev) => {
-                  const next = !prev;
-                  if (next) {
-                    setPendingOrder(stack.assets.map((a) => ({ ...a })) as any);
-                  } else {
-                    setPendingOrder(null);
-                  }
-                  return next;
-                });
-              }}
-              onSeparateAsset={!isReorderMode ? handleSeparateAsset : undefined}
-              // Disable removal while reordering for clarity
-              onRemoveAsset={
-                !isReorderMode
-                  ? async (assetId) => {
-                      try {
-                        await apiClient.removeAsset(assetId);
-                        await refetch();
-                      } catch (error) {
-                        console.error('Failed to remove asset:', error);
-                      }
-                    }
-                  : undefined
-              }
-              // Collect pending order locally; persist on confirmation
-              onReorderAssets={
-                isReorderMode
-                  ? (reorderedAssets) => {
-                      setPendingOrder(reorderedAssets);
-                    }
-                  : undefined
-              }
-              reorderBanner={
-                isReorderMode
-                  ? {
-                      show: true,
-                      canSave:
-                        !!pendingOrder &&
-                        pendingOrder.length === stack.assets.length &&
-                        pendingOrder.some((a, i) => a.id !== stack.assets[i].id),
-                      saving: isSavingOrder,
-                      onSave: async () => {
-                        if (!pendingOrder) return;
-                        try {
-                          setIsSavingOrder(true);
-                          for (const asset of pendingOrder) {
-                            await apiClient.updateAssetOrder(asset.id, asset.orderInStack || 0);
-                          }
-                          await refetch();
-                          setIsReorderMode(false);
-                          setPendingOrder(null);
-                        } catch (e) {
-                          console.error('Failed to save asset order:', e);
-                        } finally {
-                          setIsSavingOrder(false);
-                        }
-                      },
-                      onCancel: () => {
-                        setIsReorderMode(false);
-                        setPendingOrder(null);
-                      },
-                    }
-                  : undefined
-              }
-              className="pt-14"
+              onSeparateAsset={handleSeparateAsset}
+              onRemoveAsset={handleRemoveAsset}
+              onReorderAssets={handleAssetOrderChange}
             />
           )}
 
@@ -1928,7 +1933,7 @@ export default function StackViewer({
                 variant="toolbar"
                 onFiles={handleFileDrop}
                 onUrls={handleUrlDrop}
-                disabled={isReorderMode || isPenMode || isNativeInteractionMode}
+                disabled={isPenMode || isNativeInteractionMode}
                 closeOnOutsidePointerDown
               />
             }

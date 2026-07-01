@@ -805,6 +805,8 @@ const en = {
     addedDesc: 'Added order descending',
     separateAsset: 'Separate',
     removeAsset: 'Remove',
+    removeAssetConfirm: (name: string) =>
+      `Remove "${name}" from this stack? This operation cannot be undone.`,
     mute: 'Mute',
     unmute: 'Unmute',
     play: 'Play',
@@ -1591,6 +1593,8 @@ const ja: Translations = {
     addedDesc: '追加順 降順',
     separateAsset: '分離',
     removeAsset: '削除',
+    removeAssetConfirm: (name: string) =>
+      `「${name}」をこのスタックから削除しますか? この操作は取り消せません。`,
     mute: 'ミュート',
     unmute: 'ミュート解除',
     play: '再生',

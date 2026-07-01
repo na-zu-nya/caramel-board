@@ -35,7 +35,8 @@ export default function StackToolbar({
 }: StackToolbarProps) {
   const t = useT();
   const canBookmarkPage =
-    stack.assets.length > 1 || stack.assetCount > 1 || (stack.assetsCount ?? 0) > 1;
+    !isListMode &&
+    (stack.assets.length > 1 || stack.assetCount > 1 || (stack.assetsCount ?? 0) > 1);
 
   return (
     <div

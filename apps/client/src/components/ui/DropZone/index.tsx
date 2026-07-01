@@ -674,6 +674,7 @@ export function DropZone({
     };
 
     const handleDrop = (e: DragEvent) => {
+      if (!isFileLikeDrag(e)) return; // 内部並び替えなど、ファイル投入ではないドラッグは通す
       const dataTransfer = e.dataTransfer ?? null;
       if (dragKind === 'native-image') return;
       if (Array.from(dataTransfer?.types ?? []).includes(STACK_IDS_MIME)) return;
