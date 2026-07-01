@@ -41,47 +41,35 @@ export class UploadService {
     ) => void,
     addNotification: (notification: { type: 'success' | 'error' | 'info'; message: string }) => void
   ) {
-    // Process files in parallel (up to 3 at a time to avoid overloading)
-    const concurrentLimit = 3;
-    const chunks = [];
+    for (const file of batch.files) {
+      try {
+        updateProgress(file.id, 0, 'uploading');
+        const metadata = file.metadata ?? batch.metadata;
 
-    for (let i = 0; i < batch.files.length; i += concurrentLimit) {
-      chunks.push(batch.files.slice(i, i + concurrentLimit));
-    }
+        const stack = await apiClient.createStackWithFile(file.file, {
+          name: file.file.name,
+          datasetId: metadata?.datasetId?.toString(),
+          mediaType: metadata?.collectionId ? 'image' : metadata?.mediaType,
+          tags: metadata?.tags,
+          author: metadata?.author,
+          collectionId: metadata?.collectionId,
+          onProgress: (progress) => {
+            updateProgress(file.id, progress, 'uploading');
+          },
+        });
 
-    for (const chunk of chunks) {
-      await Promise.all(
-        chunk.map(async (file) => {
-          try {
-            updateProgress(file.id, 0, 'uploading');
-            const metadata = file.metadata ?? batch.metadata;
-
-            const stack = await apiClient.createStackWithFile(file.file, {
-              name: file.file.name,
-              datasetId: metadata?.datasetId?.toString(),
-              mediaType: metadata?.collectionId ? 'image' : metadata?.mediaType,
-              tags: metadata?.tags,
-              author: metadata?.author,
-              collectionId: metadata?.collectionId,
-              onProgress: (progress) => {
-                updateProgress(file.id, progress, 'uploading');
-              },
-            });
-
-            updateProgress(file.id, 100, 'completed');
-            file.result = {
-              stackId: Number(stack.id),
-              assetId: Number(stack.assets?.[0]?.id) || 0,
-            };
-          } catch (error) {
-            console.error(`Upload failed for ${file.file.name}:`, error);
-            const msg = error instanceof Error ? error.message : 'アップロードに失敗しました';
-            updateProgress(file.id, 0, 'error', msg);
-            // 表示: 重複などの理由をトーストに出す
-            addNotification({ type: 'error', message: `${file.file.name}: ${msg}` });
-          }
-        })
-      );
+        updateProgress(file.id, 100, 'completed');
+        file.result = {
+          stackId: Number(stack.id),
+          assetId: Number(stack.assets?.[0]?.id) || 0,
+        };
+      } catch (error) {
+        console.error(`Upload failed for ${file.file.name}:`, error);
+        const msg = error instanceof Error ? error.message : 'アップロードに失敗しました';
+        updateProgress(file.id, 0, 'error', msg);
+        // 表示: 重複などの理由をトーストに出す
+        addNotification({ type: 'error', message: `${file.file.name}: ${msg}` });
+      }
     }
   }
 

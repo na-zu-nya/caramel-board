@@ -200,7 +200,10 @@ export async function uploadFolderAsCollection(
   }
 
   const concurrentLimit = 3;
-  const stackIds: number[] = [];
+  const stackIdsByFileIndex: Array<number | null> = Array.from(
+    { length: sortedFiles.length },
+    () => null
+  );
   const errors: Error[] = [];
   let processedFiles = 0;
   let failedFiles = 0;
@@ -213,9 +216,12 @@ export async function uploadFolderAsCollection(
   });
 
   for (let i = 0; i < sortedFiles.length; i += concurrentLimit) {
-    const chunk = sortedFiles.slice(i, i + concurrentLimit);
+    const chunk = sortedFiles.slice(i, i + concurrentLimit).map((file, offset) => ({
+      file,
+      fileIndex: i + offset,
+    }));
     await Promise.all(
-      chunk.map(async (file) => {
+      chunk.map(async ({ file, fileIndex }) => {
         try {
           options.onProgress?.({
             phase: 'uploading',
@@ -231,7 +237,7 @@ export async function uploadFolderAsCollection(
             tags: defaults.tags,
             author: defaults.author,
           });
-          stackIds.push(Number(stack.id));
+          stackIdsByFileIndex[fileIndex] = Number(stack.id);
         } catch (error) {
           console.error('Failed to create stack from file', file.name, error);
           failedFiles += 1;
@@ -253,6 +259,8 @@ export async function uploadFolderAsCollection(
       })
     );
   }
+
+  const stackIds = stackIdsByFileIndex.filter((stackId): stackId is number => stackId !== null);
 
   if (stackIds.length === 0) {
     throw errors[0] || new Error('スタックを作成できませんでした');
