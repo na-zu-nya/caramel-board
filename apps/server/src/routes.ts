@@ -11,6 +11,7 @@ import { datasetAssetsRoute } from './routes/dataset-assets';
 import { datasetStacksRoute } from './routes/datasetStacks';
 // Mount legacy-stable routes consumed by the client
 import { datasetsLiteRoute } from './routes/datasets-lite';
+import { maintenanceRoute } from './routes/maintenance';
 import { navigationPinsRouter } from './routes/navigationPins';
 import { stacksRoute } from './routes/stacks';
 import { tagsRoute } from './routes/tags';
@@ -43,4 +44,6 @@ export const apiRoutes = new Hono()
   .route('/clipper', clipperRoute)
   .route('/upload', uploadRoute)
   // Auto-Tag endpoints (mappings, statistics, CRUD)
-  .route('/auto-tags', autoTagsRoute);
+  .route('/auto-tags', autoTagsRoute)
+  // Server-side maintenance tasks (e.g. backfilling data added by later migrations)
+  .route('/maintenance', maintenanceRoute);
