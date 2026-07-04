@@ -294,6 +294,12 @@ const insertMigrationRow = (db, migration) => {
   ).run(migration.id, migration.title, migration.checksum, appVersion, nowIso());
 };
 
+const foreignKeyCheckErrors = (db) =>
+  db
+    .prepare('PRAGMA foreign_key_check')
+    .all()
+    .map((row) => Object.values(row).join('|'));
+
 const applyMigrations = (targetDbPath, migrations) => {
   const before = inspectDatabase(targetDbPath, migrations);
   if (before.status === 'ready') {
@@ -335,37 +341,61 @@ const applyMigrations = (targetDbPath, migrations) => {
     const pendingIds = new Set(before.pending.map((migration) => migration.id));
     const pending = migrations.filter((migration) => pendingIds.has(migration.id));
 
-    db.exec('BEGIN IMMEDIATE');
-    try {
-      if (before.legacyBaseline && migrations[0]) {
+    if (before.legacyBaseline && migrations[0]) {
+      db.exec('BEGIN IMMEDIATE');
+      try {
         insertMigrationRow(db, migrations[0]);
-        emit({
-          type: 'progress',
-          phase: 'baseline',
-          migration: migrations[0].id,
-          message: 'Recording legacy database baseline.',
-          percent: 25,
-        });
+        db.exec('COMMIT');
+      } catch (error) {
+        db.exec('ROLLBACK');
+        throw error;
       }
+      emit({
+        type: 'progress',
+        phase: 'baseline',
+        migration: migrations[0].id,
+        message: 'Recording legacy database baseline.',
+        percent: 25,
+      });
+    }
 
-      pending.forEach((migration, index) => {
-        const stepPercent = 30 + Math.round(((index + 1) / Math.max(pending.length, 1)) * 55);
-        emit({
-          type: 'progress',
-          phase: 'apply',
-          migration: migration.id,
-          message: `Applying ${migration.title}.`,
-          percent: stepPercent,
-        });
-        db.exec(migration.sql);
-        insertMigrationRow(db, migration);
+    pending.forEach((migration, index) => {
+      const stepPercent = 30 + Math.round(((index + 1) / Math.max(pending.length, 1)) * 55);
+      emit({
+        type: 'progress',
+        phase: 'apply',
+        migration: migration.id,
+        message: `Applying ${migration.title}.`,
+        percent: stepPercent,
       });
 
-      db.exec('COMMIT');
-    } catch (error) {
-      db.exec('ROLLBACK');
-      throw error;
-    }
+      // Each migration runs in its own transaction with foreign key enforcement
+      // temporarily disabled. SQLite only applies a new `PRAGMA foreign_keys`
+      // value when no transaction is active, and some migrations must rebuild
+      // tables that other tables reference via FOREIGN KEY (SQLite's documented
+      // procedure for changing a column's type/name or a CHECK constraint).
+      // Leaving foreign_keys on would make DROP TABLE cascade-delete every row
+      // in the dependent tables before the rebuilt table is back in place.
+      db.exec('PRAGMA foreign_keys = OFF');
+      db.exec('BEGIN IMMEDIATE');
+      try {
+        db.exec(migration.sql);
+        insertMigrationRow(db, migration);
+        db.exec('COMMIT');
+      } catch (error) {
+        db.exec('ROLLBACK');
+        throw error;
+      } finally {
+        db.exec('PRAGMA foreign_keys = ON');
+      }
+
+      const fkErrors = foreignKeyCheckErrors(db);
+      if (fkErrors.length > 0) {
+        throw new Error(
+          `foreign_key_check failed after migration ${migration.id}:\n${fkErrors.join('\n')}`
+        );
+      }
+    });
 
     db.prepare(
       `UPDATE schema_migration_runs
