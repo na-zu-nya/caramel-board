@@ -101,11 +101,11 @@ export const Default: Story = {
               ],
             },
             {
-              label: 'スタックをマージ',
+              label: 'スタックを結合',
               value: 'merge-stacks',
               onSelect: () => console.log('merge stacks'),
               icon: <GitMerge size={12} />,
-              confirmMessage: '選択順の先頭スタックに残りをマージします。実行しますか？',
+              confirmMessage: '選択順の先頭スタックに残りを結合します。実行しますか？',
               group: 'secondary',
             },
             {
