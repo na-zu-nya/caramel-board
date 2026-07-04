@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { Filter } from 'lucide-react';
+import type { CSSProperties } from 'react';
 import { HeaderIconButton } from './HeaderIconButton';
 
 const meta: Meta<typeof HeaderIconButton> = {
@@ -11,6 +12,10 @@ const meta: Meta<typeof HeaderIconButton> = {
 export default meta;
 type Story = StoryObj<typeof HeaderIconButton>;
 
+const themedPrimaryStyle: CSSProperties & Record<'--primary', string> = {
+  '--primary': 'oklch(0.646 0.222 41.116)',
+};
+
 export const Default: Story = {};
 export const WithBadge: Story = {
   args: {
@@ -21,6 +26,14 @@ export const WithBadge: Story = {
   },
 };
 export const Active: Story = {
+  args: { isActive: true, children: <Filter size={18} />, 'aria-label': 'Filter' },
+};
+export const ActiveThemed: Story = {
+  render: (args) => (
+    <div className="bg-slate-700 p-4" style={themedPrimaryStyle}>
+      <HeaderIconButton {...args} />
+    </div>
+  ),
   args: { isActive: true, children: <Filter size={18} />, 'aria-label': 'Filter' },
 };
 export const Highlight: Story = { args: { variant: 'highlight' } };
