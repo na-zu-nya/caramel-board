@@ -724,7 +724,7 @@ const en = {
   },
   overview: {
     title: 'Overview',
-    mediaTypes: 'Media Types',
+    mediaCategories: 'Media Categories',
     popularTags: 'Popular Tags',
     recentlyLiked: 'Recently Liked',
     recentlyScratch: 'Recently Scratch',
@@ -1525,7 +1525,7 @@ const ja: Translations = {
   },
   overview: {
     title: '概要',
-    mediaTypes: 'メディアタイプ',
+    mediaCategories: 'メディアカテゴリ',
     popularTags: '人気のタグ',
     recentlyLiked: '最近の Like',
     recentlyScratch: '最近のスクラッチ',

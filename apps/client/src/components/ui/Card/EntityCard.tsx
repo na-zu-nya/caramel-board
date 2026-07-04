@@ -1,16 +1,20 @@
-import type { ReactNode } from 'react';
+import type { HTMLAttributes, ReactNode } from 'react';
 import { cloneElement, isValidElement } from 'react';
 import { cn } from '@/lib/utils';
 import { getThumbnailPath } from '@/utils/thumbnailPath';
 
-export interface EntityCardProps extends React.HTMLAttributes<HTMLDivElement> {
+type EntityCardChildProps = HTMLAttributes<HTMLElement> & {
+  children?: ReactNode;
+  className?: string;
+};
+
+export interface EntityCardProps extends Omit<HTMLAttributes<HTMLDivElement>, 'title'> {
   asChild?: boolean;
   title: ReactNode;
   subtitle?: ReactNode;
   thumbnailSrc?: string | null;
   icon?: ReactNode; // fallback when no thumbnail
-  // aspect: '16/9' | '1/1' or custom via style
-  aspect?: '16/9' | '1/1';
+  aspect?: '16/9' | '3/2' | '1/1';
   variant?: 'card' | 'tile';
 }
 
@@ -26,7 +30,11 @@ export function EntityCard({
   children,
   ...rest
 }: EntityCardProps) {
-  const aspectClass = aspect === '16/9' ? 'aspect-[16/9]' : 'aspect-square';
+  const aspectClass = {
+    '16/9': 'aspect-[16/9]',
+    '3/2': 'aspect-[3/2]',
+    '1/1': 'aspect-square',
+  }[aspect];
 
   const cardInner = (
     <>
@@ -92,10 +100,10 @@ export function EntityCard({
     </div>
   );
 
-  if (asChild && children && isValidElement(children)) {
-    return cloneElement(children as any, {
+  if (asChild && children && isValidElement<EntityCardChildProps>(children)) {
+    return cloneElement(children, {
       ...rest,
-      className: cn((children as any).props?.className, className),
+      className: cn(children.props.className, className),
       children: content,
     });
   }

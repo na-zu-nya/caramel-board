@@ -27,3 +27,13 @@ export const Widescreen: Story = {
     icon: '🖼️',
   },
 };
+
+export const ThreeByTwo: Story = {
+  args: {
+    aspect: '3/2',
+    title: 'Media Categories',
+    subtitle: '1,234 items',
+    thumbnailSrc: '',
+    icon: '🖼️',
+  },
+};

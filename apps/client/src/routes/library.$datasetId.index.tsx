@@ -264,10 +264,10 @@ function DatasetHome() {
       <DropZone
         onFilesDrop={handleOverviewFileDrop}
         onUrlDrop={handleOverviewUrlDrop}
-        className="min-h-screen"
+        className="min-h-screen bg-gray-50"
         overlayClassName="top-14 left-0 right-0 bottom-0"
       >
-        <div className="min-h-screen flex items-center justify-center">
+        <div className="min-h-screen flex items-center justify-center bg-gray-50">
           <div className="w-8 h-8 border-2 border-gray-300 border-t-transparent rounded-full animate-spin" />
         </div>
       </DropZone>
@@ -278,37 +278,32 @@ function DatasetHome() {
     <DropZone
       onFilesDrop={handleOverviewFileDrop}
       onUrlDrop={handleOverviewUrlDrop}
-      className="min-h-screen"
+      className="min-h-screen bg-gray-50"
       overlayClassName="top-14 left-0 right-0 bottom-0"
     >
-      <div
-        className="min-h-screen transition-all duration-300 ease-in-out"
-        style={{
-          backgroundColor: dataset?.themeColor
-            ? `color-mix(in oklch, ${dataset.themeColor} 5%, white)`
-            : 'white',
-        }}
-      >
+      <div className="min-h-screen bg-gray-50 transition-all duration-300 ease-in-out">
         <div className="container mx-auto px-4 py-6 pt-8 pb-24 space-y-8">
           <h1 className="text-4xl font-bold">
             {dataset?.name || t.sidebar.library} {t.overview.title}
           </h1>
 
-          {/* Media Types Section */}
+          {/* メディアカテゴリ */}
           <section>
-            <SectionHeader title={t.overview.mediaTypes} />
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <SectionHeader title={t.overview.mediaCategories} />
+            <div className="grid grid-cols-3 gap-3 md:gap-6">
               {overview?.mediaTypes.map((media) => {
                 const config = mediaTypeConfig[media.mediaType as MediaCategory];
                 return (
                   <EntityCard
                     key={media.mediaType}
                     asChild
-                    aspect="16/9"
+                    aspect="3/2"
                     title={
-                      <span className="flex items-center gap-2">
-                        {config?.Icon && <config.Icon size={20} />}
-                        <span className="text-lg font-semibold">{config?.label}</span>
+                      <span className="flex min-w-0 items-center gap-2">
+                        {config?.Icon && <config.Icon size={20} className="shrink-0" />}
+                        <span className="min-w-0 truncate text-sm font-semibold sm:text-lg">
+                          {config?.label}
+                        </span>
                       </span>
                     }
                     subtitle={t.library.itemCount(media.count)}
@@ -331,7 +326,7 @@ function DatasetHome() {
           {overview?.collections && overview.collections.length > 0 && (
             <section>
               <SectionHeader title={t.sidebar.collections} />
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+              <div className="grid grid-cols-3 gap-3 md:grid-cols-4 md:gap-4 lg:grid-cols-5">
                 {overview.collections
                   .filter((c) => !isScratchCollection(c))
                   .map((collection) => (
