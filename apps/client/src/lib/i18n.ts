@@ -262,6 +262,8 @@ const en = {
       'Paste this key into the Clipper options page. You can copy it again while the key is stored.',
     extensionKeyCopied: 'Copied the Clipper key.',
     extensionKeyCopyFailed: 'Failed to copy the Clipper key.',
+    licenseLinkApp: 'Caramel Board License',
+    licenseLinkThirdParty: 'Third-Party Licenses',
   },
   authorManagement: {
     title: 'Authors',
@@ -1064,6 +1066,8 @@ const ja: Translations = {
       'Clipperの設定画面へ貼り付けてください。キーが保存されている間は再コピーできます。',
     extensionKeyCopied: 'Clipper連携キーをコピーしました。',
     extensionKeyCopyFailed: 'Clipper連携キーをコピーできませんでした。',
+    licenseLinkApp: 'Caramel Board ライセンス',
+    licenseLinkThirdParty: 'サードパーティライセンス',
   },
   authorManagement: {
     title: '作者一覧',

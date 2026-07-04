@@ -946,6 +946,32 @@ ul.copy-bullets {
   font-weight: 600;
 }
 
+.legal-links {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.legal-link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: #8a97a6;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.legal-link:hover {
+  color: #637489;
+  text-decoration: underline;
+}
+
+.legal-link-separator {
+  color: #c3ccd6;
+  font-size: 11px;
+}
+
 .message-box,
 .loading-panel {
   padding: 10px;

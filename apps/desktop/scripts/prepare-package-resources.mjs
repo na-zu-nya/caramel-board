@@ -418,11 +418,24 @@ const prepareAutoTagBridge = () => {
   });
 };
 
+const copyLegalNotices = () => {
+  fs.copyFileSync(path.join(repoRoot, 'LICENSE'), path.join(resourcesRoot, 'LICENSE'));
+  fs.copyFileSync(
+    path.join(repoRoot, 'THIRD_PARTY_NOTICES.md'),
+    path.join(resourcesRoot, 'THIRD_PARTY_NOTICES.md')
+  );
+  fs.copyFileSync(
+    path.join(repoRoot, 'THIRD_PARTY_NOTICES.generated.md'),
+    path.join(resourcesRoot, 'THIRD_PARTY_NOTICES.generated.md')
+  );
+};
+
 const main = async () => {
   run(npmCommand(), ['run', '-w', '@caramelboard/server', 'build']);
   run(npmCommand(), ['run', '-w', '@caramelboard/client', 'build']);
 
   ensureEmptyDir(resourcesRoot);
+  copyLegalNotices();
   await installNodeRuntime();
   await installUvRuntime();
   prepareServerRuntime();

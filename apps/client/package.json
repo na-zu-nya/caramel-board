@@ -9,6 +9,7 @@
     "dev:standalone": "node ../../scripts/dev-client-vite.mjs http://127.0.0.1:6777",
     "dev:vite": "node ../../scripts/dev-client-vite.mjs",
     "start": "vite --port 3000",
+    "prebuild": "node ../../scripts/generate-third-party-notices.mjs",
     "build": "vite build",
     "serve": "vite preview",
     "storybook": "storybook dev -p 6006 --no-open",

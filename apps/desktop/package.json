@@ -9,6 +9,7 @@
     "build": "npm run build:ui",
     "build:app": "node ../../scripts/sync-version.mjs && npm run prepare:package && tauri build",
     "dev:ui": "vite --host 127.0.0.1 --port 1420",
+    "prebuild:ui": "node ../../scripts/generate-third-party-notices.mjs",
     "build:ui": "vite build",
     "lint": "biome check src",
     "format": "biome check --write src && biome format --write src",

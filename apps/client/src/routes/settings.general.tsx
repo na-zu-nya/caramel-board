@@ -231,6 +231,26 @@ function GeneralSettings() {
             onCopyStoredKey={handleCopyStoredApiKey}
           />
         </div>
+
+        <div className="mt-10 text-center text-xs text-gray-400">
+          <a
+            href="/legal/LICENSE.txt"
+            target="_blank"
+            rel="noreferrer"
+            className="hover:text-gray-600 hover:underline"
+          >
+            {t.settings.licenseLinkApp}
+          </a>
+          <span className="mx-2">·</span>
+          <a
+            href="/legal/THIRD_PARTY_NOTICES.txt"
+            target="_blank"
+            rel="noreferrer"
+            className="hover:text-gray-600 hover:underline"
+          >
+            {t.settings.licenseLinkThirdParty}
+          </a>
+        </div>
       </div>
     </div>
   );

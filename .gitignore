@@ -90,3 +90,8 @@ docker-compose.local.yml
 notes/**/*.md
 
 AGENTS.md
+
+# Generated legal notices
+THIRD_PARTY_NOTICES.generated.md
+apps/client/public/legal/
+apps/desktop/public/legal/

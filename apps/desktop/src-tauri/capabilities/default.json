@@ -3,5 +3,11 @@
   "identifier": "default",
   "description": "Default permissions for the Caramel Board launcher window",
   "windows": ["main"],
-  "permissions": ["core:default", "dialog:default", "opener:default"]
+  "permissions": [
+    "core:default",
+    "dialog:default",
+    "opener:default",
+    "core:webview:allow-create-webview-window",
+    "core:window:allow-set-focus"
+  ]
 }

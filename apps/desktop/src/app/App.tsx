@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import {
@@ -602,6 +603,32 @@ export default function App() {
     event.preventDefault();
     void openUrl(event.currentTarget.href);
   }, []);
+
+  const openLegalNotice = useCallback(
+    async (doc: 'license' | 'third-party') => {
+      const label = doc === 'license' ? 'legal-license' : 'legal-third-party';
+      const existing = await WebviewWindow.getByLabel(label);
+      if (existing) {
+        await existing.setFocus();
+        return;
+      }
+      new WebviewWindow(label, {
+        url: doc === 'license' ? '/legal/LICENSE.txt' : '/legal/THIRD_PARTY_NOTICES.txt',
+        title: doc === 'license' ? t.licenseLinkApp : t.licenseLinkThirdParty,
+        width: 760,
+        height: 640,
+      });
+    },
+    [t]
+  );
+
+  const handleOpenLicenseNotice = useCallback(() => {
+    void openLegalNotice('license');
+  }, [openLegalNotice]);
+
+  const handleOpenThirdPartyNotice = useCallback(() => {
+    void openLegalNotice('third-party');
+  }, [openLegalNotice]);
 
   const handleChooseDb = useCallback(() => {
     void runAction(async () => {
@@ -1285,6 +1312,15 @@ export default function App() {
         <footer className="settings-footer">
           <span className="auto-save-note">{t.settingsAutoSaved}</span>
           {message ? <div className="message-box">{message}</div> : null}
+          <div className="legal-links">
+            <button type="button" className="legal-link" onClick={handleOpenLicenseNotice}>
+              {t.licenseLinkApp}
+            </button>
+            <span className="legal-link-separator">·</span>
+            <button type="button" className="legal-link" onClick={handleOpenThirdPartyNotice}>
+              {t.licenseLinkThirdParty}
+            </button>
+          </div>
         </footer>
       </section>
 
