@@ -426,6 +426,27 @@ select:disabled {
   line-height: 1.35;
 }
 
+ul.copy-bullets {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.section-heading ul.copy-bullets {
+  margin-top: 6px;
+  color: #657386;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.wizard-heading ul.copy-bullets {
+  color: #485768;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
 .dependency-link-row {
   display: flex;
   flex-wrap: wrap;

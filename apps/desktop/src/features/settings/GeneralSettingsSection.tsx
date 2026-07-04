@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import type { ChangeEvent } from 'react';
 import type { AppSettings } from '../../app/types';
+import { type CopyBlock, CopyText } from '../../shared/ui/CopyText';
 
 export interface GeneralSettingsCopy {
   general: string;
@@ -42,7 +43,7 @@ export interface GeneralSettingsCopy {
   moveLibrary: string;
   resetSetup: string;
   network: string;
-  networkDescription: string;
+  networkDescription: CopyBlock;
   allowExternalNetwork: string;
   requireBasicAuth: string;
   requireBasicAuthHint: string;
@@ -252,7 +253,7 @@ export function GeneralSettingsSection({
           <Globe2 size={16} />
           <h3>{copy.network}</h3>
         </div>
-        <p className="muted">{copy.networkDescription}</p>
+        <CopyText className="muted" text={copy.networkDescription} />
         <label className="toggle-row">
           <input
             type="checkbox"

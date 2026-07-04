@@ -1,11 +1,12 @@
 import { AlertCircle, CheckCircle2, Download, Folder, RefreshCcw, Sparkles } from 'lucide-react';
 import type { ChangeEvent } from 'react';
 import type { AppSettings, AutoTagInstallProgress, AutoTagStatus } from '../../app/types';
+import { type CopyBlock, CopyText } from '../../shared/ui/CopyText';
 import { type AutoTagProgressCopy, getAutoTagProgressText } from './progressText';
 
 export interface AutoTagSettingsCopy {
   title: string;
-  description: string;
+  description: CopyBlock;
   enable: string;
   useGpu: string;
   gpuAvailable: string;
@@ -76,7 +77,7 @@ export function AutoTagSettingsSection({
         <Sparkles size={18} />
         <div>
           <h2>{copy.title}</h2>
-          <p>{copy.description}</p>
+          <CopyText text={copy.description} />
         </div>
       </div>
 

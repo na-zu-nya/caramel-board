@@ -22,6 +22,7 @@ import {
   getPopplerOfficialUrl,
 } from '../../app/external-links';
 import { CaramelBoardLogo } from '../../shared/brand/CaramelBoardLogo';
+import { CopyText } from '../../shared/ui/CopyText';
 import { type AutoTagProgressCopy, getAutoTagProgressText } from '../autotag/progressText';
 import type {
   StandaloneMigrationProgress,
@@ -172,7 +173,7 @@ const wizardCopy = {
     doneTitle: 'All set',
     doneBody: 'Setup is complete. Start Caramel Board now?',
     launchNetworkNote:
-      'On first launch, Windows may ask to allow network access for Node.js or Python. Allow access on private networks if you want to open Caramel Board from this computer or other devices on your local network.',
+      'On first launch, Windows may ask to allow network access for Node.js or Python — allow it on private networks.',
     launchNow: 'Start Caramel Board',
     launchLater: 'Start later',
     launchPreparing: 'Starting Caramel Board…',
@@ -189,8 +190,7 @@ const wizardCopy = {
     retry: 'Retry',
     chooseExistingFolder: 'Open data store',
     databaseSetupTitle: 'Prepare the database',
-    databaseSetupBody:
-      'The selected data store must match this app version before media setup continues.',
+    databaseSetupBody: 'The database is checked and updated if needed before continuing.',
     databaseSetupChecking: 'Checking database…',
     databaseSetupReadyTitle: 'Database is ready',
     databaseSetupReadyBody: 'No database update is required.',
@@ -203,13 +203,15 @@ const wizardCopy = {
     databaseSetupUpdate: 'Update database',
     databaseSetupUpdating: 'Updating database…',
     sharingTitle: 'Share with other devices',
-    sharingBody:
-      'Caramel Board can be opened from other devices on the same network — phones, tablets, or another PC. In typical home networks only devices on your local network can reach it, but depending on your router setup it may also become reachable from the Internet. Direct Internet exposure is strongly discouraged — for remote access, use a VPN like Tailscale.',
+    sharingBody: [
+      'Open Caramel Board from other devices on the same network — phones, tablets, or another PC.',
+      'Protecting the page with a password is recommended when sharing',
+      'Do not expose Caramel Board directly to the Internet — for remote access, use a VPN like Tailscale',
+    ],
     sharingAllow: 'Allow access from other devices on this network',
     sharingPasswordHint: 'When sharing is on, we recommend protecting it with a name and password.',
     sharingPasswordToggle: 'Protect the page with a password',
-    sharingPasswordToggleHint:
-      'Visitors will need a name and password to open the page. Recommended when other people share the network.',
+    sharingPasswordToggleHint: 'Visitors will need a name and password to open the page.',
     sharingUsername: 'Name',
     sharingPassword: 'Password',
     sharingPrivateBody:
@@ -228,8 +230,8 @@ const wizardCopy = {
     pdfBody:
       'Caramel Board uses Poppler to turn PDF pages into images. This is optional — you can set it up later from the settings screen.',
     pdfDetectedHeading: 'Detected Poppler',
-    pdfDetectedHint: 'Pick the pdftocairo executable to use.',
-    pdfNotFound: 'No pdftocairo executable was found on this computer.',
+    pdfDetectedHint: 'Pick the Poppler to use.',
+    pdfNotFound: 'No Poppler was found on this computer.',
     pdfInstallHint:
       'After installing Poppler, click "Re-detect" or set it up later from the settings screen.',
     pdfInstallGuide: 'How to install Poppler',
@@ -237,10 +239,13 @@ const wizardCopy = {
     skipForNow: 'Skip for now',
     useThis: 'Use this',
     autoTagTitle: 'Auto-tagging',
-    autoTagBody:
-      'Caramel Board can automatically tag imported images and enable similar-image search using the open-source JoyTag model. Everything runs on this computer — your images are never sent anywhere, and they are never used to train AI.',
+    autoTagBody: [
+      'Caramel Board can automatically tag imported images and enable similar-image search.',
+      'Everything runs on this computer',
+      'Your images are never sent anywhere or used to train AI',
+    ],
     autoTagCudaNote:
-      'CUDA is not required for CPU tagging. GPU tagging can be enabled from AutoTag settings when a usable NVIDIA GPU is detected.',
+      'GPU tagging can be turned on later from AutoTag settings when an NVIDIA GPU is available',
     aboutJoyTag: 'About JoyTag',
     autoTagEnable: 'I want to use auto-tagging',
     autoTagEnableHint:
@@ -303,7 +308,7 @@ const wizardCopy = {
     doneTitle: '準備ができました',
     doneBody: 'セットアップが完了しました。Caramel Board を起動しますか?',
     launchNetworkNote:
-      '初回起動時に、Windows が Node.js や Python のネットワークアクセス許可を求める場合があります。この PC や同じネットワーク上の機器から Caramel Board を開く場合は、プライベートネットワークでのアクセスを許可してください。',
+      '初回起動時に、Windows が Node.js や Python のネットワークアクセス許可を求めることがあります。プライベートネットワークでのアクセスを許可してください。',
     launchNow: 'Caramel Board を起動',
     launchLater: 'あとで起動する',
     launchPreparing: 'Caramel Board を起動しています…',
@@ -320,8 +325,7 @@ const wizardCopy = {
     retry: 'もう一度確認',
     chooseExistingFolder: 'データストアを開く',
     databaseSetupTitle: 'データベースを準備',
-    databaseSetupBody:
-      '選択したデータストアを確認し、このアプリで使える状態にしてから次へ進みます。',
+    databaseSetupBody: 'データベースを確認し、必要があれば更新してから次へ進みます。',
     databaseSetupChecking: 'データベースを確認しています…',
     databaseSetupReadyTitle: 'データベースは準備済みです',
     databaseSetupReadyBody: '必要なデータベース更新はありません。',
@@ -334,13 +338,15 @@ const wizardCopy = {
     databaseSetupUpdate: 'データベースを更新',
     databaseSetupUpdating: 'データベースを更新しています…',
     sharingTitle: '他の機器からのアクセス',
-    sharingBody:
-      '同じネットワーク上のスマートフォン・タブレット・別の PC から Caramel Board を開けるようにできます。通常はローカルネットワーク内からのみアクセスできますが、ルーターや環境によってはインターネットからアクセスできる場合があります。インターネットへの直接公開は強く非推奨です。外出先からアクセスしたい場合は Tailscale などの VPN 経由を推奨します。',
+    sharingBody: [
+      '同じネットワークのスマートフォンやタブレット、PC から Caramel Board を開けるようにできます。',
+      '共有するときはパスワード保護をおすすめします',
+      'インターネットへの直接公開は避けてください。外出先からは Tailscale などの VPN が安全です',
+    ],
     sharingAllow: '同じネットワーク上の他の機器からのアクセスを許可する',
     sharingPasswordHint: '共有を有効にする場合は、名前とパスワードでの保護を推奨します。',
     sharingPasswordToggle: 'ページをパスワードで保護する',
-    sharingPasswordToggleHint:
-      'ページにアクセスするために、名前とパスワードが必要になります。他の人が参加しているネットワークの場合、設定を推奨します。',
+    sharingPasswordToggleHint: 'ページを開くときに名前とパスワードの入力が必要になります。',
     sharingUsername: '名前',
     sharingPassword: 'パスワード',
     sharingPrivateBody:
@@ -358,18 +364,21 @@ const wizardCopy = {
     pdfBody:
       'PDF ページを画像に変換するために Poppler を使います。任意の設定です。後から設定画面で設定することもできます。',
     pdfDetectedHeading: '検出された Poppler',
-    pdfDetectedHint: '使用する pdftocairo を選んでください。',
-    pdfNotFound: 'このコンピュータに pdftocairo は見つかりませんでした。',
+    pdfDetectedHint: '使う Poppler を選んでください。',
+    pdfNotFound: 'このコンピュータに Poppler は見つかりませんでした。',
     pdfInstallHint: 'Poppler をインストールして「再検出」を押すか、後から設定画面で設定できます。',
     pdfInstallGuide: 'Poppler のインストール方法',
     redetect: '再検出',
     skipForNow: 'あとで設定する',
     useThis: 'これを使う',
     autoTagTitle: '自動タグ',
-    autoTagBody:
-      '自動タグを使うと、取り込んだ画像に自動でタグを付け、類似画像検索など画像ベースの検索に活用できます。オープンソースの JoyTag モデルでローカル処理し、画像が外部に送信されたり、AI の学習に使われたりすることはありません。',
+    autoTagBody: [
+      '取り込んだ画像に自動でタグを付け、類似画像検索などに活用できます。',
+      '処理はすべてこの PC の中で完結します',
+      '画像が外部に送信されたり、AI の学習に使われたりすることはありません',
+    ],
     autoTagCudaNote:
-      'CPU でのタグ付けに CUDA は不要です。利用できる NVIDIA GPU が検出された場合は、自動タグ設定から GPU でのタグ生成を有効にできます。',
+      'NVIDIA GPU がある場合は、インストール後に自動タグ設定から GPU での生成を有効にできます',
     aboutJoyTag: 'JoyTag について',
     autoTagEnable: '自動タグを使う',
     autoTagEnableHint:
@@ -434,7 +443,7 @@ export function SetupWizard({
   const t = wizardCopy[language];
   const showAutoTagCudaNote = useMemo(() => !navigator.platform.toLowerCase().includes('mac'), []);
   const autoTagBody = useMemo(
-    () => (showAutoTagCudaNote ? `${t.autoTagBody} ${t.autoTagCudaNote}` : t.autoTagBody),
+    () => (showAutoTagCudaNote ? [...t.autoTagBody, t.autoTagCudaNote] : t.autoTagBody),
     [showAutoTagCudaNote, t]
   );
   const getAutoTagConfirmBody = useCallback(
@@ -1374,7 +1383,7 @@ export function SetupWizard({
     <>
       <div className="wizard-heading">
         <h1>{t.sharingTitle}</h1>
-        <p>{t.sharingBody}</p>
+        <CopyText text={t.sharingBody} />
       </div>
       <label className="wizard-choice" style={{ cursor: 'pointer' }}>
         <input
@@ -1618,7 +1627,7 @@ export function SetupWizard({
       <>
         <div className="wizard-heading">
           <h1>{t.autoTagTitle}</h1>
-          <p>{autoTagBody}</p>
+          <CopyText text={autoTagBody} />
           <button
             type="button"
             className="link-button"
