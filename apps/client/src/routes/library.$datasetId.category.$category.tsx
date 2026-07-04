@@ -14,13 +14,13 @@ import { currentFilterAtom } from '@/stores/ui';
 import { genListToken, saveViewContext } from '@/stores/view-context';
 import type { MediaCategory, MediaGridItem, StackFilter } from '@/types';
 
-export const Route = createFileRoute('/library/$datasetId/media-type/$mediaType')({
+export const Route = createFileRoute('/library/$datasetId/category/$category')({
   component: MediaTypeList,
 });
 
 function MediaTypeList() {
   const t = useT();
-  const { datasetId, mediaType } = Route.useParams();
+  const { datasetId, category } = Route.useParams();
   const search = Route.useSearch() as {
     tags?: string[];
     sparse?: boolean;
@@ -76,7 +76,7 @@ function MediaTypeList() {
     // Otherwise, initialize from URL params
     const newFilter: StackFilter = {
       datasetId,
-      mediaCategory: mediaType as MediaCategory,
+      category: category as MediaCategory,
       mediaTypes: search.mediaTypes,
       // Preserve explicit false/empty values correctly; avoid `|| undefined` which drops false
       tags: search.tags ?? undefined,
@@ -93,7 +93,7 @@ function MediaTypeList() {
     );
   }, [
     datasetId,
-    mediaType,
+    category,
     search.tags,
     search.search,
     search.isFavorite,
@@ -111,7 +111,7 @@ function MediaTypeList() {
   const { total, allItems, loadPage, loadRange, isLoading, loadedPages, refreshAll } =
     useRangeBasedQuery({
       datasetId,
-      mediaType,
+      category,
       filter: currentFilter,
       sort: currentSort,
       pageSize: 50,
@@ -143,7 +143,7 @@ function MediaTypeList() {
       );
       const token = genListToken({
         datasetId,
-        mediaType,
+        category,
         filters: currentFilter,
         sort: currentSort,
       });
@@ -153,7 +153,7 @@ function MediaTypeList() {
       saveViewContext({
         token,
         datasetId,
-        mediaType: mediaType as MediaCategory,
+        category: category as MediaCategory,
         filters: currentFilter,
         sort: currentSort,
         ids,
@@ -164,7 +164,7 @@ function MediaTypeList() {
       // Preserve search params + listToken
       const searchParams: Record<string, string | string[] | number | boolean> = {
         page: 0,
-        mediaType,
+        category,
         listToken: token,
       };
       if (search.tags) searchParams.tags = search.tags;
@@ -189,7 +189,7 @@ function MediaTypeList() {
   }, [
     total,
     datasetId,
-    mediaType,
+    category,
     navigate,
     currentFilter,
     currentSort,
@@ -323,13 +323,13 @@ function MediaTypeList() {
       }
 
       void navigate({
-        to: '/library/$datasetId/media-type/$mediaType',
-        params: { datasetId, mediaType },
+        to: '/library/$datasetId/category/$category',
+        params: { datasetId, category },
         search: searchParams,
         replace: true,
       });
     },
-    [setCurrentFilter, setNavigationState, navigate, datasetId, mediaType]
+    [setCurrentFilter, setNavigationState, navigate, datasetId, category]
   );
 
   // Handle sort changes
@@ -375,14 +375,14 @@ function MediaTypeList() {
       // Create a listToken and persist ViewContext
       const token = genListToken({
         datasetId,
-        mediaType,
+        category,
         filters: currentFilter,
         sort: currentSort,
       });
       saveViewContext({
         token,
         datasetId,
-        mediaType: mediaType as MediaCategory,
+        category: category as MediaCategory,
         filters: currentFilter,
         sort: currentSort,
         ids: loadedIds,
@@ -393,7 +393,7 @@ function MediaTypeList() {
       // Navigate to stack viewer - preserve all search params + listToken
       const searchParams: Record<string, string | string[] | number | boolean> = {
         page: 0,
-        mediaType,
+        category,
         listToken: token,
       };
 
@@ -443,7 +443,7 @@ function MediaTypeList() {
     [
       navigate,
       datasetId,
-      mediaType,
+      category,
       search,
       setNavigationState,
       total,
@@ -464,7 +464,7 @@ function MediaTypeList() {
         onLoadRange={handleLoadRange}
         onRefreshAll={refreshAll}
         dataset={dataset}
-        uploadMediaCategory={mediaType as MediaCategory}
+        uploadMediaCategory={category as MediaCategory}
         onItemClick={handleItemClick}
         containerRef={containerRef}
         useWindowScroll

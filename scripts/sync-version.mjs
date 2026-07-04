@@ -6,10 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const repoRoot = path.resolve(path.dirname(__filename), '..');
-const appPackagePaths = [
-  'apps/desktop/package.json',
-  'apps/chrome-extension/package.json',
-];
+const appPackagePaths = ['apps/desktop/package.json', 'apps/chrome-extension/package.json'];
 
 const readText = (relativePath) => fs.readFileSync(path.join(repoRoot, relativePath), 'utf8');
 const writeText = (relativePath, content) =>
@@ -19,6 +16,17 @@ const writeJson = (relativePath, value) =>
   writeText(relativePath, `${JSON.stringify(value, null, 2)}\n`);
 
 const rootPackage = readJson('package.json');
+const requestedVersion = process.argv[2];
+
+if (requestedVersion !== undefined) {
+  if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(requestedVersion)) {
+    console.error(`指定されたバージョンが SemVer として扱えません: ${requestedVersion}`);
+    process.exit(1);
+  }
+  rootPackage.version = requestedVersion;
+  writeJson('package.json', rootPackage);
+}
+
 const version = rootPackage.version;
 
 if (typeof version !== 'string' || !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version)) {

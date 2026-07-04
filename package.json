@@ -10,6 +10,7 @@
   "scripts": {
     "dev": "node scripts/dev-desktop.mjs",
     "generate:licenses": "node scripts/generate-third-party-notices.mjs",
+    "sync:version": "node scripts/sync-version.mjs",
     "build": "npm run -w @caramelboard/desktop build:app",
     "build:ci": "turbo run build",
     "lint": "turbo run lint",
