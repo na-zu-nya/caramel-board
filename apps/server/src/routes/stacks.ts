@@ -17,8 +17,8 @@ import { createZipArchive } from '../utils/zip';
 
 export const stacksRoute = new Hono();
 
-const MediaCategorySchema = z.enum(['image', 'comic', 'video']);
-type MediaCategory = z.infer<typeof MediaCategorySchema>;
+const CategorySchema = z.enum(['image', 'books', 'video']);
+type Category = z.infer<typeof CategorySchema>;
 const ActualMediaTypeSchema = z.enum(['image', 'video', 'multipleImages']);
 const ActualMediaTypesQuerySchema = z
   .union([ActualMediaTypeSchema, z.array(ActualMediaTypeSchema)])
@@ -49,7 +49,7 @@ const colorRepository = new StandaloneColorRepository();
 const PaginatedQuerySchema = z.object({
   dataSetId: z.coerce.number().int().positive(),
   collection: z.coerce.number().int().positive().optional(),
-  mediaCategory: MediaCategorySchema.optional(),
+  category: CategorySchema.optional(),
   mediaTypes: ActualMediaTypesQuerySchema,
   tag: z.union([z.array(z.string()), z.string()]).optional(),
   author: z.union([z.array(z.string()), z.string()]).optional(),
@@ -94,7 +94,7 @@ const AutoTagSearchQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).optional().default(50),
   offset: z.coerce.number().int().min(0).optional().default(0),
   search: z.string().optional(),
-  mediaCategory: MediaCategorySchema.optional(),
+  category: CategorySchema.optional(),
   mediaTypes: ActualMediaTypesQuerySchema,
   author: z.union([z.array(z.string()), z.string()]).optional(),
   tag: z.union([z.array(z.string()), z.string()]).optional(),
@@ -112,9 +112,9 @@ const BulkAuthorSchema = z.object({
   stackIds: z.array(z.number().int().positive()),
   author: z.string().min(1),
 });
-const BulkMediaTypeSchema = z.object({
+const BulkCategorySchema = z.object({
   stackIds: z.array(z.number().int().positive()),
-  mediaType: MediaCategorySchema,
+  category: CategorySchema,
 });
 const BulkFavoriteSchema = z.object({
   stackIds: z.array(z.number().int().positive()),
@@ -138,7 +138,7 @@ const ImportFromUrlsSchema = z.object({
   urls: z.array(z.string().url()).min(1).max(20),
   dataSetId: z.number().int().positive().optional(),
   stackId: z.number().int().positive().optional(),
-  mediaType: MediaCategorySchema.optional(),
+  category: CategorySchema.optional(),
   collectionId: z.number().int().positive().optional(),
   author: z.string().min(1).max(200).optional(),
   tags: z.array(z.string().min(1)).optional(),
@@ -194,7 +194,7 @@ const parseIds = (value: string | string[]) => {
 
 const getStandaloneColorStackIds = (options: {
   dataSetId: number;
-  mediaCategory?: MediaCategory;
+  category?: Category;
   hueCategories?: string | string[];
   toneSaturation?: number;
   toneLightness?: number;
@@ -214,7 +214,7 @@ const getStandaloneColorStackIds = (options: {
 
   return colorRepository.getMatchingStackIdsByFilter({
     dataSetId: options.dataSetId,
-    mediaType: options.mediaCategory,
+    category: options.category,
     hueCategories,
     tonePoint,
     toneTolerance: options.toneTolerance,
@@ -345,16 +345,13 @@ const resolveFileNameFromHeaders = (urlString: string, contentDisposition: strin
   }
 };
 
-const inferMediaTypeFromMime = (
-  mime: string | null | undefined,
-  originalName: string
-): MediaCategory => {
+const inferCategoryFromMime = (mime: string | null | undefined, originalName: string): Category => {
   const ext = path.extname(originalName).toLowerCase();
   if (ext === '.ai' || ext === '.svg' || ext === '.svgz') return 'image';
-  if (ext === '.pdf') return 'comic';
+  if (ext === '.pdf') return 'books';
   if (['.mp4', '.mov', '.avi', '.mkv', '.webm', '.mpeg', '.mpg'].includes(ext)) return 'video';
   if (mime?.startsWith('video/')) return 'video';
-  if (mime === 'application/pdf') return 'comic';
+  if (mime === 'application/pdf') return 'books';
   return 'image';
 };
 
@@ -552,7 +549,7 @@ stacksRoute.get('/paginated', async (c) => {
   const stackListParams: StandaloneStackListParams = {
     dataSetId: query.dataSetId,
     collection: query.collection,
-    mediaCategory: query.mediaCategory,
+    category: query.category,
     mediaTypes: query.mediaTypes,
     tag: query.tag,
     author: query.author,
@@ -572,7 +569,7 @@ stacksRoute.get('/paginated', async (c) => {
 
   const stackIds = getStandaloneColorStackIds({
     dataSetId: stackListParams.dataSetId,
-    mediaCategory: stackListParams.mediaCategory,
+    category: stackListParams.category,
     hueCategories: query.hueCategories,
     toneSaturation: query.toneSaturation,
     toneLightness: query.toneLightness,
@@ -610,7 +607,7 @@ stacksRoute.get('/search/autotag', async (c) => {
     limit,
     offset,
     search,
-    mediaCategory,
+    category,
     mediaTypes,
     author,
     tag,
@@ -630,7 +627,7 @@ stacksRoute.get('/search/autotag', async (c) => {
       limit,
       offset,
       search,
-      mediaCategory,
+      category,
       mediaTypes,
       author,
       tag,
@@ -801,10 +798,10 @@ stacksRoute.put('/bulk/author', async (c) => {
   return c.json({ success: true, updated });
 });
 
-stacksRoute.put('/bulk/media-type', async (c) => {
-  const parse = BulkMediaTypeSchema.safeParse(await c.req.json().catch(() => ({})));
+stacksRoute.put('/bulk/category', async (c) => {
+  const parse = BulkCategorySchema.safeParse(await c.req.json().catch(() => ({})));
   if (!parse.success) return c.json({ error: 'Invalid body', details: parse.error }, 400);
-  const updated = stackRepository.bulkSetMediaType(parse.data.stackIds, parse.data.mediaType);
+  const updated = stackRepository.bulkSetCategory(parse.data.stackIds, parse.data.category);
   return c.json({ success: true, updated });
 });
 
@@ -930,18 +927,18 @@ stacksRoute.post('/', async (c) => {
     }
 
     const nameValue = formData.get('name');
-    const mediaTypeValue = formData.get('mediaType');
+    const categoryValue = formData.get('category');
     const authorValue = formData.get('author');
     const tags = formData.getAll('tags[]').map((tag) => String(tag));
-    let mediaType: MediaCategory;
-    if (typeof mediaTypeValue === 'string' && mediaTypeValue.length > 0) {
-      const parsedMediaType = MediaCategorySchema.safeParse(mediaTypeValue);
-      if (!parsedMediaType.success) {
-        return c.json({ error: 'mediaType must be one of image, comic, or video' }, 400);
+    let category: Category;
+    if (typeof categoryValue === 'string' && categoryValue.length > 0) {
+      const parsedCategory = CategorySchema.safeParse(categoryValue);
+      if (!parsedCategory.success) {
+        return c.json({ error: 'category must be one of image, books, or video' }, 400);
       }
-      mediaType = parsedMediaType.data;
+      category = parsedCategory.data;
     } else {
-      mediaType = inferMediaTypeFromMime(file.type, file.name);
+      category = inferCategoryFromMime(file.type, file.name);
     }
 
     const storageRoot = process.env.FILES_STORAGE || path.resolve('./data');
@@ -953,7 +950,7 @@ stacksRoute.post('/', async (c) => {
     const stack = await stackRepository.createStackWithFile({
       dataSetId,
       name: typeof nameValue === 'string' && nameValue.length > 0 ? nameValue : file.name,
-      mediaType,
+      category,
       tags: tags.length ? tags : undefined,
       author: typeof authorValue === 'string' ? authorValue : undefined,
       file: {
@@ -986,7 +983,7 @@ stacksRoute.post('/import-from-urls', async (c) => {
     return c.json({ error: 'Invalid body', details: parse.error }, 400);
   }
 
-  const { urls, dataSetId, stackId, mediaType, collectionId, author, tags } = parse.data;
+  const { urls, dataSetId, stackId, category, collectionId, author, tags } = parse.data;
   if (!stackId && !dataSetId) {
     return c.json({ error: 'stackId or dataSetId is required' }, 400);
   }
@@ -1050,8 +1047,7 @@ stacksRoute.post('/import-from-urls', async (c) => {
         const createdStack = await stackRepository.createStackWithFile({
           dataSetId: effectiveDatasetId,
           name: downloaded.originalname,
-          mediaType:
-            mediaType ?? inferMediaTypeFromMime(downloaded.mimetype, downloaded.originalname),
+          category: category ?? inferCategoryFromMime(downloaded.mimetype, downloaded.originalname),
           tags,
           author,
           file: downloaded,

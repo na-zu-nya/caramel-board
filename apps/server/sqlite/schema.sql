@@ -64,7 +64,7 @@ CREATE TABLE IF NOT EXISTS stacks (
   author_id INTEGER,
   name TEXT NOT NULL COLLATE NOCASE,
   thumbnail TEXT NOT NULL,
-  media_type TEXT NOT NULL DEFAULT 'image' CHECK (media_type IN ('image', 'comic', 'video')),
+  category TEXT NOT NULL DEFAULT 'image' CHECK (category IN ('image', 'books', 'video')),
   actual_media_type TEXT CHECK (actual_media_type IN ('image', 'video', 'multipleImages')),
   liked INTEGER NOT NULL DEFAULT 0,
   meta_json TEXT,
@@ -76,7 +76,7 @@ CREATE TABLE IF NOT EXISTS stacks (
 );
 
 CREATE INDEX IF NOT EXISTS idx_stacks_dataset_created ON stacks(dataset_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_stacks_dataset_media_type ON stacks(dataset_id, media_type);
+CREATE INDEX IF NOT EXISTS idx_stacks_dataset_category ON stacks(dataset_id, category);
 CREATE INDEX IF NOT EXISTS idx_stacks_dataset_actual_media_type
   ON stacks(dataset_id, actual_media_type);
 CREATE INDEX IF NOT EXISTS idx_stacks_author ON stacks(author_id);
@@ -223,17 +223,17 @@ CREATE TABLE IF NOT EXISTS navigation_pins (
   dataset_id INTEGER NOT NULL,
   user_id INTEGER NOT NULL,
   collection_id INTEGER,
-  type TEXT NOT NULL CHECK (type IN ('COLLECTION', 'MEDIA_TYPE', 'OVERVIEW', 'FAVORITES', 'LIKES')),
+  type TEXT NOT NULL CHECK (type IN ('COLLECTION', 'CATEGORY', 'OVERVIEW', 'FAVORITES', 'LIKES')),
   name TEXT NOT NULL,
   icon TEXT NOT NULL,
-  media_type TEXT,
+  category TEXT,
   sort_order INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   FOREIGN KEY (dataset_id) REFERENCES datasets(id) ON DELETE CASCADE,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
   FOREIGN KEY (collection_id) REFERENCES collections(id) ON DELETE CASCADE,
-  UNIQUE (user_id, type, dataset_id, collection_id, media_type)
+  UNIQUE (user_id, type, dataset_id, collection_id, category)
 );
 
 CREATE INDEX IF NOT EXISTS idx_navigation_pins_dataset ON navigation_pins(dataset_id);

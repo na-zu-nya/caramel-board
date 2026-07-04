@@ -148,7 +148,7 @@ export default function StackGrid({
         ? currentFilter.authors[0]
         : undefined;
 
-    let targetMediaType = uploadMediaCategory ?? currentFilter.mediaCategory ?? undefined;
+    let targetMediaType = uploadMediaCategory ?? currentFilter.category ?? undefined;
     const collectionMatch = window.location.pathname.match(/(?:collections|scratch)\/(\d+)/);
     const inCollectionView = Boolean(collectionMatch);
     const collectionId = collectionMatch ? Number.parseInt(collectionMatch[1], 10) : undefined;
@@ -158,7 +158,7 @@ export default function StackGrid({
 
     return {
       datasetId: datasetNumericId,
-      mediaType: targetMediaType,
+      category: targetMediaType,
       tags: currentFilter.tags,
       author: currentAuthor,
       collectionId,
@@ -957,7 +957,7 @@ export default function StackGrid({
           ? currentFilter.authors[0]
           : undefined;
 
-      let targetMediaType = uploadMediaCategory ?? currentFilter.mediaCategory ?? undefined;
+      let targetMediaType = uploadMediaCategory ?? currentFilter.category ?? undefined;
       const collectionMatch = window.location.pathname.match(/(?:collections|scratch)\/(\d+)/);
       const inCollectionView = Boolean(collectionMatch);
       const collectionId = collectionMatch ? Number.parseInt(collectionMatch[1], 10) : undefined;
@@ -969,7 +969,7 @@ export default function StackGrid({
         const { results } = await apiClient.importAssetsFromUrls({
           urls,
           dataSetId: datasetNumericId,
-          mediaType: targetMediaType,
+          category: targetMediaType,
           collectionId,
           author: currentAuthor,
           tags: currentFilter.tags,

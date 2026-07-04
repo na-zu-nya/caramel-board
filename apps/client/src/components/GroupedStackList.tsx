@@ -169,7 +169,7 @@ export function GroupedStackList({
                         const isAssetLike = item.assetId != null && typeof likePage === 'number';
                         const stackOpenOptions = {
                           ...(isAssetLike ? { page: likePage - 1 } : {}),
-                          mediaType: stack.mediaType,
+                          category: stack.category,
                         };
                         const collectionMenu = {
                           collections: collectionMenuCollections,

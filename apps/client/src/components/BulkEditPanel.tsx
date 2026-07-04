@@ -28,7 +28,7 @@ export interface EditUpdates {
   addTags?: string[];
   removeTags?: string[];
   setAuthor?: string;
-  setMediaType?: 'image' | 'comic' | 'video';
+  setCategory?: 'image' | 'books' | 'video';
 }
 
 const getStringField = (value: unknown, keys: string[]): string | undefined => {
@@ -94,7 +94,7 @@ export default function BulkEditPanel({
   const [tagInput, setTagInput] = useState('');
   const [authorInput, setAuthorInput] = useState('');
   const [selectedAuthor, setSelectedAuthor] = useState('');
-  const [selectedMediaType, setSelectedMediaType] = useState<'image' | 'comic' | 'video' | ''>('');
+  const [selectedCategory, setSelectedCategory] = useState<'image' | 'books' | 'video' | ''>('');
   const [tagsToAdd, setTagsToAdd] = useState<string[]>([]);
   const [tagSuggestions, setTagSuggestions] = useState<string[]>([]);
   const [authorSuggestions, setAuthorSuggestions] = useState<string[]>([]);
@@ -159,7 +159,7 @@ export default function BulkEditPanel({
       setTagInput('');
       setAuthorInput('');
       setSelectedAuthor('');
-      setSelectedMediaType('');
+      setSelectedCategory('');
       setTagsToAdd([]);
     }
   }, [isOpen]);
@@ -240,8 +240,8 @@ export default function BulkEditPanel({
       updates.setAuthor = selectedAuthor;
     }
 
-    if (selectedMediaType) {
-      updates.setMediaType = selectedMediaType;
+    if (selectedCategory) {
+      updates.setCategory = selectedCategory;
     }
 
     if (onSave) {
@@ -249,11 +249,11 @@ export default function BulkEditPanel({
     }
 
     onClose();
-  }, [onSave, onClose, selectedAuthor, selectedMediaType, tagsToAdd]);
+  }, [onSave, onClose, selectedAuthor, selectedCategory, tagsToAdd]);
 
   const hasChanges = useMemo(
-    () => tagsToAdd.length > 0 || Boolean(selectedAuthor) || Boolean(selectedMediaType),
-    [selectedAuthor, selectedMediaType, tagsToAdd.length]
+    () => tagsToAdd.length > 0 || Boolean(selectedAuthor) || Boolean(selectedCategory),
+    [selectedAuthor, selectedCategory, tagsToAdd.length]
   );
 
   const swipeRef = useSwipeClose<HTMLDivElement>({
@@ -441,28 +441,26 @@ export default function BulkEditPanel({
               )}
             </div>
 
-            {/* Change Media Type */}
+            {/* Change Category */}
             <div className="space-y-2">
               <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
                 <Monitor size={16} />
-                {t.bulkEdit.changeMediaType}
+                {t.bulkEdit.changeCategory}
               </label>
               <Select
-                value={selectedMediaType}
-                onValueChange={(value) =>
-                  setSelectedMediaType(value as 'image' | 'comic' | 'video')
-                }
+                value={selectedCategory}
+                onValueChange={(value) => setSelectedCategory(value as 'image' | 'books' | 'video')}
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder={t.bulkEdit.selectNewMediaType} />
+                  <SelectValue placeholder={t.bulkEdit.selectNewCategory} />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="image">{t.bulkEdit.image}</SelectItem>
-                  <SelectItem value="comic">{t.bulkEdit.comic}</SelectItem>
+                  <SelectItem value="books">{t.bulkEdit.books}</SelectItem>
                   <SelectItem value="video">{t.bulkEdit.video}</SelectItem>
                 </SelectContent>
               </Select>
-              <p className="text-xs text-gray-500">{t.bulkEdit.mediaTypeWillChange}</p>
+              <p className="text-xs text-gray-500">{t.bulkEdit.categoryWillChange}</p>
             </div>
           </div>
 

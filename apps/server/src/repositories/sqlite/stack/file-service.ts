@@ -54,10 +54,10 @@ export class StackFileService {
     const result = this.db
       .prepare(
         `INSERT INTO stacks
-           (dataset_id, author_id, name, thumbnail, media_type, liked, meta_json, dominant_colors_json, created_at, updated_at)
+           (dataset_id, author_id, name, thumbnail, category, liked, meta_json, dominant_colors_json, created_at, updated_at)
          VALUES (?, ?, ?, '', ?, 0, '{}', NULL, ?, ?)`
       )
-      .run(input.dataSetId, authorId, input.name, input.mediaType, now, now);
+      .run(input.dataSetId, authorId, input.name, input.category, now, now);
     const stackId = Number(result.lastInsertRowid);
 
     try {

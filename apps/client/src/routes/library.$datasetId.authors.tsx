@@ -290,8 +290,8 @@ function AuthorsPage() {
           await apiClient.bulkSetAuthor(selectedAuthorStackIdsInOrder, updates.setAuthor);
         }
 
-        if (updates.setMediaType) {
-          await apiClient.bulkSetMediaType(selectedAuthorStackIdsInOrder, updates.setMediaType);
+        if (updates.setCategory) {
+          await apiClient.bulkSetCategory(selectedAuthorStackIdsInOrder, updates.setCategory);
         }
 
         clearSelection();

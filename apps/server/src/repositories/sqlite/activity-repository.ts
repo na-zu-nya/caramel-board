@@ -18,8 +18,8 @@ interface CountRow {
   count: number;
 }
 
-interface MediaTypeRow {
-  media_type: string;
+interface CategoryRow {
+  category: string;
 }
 
 interface StackIdRow {
@@ -70,22 +70,22 @@ export class StandaloneActivityRepository {
   }
 
   getGroupedByCategory({ limit, offset }: PaginationOptions) {
-    const mediaTypes = this.db
-      .prepare('SELECT DISTINCT media_type FROM stacks ORDER BY media_type ASC')
-      .all() as MediaTypeRow[];
+    const categoryRows = this.db
+      .prepare('SELECT DISTINCT category FROM stacks ORDER BY category ASC')
+      .all() as CategoryRow[];
     const activities: Record<string, unknown[]> = {};
 
-    for (const { media_type: mediaType } of mediaTypes) {
+    for (const { category } of categoryRows) {
       const rows = this.db
         .prepare(
           `SELECT id
            FROM stacks
-           WHERE media_type = ?
+           WHERE category = ?
            ORDER BY updated_at DESC
            LIMIT ? OFFSET ?`
         )
-        .all(mediaType, limit, offset) as StackIdRow[];
-      activities[mediaType] = rows
+        .all(category, limit, offset) as StackIdRow[];
+      activities[category] = rows
         .map((row) => this.stackRepository.getById(row.id))
         .filter((stack): stack is NonNullable<typeof stack> => Boolean(stack));
     }

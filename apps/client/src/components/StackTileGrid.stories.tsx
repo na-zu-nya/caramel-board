@@ -12,7 +12,7 @@ type StoryStackItem = {
   assetCount: number;
   liked: number;
   favorited: boolean;
-  mediaType: string;
+  category: string;
 };
 
 const items: StoryStackItem[] = Array.from({ length: 12 }, (_, index) => ({
@@ -22,7 +22,7 @@ const items: StoryStackItem[] = Array.from({ length: 12 }, (_, index) => ({
   assetCount: index + 2,
   liked: index % 4,
   favorited: index % 3 === 0,
-  mediaType: index % 4 === 0 ? 'video' : 'image',
+  category: index % 4 === 0 ? 'video' : 'image',
 }));
 const selectedPreviewItemIds = items.slice(1, 3).map((item) => item.id);
 

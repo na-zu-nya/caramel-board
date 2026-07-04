@@ -43,15 +43,15 @@ export class StackBulkService {
     return { success: true, updated };
   }
 
-  bulkSetMediaType(stackIds: number[], mediaType: 'image' | 'comic' | 'video') {
+  bulkSetCategory(stackIds: number[], category: 'image' | 'books' | 'video') {
     if (stackIds.length === 0) return { success: true, updated: 0 };
     const result = this.db
       .prepare(
         `UPDATE stacks
-         SET media_type = ?, updated_at = ?
+         SET category = ?, updated_at = ?
          WHERE id IN (${placeholders(stackIds)})`
       )
-      .run(mediaType, nowIso(), ...stackIds);
+      .run(category, nowIso(), ...stackIds);
     return { success: true, updated: result.changes };
   }
 

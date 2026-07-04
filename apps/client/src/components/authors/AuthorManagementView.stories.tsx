@@ -61,7 +61,7 @@ const authorStacks: MediaGridItem[] = Array.from({ length: 12 }, (_, index) => (
   dataSetId: 1,
   name: `Stack ${index + 1}`,
   thumbnail: `https://picsum.photos/seed/author-stack-${index + 1}/320/320`,
-  mediaType: index % 3 === 0 ? 'video' : 'image',
+  category: index % 3 === 0 ? 'video' : 'image',
 }));
 
 const meta: Meta<typeof AuthorManagementView> = {

@@ -85,7 +85,7 @@ export class StackFavoriteService {
            s.id AS stack_id,
            s.name,
            s.thumbnail,
-           s.media_type,
+           s.category,
            s.actual_media_type,
            s.liked,
            s.created_at,
@@ -107,7 +107,7 @@ export class StackFavoriteService {
       stack_id: number;
       name: string;
       thumbnail: string;
-      media_type: string;
+      category: string;
       actual_media_type: StackMediaType | null;
       liked: number;
       created_at: string;
@@ -127,7 +127,7 @@ export class StackFavoriteService {
            asset.order_in_stack,
            s.id AS stack_id,
            s.name,
-           s.media_type,
+           s.category,
            s.actual_media_type,
            s.liked,
            s.created_at,
@@ -151,7 +151,7 @@ export class StackFavoriteService {
       order_in_stack: number;
       stack_id: number;
       name: string;
-      media_type: string;
+      category: string;
       actual_media_type: StackMediaType | null;
       liked: number;
       created_at: string;
@@ -170,7 +170,7 @@ export class StackFavoriteService {
           favoriteId: row.favorite_id,
           favoriteCreatedAt: row.favorite_created_at,
           name: row.name,
-          mediaType: row.media_type,
+          category: row.category,
           actualMediaType: row.actual_media_type ?? undefined,
           thumbnail: toPublicAssetPath(row.thumbnail || row.first_asset_thumbnail, dataSetId),
           favorited: true,
@@ -194,7 +194,7 @@ export class StackFavoriteService {
           assetId: row.asset_id,
           favoritePage: row.order_in_stack + 1,
           name: row.name,
-          mediaType: row.media_type,
+          category: row.category,
           actualMediaType: row.actual_media_type ?? undefined,
           thumbnail: toPublicAssetPath(row.asset_thumbnail || row.asset_file, dataSetId),
           favorited: true,

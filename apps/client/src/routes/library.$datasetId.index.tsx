@@ -14,7 +14,7 @@ import { useHeaderActions } from '@/hooks/useHeaderActions';
 import { isScratchCollection } from '@/hooks/useScratch';
 import { useStackTile } from '@/hooks/useStackTile';
 import { apiClient } from '@/lib/api-client';
-import { getMediaTypeLabel, useT } from '@/lib/i18n';
+import { getCategoryLabel, useT } from '@/lib/i18n';
 import { currentFilterAtom } from '@/stores/ui';
 import { addFilesToQueueAtom, addUploadNotificationAtom } from '@/stores/upload';
 import type { MediaCategory, Stack } from '@/types';
@@ -32,7 +32,7 @@ type StackCardItem = {
   _count?: { assets?: number | null };
   favorited?: boolean | null;
   isFavorite?: boolean | null;
-  mediaType?: string | null;
+  category?: string | null;
   originalName?: unknown;
   file?: unknown;
   url?: unknown;
@@ -95,10 +95,10 @@ function DatasetHome() {
     setCurrentFilter({ datasetId });
   }, [datasetId, setCurrentFilter]);
 
-  const mediaTypeConfig: Record<MediaCategory, { label: string; Icon: LucideIcon }> = {
-    image: { label: getMediaTypeLabel(t, 'image'), Icon: Image },
-    comic: { label: getMediaTypeLabel(t, 'comic'), Icon: BookOpen },
-    video: { label: getMediaTypeLabel(t, 'video'), Icon: Film },
+  const categoryConfig: Record<MediaCategory, { label: string; Icon: LucideIcon }> = {
+    image: { label: getCategoryLabel(t, 'image'), Icon: Image },
+    books: { label: getCategoryLabel(t, 'books'), Icon: BookOpen },
+    video: { label: getCategoryLabel(t, 'video'), Icon: Film },
   };
 
   const recentLikeItems = useMemo<StackCardItem[]>(
@@ -289,13 +289,13 @@ function DatasetHome() {
 
           {/* メディアカテゴリ */}
           <section>
-            <SectionHeader title={t.overview.mediaCategories} />
+            <SectionHeader title={t.overview.categories} />
             <div className="grid grid-cols-3 gap-3 md:gap-6">
-              {overview?.mediaTypes.map((media) => {
-                const config = mediaTypeConfig[media.mediaType as MediaCategory];
+              {overview?.categories.map((media) => {
+                const config = categoryConfig[media.category as MediaCategory];
                 return (
                   <EntityCard
-                    key={media.mediaType}
+                    key={media.category}
                     asChild
                     aspect="3/2"
                     title={
@@ -313,8 +313,8 @@ function DatasetHome() {
                     }
                   >
                     <Link
-                      to="/library/$datasetId/media-type/$mediaType"
-                      params={{ datasetId, mediaType: media.mediaType }}
+                      to="/library/$datasetId/category/$category"
+                      params={{ datasetId, category: media.category }}
                     />
                   </EntityCard>
                 );
@@ -358,10 +358,10 @@ function DatasetHome() {
                     count={tag.count}
                   >
                     <Link
-                      to="/library/$datasetId/media-type/$mediaType"
-                      params={(): { datasetId: string; mediaType: 'image' } => ({
+                      to="/library/$datasetId/category/$category"
+                      params={(): { datasetId: string; category: 'image' } => ({
                         datasetId,
-                        mediaType: 'image',
+                        category: 'image',
                       })}
                       search={{ tags: [tag.name] }}
                     />

@@ -15,7 +15,7 @@ export interface Dataset {
 
 // Media categories are user-facing stack buckets. They do not necessarily
 // describe the actual files contained in the stack.
-export type MediaCategory = 'image' | 'comic' | 'video';
+export type MediaCategory = 'image' | 'books' | 'video';
 
 // Media types describe the actual file composition of a stack.
 export type MediaType = 'image' | 'video' | 'multipleImages';
@@ -75,7 +75,7 @@ export interface Stack {
   id: string | number;
   datasetId: string;
   name: string;
-  mediaType: MediaCategory;
+  category: MediaCategory;
   actualMediaType?: MediaType;
   thumbnailUrl?: string;
   thumbnail?: string; // Legacy support
@@ -269,7 +269,7 @@ export interface FolderTreeNode {
 }
 
 // Navigation Pin types (for header navigation)
-export type PinType = 'COLLECTION' | 'MEDIA_TYPE' | 'OVERVIEW' | 'FAVORITES' | 'LIKES';
+export type PinType = 'COLLECTION' | 'CATEGORY' | 'OVERVIEW' | 'FAVORITES' | 'LIKES';
 
 export type ImportUrlStatus = 'created' | 'added' | 'skipped' | 'error';
 
@@ -293,7 +293,7 @@ export interface Pin {
   updatedAt: string;
   // References
   collectionId?: number; // For COLLECTION type
-  mediaType?: MediaCategory; // For MEDIA_TYPE type
+  category?: MediaCategory; // For CATEGORY type
   // Relations (populated when fetched)
   collection?: Collection;
 }
@@ -372,7 +372,7 @@ export interface StackPaginatedResponse {
 export interface StackFilter {
   datasetId?: string;
   collectionId?: string;
-  mediaCategory?: MediaCategory;
+  category?: MediaCategory;
   mediaTypes?: MediaType[];
   tags?: string[];
   authors?: string[];
@@ -405,7 +405,7 @@ export interface MediaGridItem {
   stackId?: string | number;
   assetId?: string | number;
   name: string;
-  mediaType?: MediaCategory;
+  category?: MediaCategory;
   actualMediaType?: MediaType;
   thumbnail?: string;
   thumbnailUrl?: string;

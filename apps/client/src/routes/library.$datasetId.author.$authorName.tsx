@@ -163,12 +163,12 @@ function AuthorDetailPage() {
       typeof item.id === 'string' ? Number.parseInt(item.id as string, 10) : (item.id as number);
     const currentIndex = Math.max(0, ids.indexOf(clickedId));
 
-    const mediaType = item.mediaType;
-    const token = genListToken({ datasetId, mediaType, filters: authorFilter });
+    const category = item.category;
+    const token = genListToken({ datasetId, category, filters: authorFilter });
     saveViewContext({
       token,
       datasetId,
-      mediaType,
+      category,
       filters: authorFilter,
       ids,
       currentIndex,
@@ -178,7 +178,7 @@ function AuthorDetailPage() {
     navigate({
       to: '/library/$datasetId/stacks/$stackId',
       params: { datasetId, stackId: String(item.id) },
-      search: { page: 0, mediaType, listToken: token },
+      search: { page: 0, category, listToken: token },
     });
   };
 

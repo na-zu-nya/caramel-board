@@ -139,7 +139,7 @@ export class StandaloneStackRepository {
       name?: string;
       thumbnail?: string;
       meta?: Record<string, unknown>;
-      mediaType?: 'image' | 'comic' | 'video';
+      category?: 'image' | 'books' | 'video';
     }
   ) {
     return this.writerService.updateStack(stackId, dataSetId, data, (id, ds) =>
@@ -219,8 +219,8 @@ export class StandaloneStackRepository {
     return this.bulkService.bulkSetAuthor(stackIds, author);
   }
 
-  bulkSetMediaType(stackIds: number[], mediaType: 'image' | 'comic' | 'video') {
-    return this.bulkService.bulkSetMediaType(stackIds, mediaType);
+  bulkSetCategory(stackIds: number[], category: 'image' | 'books' | 'video') {
+    return this.bulkService.bulkSetCategory(stackIds, category);
   }
 
   bulkSetFavorite(stackIds: number[], favorited: boolean) {

@@ -24,7 +24,7 @@ function createStack(id: number, fileName: string): Stack {
     id,
     datasetId: '1',
     name: fileName,
-    mediaType: 'image',
+    category: 'image',
     assetCount: 1,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
@@ -56,7 +56,7 @@ function createUploadFile(id: string, file: File): UploadFile {
     file,
     progress: 0,
     status: 'pending',
-    metadata: { datasetId: 1, mediaType: 'image' },
+    metadata: { datasetId: 1, category: 'image' },
   };
 }
 
@@ -83,7 +83,7 @@ describe('upload ordering', () => {
         createUploadFile('first', createFile('01.png')),
         createUploadFile('second', createFile('02.png')),
       ],
-      metadata: { datasetId: 1, mediaType: 'image' },
+      metadata: { datasetId: 1, category: 'image' },
     };
     const service = new UploadService();
     const uploadPromise = service.processUploadBatch(batch, vi.fn(), vi.fn());
@@ -119,7 +119,7 @@ describe('upload ordering', () => {
 
     const uploadPromise = uploadFolderAsCollection(
       [createFile('03.png'), createFile('01.png'), createFile('02.png')],
-      { datasetId: 1, mediaType: 'image' },
+      { datasetId: 1, category: 'image' },
       'collection'
     );
 

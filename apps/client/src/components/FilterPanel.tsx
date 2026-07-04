@@ -59,7 +59,7 @@ const FILTER_CHOICE_BUTTON_CLASS =
   'px-1.5 py-3 rounded-md text-[11px] font-medium leading-none whitespace-nowrap transition-colors';
 
 function isMediaCategory(value: unknown): value is MediaCategory {
-  return value === 'image' || value === 'comic' || value === 'video';
+  return value === 'image' || value === 'books' || value === 'video';
 }
 
 function isMediaType(value: unknown): value is MediaType {
@@ -123,10 +123,10 @@ function FilterPanel({
   // Ref for the Search input to focus when panel opens
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const params = useParams({ strict: false });
-  const routeParams = params as { datasetId?: string; mediaType?: string };
+  const routeParams = params as { datasetId?: string; category?: string };
   const datasetId = routeParams.datasetId;
-  const routeMediaCategory = isMediaCategory(routeParams.mediaType)
-    ? routeParams.mediaType
+  const routeMediaCategory = isMediaCategory(routeParams.category)
+    ? routeParams.category
     : undefined;
   const queryClient = useQueryClient();
 
@@ -169,7 +169,7 @@ function FilterPanel({
     if (filter.authors) config.authorNames = filter.authors;
     if (filter.hasNoTags) config.hasNoTags = filter.hasNoTags;
     if (filter.hasNoAuthor) config.hasNoAuthor = filter.hasNoAuthor;
-    if (filter.mediaCategory) config.mediaCategory = filter.mediaCategory;
+    if (filter.category) config.category = filter.category;
     if (filter.mediaTypes?.length) config.mediaTypes = filter.mediaTypes;
     if (filter.colorFilter) config.colorFilter = filter.colorFilter;
 
@@ -327,8 +327,8 @@ function FilterPanel({
       if (originalFilterConfig.hasNoTags) restoredFilter.hasNoTags = originalFilterConfig.hasNoTags;
       if (originalFilterConfig.hasNoAuthor)
         restoredFilter.hasNoAuthor = originalFilterConfig.hasNoAuthor;
-      if (originalFilterConfig.mediaCategory)
-        restoredFilter.mediaCategory = originalFilterConfig.mediaCategory as MediaCategory;
+      if (originalFilterConfig.category)
+        restoredFilter.category = originalFilterConfig.category as MediaCategory;
       restoredFilter.mediaTypes = readMediaTypes(originalFilterConfig.mediaTypes);
       if (originalFilterConfig.colorFilter)
         restoredFilter.colorFilter = originalFilterConfig.colorFilter;
@@ -339,7 +339,7 @@ function FilterPanel({
       // For regular views and manual collections, clear all filters
       const clearedFilter: StackFilter = {
         datasetId: localFilter.datasetId,
-        mediaCategory: routeMediaCategory,
+        category: routeMediaCategory,
       };
       setLocalFilter(clearedFilter);
       commitFilterChange(clearedFilter, 0);
@@ -351,10 +351,8 @@ function FilterPanel({
       ? true // For smart collections, show "Clear all" when filter is modified
       : Object.keys(localFilter).some((key) => {
           if (key === 'datasetId') return false;
-          if (key === 'mediaCategory') {
-            return Boolean(
-              localFilter.mediaCategory && localFilter.mediaCategory !== routeMediaCategory
-            );
+          if (key === 'category') {
+            return Boolean(localFilter.category && localFilter.category !== routeMediaCategory);
           }
           return Boolean(localFilter[key as keyof StackFilter]);
         });
@@ -871,14 +869,14 @@ function FilterPanel({
             <div className="space-y-2">
               <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
                 <Monitor size={16} />
-                {t.filter.mediaCategory}
+                {t.filter.category}
               </label>
               <Select
-                value={localFilter.mediaCategory || 'all'}
+                value={localFilter.category || 'all'}
                 onValueChange={(value) =>
                   updateFilter(
                     {
-                      mediaCategory: value === 'all' ? undefined : (value as MediaCategory),
+                      category: value === 'all' ? undefined : (value as MediaCategory),
                     },
                     true
                   )
@@ -890,7 +888,7 @@ function FilterPanel({
                 <SelectContent>
                   <SelectItem value="all">{t.filter.allCategories}</SelectItem>
                   <SelectItem value="image">{t.sidebar.images}</SelectItem>
-                  <SelectItem value="comic">{t.sidebar.comics}</SelectItem>
+                  <SelectItem value="books">{t.sidebar.books}</SelectItem>
                   <SelectItem value="video">{t.sidebar.videos}</SelectItem>
                 </SelectContent>
               </Select>

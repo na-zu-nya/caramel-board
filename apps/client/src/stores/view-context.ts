@@ -4,7 +4,7 @@ import type { MediaCategory, StackFilter } from '@/types';
 export type ViewContext = {
   token: string;
   datasetId: string;
-  mediaType?: MediaCategory;
+  category?: MediaCategory;
   filters?: StackFilter;
   sort?: { field: string; order: 'asc' | 'desc' };
   collectionId?: string;
@@ -37,14 +37,14 @@ export function loadViewContext(token: string): ViewContext | null {
 
 export function genListToken(input: {
   datasetId: string;
-  mediaType?: string;
+  category?: string;
   filters?: any;
   sort?: { field: string; order: 'asc' | 'desc' };
   collectionId?: string;
 }) {
   const seed = JSON.stringify({
     d: input.datasetId,
-    m: input.mediaType,
+    m: input.category,
     f: input.filters,
     s: input.sort,
     c: input.collectionId,

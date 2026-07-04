@@ -124,10 +124,10 @@ function CollectionViewContent() {
     const clickedId =
       typeof item.id === 'string' ? Number.parseInt(item.id as string, 10) : (item.id as number);
     const currentIndex = Math.max(0, ids.indexOf(clickedId));
-    const mediaType = item.mediaType;
+    const category = item.category;
     const token = genListToken({
       datasetId,
-      mediaType,
+      category,
       filters: currentFilter,
       sort: currentSort,
       collectionId,
@@ -135,7 +135,7 @@ function CollectionViewContent() {
     saveViewContext({
       token,
       datasetId,
-      mediaType,
+      category,
       filters: currentFilter,
       sort: currentSort,
       collectionId,
@@ -147,7 +147,7 @@ function CollectionViewContent() {
     navigate({
       to: '/library/$datasetId/stacks/$stackId',
       params: { datasetId, stackId: String(item.id) },
-      search: { page: 0, mediaType, listToken: token },
+      search: { page: 0, category, listToken: token },
     });
   }, [collection, datasetId, currentFilter, currentSort, collectionId, navigate]);
 
@@ -189,7 +189,7 @@ function CollectionViewContent() {
         if (filterConfig.authorNames) restoredFilter.authors = filterConfig.authorNames;
         if (filterConfig.hasNoTags) restoredFilter.hasNoTags = filterConfig.hasNoTags;
         if (filterConfig.hasNoAuthor) restoredFilter.hasNoAuthor = filterConfig.hasNoAuthor;
-        if (filterConfig.mediaCategory) restoredFilter.mediaCategory = filterConfig.mediaCategory;
+        if (filterConfig.category) restoredFilter.category = filterConfig.category;
         if (Array.isArray(filterConfig.mediaTypes))
           restoredFilter.mediaTypes = filterConfig.mediaTypes;
         if (filterConfig.colorFilter) restoredFilter.colorFilter = filterConfig.colorFilter;
@@ -223,7 +223,7 @@ function CollectionViewContent() {
       JSON.stringify(currentFilter.authors) !== JSON.stringify(originalConfig.authorNames) ||
       currentFilter.hasNoTags !== originalConfig.hasNoTags ||
       currentFilter.hasNoAuthor !== originalConfig.hasNoAuthor ||
-      currentFilter.mediaCategory !== originalConfig.mediaCategory ||
+      currentFilter.category !== originalConfig.category ||
       JSON.stringify(currentFilter.mediaTypes) !== JSON.stringify(originalConfig.mediaTypes) ||
       JSON.stringify(currentFilter.colorFilter) !== JSON.stringify(originalConfig.colorFilter)
     );
@@ -282,7 +282,7 @@ function CollectionViewContent() {
             filter: {
               datasetId,
               collectionId,
-              mediaCategory: currentFilter.mediaCategory,
+              category: currentFilter.category,
               mediaTypes: currentFilter.mediaTypes,
               tags: currentFilter.tags,
               authors: currentFilter.authors,
@@ -337,7 +337,7 @@ function CollectionViewContent() {
         if (collection.type === 'MANUAL') {
           filterParams.collection = Number.parseInt(collectionId, 10);
         }
-        if (currentFilter.mediaCategory) filterParams.mediaCategory = currentFilter.mediaCategory;
+        if (currentFilter.category) filterParams.category = currentFilter.category;
         if (currentFilter.mediaTypes?.length) filterParams.mediaTypes = currentFilter.mediaTypes;
         if (currentFilter.tags && currentFilter.tags.length > 0)
           filterParams.tag = currentFilter.tags;
@@ -541,7 +541,7 @@ function CollectionViewContent() {
 
     const token = genListToken({
       datasetId,
-      mediaType: currentFilter.mediaCategory,
+      category: currentFilter.category,
       filters: currentFilter,
       sort: currentSort,
       collectionId,
@@ -550,7 +550,7 @@ function CollectionViewContent() {
     saveViewContext({
       token,
       datasetId,
-      mediaType: currentFilter.mediaCategory,
+      category: currentFilter.category,
       filters: currentFilter,
       sort: currentSort,
       collectionId,

@@ -9,7 +9,7 @@ import type { MediaGridItem, Stack, StackFilter } from '@/types';
 
 interface UseSparseStackGridOptions {
   datasetId: string;
-  mediaType?: string;
+  category?: string;
   filter: StackFilter;
   sort: any;
   pageSize?: number;
@@ -34,7 +34,7 @@ function toMediaGridItem(stack: Stack): MediaGridItem {
 
 export function useSparseStackGrid({
   datasetId,
-  mediaType,
+  category,
   filter,
   sort,
   pageSize = 50,
@@ -49,11 +49,11 @@ export function useSparseStackGrid({
   const [loadedPages, setLoadedPages] = useState<Set<number>>(new Set());
 
   // 現在のクエリキーを生成
-  const _queryKey = `${datasetId}-${mediaType}-${JSON.stringify(filter)}-${JSON.stringify(sort)}`;
+  const _queryKey = `${datasetId}-${category}-${JSON.stringify(filter)}-${JSON.stringify(sort)}`;
 
   // トータル数を取得
   const { data: countData } = useQuery({
-    queryKey: ['stacks', 'count', datasetId, mediaType, filter, sort],
+    queryKey: ['stacks', 'count', datasetId, category, filter, sort],
     queryFn: async ({ signal }) => {
       const result = await apiClient.getStacks(
         {

@@ -13,7 +13,7 @@ export class StackWriterService {
       name?: string;
       thumbnail?: string;
       meta?: Record<string, unknown>;
-      mediaType?: 'image' | 'comic' | 'video';
+      category?: 'image' | 'books' | 'video';
     },
     resolveStack: StackResolver<TStack>
   ) {
@@ -33,9 +33,9 @@ export class StackWriterService {
       updates.push('meta_json = ?');
       params.push(JSON.stringify(data.meta));
     }
-    if (data.mediaType !== undefined) {
-      updates.push('media_type = ?');
-      params.push(data.mediaType);
+    if (data.category !== undefined) {
+      updates.push('category = ?');
+      params.push(data.category);
     }
 
     if (updates.length > 0) {

@@ -5,7 +5,7 @@ const uploadRoute = new Hono();
 // Store upload defaults (in memory for now - could be persisted to DB per user)
 let uploadDefaults: {
   datasetId?: string;
-  mediaType?: string;
+  category?: string;
   tags?: string[];
   author?: string;
 } = {};
@@ -17,7 +17,7 @@ uploadRoute.put('/defaults', async (c) => {
 
     uploadDefaults = {
       datasetId: body.datasetId,
-      mediaType: body.mediaType,
+      category: body.category,
       tags: Array.isArray(body.tags) ? body.tags : [],
       author: body.author,
     };

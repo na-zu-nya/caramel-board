@@ -24,7 +24,7 @@ import { Label } from '@/components/ui/label';
 import { isScratchCollection, useScratch } from '@/hooks/useScratch';
 import { useSidebarPushesContent } from '@/hooks/useSidebarLayoutMode';
 import { apiClient } from '@/lib/api-client';
-import { getDefaultPinDisplayName, getMediaTypeLabel, useT } from '@/lib/i18n';
+import { getCategoryLabel, getDefaultPinDisplayName, useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { currentDatasetAtom, sidebarOpenAtom } from '@/stores/ui';
 import type { AvailableIcon, Collection, MediaCategory, Pin, PinType } from '@/types';
@@ -35,9 +35,9 @@ interface DragItem {
   index: number;
 }
 
-const MEDIA_TYPE_ICON_MAP: Record<MediaCategory, AvailableIcon> = {
+const CATEGORY_ICON_MAP: Record<MediaCategory, AvailableIcon> = {
   image: 'Image',
-  comic: 'BookOpen',
+  books: 'BookOpen',
   video: 'Film',
 };
 
@@ -85,9 +85,9 @@ export default function PinsPage() {
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [editingPin, setEditingPin] = useState<Pin | null>(null);
   const [selectedType, setSelectedType] = useState<
-    'COLLECTION' | 'MEDIA_TYPE' | 'OVERVIEW' | 'FAVORITES' | 'LIKES' | 'SCRATCH'
-  >('MEDIA_TYPE');
-  const [selectedMediaType, setSelectedMediaType] = useState<MediaCategory>('image');
+    'COLLECTION' | 'CATEGORY' | 'OVERVIEW' | 'FAVORITES' | 'LIKES' | 'SCRATCH'
+  >('CATEGORY');
+  const [selectedCategory, setSelectedCategory] = useState<MediaCategory>('image');
   const [selectedIcon, setSelectedIcon] = useState<AvailableIcon>('Image');
   const [collections, setCollections] = useState<Array<{ id: number; name: string }>>([]);
   const [selectedCollectionId, setSelectedCollectionId] = useState<number | null>(null);
@@ -164,8 +164,8 @@ export default function PinsPage() {
     ((pin.collection && isScratchCollection(pin.collection)) || pin.name === 'Scratch');
 
   const resolveFixedIconForPin = (pin: Pin): AvailableIcon | null => {
-    if (pin.type === 'MEDIA_TYPE' && pin.mediaType) {
-      return MEDIA_TYPE_ICON_MAP[pin.mediaType as MediaCategory];
+    if (pin.type === 'CATEGORY' && pin.category) {
+      return CATEGORY_ICON_MAP[pin.category as MediaCategory];
     }
     if (pin.type === 'OVERVIEW') {
       return FIXED_TYPE_ICONS.OVERVIEW;
@@ -233,14 +233,14 @@ export default function PinsPage() {
 
   // Add new pin
   const handleAddPin = () => {
-    if (selectedType === 'MEDIA_TYPE') {
+    if (selectedType === 'CATEGORY') {
       const newPin = {
-        type: 'MEDIA_TYPE' as PinType,
+        type: 'CATEGORY' as PinType,
         dataSetId: Number.parseInt(datasetId, 10),
-        name: capitalizeLabel(selectedMediaType),
-        icon: MEDIA_TYPE_ICON_MAP[selectedMediaType],
+        name: capitalizeLabel(selectedCategory),
+        icon: CATEGORY_ICON_MAP[selectedCategory],
         order: currentDatasetPins.length,
-        mediaType: selectedMediaType,
+        category: selectedCategory,
       };
       createNavigationPinMutation.mutate(newPin);
     } else if (selectedType === 'COLLECTION' && selectedCollectionId) {
@@ -432,8 +432,8 @@ export default function PinsPage() {
                           pin.name === 'Scratch'
                           ? t.pins.scratch
                           : t.pins.collection
-                        : pin.type === 'MEDIA_TYPE'
-                          ? t.pins.mediaType
+                        : pin.type === 'CATEGORY'
+                          ? t.pins.category
                           : pin.type === 'OVERVIEW'
                             ? t.pins.overview
                             : pin.type === 'FAVORITES'
@@ -485,14 +485,14 @@ export default function PinsPage() {
               <div className="grid grid-cols-3 gap-2">
                 <Button
                   type="button"
-                  variant={selectedType === 'MEDIA_TYPE' ? 'default' : 'outline'}
+                  variant={selectedType === 'CATEGORY' ? 'default' : 'outline'}
                   onClick={() => {
-                    setSelectedType('MEDIA_TYPE');
-                    setSelectedIcon(MEDIA_TYPE_ICON_MAP[selectedMediaType]);
+                    setSelectedType('CATEGORY');
+                    setSelectedIcon(CATEGORY_ICON_MAP[selectedCategory]);
                   }}
                   className=""
                 >
-                  {t.pins.mediaType}
+                  {t.pins.category}
                 </Button>
                 <Button
                   type="button"
@@ -552,23 +552,23 @@ export default function PinsPage() {
               </div>
             </div>
 
-            {selectedType === 'MEDIA_TYPE' ? (
+            {selectedType === 'CATEGORY' ? (
               <div className="space-y-2">
-                <Label>{t.pins.mediaType}</Label>
+                <Label>{t.pins.category}</Label>
                 <div className="grid grid-cols-3 gap-2">
-                  {(['image', 'comic', 'video'] as MediaCategory[]).map((type) => (
+                  {(['image', 'books', 'video'] as MediaCategory[]).map((type) => (
                     <Button
                       key={type}
                       type="button"
-                      variant={selectedMediaType === type ? 'default' : 'outline'}
+                      variant={selectedCategory === type ? 'default' : 'outline'}
                       onClick={() => {
-                        setSelectedMediaType(type);
-                        setSelectedIcon(MEDIA_TYPE_ICON_MAP[type]);
+                        setSelectedCategory(type);
+                        setSelectedIcon(CATEGORY_ICON_MAP[type]);
                       }}
                       className="h-auto py-3 flex flex-col gap-1"
                     >
-                      {renderIcon(MEDIA_TYPE_ICON_MAP[type], 24)}
-                      <span className="text-xs">{getMediaTypeLabel(t, type)}</span>
+                      {renderIcon(CATEGORY_ICON_MAP[type], 24)}
+                      <span className="text-xs">{getCategoryLabel(t, type)}</span>
                     </Button>
                   ))}
                 </div>

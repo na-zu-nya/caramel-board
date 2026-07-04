@@ -94,9 +94,9 @@ export class StackQueryService {
       }
     }
 
-    if (params.mediaCategory) {
-      where.push('s.media_type = ?');
-      sqlParams.push(params.mediaCategory);
+    if (params.category) {
+      where.push('s.category = ?');
+      sqlParams.push(params.category);
     }
 
     if (params.mediaTypes?.length) {
@@ -192,7 +192,7 @@ export class StackQueryService {
         a.name AS author_name,
         s.name,
         s.thumbnail,
-        s.media_type,
+        s.category,
         s.actual_media_type,
         s.liked,
         s.meta_json,
@@ -252,7 +252,7 @@ export class StackQueryService {
         : null,
       name: row.name,
       thumbnail,
-      mediaType: row.media_type,
+      category: row.category,
       actualMediaType: actualMediaType ?? undefined,
       liked: likeCount,
       likeCount,

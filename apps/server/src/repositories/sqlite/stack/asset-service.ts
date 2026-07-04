@@ -13,7 +13,7 @@ type AssetMutationRow = AssetRow & {
   dataset_id: number;
   author_id: number | null;
   stack_name: string;
-  media_type: string;
+  category: string;
 };
 
 const getSeparatedAssetName = (asset: AssetMutationRow) => {
@@ -211,7 +211,7 @@ export class StackAssetService {
   separateAsset<TStack>(assetId: number, resolveStack: StackResolver<TStack>) {
     const asset = this.db
       .prepare(
-        `SELECT assets.*, s.dataset_id, s.author_id, s.name AS stack_name, s.media_type
+        `SELECT assets.*, s.dataset_id, s.author_id, s.name AS stack_name, s.category
          FROM assets
          JOIN stacks s ON s.id = assets.stack_id
          WHERE assets.id = ?`
@@ -221,7 +221,7 @@ export class StackAssetService {
           dataset_id: number;
           author_id: number | null;
           stack_name: string;
-          media_type: string;
+          category: string;
         })
       | undefined;
     if (!asset) return null;
@@ -234,7 +234,7 @@ export class StackAssetService {
       const created = this.db
         .prepare(
           `INSERT INTO stacks
-             (dataset_id, author_id, name, thumbnail, media_type, liked, meta_json, dominant_colors_json, created_at, updated_at)
+             (dataset_id, author_id, name, thumbnail, category, liked, meta_json, dominant_colors_json, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`
         )
         .run(
@@ -242,7 +242,7 @@ export class StackAssetService {
           asset.author_id,
           name,
           asset.thumbnail,
-          asset.media_type,
+          asset.category,
           '{}',
           asset.dominant_colors_json,
           now,
@@ -297,7 +297,7 @@ export class StackAssetService {
     try {
       const insertStack = this.db.prepare(
         `INSERT INTO stacks
-           (dataset_id, author_id, name, thumbnail, media_type, liked, meta_json, dominant_colors_json, created_at, updated_at)
+           (dataset_id, author_id, name, thumbnail, category, liked, meta_json, dominant_colors_json, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`
       );
       const moveAsset = this.db.prepare(
@@ -311,7 +311,7 @@ export class StackAssetService {
           asset.author_id,
           getSeparatedAssetName(asset),
           asset.thumbnail,
-          asset.media_type,
+          asset.category,
           '{}',
           asset.dominant_colors_json,
           now,
@@ -357,7 +357,7 @@ export class StackAssetService {
       const created = this.db
         .prepare(
           `INSERT INTO stacks
-             (dataset_id, author_id, name, thumbnail, media_type, liked, meta_json, dominant_colors_json, created_at, updated_at)
+             (dataset_id, author_id, name, thumbnail, category, liked, meta_json, dominant_colors_json, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`
         )
         .run(
@@ -365,7 +365,7 @@ export class StackAssetService {
           firstAsset.author_id,
           stackName,
           firstAsset.thumbnail,
-          firstAsset.media_type,
+          firstAsset.category,
           '{}',
           firstAsset.dominant_colors_json,
           now,
@@ -415,7 +415,7 @@ export class StackAssetService {
 
     const rows = this.db
       .prepare(
-        `SELECT assets.*, s.dataset_id, s.author_id, s.name AS stack_name, s.media_type
+        `SELECT assets.*, s.dataset_id, s.author_id, s.name AS stack_name, s.category
          FROM assets
          JOIN stacks s ON s.id = assets.stack_id
          WHERE assets.id IN (${placeholders(assetIds)})`

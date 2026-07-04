@@ -37,7 +37,7 @@ export function getStackFilterKey(filter: StackFilter | null | undefined): strin
   return JSON.stringify({
     datasetId: current.datasetId ?? undefined,
     collectionId: current.collectionId ?? undefined,
-    mediaCategory: current.mediaCategory ?? undefined,
+    category: current.category ?? undefined,
     mediaTypes: sortedValues(current.mediaTypes),
     tags: sortedValues(current.tags),
     authors: sortedValues(current.authors),

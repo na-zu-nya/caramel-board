@@ -77,7 +77,7 @@ import TapZoneOverlay from './TapZoneOverlay';
 
 interface StackViewerProps {
   datasetId: string;
-  mediaType: string;
+  category: string;
   stackId: string;
   listToken?: string;
   returnTo?: string;
@@ -207,7 +207,7 @@ function ViewerShell({
 
 export default function StackViewer({
   datasetId,
-  mediaType,
+  category,
   stackId,
   listToken,
   returnTo,
@@ -273,7 +273,7 @@ export default function StackViewer({
     setIsListMode,
     handleFavoriteToggle,
     refetch,
-  } = useStackViewer({ datasetId, mediaType, stackId });
+  } = useStackViewer({ datasetId, category, stackId });
 
   const readingSettings = useMemo(
     () => normalizeComicReadingSettings(stack?.meta?.reading),
@@ -285,7 +285,7 @@ export default function StackViewer({
       ? comicDisplayModeOverride.mode
       : (readingSettings.displayMode ?? comicDisplayMode);
   const effectiveComicDisplayMode: ComicDisplayMode =
-    mediaType === 'video' || !readingSettings.spreadDisplayEnabled
+    category === 'video' || !readingSettings.spreadDisplayEnabled
       ? 'single'
       : currentComicDisplayMode;
   const readingModel = useMemo(
@@ -404,7 +404,7 @@ export default function StackViewer({
   );
   const hasMultipleReadingUnits = readingUnits.length > 1;
   const canToggleComicDisplayMode =
-    mediaType !== 'video' &&
+    category !== 'video' &&
     readingSettings.spreadDisplayEnabled &&
     (hasMultipleAssets || hasAutoSpreadAsset);
 
@@ -511,7 +511,7 @@ export default function StackViewer({
     onPrevStack,
   } = useStackViewerInteractions({
     datasetId,
-    mediaType,
+    category,
     stackId,
     listToken,
     returnTo,
@@ -928,7 +928,7 @@ export default function StackViewer({
   const shuffleStateRef = useRef<{
     ctx: typeof ctx;
     datasetId: string;
-    mediaType: string;
+    category: string;
     listToken?: string;
     returnTo?: string;
     update: typeof update;
@@ -938,7 +938,7 @@ export default function StackViewer({
   shuffleStateRef.current = {
     ctx,
     datasetId,
-    mediaType,
+    category,
     listToken,
     returnTo,
     update,
@@ -955,7 +955,7 @@ export default function StackViewer({
       if (!state) return;
 
       const baseDatasetId = state.ctx?.datasetId ?? state.datasetId;
-      const baseMediaType = state.ctx?.mediaType ?? (state.mediaType as any);
+      const baseCategory = state.ctx?.category ?? (state.category as any);
       const baseFilter = state.ctx?.filters;
       const baseSort = state.ctx?.sort;
 
@@ -1007,7 +1007,7 @@ export default function StackViewer({
               : ({
                   token,
                   datasetId: String(baseDatasetId),
-                  mediaType: baseMediaType,
+                  category: baseCategory,
                   filters: baseFilter,
                   sort: baseSort,
                   ids: [],
@@ -1031,7 +1031,7 @@ export default function StackViewer({
         params: { datasetId: String(baseDatasetId), stackId: String(item.id) },
         search: {
           page: 0,
-          mediaType: String(baseMediaType),
+          category: String(baseCategory),
           listToken: token || undefined,
           returnTo: state.returnTo,
         },
@@ -1159,10 +1159,10 @@ export default function StackViewer({
 
       const currentPath = window.location.pathname;
       if (currentPath.includes('/stacks/')) {
-        const targetMediaType = (stack.mediaType as string) || mediaType || 'image';
+        const targetCategory = (stack.category as string) || category || 'image';
         await navigate({
-          to: '/library/$datasetId/media-type/$mediaType',
-          params: { datasetId, mediaType: String(targetMediaType) },
+          to: '/library/$datasetId/category/$category',
+          params: { datasetId, category: String(targetCategory) },
         });
       } else {
         navigateBack();
@@ -1173,7 +1173,7 @@ export default function StackViewer({
     }
   }, [
     datasetId,
-    mediaType,
+    category,
     navigate,
     navigateBack,
     queryClient,

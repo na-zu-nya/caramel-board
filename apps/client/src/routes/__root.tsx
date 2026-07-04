@@ -66,6 +66,25 @@ function RootLayout() {
     }
   }, [routeDatasetId, currentDataset, defaultDatasetId, setCurrentDataset]);
 
+  // ライブラリ固有ページ(/library/$datasetId/...)を開いたら、そのライブラリを
+  // アクティブライブラリとして採用する(ルートの datasetId を優先)
+  useEffect(() => {
+    if (routeDatasetId && routeDatasetId !== currentDataset) {
+      setCurrentDataset(routeDatasetId);
+    }
+  }, [routeDatasetId, currentDataset, setCurrentDataset]);
+
+  // 削除済みライブラリなど、datasets 一覧に存在しない ID が sessionStorage に
+  // 残っている場合はリセットする(route 側で値が指定されている場合はそちらを優先し、
+  // 上の effect に任せるためここではスキップする)
+  useEffect(() => {
+    if (routeDatasetId || datasets.length === 0 || !currentDataset) return;
+    const exists = datasets.some((d) => String(d.id) === String(currentDataset));
+    if (!exists) {
+      setCurrentDataset(defaultDatasetId ?? null);
+    }
+  }, [routeDatasetId, currentDataset, datasets, defaultDatasetId, setCurrentDataset]);
+
   // Selected dataset for theming (prefer route dataset, then current, then default)
   const selectedDataset = datasets.find(
     (d) => String(d.id) === String(routeDatasetId || currentDataset || defaultDatasetId || '')

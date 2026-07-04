@@ -84,7 +84,7 @@ function ScratchView() {
           filter: {
             datasetId,
             collectionId,
-            mediaCategory: currentFilter.mediaCategory,
+            category: currentFilter.category,
             mediaTypes: currentFilter.mediaTypes,
             tags: currentFilter.tags,
             authors: currentFilter.authors,
@@ -134,7 +134,7 @@ function ScratchView() {
         sort: currentSort.field,
         order: currentSort.order,
       };
-      if (currentFilter.mediaCategory) qp.mediaCategory = currentFilter.mediaCategory;
+      if (currentFilter.category) qp.category = currentFilter.category;
       if (currentFilter.mediaTypes?.length) qp.mediaTypes = currentFilter.mediaTypes;
       if (currentFilter.tags && currentFilter.tags.length > 0) qp.tag = currentFilter.tags;
       if (currentFilter.authors && currentFilter.authors.length > 0)
@@ -207,10 +207,10 @@ function ScratchView() {
     const clickedId =
       typeof item.id === 'string' ? Number.parseInt(item.id as string, 10) : (item.id as number);
     const currentIndex = Math.max(0, ids.indexOf(clickedId));
-    const mediaType = item.mediaType;
+    const category = item.category;
     const token = genListToken({
       datasetId,
-      mediaType,
+      category,
       filters: { datasetId, collectionId },
       sort: currentSort,
       collectionId,
@@ -218,7 +218,7 @@ function ScratchView() {
     saveViewContext({
       token,
       datasetId,
-      mediaType,
+      category,
       filters: { datasetId, collectionId },
       sort: currentSort,
       collectionId,
@@ -230,7 +230,7 @@ function ScratchView() {
     navigate({
       to: '/library/$datasetId/stacks/$stackId',
       params: { datasetId, stackId: String(item.id) },
-      search: { page: 0, mediaType, listToken: token },
+      search: { page: 0, category, listToken: token },
     });
   }, [datasetId, collectionId, currentSort, navigate]);
 
@@ -253,10 +253,10 @@ function ScratchView() {
       const clickedId =
         typeof item.id === 'string' ? Number.parseInt(item.id as string, 10) : (item.id as number);
       const currentIndex = Math.max(0, loadedIds.indexOf(clickedId));
-      const mediaType = item.mediaType;
+      const category = item.category;
       const token = genListToken({
         datasetId,
-        mediaType,
+        category,
         filters: { datasetId, collectionId },
         sort: currentSort,
         collectionId,
@@ -264,7 +264,7 @@ function ScratchView() {
       saveViewContext({
         token,
         datasetId,
-        mediaType,
+        category,
         filters: { datasetId, collectionId },
         sort: currentSort,
         collectionId,
@@ -275,7 +275,7 @@ function ScratchView() {
       navigate({
         to: '/library/$datasetId/stacks/$stackId',
         params: { datasetId, stackId: String(item.id) },
-        search: { page: 0, listToken: token },
+        search: { page: 0, category, listToken: token },
       });
     },
     [items, datasetId, collectionId, currentSort, navigate]

@@ -36,7 +36,7 @@ export function useStack(datasetId: string, stackId: string) {
   });
 }
 
-// Hook for infinite scrolling with mediaType filter
+// Hook for infinite scrolling with category filter
 export function useStacksInfinite(params: {
   datasetId: string | number;
   filter?: StackFilter;

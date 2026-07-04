@@ -10,7 +10,7 @@ const items: MediaGridItem[] = Array.from({ length: 10 }, (_, index) => ({
   id: index + 1,
   dataSetId: 1,
   name: `Stack ${index + 1}`,
-  mediaType: index % 4 === 0 ? 'video' : 'image',
+  category: index % 4 === 0 ? 'video' : 'image',
   thumbnailUrl: `https://picsum.photos/seed/tag-stack-${index + 1}/320/320`,
 }));
 

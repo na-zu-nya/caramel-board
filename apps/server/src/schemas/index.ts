@@ -20,7 +20,7 @@ export const PaginationSchema = z.object({
     .optional()
     .transform((val) => (val ? Number(val) : 0))
     .pipe(z.number().int().min(0)),
-  mediaType: z.enum(['image', 'comic', 'video']).optional(),
+  category: z.enum(['image', 'books', 'video']).optional(),
 });
 
 // Extended pagination for management operations (higher limits)
@@ -53,7 +53,7 @@ export const FilterSchema = z.object({
     .optional()
     .transform((val) => (val ? Number(val) : 0))
     .pipe(z.number().int().min(0)),
-  mediaType: z.enum(['image', 'comic', 'video']).optional(),
+  category: z.enum(['image', 'books', 'video']).optional(),
   tag: z.union([z.string(), z.array(z.string())]).optional(),
   author: z.string().optional(),
   fav: z
@@ -108,7 +108,7 @@ export const FilterSchema = z.object({
 // Stack schemas
 export const CreateStackSchema = z.object({
   name: z.string().min(1),
-  mediaType: z.enum(['image', 'comic', 'video']).optional().default('image'),
+  category: z.enum(['image', 'books', 'video']).optional().default('image'),
   thumbnail: z.string().optional(),
 });
 
@@ -116,7 +116,7 @@ export const UpdateStackSchema = z.object({
   name: z.string().min(1).optional(),
   thumbnail: z.string().optional(),
   meta: z.record(z.any()).optional(),
-  mediaType: z.enum(['image', 'comic', 'video']).optional(),
+  category: z.enum(['image', 'books', 'video']).optional(),
 });
 
 export const StackQuerySchema = z.object({
@@ -202,9 +202,9 @@ export const BulkAuthorSchema = z.object({
   author: z.string().min(1),
 });
 
-export const BulkMediaTypeSchema = z.object({
+export const BulkCategorySchema = z.object({
   stackIds: z.array(z.number().int().positive()).min(1),
-  mediaType: z.enum(['image', 'comic', 'video']),
+  category: z.enum(['image', 'books', 'video']),
 });
 
 export const BulkFavoriteSchema = z.object({
@@ -225,7 +225,7 @@ export type AutoTagAggregate = z.infer<typeof AutoTagAggregateSchema>;
 export type SimilaritySearch = z.infer<typeof SimilaritySearchSchema>;
 export type BulkTags = z.infer<typeof BulkTagsSchema>;
 export type BulkAuthor = z.infer<typeof BulkAuthorSchema>;
-export type BulkMediaType = z.infer<typeof BulkMediaTypeSchema>;
+export type BulkCategory = z.infer<typeof BulkCategorySchema>;
 export type BulkFavorite = z.infer<typeof BulkFavoriteSchema>;
 export type BulkRefreshThumbnails = z.infer<typeof BulkRefreshThumbnailsSchema>;
 export type BulkRemoveStacks = z.infer<typeof BulkRemoveStacksSchema>;

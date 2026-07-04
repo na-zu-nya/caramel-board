@@ -181,12 +181,12 @@ function TagDetailPage() {
     const clickedId = toNumericId(item.id);
     const currentIndex = Math.max(0, ids.indexOf(clickedId));
 
-    const mediaType = isMediaType(item.mediaType) ? item.mediaType : undefined;
-    const token = genListToken({ datasetId, mediaType, filters: effectiveFilter });
+    const category = isMediaCategory(item.category) ? item.category : undefined;
+    const token = genListToken({ datasetId, category, filters: effectiveFilter });
     saveViewContext({
       token,
       datasetId,
-      mediaType,
+      category,
       filters: effectiveFilter,
       ids,
       currentIndex,
@@ -196,7 +196,7 @@ function TagDetailPage() {
     navigate({
       to: '/library/$datasetId/stacks/$stackId',
       params: { datasetId, stackId: String(item.id) },
-      search: { page: 0, mediaType, listToken: token },
+      search: { page: 0, category, listToken: token },
     });
   };
 
@@ -232,6 +232,6 @@ function toNumericId(value: string | number): number {
   return typeof value === 'number' ? value : Number.parseInt(value, 10);
 }
 
-function isMediaType(value: unknown): value is MediaCategory {
-  return value === 'image' || value === 'comic' || value === 'video';
+function isMediaCategory(value: unknown): value is MediaCategory {
+  return value === 'image' || value === 'books' || value === 'video';
 }

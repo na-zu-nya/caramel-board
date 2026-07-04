@@ -67,7 +67,7 @@ interface RecentLikeRow {
   name: string;
   thumbnail: string | null;
   liked: number;
-  media_type: string;
+  category: string;
   created_at: string;
   updated_at: string;
   asset_id: number | null;
@@ -218,12 +218,12 @@ export class StandaloneDatasetRepository {
   }
 
   getOverview(id: number) {
-    const mediaTypes = ['image', 'comic', 'video'].map((mediaType) => {
+    const categories = ['image', 'books', 'video'].map((category) => {
       const count = getCount(
         this.db,
-        'SELECT COUNT(*) AS count FROM stacks WHERE dataset_id = ? AND media_type = ?',
+        'SELECT COUNT(*) AS count FROM stacks WHERE dataset_id = ? AND category = ?',
         id,
-        mediaType
+        category
       );
       const thumbnailRow = this.db
         .prepare(
@@ -235,14 +235,14 @@ export class StandaloneDatasetRepository {
              ORDER BY order_in_stack ASC, id ASC
              LIMIT 1
            )
-           WHERE s.dataset_id = ? AND s.media_type = ?
+           WHERE s.dataset_id = ? AND s.category = ?
            ORDER BY s.created_at DESC, s.id DESC
            LIMIT 1`
         )
-        .get(id, mediaType) as ThumbnailRow | undefined;
+        .get(id, category) as ThumbnailRow | undefined;
 
       return {
-        mediaType,
+        category,
         count,
         thumbnail: toPublicAssetPath(thumbnailRow?.thumbnail, id) || null,
       };
@@ -304,7 +304,7 @@ export class StandaloneDatasetRepository {
              s.name,
              s.thumbnail,
              s.liked,
-             s.media_type,
+             s.category,
              s.created_at,
              s.updated_at,
              a.id AS asset_id,
@@ -332,7 +332,7 @@ export class StandaloneDatasetRepository {
       name: row.name,
       thumbnail: toPublicAssetPath(row.asset_thumbnail || row.thumbnail, id),
       likeCount: row.liked,
-      mediaType: row.media_type,
+      category: row.category,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       assets: row.asset_id
@@ -347,7 +347,7 @@ export class StandaloneDatasetRepository {
     }));
 
     return {
-      mediaTypes,
+      categories,
       collections,
       tagCloud,
       recentLikes,

@@ -2,7 +2,7 @@ import { atom } from 'jotai';
 
 export interface UploadMetadata {
   datasetId?: number;
-  mediaType?: string;
+  category?: string;
   tags?: string[];
   author?: string;
   collectionId?: number;
@@ -116,8 +116,8 @@ function normalizeUploadMetadata(metadata?: UploadMetadata): UploadMetadata | un
   if (metadata.datasetId !== undefined) {
     normalized.datasetId = metadata.datasetId;
   }
-  if (metadata.mediaType) {
-    normalized.mediaType = metadata.mediaType;
+  if (metadata.category) {
+    normalized.category = metadata.category;
   }
   if (metadata.tags && metadata.tags.length > 0) {
     normalized.tags = [...metadata.tags];

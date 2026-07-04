@@ -50,7 +50,7 @@ import { getAuthorLinkLabel, MAX_AUTHOR_LINKS } from '@/lib/author-links';
 import { copyText } from '@/lib/clipboard';
 import { normalizeComicReadingSettings } from '@/lib/comic-reading';
 import { downloadStackOriginals } from '@/lib/download-originals';
-import { getMediaTypeLabel, useT } from '@/lib/i18n';
+import { getCategoryLabel, useT } from '@/lib/i18n';
 import { removeStackFromCache } from '@/lib/stack-cache';
 import { cn, hexForCopy } from '@/lib/utils';
 import {
@@ -155,7 +155,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
     [selectedItem?.meta?.reading]
   );
   const canEditReadingSettings =
-    !!selectedItem && selectedItem.mediaType !== 'video' && selectedItemAssetCount > 0;
+    !!selectedItem && selectedItem.category !== 'video' && selectedItemAssetCount > 0;
   const pageSettingDisplayMode = readingSettings.displayMode ?? 'spread';
 
   useEffect(() => {
@@ -174,7 +174,7 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
 
     const rawId = selectedItem.id;
     const stackIdValue = typeof rawId === 'string' ? Number.parseInt(rawId, 10) : Number(rawId);
-    const mediaType = selectedItem.mediaType;
+    const category = selectedItem.category;
 
     try {
       await apiClient.removeStack(stackIdValue);
@@ -186,12 +186,12 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
 
       const currentPath = window.location.pathname;
       if (currentPath.includes('/stacks/')) {
-        const mediaTypeMatch = currentPath.match(/media-type\/(\w+)/);
-        const nextMediaType = mediaType || mediaTypeMatch?.[1] || 'image';
+        const categoryMatch = currentPath.match(/category\/(\w+)/);
+        const nextCategory = category || categoryMatch?.[1] || 'image';
 
         navigate({
-          to: '/library/$datasetId/media-type/$mediaType',
-          params: { datasetId, mediaType: nextMediaType },
+          to: '/library/$datasetId/category/$category',
+          params: { datasetId, category: nextCategory },
         });
       }
     } catch (error) {
@@ -405,21 +405,15 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
     },
   });
 
-  const updateMediaTypeMutation = useMutation({
+  const updateCategoryMutation = useMutation({
     mutationFn: async ({
       stackId,
-      mediaType,
+      category,
     }: {
       stackId: number;
-      mediaType: 'image' | 'comic' | 'video';
+      category: 'image' | 'books' | 'video';
     }) => {
-      const response = await fetch(`/api/v1/stacks/bulk/media-type`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ stackIds: [stackId], mediaType }),
-      });
-      if (!response.ok) throw new Error('Failed to update media type');
-      return response.json();
+      return apiClient.bulkSetCategory([stackId], category);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['stack', datasetId, selectedItemId] });
@@ -594,9 +588,9 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
     }
   };
 
-  const handleMediaTypeChange = (mediaType: 'image' | 'comic' | 'video') => {
-    if (selectedItem && mediaType !== selectedItem.mediaType) {
-      updateMediaTypeMutation.mutate({ stackId: Number(selectedItem.id), mediaType });
+  const handleCategoryChange = (category: 'image' | 'books' | 'video') => {
+    if (selectedItem && category !== selectedItem.category) {
+      updateCategoryMutation.mutate({ stackId: Number(selectedItem.id), category });
     }
   };
 
@@ -1055,16 +1049,16 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
               <div className="space-y-2">
                 <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
                   <Image size={16} />
-                  {t.info.mediaCategory}
+                  {t.info.category}
                 </div>
-                <Select value={selectedItem.mediaType || ''} onValueChange={handleMediaTypeChange}>
+                <Select value={selectedItem.category || ''} onValueChange={handleCategoryChange}>
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder={t.info.selectMediaCategory} />
+                    <SelectValue placeholder={t.info.selectCategory} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="image">{getMediaTypeLabel(t, 'image')}</SelectItem>
-                    <SelectItem value="comic">{getMediaTypeLabel(t, 'comic')}</SelectItem>
-                    <SelectItem value="video">{getMediaTypeLabel(t, 'video')}</SelectItem>
+                    <SelectItem value="image">{getCategoryLabel(t, 'image')}</SelectItem>
+                    <SelectItem value="books">{getCategoryLabel(t, 'books')}</SelectItem>
+                    <SelectItem value="video">{getCategoryLabel(t, 'video')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

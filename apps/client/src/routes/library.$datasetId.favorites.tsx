@@ -88,8 +88,7 @@ function FavoritesPage() {
     const items = favoriteItems?.stacks ?? [];
     const search = currentFilter.search?.trim().toLowerCase();
     const filtered = items.filter((item) => {
-      if (currentFilter.mediaCategory && item.mediaType !== currentFilter.mediaCategory)
-        return false;
+      if (currentFilter.category && item.category !== currentFilter.category) return false;
       if (
         currentFilter.mediaTypes?.length &&
         (!item.actualMediaType || !currentFilter.mediaTypes.includes(item.actualMediaType))
@@ -131,7 +130,7 @@ function FavoritesPage() {
       }
     });
   }, [
-    currentFilter.mediaCategory,
+    currentFilter.category,
     currentFilter.mediaTypes,
     currentFilter.search,
     currentSort,
@@ -175,14 +174,14 @@ function FavoritesPage() {
     const currentIndex = Math.max(0, ids.indexOf(clickedId));
     const token = genListToken({
       datasetId,
-      mediaType: item.mediaType,
+      category: item.category,
       filters: { ...currentFilter, datasetId, isFavorite: true },
       sort: currentSort,
     });
     saveViewContext({
       token,
       datasetId,
-      mediaType: item.mediaType,
+      category: item.category,
       filters: { ...currentFilter, datasetId, isFavorite: true },
       sort: currentSort,
       ids,
@@ -195,7 +194,7 @@ function FavoritesPage() {
       params: { datasetId, stackId: String(clickedId) },
       search: {
         page: typeof item.favoritePage === 'number' ? item.favoritePage - 1 : 0,
-        mediaType: item.mediaType,
+        category: item.category,
         listToken: token,
       },
     });
@@ -269,17 +268,17 @@ function FavoritesPage() {
     const currentIndex = Math.max(0, ids.indexOf(clickedId));
 
     // ViewContext を保存（お気に入りフィルタ固定）
-    const mediaType = item.mediaType;
+    const category = item.category;
     const token = genListToken({
       datasetId,
-      mediaType,
+      category,
       filters: { ...currentFilter, datasetId, isFavorite: true },
       sort: currentSort,
     });
     saveViewContext({
       token,
       datasetId,
-      mediaType,
+      category,
       filters: { ...currentFilter, datasetId, isFavorite: true },
       sort: currentSort,
       ids,
@@ -287,13 +286,13 @@ function FavoritesPage() {
       createdAt: Date.now(),
     });
 
-    // StackViewer へ（listToken と mediaType を付与）
+    // StackViewer へ（listToken と category を付与）
     navigate({
       to: '/library/$datasetId/stacks/$stackId',
       params: { datasetId, stackId: String(clickedId) },
       search: {
         page: typeof item.favoritePage === 'number' ? item.favoritePage - 1 : 0,
-        mediaType,
+        category,
         listToken: token,
       },
     });

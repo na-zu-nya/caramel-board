@@ -60,7 +60,7 @@ export function useStackTile(datasetId: string) {
   const onOpen = useCallback(
     async (
       stackId: number | string,
-      options?: { page?: number; mediaType?: string; listToken?: string }
+      options?: { page?: number; category?: string; listToken?: string }
     ) => {
       setNavigationState({
         scrollPosition: window.scrollY,
@@ -71,7 +71,7 @@ export function useStackTile(datasetId: string) {
 
       const search = {
         ...(typeof options?.page === 'number' && options.page > 0 ? { page: options.page } : {}),
-        ...(options?.mediaType ? { mediaType: options.mediaType } : {}),
+        ...(options?.category ? { category: options.category } : {}),
         ...(options?.listToken ? { listToken: options.listToken } : {}),
       };
 

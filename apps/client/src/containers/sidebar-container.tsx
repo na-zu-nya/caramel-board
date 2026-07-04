@@ -19,9 +19,9 @@ import type { MediaCategory } from '@/types';
 // LocalStorage keys for collapsed state
 const COLLAPSED_STATE_KEY = 'sidebar-collapsed-groups';
 
-const DEFAULT_MEDIA_TYPE_PIN_NAMES: Record<MediaCategory, string> = {
+const DEFAULT_CATEGORY_PIN_NAMES: Record<MediaCategory, string> = {
   image: 'Images',
-  comic: 'Comics',
+  books: 'Books',
   video: 'Videos',
 };
 
@@ -86,15 +86,15 @@ export default function SidebarContainer() {
   };
 
   const isPinned: NavigationPinHandlers['isPinned'] = useCallback(
-    (type, id, mediaType) =>
+    (type, id, category) =>
       navigationPins.some(
         (pin) =>
           pin.dataSetId === Number.parseInt(datasetId, 10) &&
           pin.type === type &&
           (type === 'COLLECTION'
             ? pin.collectionId === id
-            : type === 'MEDIA_TYPE'
-              ? pin.mediaType === mediaType
+            : type === 'CATEGORY'
+              ? pin.category === category
               : type === 'OVERVIEW')
       ),
     [datasetId, navigationPins]
@@ -128,27 +128,27 @@ export default function SidebarContainer() {
     [datasetId, deleteNavigationPinMutation, navigationPins]
   );
 
-  const handlePinMediaType: NavigationPinHandlers['onPinMediaType'] = useCallback(
-    async (mediaType, iconName) => {
+  const handlePinCategory: NavigationPinHandlers['onPinCategory'] = useCallback(
+    async (category, iconName) => {
       const newPin = {
-        type: 'MEDIA_TYPE' as const,
+        type: 'CATEGORY' as const,
         dataSetId: Number.parseInt(datasetId, 10),
-        name: DEFAULT_MEDIA_TYPE_PIN_NAMES[mediaType],
+        name: DEFAULT_CATEGORY_PIN_NAMES[category],
         icon: iconName,
         order: navigationPins.length,
-        mediaType,
+        category,
       };
       createNavigationPinMutation.mutate(newPin);
     },
     [createNavigationPinMutation, datasetId, navigationPins.length]
   );
 
-  const handleUnpinMediaType: NavigationPinHandlers['onUnpinMediaType'] = useCallback(
-    async (mediaType) => {
+  const handleUnpinCategory: NavigationPinHandlers['onUnpinCategory'] = useCallback(
+    async (category) => {
       const pinToDelete = navigationPins.find(
         (pin) =>
-          pin.type === 'MEDIA_TYPE' &&
-          pin.mediaType === mediaType &&
+          pin.type === 'CATEGORY' &&
+          pin.category === category &&
           pin.dataSetId === Number.parseInt(datasetId, 10)
       );
       if (pinToDelete) deleteNavigationPinMutation.mutate(pinToDelete.id);
@@ -262,8 +262,8 @@ export default function SidebarContainer() {
         isCollapsed={collapsedGroups.library}
         onToggle={() => toggleGroup('library')}
         isPinned={isPinned}
-        onPinMediaType={handlePinMediaType}
-        onUnpinMediaType={handleUnpinMediaType}
+        onPinCategory={handlePinCategory}
+        onUnpinCategory={handleUnpinCategory}
         onPinOverview={handlePinOverview}
         onUnpinOverview={handleUnpinOverview}
       />

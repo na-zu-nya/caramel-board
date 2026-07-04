@@ -17,28 +17,28 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { getMediaTypeLabel, useT } from '@/lib/i18n';
+import { getCategoryLabel, useT } from '@/lib/i18n';
 import type { AvailableIcon, MediaCategory } from '@/types';
 import { AVAILABLE_ICONS } from '@/types';
 
 interface MediaTypeContextMenuProps {
   children: React.ReactNode;
-  mediaType: MediaCategory;
+  category: MediaCategory;
   datasetId: string;
   isPinned?: boolean;
   onPin?: (iconName: string) => void;
   onUnpin?: () => void;
 }
 
-const DEFAULT_MEDIA_TYPE_ICONS: Record<MediaCategory, AvailableIcon> = {
+const DEFAULT_CATEGORY_ICONS: Record<MediaCategory, AvailableIcon> = {
   image: 'Image',
-  comic: 'BookOpen',
+  books: 'BookOpen',
   video: 'Film',
 };
 
 export function MediaTypeContextMenu({
   children,
-  mediaType,
+  category,
   isPinned,
   onPin,
   onUnpin,
@@ -47,9 +47,7 @@ export function MediaTypeContextMenu({
   const [showPinDialog, setShowPinDialog] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const [selectedIcon, setSelectedIcon] = useState<AvailableIcon>(
-    DEFAULT_MEDIA_TYPE_ICONS[mediaType]
-  );
+  const [selectedIcon, setSelectedIcon] = useState<AvailableIcon>(DEFAULT_CATEGORY_ICONS[category]);
 
   const handlePin = useCallback(async () => {
     if (!onPin) return;
@@ -66,9 +64,9 @@ export function MediaTypeContextMenu({
   }, [onPin, selectedIcon]);
 
   const openPinDialog = useCallback(() => {
-    setSelectedIcon(DEFAULT_MEDIA_TYPE_ICONS[mediaType]);
+    setSelectedIcon(DEFAULT_CATEGORY_ICONS[category]);
     setShowPinDialog(true);
-  }, [mediaType]);
+  }, [category]);
 
   // Helper function to render Lucide icons dynamically
   const renderIcon = (iconName: string) => {
@@ -106,7 +104,7 @@ export function MediaTypeContextMenu({
         <DialogContent className="sm:max-w-md">
           <DialogHeader className="border-b border-gray-200 pb-4">
             <DialogTitle className="text-lg font-semibold text-gray-900">
-              {getMediaTypeLabel(t, mediaType)}
+              {getCategoryLabel(t, category)}
             </DialogTitle>
             <DialogDescription className="text-gray-600 mt-2">
               {t.pins.editPinDescription}
@@ -117,7 +115,7 @@ export function MediaTypeContextMenu({
             <div className="space-y-2">
               <Label className="text-gray-700">{t.pins.name}</Label>
               <div className="rounded-md border bg-gray-50 px-3 py-2 text-sm text-gray-700">
-                {getMediaTypeLabel(t, mediaType)}
+                {getCategoryLabel(t, category)}
               </div>
               <p className="text-sm text-gray-500">{t.pins.nameFixed}</p>
             </div>

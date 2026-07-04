@@ -715,8 +715,8 @@ function AutoTagConfigPage() {
           await apiClient.bulkSetAuthor(stackIds, updates.setAuthor);
         }
 
-        if (updates.setMediaType) {
-          await apiClient.bulkSetMediaType(stackIds, updates.setMediaType);
+        if (updates.setCategory) {
+          await apiClient.bulkSetCategory(stackIds, updates.setCategory);
         }
 
         queryClient.invalidateQueries({
@@ -1312,8 +1312,8 @@ function appendFilterParams(target: URLSearchParams, filter: StackFilter) {
   if (filter.isFavorite !== undefined) {
     target.append('isFavorite', filter.isFavorite.toString());
   }
-  if (filter.mediaCategory) {
-    target.append('mediaCategory', filter.mediaCategory);
+  if (filter.category) {
+    target.append('category', filter.category);
   }
   if (Array.isArray(filter.mediaTypes)) {
     for (const mediaType of filter.mediaTypes) {

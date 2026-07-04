@@ -93,7 +93,7 @@ interface StackItem {
   likeCount?: number;
   favorited?: boolean;
   isFavorite?: boolean;
-  mediaType?: MediaCategory;
+  category?: MediaCategory;
   actualMediaType?: MediaType;
   author?: string | { id: string | number; name: string };
   tags?: Array<string | { name?: string; title?: string }>;
@@ -113,7 +113,7 @@ interface TagStacksQueryParams {
   limit: number;
   offset: number;
   tag: string[];
-  mediaCategory?: MediaCategory;
+  category?: MediaCategory;
   mediaTypes?: MediaType[];
   author?: string[];
   fav?: 0 | 1;
@@ -155,7 +155,7 @@ function buildTagStacksQuery(params: {
     tag: [params.selectedTag.title],
   };
 
-  if (params.filter.mediaCategory) query.mediaCategory = params.filter.mediaCategory;
+  if (params.filter.category) query.category = params.filter.category;
   if (params.filter.mediaTypes?.length) query.mediaTypes = params.filter.mediaTypes;
   if (params.filter.tags && params.filter.tags.length > 0) {
     const extras = params.filter.tags.filter((tag) => tag !== params.selectedTag.title);
@@ -181,7 +181,7 @@ function toNumericId(value: string | number): number {
 }
 
 function isMediaCategory(value: unknown): value is MediaCategory {
-  return value === 'image' || value === 'comic' || value === 'video';
+  return value === 'image' || value === 'books' || value === 'video';
 }
 
 function getStackTagNames(tags: StackItem['tags']): string[] | undefined {
@@ -283,7 +283,7 @@ function TagsPage() {
     void refetchTags();
   }, [refetchTags, routeFilterScopeKey, setCurrentFilter, setSelectionMode, tagsPageFilter]);
 
-  // ルート入場時に、他ページから持ち越された mediaType などのフィルタを切り離す
+  // ルート入場時に、他ページから持ち越された category などのフィルタを切り離す
   useEffect(() => {
     resetTagsPageState();
   }, [resetTagsPageState]);
@@ -333,7 +333,7 @@ function TagsPage() {
   const filterKey = useMemo(() => {
     const f = effectiveFilter;
     const key = {
-      mediaCategory: f.mediaCategory ?? undefined,
+      category: f.category ?? undefined,
       search: f.search ?? undefined,
       tags: Array.isArray(f.tags) ? [...f.tags] : undefined,
       authors: Array.isArray(f.authors) ? [...f.authors] : undefined,
@@ -441,13 +441,13 @@ function TagsPage() {
     const selectedTagContextFilter: StackFilter = { tags: [String(selectedTag.id)] };
     const token = genListToken({
       datasetId: String(selectedTag.dataSetId),
-      mediaType: item.mediaType,
+      category: item.category,
       filters: selectedTagContextFilter,
     });
     saveViewContext({
       token,
       datasetId: String(selectedTag.dataSetId),
-      mediaType: item.mediaType,
+      category: item.category,
       filters: selectedTagContextFilter,
       ids,
       currentIndex,
@@ -456,7 +456,7 @@ function TagsPage() {
     navigate({
       to: '/library/$datasetId/stacks/$stackId',
       params: { datasetId: String(selectedTag.dataSetId), stackId: String(item.id) },
-      search: { page: 0, mediaType: item.mediaType, listToken: token },
+      search: { page: 0, category: item.category, listToken: token },
       replace: true,
     });
   }, [selectedTag, stacksData, navigate, effectiveFilter, datasetId]);
@@ -700,19 +700,19 @@ function TagsPage() {
       const clickedId = toNumericId(stack.id);
       const currentIndex = Math.max(0, ids.indexOf(clickedId));
 
-      const mediaType = isMediaCategory(stack.mediaType) ? stack.mediaType : undefined;
+      const category = isMediaCategory(stack.category) ? stack.category : undefined;
       const selectedTagContextFilter: StackFilter = selectedTag
         ? { tags: [String(selectedTag.id)] }
         : {};
       const token = genListToken({
         datasetId,
-        mediaType,
+        category,
         filters: selectedTagContextFilter,
       });
       saveViewContext({
         token,
         datasetId,
-        mediaType,
+        category,
         filters: selectedTagContextFilter,
         ids,
         currentIndex,
@@ -722,7 +722,7 @@ function TagsPage() {
       navigate({
         to: '/library/$datasetId/stacks/$stackId',
         params: { datasetId, stackId: String(stack.id) },
-        search: { page: 0, mediaType, listToken: token },
+        search: { page: 0, category, listToken: token },
       });
     },
     [
@@ -853,9 +853,9 @@ function TagsPage() {
           await apiClient.bulkSetAuthor(stackIds, updates.setAuthor);
         }
 
-        // Apply media type
-        if (updates.setMediaType) {
-          await apiClient.bulkSetMediaType(stackIds, updates.setMediaType);
+        // Apply category
+        if (updates.setCategory) {
+          await apiClient.bulkSetCategory(stackIds, updates.setCategory);
         }
 
         // Refresh data

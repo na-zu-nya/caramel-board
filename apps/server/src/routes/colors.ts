@@ -43,7 +43,7 @@ const ColorSearchSchema = z.object({
   }),
   threshold: z.number().min(0).max(1).optional().default(0.8),
   dataSetId: z.number().optional(),
-  mediaType: z.enum(['image', 'comic', 'video']).optional(),
+  category: z.enum(['image', 'books', 'video']).optional(),
   limit: z.number().min(1).max(100).optional().default(50),
   offset: z.number().min(0).optional().default(0),
 });
@@ -61,7 +61,7 @@ const MultiColorSearchSchema = z.object({
     .max(5),
   threshold: z.number().min(0).max(1).optional().default(0.8),
   dataSetId: z.number().optional(),
-  mediaType: z.enum(['image', 'comic', 'video']).optional(),
+  category: z.enum(['image', 'books', 'video']).optional(),
   limit: z.number().min(1).max(100).optional().default(50),
   offset: z.number().min(0).optional().default(0),
 });
@@ -81,7 +81,7 @@ const ColorFilterSchema = z.object({
     })
     .optional(),
   dataSetId: z.number().optional(),
-  mediaType: z.enum(['image', 'comic', 'video']).optional(),
+  category: z.enum(['image', 'books', 'video']).optional(),
   limit: z.number().min(1).max(100).optional().default(50),
   offset: z.number().min(0).optional().default(0),
 });

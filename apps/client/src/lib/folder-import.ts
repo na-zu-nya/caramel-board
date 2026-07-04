@@ -10,7 +10,7 @@ export type FolderUploadMode = 'single-stack' | 'create-collection' | 'flat-uplo
 
 export interface FolderUploadDefaults {
   datasetId: number;
-  mediaType?: string;
+  category?: string;
   tags?: string[];
   author?: string;
   collectionId?: number;
@@ -132,7 +132,7 @@ export async function uploadFolderAsSingleStack(
   const stack = await apiClient.createStackWithFile(primary, {
     name: primary.name,
     datasetId: String(defaults.datasetId),
-    mediaType: defaults.collectionId ? 'image' : defaults.mediaType,
+    category: defaults.collectionId ? 'image' : defaults.category,
     tags: defaults.tags,
     author: defaults.author,
     collectionId: defaults.collectionId,
@@ -233,7 +233,7 @@ export async function uploadFolderAsCollection(
           const stack = await apiClient.createStackWithFile(file, {
             name: file.name,
             datasetId: String(defaults.datasetId),
-            mediaType: defaults.mediaType,
+            category: defaults.category,
             tags: defaults.tags,
             author: defaults.author,
           });

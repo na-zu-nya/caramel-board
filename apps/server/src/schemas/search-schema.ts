@@ -58,7 +58,7 @@ export const SearchFiltersSchema = z.object({
   favorites: z.enum(['is-fav', 'not-fav']).optional(),
   likes: z.enum(['is-liked', 'not-liked']).optional(),
   color: ColorFilterSchema,
-  mediaCategory: z.enum(['all', 'image', 'comic', 'video']).optional(),
+  category: z.enum(['all', 'image', 'books', 'video']).optional(),
   mediaTypes: z.array(ActualMediaTypeSchema).optional(),
   collectionId: z.number().int().positive().optional(),
   includeAutoTags: z.boolean().optional(),

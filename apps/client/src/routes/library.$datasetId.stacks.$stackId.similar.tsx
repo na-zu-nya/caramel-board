@@ -116,18 +116,18 @@ function SimilarStacksRoute() {
       const clickedId = toStackId(item.id);
       if (clickedId === null) return;
       const currentIndex = Math.max(0, ids.indexOf(clickedId));
-      const mediaType = item.mediaType;
+      const category = item.category;
       const filters: SimilarStackFilter = { datasetId, similarTo: Number(stackId) };
       const token = genListToken({
         datasetId,
-        mediaType,
+        category,
         filters,
       });
 
       saveViewContext({
         token,
         datasetId,
-        mediaType,
+        category,
         filters,
         ids,
         currentIndex,
@@ -137,7 +137,7 @@ function SimilarStacksRoute() {
       navigate({
         to: '/library/$datasetId/stacks/$stackId',
         params: { datasetId, stackId: String(item.id) },
-        search: { page: 0, mediaType, listToken: token },
+        search: { page: 0, category, listToken: token },
       });
     },
     [datasetId, items, navigate, stackId]
@@ -258,8 +258,8 @@ function SimilarStacksRoute() {
         if (updates.setAuthor) {
           await apiClient.bulkSetAuthor(stackIds, updates.setAuthor);
         }
-        if (updates.setMediaType) {
-          await apiClient.bulkSetMediaType(stackIds, updates.setMediaType);
+        if (updates.setCategory) {
+          await apiClient.bulkSetCategory(stackIds, updates.setCategory);
         }
         clearSelection();
         exitSelectionMode();

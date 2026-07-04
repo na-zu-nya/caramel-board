@@ -121,12 +121,12 @@ export function useStackNavigation({
             params: { datasetId, collectionId },
           });
         }
-      } else if (currentPath.includes('/media-type/')) {
-        // Navigate back to media type page
-        const match = currentPath.match(/\/library\/(\d+)\/media-type\/(\w+)/);
+      } else if (currentPath.includes('/category/')) {
+        // Navigate back to category page
+        const match = currentPath.match(/\/library\/(\d+)\/category\/(\w+)/);
         if (match) {
-          const [, datasetId, mediaType] = match;
-          navigate({ to: `/library/${datasetId}/media-type/${mediaType}` });
+          const [, datasetId, category] = match;
+          navigate({ to: `/library/${datasetId}/category/${category}` });
         }
       }
     }

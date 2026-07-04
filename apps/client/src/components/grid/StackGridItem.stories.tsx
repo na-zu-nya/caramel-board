@@ -10,7 +10,7 @@ const sampleItem: MediaGridItem = {
   id: 42,
   stackId: 42,
   name: 'Sample Stack',
-  mediaType: 'image',
+  category: 'image',
   thumbnailUrl: 'https://picsum.photos/id/1062/480/480',
   assetCount: 12,
   likeCount: 18,

@@ -79,8 +79,8 @@ export default function Header() {
       return scratch
         ? path.includes(`/scratch/${pin.collectionId}`)
         : path.includes(`/collections/${pin.collectionId}`);
-    } else if (pin.type === 'MEDIA_TYPE' && pin.mediaType) {
-      return path.includes(`/media-type/${pin.mediaType}`);
+    } else if (pin.type === 'CATEGORY' && pin.category) {
+      return path.includes(`/category/${pin.category}`);
     } else if (pin.type === 'OVERVIEW') {
       return path === `/library/${datasetId}`;
     } else if (pin.type === 'FAVORITES') {
@@ -108,9 +108,9 @@ export default function Header() {
           params: () => ({ datasetId, collectionId: String(pin.collectionId) }),
         });
       }
-    } else if (pin.type === 'MEDIA_TYPE' && pin.mediaType) {
-      // Navigate to media type
-      navigate({ to: `/library/${datasetId}/media-type/${pin.mediaType}` });
+    } else if (pin.type === 'CATEGORY' && pin.category) {
+      // Navigate to category
+      navigate({ to: `/library/${datasetId}/category/${pin.category}` });
     } else if (pin.type === 'OVERVIEW') {
       // Navigate to overview
       navigate({ to: `/library/${datasetId}` });

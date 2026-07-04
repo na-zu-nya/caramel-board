@@ -1,10 +1,10 @@
-export type StackMediaCategory = 'image' | 'comic' | 'video';
+export type StackCategory = 'image' | 'books' | 'video';
 export type StackMediaType = 'image' | 'video' | 'multipleImages';
 
 export interface StandaloneStackListParams {
   dataSetId: number;
   collection?: number;
-  mediaCategory?: StackMediaCategory;
+  category?: StackCategory;
   mediaTypes?: StackMediaType[];
   tag?: string | string[];
   author?: string | string[];
@@ -27,7 +27,7 @@ export interface StackRow {
   author_name: string | null;
   name: string;
   thumbnail: string;
-  media_type: string;
+  category: string;
   actual_media_type: StackMediaType | null;
   liked: number;
   meta_json: string | null;
@@ -118,7 +118,7 @@ export interface AddAssetWithFileOptions {
 export interface CreateStackWithFileInput {
   dataSetId: number;
   name: string;
-  mediaType: StackMediaCategory;
+  category: StackCategory;
   author?: string;
   tags?: string[];
   file: StandaloneFileInput;

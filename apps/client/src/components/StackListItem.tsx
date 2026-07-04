@@ -184,7 +184,7 @@ export function StackListItem({
         to: '/library/$datasetId/stacks/$stackId',
         params: { datasetId, stackId: String(stack.id) },
         search: {
-          ...(stack.mediaType ? { mediaType: stack.mediaType } : {}),
+          ...(stack.category ? { category: stack.category } : {}),
           ...(returnTo ? { returnTo } : {}),
         },
         className: cn('group cursor-pointer block', className),

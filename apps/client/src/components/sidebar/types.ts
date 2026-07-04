@@ -10,14 +10,14 @@ export interface SidebarSectionProps {
 // Navigation pin related functions
 export interface NavigationPinHandlers {
   isPinned: (
-    type: 'COLLECTION' | 'MEDIA_TYPE' | 'OVERVIEW',
+    type: 'COLLECTION' | 'CATEGORY' | 'OVERVIEW',
     id?: number,
-    mediaType?: MediaCategory
+    category?: MediaCategory
   ) => boolean;
   onPinCollection: (collection: { id: number; name?: string }, iconName: string) => void;
   onUnpinCollection: (collection: { id: number }) => void;
-  onPinMediaType: (mediaType: MediaCategory, iconName: string) => void;
-  onUnpinMediaType: (mediaType: MediaCategory) => void;
+  onPinCategory: (category: MediaCategory, iconName: string) => void;
+  onUnpinCategory: (category: MediaCategory) => void;
   onPinOverview: (iconName: string) => void;
   onUnpinOverview: () => void;
 }
@@ -28,8 +28,8 @@ export interface SettingsSectionProps extends SidebarSectionProps {}
 // Library section props
 export interface LibrarySectionProps extends SidebarSectionProps {
   isPinned: NavigationPinHandlers['isPinned'];
-  onPinMediaType: NavigationPinHandlers['onPinMediaType'];
-  onUnpinMediaType: NavigationPinHandlers['onUnpinMediaType'];
+  onPinCategory: NavigationPinHandlers['onPinCategory'];
+  onUnpinCategory: NavigationPinHandlers['onUnpinCategory'];
   onPinOverview: NavigationPinHandlers['onPinOverview'];
   onUnpinOverview: NavigationPinHandlers['onUnpinOverview'];
 }

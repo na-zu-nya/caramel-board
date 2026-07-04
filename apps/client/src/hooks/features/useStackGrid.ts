@@ -55,7 +55,7 @@ interface EditUpdates {
   addTags?: string[];
   removeTags?: string[];
   setAuthor?: string;
-  setMediaType?: 'image' | 'comic' | 'video';
+  setCategory?: 'image' | 'books' | 'video';
 }
 
 export function useStackGrid({
@@ -524,8 +524,8 @@ export function useStackGrid({
           hasMutation = true;
         }
 
-        if (updates.setMediaType) {
-          await apiClient.bulkSetMediaType(stackIds, updates.setMediaType);
+        if (updates.setCategory) {
+          await apiClient.bulkSetCategory(stackIds, updates.setCategory);
           hasMutation = true;
         }
 

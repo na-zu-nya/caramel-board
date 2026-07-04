@@ -4,7 +4,7 @@ import type { MediaGridItem } from '@/types';
 export interface EditUpdates {
   addTags?: string[];
   setAuthor?: string;
-  setMediaType?: 'image' | 'comic' | 'video';
+  setCategory?: 'image' | 'books' | 'video';
 }
 
 interface EditPanelContextType {

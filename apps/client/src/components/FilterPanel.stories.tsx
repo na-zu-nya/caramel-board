@@ -65,14 +65,14 @@ function FilterPanelStory({
 const selectedMediaTypeFilter: StackFilter = {
   datasetId: '1',
   search: 'blue reference',
-  mediaCategory: 'comic',
+  category: 'books',
   mediaTypes: ['image', 'multipleImages'],
 };
 
 const allMediaTypeFilter: StackFilter = {
   datasetId: '1',
   search: 'blue reference',
-  mediaCategory: 'comic',
+  category: 'books',
 };
 
 export const Default: Story = {

@@ -17,7 +17,7 @@ const LikeActivityParamSchema = z.object({
   id: z.coerce.number().int().positive(),
 });
 
-// Get activities grouped by mediaType
+// Get activities grouped by category
 activitiesRoute.get('/', zValidator('query', PaginationSchema), async (c) => {
   try {
     const { limit, offset } = c.req.valid('query');

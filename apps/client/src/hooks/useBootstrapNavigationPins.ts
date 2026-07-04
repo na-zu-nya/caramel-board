@@ -8,7 +8,7 @@ type DefaultPinSpec = {
   type: Pin['type'];
   name: string;
   icon: string;
-  mediaType?: Pin['mediaType'];
+  category?: Pin['category'];
 };
 
 const DEFAULT_PIN_SPECS: ReadonlyArray<DefaultPinSpec> = [
@@ -18,22 +18,22 @@ const DEFAULT_PIN_SPECS: ReadonlyArray<DefaultPinSpec> = [
     icon: 'Star',
   },
   {
-    type: 'MEDIA_TYPE',
+    type: 'CATEGORY',
     name: 'Images',
     icon: 'Image',
-    mediaType: 'image',
+    category: 'image',
   },
   {
-    type: 'MEDIA_TYPE',
+    type: 'CATEGORY',
     name: 'Comics',
     icon: 'BookOpen',
-    mediaType: 'comic',
+    category: 'books',
   },
   {
-    type: 'MEDIA_TYPE',
+    type: 'CATEGORY',
     name: 'Videos',
     icon: 'Film',
-    mediaType: 'video',
+    category: 'video',
   },
 ];
 
@@ -43,8 +43,8 @@ export interface BootstrapNavigationPinsOptions {
 
 function isMatchingSpec(spec: DefaultPinSpec, pin: Pin): boolean {
   if (spec.type !== pin.type) return false;
-  if (spec.type === 'MEDIA_TYPE') {
-    return spec.mediaType === pin.mediaType;
+  if (spec.type === 'CATEGORY') {
+    return spec.category === pin.category;
   }
   return true;
 }
@@ -100,7 +100,7 @@ export function useBootstrapNavigationPins() {
               icon: spec.icon,
               order: index,
               dataSetId: targetId,
-              mediaType: spec.mediaType,
+              category: spec.category,
             });
           } catch (error) {
             console.error(`Failed to bootstrap pin: ${spec.name}`, error);

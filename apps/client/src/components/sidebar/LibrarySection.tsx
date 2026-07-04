@@ -10,6 +10,7 @@ import {
   Heart,
   Home,
   Image,
+  Layers,
   NotebookText,
   Star,
   Tag,
@@ -19,6 +20,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ScratchContextMenu } from '@/components/modals/ScratchContextMenu';
 import { AuthorsSection } from '@/components/sidebar/AuthorsSection';
 import { AutoTagsSection } from '@/components/sidebar/AutoTagsSection';
+import { MediaTypesSection } from '@/components/sidebar/MediaTypesSection';
 import { TagsSection } from '@/components/sidebar/TagsSection';
 import type { LibrarySectionProps } from '@/components/sidebar/types';
 import { DroppableSideMenuItem } from '@/components/ui/DroppableSideMenuItem';
@@ -33,8 +35,8 @@ export function LibrarySection({
   isCollapsed = false,
   onToggle,
   isPinned,
-  onPinMediaType,
-  onUnpinMediaType,
+  onPinCategory,
+  onUnpinCategory,
   onPinOverview,
   onUnpinOverview,
 }: LibrarySectionProps) {
@@ -53,19 +55,19 @@ export function LibrarySection({
         apiClient.getStacks({ datasetId, filter: { isLiked: true }, limit: 1, offset: 0 }),
         apiClient.getStacks({
           datasetId,
-          filter: { mediaCategory: 'image' },
+          filter: { category: 'image' },
           limit: 1,
           offset: 0,
         }),
         apiClient.getStacks({
           datasetId,
-          filter: { mediaCategory: 'comic' },
+          filter: { category: 'books' },
           limit: 1,
           offset: 0,
         }),
         apiClient.getStacks({
           datasetId,
-          filter: { mediaCategory: 'video' },
+          filter: { category: 'video' },
           limit: 1,
           offset: 0,
         }),
@@ -90,6 +92,18 @@ export function LibrarySection({
     enabled: !!datasetId,
     staleTime: 5000,
   });
+
+  // MediaTypes collapsed state
+  const [mediaTypesCollapsed, setMediaTypesCollapsed] = useState(() => {
+    const stored = sessionStorage.getItem(`mediaTypesCollapsed-${datasetId}`);
+    return stored !== null ? stored === 'true' : true;
+  });
+
+  const toggleMediaTypesCollapsed = () => {
+    const newState = !mediaTypesCollapsed;
+    setMediaTypesCollapsed(newState);
+    sessionStorage.setItem(`mediaTypesCollapsed-${datasetId}`, String(newState));
+  };
 
   // Load tags collapsed state from sessionStorage
   const [tagsCollapsed, setTagsCollapsed] = useState(() => {
@@ -164,22 +178,19 @@ export function LibrarySection({
     }
   };
 
-  const handleMediaTypeDrop = async (
-    stackIds: number[],
-    mediaType: 'image' | 'comic' | 'video'
-  ) => {
+  const handleCategoryDrop = async (stackIds: number[], category: 'image' | 'books' | 'video') => {
     try {
-      await apiClient.bulkSetMediaType(stackIds, mediaType);
+      await apiClient.bulkSetCategory(stackIds, category);
 
-      // Invalidate all stack-related queries to refresh media type filters
+      // Invalidate all stack-related queries to refresh category filters
       await queryClient.invalidateQueries({ queryKey: ['stacks'] });
       await queryClient.invalidateQueries({ queryKey: ['library-counts', datasetId] });
       await queryClient.invalidateQueries({ queryKey: ['tag-stacks'] });
       await queryClient.invalidateQueries({ queryKey: ['autotag-stacks'] });
 
-      console.log(`✅ Set ${stackIds.length} stacks to ${mediaType} media type`);
+      console.log(`✅ Set ${stackIds.length} stacks to ${category} category`);
     } catch (error) {
-      console.error(`❌ Failed to set media type to ${mediaType}:`, error);
+      console.error(`❌ Failed to set category to ${category}:`, error);
     }
   };
 
@@ -265,16 +276,16 @@ export function LibrarySection({
           icon={Image}
           label={t.sidebar.images}
           count={counts?.image}
-          onStacksDrop={(stackIds) => handleMediaTypeDrop(stackIds, 'image')}
+          onStacksDrop={(stackIds) => handleCategoryDrop(stackIds, 'image')}
           enableContextMenu
           pinnable
-          pinned={isPinned('MEDIA_TYPE', undefined, 'image')}
-          onPin={() => onPinMediaType?.('image', 'Image')}
-          onUnpin={() => onUnpinMediaType?.('image')}
+          pinned={isPinned('CATEGORY', undefined, 'image')}
+          onPin={() => onPinCategory?.('image', 'Image')}
+          onUnpin={() => onUnpinCategory?.('image')}
         >
           <Link
-            to="/library/$datasetId/media-type/$mediaType"
-            params={{ datasetId, mediaType: 'image' }}
+            to="/library/$datasetId/category/$category"
+            params={{ datasetId, category: 'image' }}
             activeProps={{ className: 'bg-gray-100 font-medium' }}
           />
         </DroppableSideMenuItem>
@@ -282,18 +293,18 @@ export function LibrarySection({
         <DroppableSideMenuItem
           asChild
           icon={BookOpen}
-          label={t.sidebar.comics}
+          label={t.sidebar.books}
           count={counts?.comic}
-          onStacksDrop={(stackIds) => handleMediaTypeDrop(stackIds, 'comic')}
+          onStacksDrop={(stackIds) => handleCategoryDrop(stackIds, 'books')}
           enableContextMenu
           pinnable
-          pinned={isPinned('MEDIA_TYPE', undefined, 'comic')}
-          onPin={() => onPinMediaType?.('comic', 'BookOpen')}
-          onUnpin={() => onUnpinMediaType?.('comic')}
+          pinned={isPinned('CATEGORY', undefined, 'books')}
+          onPin={() => onPinCategory?.('books', 'BookOpen')}
+          onUnpin={() => onUnpinCategory?.('books')}
         >
           <Link
-            to="/library/$datasetId/media-type/$mediaType"
-            params={{ datasetId, mediaType: 'comic' }}
+            to="/library/$datasetId/category/$category"
+            params={{ datasetId, category: 'books' }}
             activeProps={{ className: 'bg-gray-100 font-medium' }}
           />
         </DroppableSideMenuItem>
@@ -303,19 +314,42 @@ export function LibrarySection({
           icon={Film}
           label={t.sidebar.videos}
           count={counts?.video}
-          onStacksDrop={(stackIds) => handleMediaTypeDrop(stackIds, 'video')}
+          onStacksDrop={(stackIds) => handleCategoryDrop(stackIds, 'video')}
           enableContextMenu
           pinnable
-          pinned={isPinned('MEDIA_TYPE', undefined, 'video')}
-          onPin={() => onPinMediaType?.('video', 'Film')}
-          onUnpin={() => onUnpinMediaType?.('video')}
+          pinned={isPinned('CATEGORY', undefined, 'video')}
+          onPin={() => onPinCategory?.('video', 'Film')}
+          onUnpin={() => onUnpinCategory?.('video')}
         >
           <Link
-            to="/library/$datasetId/media-type/$mediaType"
-            params={{ datasetId, mediaType: 'video' }}
+            to="/library/$datasetId/category/$category"
+            params={{ datasetId, category: 'video' }}
             activeProps={{ className: 'bg-gray-100 font-medium' }}
           />
         </DroppableSideMenuItem>
+
+        <SideMenuListItem
+          label={
+            (
+              <span className="flex items-center gap-1.5">
+                <Layers size={15} />
+                <span>{t.sidebar.mediaTypesNav}</span>
+              </span>
+            ) as any
+          }
+          right={
+            <ChevronRight
+              size={14}
+              className={cn('ml-1 transition-transform', !mediaTypesCollapsed && 'rotate-90')}
+            />
+          }
+          onClick={toggleMediaTypesCollapsed}
+        />
+        {!mediaTypesCollapsed && (
+          <div className="mt-0.5 ml-2">
+            <MediaTypesSection datasetId={datasetId} />
+          </div>
+        )}
 
         <SideMenuListItem
           label={

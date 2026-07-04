@@ -94,7 +94,7 @@ function AutoTagStacksPage() {
   const _filterKey = useMemo(() => {
     const f = currentFilter || ({} as any);
     const key = {
-      mediaCategory: f.mediaCategory ?? undefined,
+      category: f.category ?? undefined,
       mediaTypes: Array.isArray(f.mediaTypes) ? [...f.mediaTypes].sort() : undefined,
       search: f.search ?? undefined,
       authors: Array.isArray(f.authors) ? [...f.authors].sort() : undefined,
@@ -241,12 +241,12 @@ function AutoTagStacksPage() {
       typeof item.id === 'string' ? Number.parseInt(item.id as string, 10) : (item.id as number);
     const currentIndex = Math.max(0, ids.indexOf(clickedId));
 
-    const mediaType = item.mediaType;
-    const token = genListToken({ datasetId, mediaType });
+    const category = item.category;
+    const token = genListToken({ datasetId, category });
     saveViewContext({
       token,
       datasetId,
-      mediaType,
+      category,
       ids,
       currentIndex,
       createdAt: Date.now(),
@@ -255,7 +255,7 @@ function AutoTagStacksPage() {
     navigate({
       to: '/library/$datasetId/stacks/$stackId',
       params: { datasetId, stackId: String(item.id) },
-      search: { page: 0, mediaType, listToken: token },
+      search: { page: 0, category, listToken: token },
     });
   };
 

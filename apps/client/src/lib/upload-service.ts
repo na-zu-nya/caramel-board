@@ -49,7 +49,7 @@ export class UploadService {
         const stack = await apiClient.createStackWithFile(file.file, {
           name: file.file.name,
           datasetId: metadata?.datasetId?.toString(),
-          mediaType: metadata?.collectionId ? 'image' : metadata?.mediaType,
+          category: metadata?.collectionId ? 'image' : metadata?.category,
           tags: metadata?.tags,
           author: metadata?.author,
           collectionId: metadata?.collectionId,

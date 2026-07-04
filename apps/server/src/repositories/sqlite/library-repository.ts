@@ -76,10 +76,10 @@ interface NavigationPinRow {
   dataset_id: number;
   user_id: number;
   collection_id: number | null;
-  type: 'COLLECTION' | 'MEDIA_TYPE' | 'OVERVIEW' | 'FAVORITES' | 'LIKES';
+  type: 'COLLECTION' | 'CATEGORY' | 'OVERVIEW' | 'FAVORITES' | 'LIKES';
   name: string;
   icon: string;
-  media_type: string | null;
+  category: string | null;
   sort_order: number;
   created_at: string;
   updated_at: string;
@@ -104,7 +104,7 @@ const toNumber = (value: unknown) => (typeof value === 'number' ? value : undefi
 const getSmartCollectionColorStackIds = (
   repository: StandaloneColorRepository,
   dataSetId: number,
-  mediaCategory: 'image' | 'comic' | 'video' | undefined,
+  category: 'image' | 'books' | 'video' | undefined,
   colorFilter: unknown
 ) => {
   if (!isRecord(colorFilter)) return undefined;
@@ -126,7 +126,7 @@ const getSmartCollectionColorStackIds = (
 
   return repository.getMatchingStackIdsByFilter({
     dataSetId,
-    mediaType: mediaCategory,
+    category,
     hueCategories,
     tonePoint,
     toneTolerance: toNumber(colorFilter.toneTolerance),
@@ -268,7 +268,7 @@ export class StandaloneLibraryRepository {
       dataSetId: row.dataset_id,
       userId: row.user_id,
       collectionId: row.collection_id,
-      mediaType: row.media_type,
+      category: row.category,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       collection: row.collection_id
@@ -563,22 +563,22 @@ export class StandaloneLibraryRepository {
     const collection = this.getCollectionRow(collectionId);
     if (!collection || collection.type !== 'SMART') return null;
     const filterConfig = parseJsonRecord(collection.filter_config_json);
-    const mediaCategory =
-      filterConfig.mediaCategory === 'image' ||
-      filterConfig.mediaCategory === 'comic' ||
-      filterConfig.mediaCategory === 'video'
-        ? filterConfig.mediaCategory
+    const category =
+      filterConfig.category === 'image' ||
+      filterConfig.category === 'books' ||
+      filterConfig.category === 'video'
+        ? filterConfig.category
         : undefined;
     const mediaTypes = readStackMediaTypes(filterConfig.mediaTypes);
     const stackIds = getSmartCollectionColorStackIds(
       this.colorRepository,
       collection.dataset_id,
-      mediaCategory,
+      category,
       filterConfig.colorFilter
     );
     const params: StandaloneStackListParams = {
       dataSetId: collection.dataset_id,
-      mediaCategory,
+      category,
       mediaTypes,
       tag: Array.isArray(filterConfig.tagIds)
         ? filterConfig.tagIds.map((value) => String(value))
@@ -789,13 +789,13 @@ export class StandaloneLibraryRepository {
   }
 
   upsertNavigationPin(data: {
-    type: 'COLLECTION' | 'MEDIA_TYPE' | 'OVERVIEW' | 'FAVORITES' | 'LIKES';
+    type: 'COLLECTION' | 'CATEGORY' | 'OVERVIEW' | 'FAVORITES' | 'LIKES';
     name: string;
     icon: string;
     order: number;
     dataSetId: number;
     collectionId?: number;
-    mediaType?: string;
+    category?: string;
   }) {
     const userId = this.ensureUserId();
     const now = nowIso();
@@ -806,9 +806,9 @@ export class StandaloneLibraryRepository {
            AND type = ?
            AND dataset_id = ?
            AND collection_id IS ?
-           AND media_type IS ?`
+           AND category IS ?`
       )
-      .get(userId, data.type, data.dataSetId, data.collectionId ?? null, data.mediaType ?? null) as
+      .get(userId, data.type, data.dataSetId, data.collectionId ?? null, data.category ?? null) as
       | { id: number }
       | undefined;
 
@@ -824,7 +824,7 @@ export class StandaloneLibraryRepository {
     const result = this.db
       .prepare(
         `INSERT INTO navigation_pins
-           (dataset_id, user_id, collection_id, type, name, icon, media_type, sort_order, created_at, updated_at)
+           (dataset_id, user_id, collection_id, type, name, icon, category, sort_order, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
@@ -834,7 +834,7 @@ export class StandaloneLibraryRepository {
         data.type,
         data.name,
         data.icon,
-        data.mediaType ?? null,
+        data.category ?? null,
         data.order,
         now,
         now

@@ -40,7 +40,7 @@ import BulkEditPanel from './BulkEditPanel.tsx';
 
 interface SparseStackGridProps {
   datasetId: string;
-  mediaType?: string;
+  category?: string;
   filter: StackFilter;
   sort?: SortOption;
   dataset?: Dataset;
@@ -64,7 +64,7 @@ const EMPTY_SELECTED_STACK_IDS: number[] = [];
 
 export default function SparseStackGrid({
   datasetId,
-  mediaType,
+  category,
   filter,
   sort,
   dataset,
@@ -110,7 +110,7 @@ export default function SparseStackGrid({
 
     const collectionMatch = window.location.pathname.match(/(?:collections|scratch)\/(\d+)/);
     const collectionId = collectionMatch ? Number.parseInt(collectionMatch[1], 10) : undefined;
-    const targetMediaType = collectionId ? 'image' : mediaType || undefined;
+    const targetCategory = collectionId ? 'image' : category || undefined;
 
     const tags = Array.isArray(filter.tags) ? filter.tags : undefined;
     const author =
@@ -118,12 +118,12 @@ export default function SparseStackGrid({
 
     return {
       datasetId: datasetNumericId,
-      mediaType: targetMediaType,
+      category: targetCategory,
       tags,
       author,
       collectionId,
     };
-  }, [dataset?.id, datasetId, mediaType, filter.tags, filter.authors]);
+  }, [dataset?.id, datasetId, category, filter.tags, filter.authors]);
 
   // While this grid is mounted, stabilize body scrollbar gutter for contextmenu reflows
   useEffect(() => {
@@ -146,7 +146,7 @@ export default function SparseStackGrid({
     refreshAll,
   } = useSparseInfiniteScroll({
     datasetId,
-    mediaType,
+    category,
     filter,
     sort,
     pageSize: 50,
@@ -675,13 +675,13 @@ export default function SparseStackGrid({
 
       const collectionMatch = window.location.pathname.match(/(?:collections|scratch)\/(\d+)/);
       const collectionId = collectionMatch ? Number.parseInt(collectionMatch[1], 10) : undefined;
-      const targetMediaType = collectionId ? 'image' : mediaType || undefined;
+      const targetCategory = collectionId ? 'image' : category || undefined;
 
       try {
         const { results } = await apiClient.importAssetsFromUrls({
           urls,
           dataSetId: datasetNumericId,
-          mediaType: targetMediaType,
+          category: targetCategory,
           collectionId,
         });
 
@@ -734,7 +734,7 @@ export default function SparseStackGrid({
         addNotification({ type: 'error', message: t.grid.urlUploadFailed });
       }
     },
-    [dataset?.id, datasetId, mediaType, addNotification, t]
+    [dataset?.id, datasetId, category, addNotification, t]
   );
 
   // Loading state

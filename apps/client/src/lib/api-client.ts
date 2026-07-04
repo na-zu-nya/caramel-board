@@ -207,7 +207,7 @@ class ApiClient {
   }
 
   async getDatasetOverview(id: string): Promise<{
-    mediaTypes: Array<{ mediaType: string; count: number; thumbnail: string | null }>;
+    categories: Array<{ category: string; count: number; thumbnail: string | null }>;
     collections: Array<{
       id: number;
       name: string;
@@ -226,7 +226,7 @@ class ApiClient {
         thumbnail?: string | null;
       }>;
       likeCount: number;
-      mediaType: string;
+      category: string;
     }>;
   }> {
     return this.fetch(`/api/v1/datasets/${id}/overview`);
@@ -397,7 +397,7 @@ class ApiClient {
       limit: params.limit,
       offset: params.offset,
       collection: params.collection,
-      mediaCategory: params.mediaCategory,
+      category: params.category,
       mediaTypes: params.mediaTypes,
       tag: params.tag,
       author: params.author,
@@ -453,7 +453,7 @@ class ApiClient {
       name?: string;
       thumbnail?: string;
       meta?: Stack['meta'];
-      mediaType?: 'image' | 'comic' | 'video';
+      category?: 'image' | 'books' | 'video';
     }
   ): Promise<Stack> {
     return this.fetch<Stack>(`/api/v1/datasets/${datasetId}/stacks/${stackId}`, {
@@ -886,13 +886,13 @@ class ApiClient {
     });
   }
 
-  async bulkSetMediaType(
+  async bulkSetCategory(
     stackIds: number[],
-    mediaType: 'image' | 'comic' | 'video'
+    category: 'image' | 'books' | 'video'
   ): Promise<{ success: boolean; updated: number }> {
-    return this.fetch<{ success: boolean; updated: number }>('/api/v1/stacks/bulk/media-type', {
+    return this.fetch<{ success: boolean; updated: number }>('/api/v1/stacks/bulk/category', {
       method: 'PUT',
-      body: JSON.stringify({ stackIds, mediaType }),
+      body: JSON.stringify({ stackIds, category }),
     });
   }
 
@@ -1180,7 +1180,7 @@ class ApiClient {
     saturationRange?: { min: number; max: number };
     lightnessRange?: { min: number; max: number };
     dataSetId?: number;
-    mediaType?: 'image' | 'comic' | 'video';
+    category?: 'image' | 'books' | 'video';
     limit?: number;
     offset?: number;
   }): Promise<{ stacks: any[]; total: number; limit: number; offset: number }> {
@@ -1268,13 +1268,13 @@ class ApiClient {
   }
 
   async createNavigationPin(data: {
-    type: 'COLLECTION' | 'MEDIA_TYPE' | 'OVERVIEW' | 'FAVORITES' | 'LIKES';
+    type: 'COLLECTION' | 'CATEGORY' | 'OVERVIEW' | 'FAVORITES' | 'LIKES';
     name: string;
     icon: string;
     order: number;
     dataSetId: number;
     collectionId?: number;
-    mediaType?: string;
+    category?: string;
   }): Promise<Pin> {
     console.log('Creating navigation pin with data:', data);
     return this.fetch<Pin>('/api/v1/navigation-pins', {
@@ -1421,7 +1421,7 @@ class ApiClient {
     // Map additional filters
     const f = params.filter;
     if (f) {
-      if (f.mediaCategory) query.append('mediaCategory', f.mediaCategory);
+      if (f.category) query.append('category', f.category);
       if (Array.isArray(f.mediaTypes)) {
         for (const mediaType of f.mediaTypes) {
           query.append('mediaTypes', mediaType);
@@ -1452,7 +1452,7 @@ class ApiClient {
     options?: {
       name?: string;
       datasetId?: string;
-      mediaType?: string;
+      category?: string;
       tags?: string[];
       author?: string;
       collectionId?: number;
@@ -1463,7 +1463,7 @@ class ApiClient {
     formData.append('file', file);
     if (options?.name) formData.append('name', options.name);
     if (options?.datasetId) formData.append('dataSetId', options.datasetId);
-    if (options?.mediaType) formData.append('mediaType', options.mediaType);
+    if (options?.category) formData.append('category', options.category);
     if (options?.author) formData.append('author', options.author);
     if (options?.collectionId) formData.append('collectionId', String(options.collectionId));
     if (options?.tags) {
@@ -1472,19 +1472,19 @@ class ApiClient {
       }
     }
 
-    // Auto-detect mediaType from file type if not provided
-    if (!options?.mediaType) {
+    // Auto-detect category from file type if not provided
+    if (!options?.category) {
       const extension = file.name.match(/\.([a-z0-9]+)$/i)?.[1]?.toLowerCase() ?? '';
       const mimeType = file.type.toLowerCase();
-      const inferredMediaType = ['ai', 'svg', 'svgz'].includes(extension)
+      const inferredCategory = ['ai', 'svg', 'svgz'].includes(extension)
         ? 'image'
         : ['mp4', 'mov', 'avi', 'mkv', 'webm', 'mpeg', 'mpg', 'm4v', 'wmv'].includes(extension) ||
             mimeType.startsWith('video/')
           ? 'video'
           : extension === 'pdf' || mimeType === 'application/pdf'
-            ? 'comic'
+            ? 'books'
             : 'image';
-      formData.append('mediaType', inferredMediaType);
+      formData.append('category', inferredCategory);
     }
 
     return this.uploadFile<Stack>('/api/v1/stacks', formData, options?.onProgress);
@@ -1511,7 +1511,7 @@ class ApiClient {
     urls: string[];
     dataSetId?: number;
     stackId?: number;
-    mediaType?: string;
+    category?: string;
     collectionId?: number;
     author?: string;
     tags?: string[];
@@ -1525,7 +1525,7 @@ class ApiClient {
 
   async setUploadDefaults(defaults: {
     datasetId?: string;
-    mediaType?: string;
+    category?: string;
     tags?: string[];
     author?: string;
   }): Promise<{ success: boolean }> {

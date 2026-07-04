@@ -4,23 +4,23 @@ import { StandaloneLibraryRepository } from '../repositories/sqlite/library-repo
 
 // リクエストボディのスキーマ定義
 const createNavigationPinSchema = z.object({
-  type: z.enum(['COLLECTION', 'MEDIA_TYPE', 'OVERVIEW', 'FAVORITES', 'LIKES']),
+  type: z.enum(['COLLECTION', 'CATEGORY', 'OVERVIEW', 'FAVORITES', 'LIKES']),
   name: z.string().min(1).max(255),
   icon: z.string().min(1).max(50),
   order: z.number().int().min(0),
   dataSetId: z.number().int().positive(),
   collectionId: z.number().int().positive().optional(),
-  mediaType: z.string().max(50).optional(),
+  category: z.string().max(50).optional(),
 });
 
 type CreateNavigationPinInput = {
-  type: 'COLLECTION' | 'MEDIA_TYPE' | 'OVERVIEW' | 'FAVORITES' | 'LIKES';
+  type: 'COLLECTION' | 'CATEGORY' | 'OVERVIEW' | 'FAVORITES' | 'LIKES';
   name: string;
   icon: string;
   order: number;
   dataSetId: number;
   collectionId?: number;
-  mediaType?: string;
+  category?: string;
 };
 
 const updateNavigationPinSchema = z.object({
@@ -52,7 +52,7 @@ navigationPinsRouter.get('/', (c) => {
       message: 'Use /api/v1/navigation-pins/dataset/:dataSetId to list pins for a dataset.',
       examples: [
         '/api/v1/navigation-pins/dataset/1',
-        'POST /api/v1/navigation-pins { type, name, icon, order, dataSetId, collectionId?, mediaType? }',
+        'POST /api/v1/navigation-pins { type, name, icon, order, dataSetId, collectionId?, category? }',
       ],
     },
     400

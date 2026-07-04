@@ -3,12 +3,12 @@ import { apiClient } from '@/lib/api-client';
 import type { MediaCategory, Stack, StackFilter } from '@/types';
 
 function isMediaCategory(value: string | undefined): value is MediaCategory {
-  return value === 'image' || value === 'comic' || value === 'video';
+  return value === 'image' || value === 'books' || value === 'video';
 }
 
 interface UseAdjacentStacksOptions {
   datasetId: string;
-  mediaType?: string;
+  category?: string;
   currentStackId: string;
 }
 
@@ -21,16 +21,16 @@ interface AdjacentStacks {
 
 export function useAdjacentStacks({
   datasetId,
-  mediaType,
+  category,
   currentStackId,
 }: UseAdjacentStacksOptions) {
-  // Fetch stacks from the current dataset/media type
+  // Fetch stacks from the current dataset/category
   const { data: stacksData } = useQuery({
-    queryKey: ['stacks', 'paginated', { datasetId, mediaType, limit: 1000 }],
+    queryKey: ['stacks', 'paginated', { datasetId, category, limit: 1000 }],
     queryFn: async ({ signal }) => {
       const filter: StackFilter = { datasetId };
-      if (isMediaCategory(mediaType)) {
-        filter.mediaCategory = mediaType;
+      if (isMediaCategory(category)) {
+        filter.category = category;
       }
 
       return await apiClient.getStacks(

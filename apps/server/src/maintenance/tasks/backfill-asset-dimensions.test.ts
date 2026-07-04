@@ -22,7 +22,7 @@ describe('backfillAssetDimensionsTask', () => {
       `INSERT INTO datasets (id, name, created_at, updated_at) VALUES (1, 'Library', ?, ?)`
     ).run(NOW, NOW);
     db.prepare(
-      `INSERT INTO stacks (id, dataset_id, name, thumbnail, media_type, created_at, updated_at)
+      `INSERT INTO stacks (id, dataset_id, name, thumbnail, category, created_at, updated_at)
        VALUES (1, 1, 'Stack', '', 'image', ?, ?)`
     ).run(NOW, NOW);
 

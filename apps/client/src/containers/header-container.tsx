@@ -80,8 +80,8 @@ export default function HeaderContainer() {
         return scratch
           ? path.includes(`/scratch/${pin.collectionId}`)
           : path.includes(`/collections/${pin.collectionId}`);
-      } else if (pin.type === 'MEDIA_TYPE' && pin.mediaType) {
-        return path.includes(`/media-type/${pin.mediaType}`);
+      } else if (pin.type === 'CATEGORY' && pin.category) {
+        return path.includes(`/category/${pin.category}`);
       } else if (pin.type === 'OVERVIEW') {
         return path === `/library/${datasetId}`;
       } else if (pin.type === 'FAVORITES') {
@@ -110,8 +110,8 @@ export default function HeaderContainer() {
             params: () => ({ datasetId, collectionId: String(pin.collectionId) }),
           });
         }
-      } else if (pin.type === 'MEDIA_TYPE' && pin.mediaType) {
-        navigate({ to: `/library/${datasetId}/media-type/${pin.mediaType}` });
+      } else if (pin.type === 'CATEGORY' && pin.category) {
+        navigate({ to: `/library/${datasetId}/category/${pin.category}` });
       } else if (pin.type === 'OVERVIEW') {
         navigate({ to: `/library/${datasetId}` });
       } else if (pin.type === 'FAVORITES') {

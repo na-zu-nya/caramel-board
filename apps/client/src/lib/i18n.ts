@@ -50,7 +50,7 @@ type CollectionLike = {
 type PinLike = {
   type: string;
   name?: string | null;
-  mediaType?: string | null;
+  category?: string | null;
   collection?: CollectionLike | null;
 };
 
@@ -137,7 +137,7 @@ const en = {
     favorites: 'Favorites',
     likes: 'Likes',
     images: 'Images',
-    comics: 'Comics',
+    books: 'Books',
     videos: 'Videos',
     releases: 'Releases',
     closeSidebar: 'Close sidebar',
@@ -330,13 +330,13 @@ const en = {
     colors: 'Colors',
     customColor: 'Custom color',
     selectCustomColor: 'Select custom color',
-    mediaCategory: 'Media Category',
+    category: 'Category',
     mediaType: 'Media Type',
     allCategories: 'All Categories',
     allMediaTypes: 'All Media Types',
     allTypes: 'All Types',
     images: 'Images',
-    comics: 'Comics',
+    books: 'Books',
     videos: 'Videos',
     multipleImages: 'Multiple Images',
     sortBy: 'Sort by',
@@ -399,10 +399,10 @@ const en = {
     setAuthor: 'Set author',
     searchAuthor: 'Search and select author',
     applyAuthorFilter: 'Apply author filter',
-    changeMediaType: 'Change media type',
-    selectNewMediaType: 'Select new media type',
+    changeCategory: 'Change category',
+    selectNewCategory: 'Select new category',
     image: 'Image',
-    comic: 'Comic',
+    books: 'Books',
     video: 'Video',
     noChangesMade: 'No changes made',
     changesReady: 'Changes ready to apply',
@@ -413,7 +413,7 @@ const en = {
     tagsFromSelectedItems: 'Tags from selected items:',
     authorWillBeSet: 'This author will be set for all selected items',
     authorsFromSelectedItems: 'Authors from selected items:',
-    mediaTypeWillChange: 'All selected items will be changed to this media type',
+    categoryWillChange: 'All selected items will be changed to this category',
   },
   pins: {
     management: 'Pin Management',
@@ -425,7 +425,7 @@ const en = {
     editPin: 'Edit Pin',
     editPinDescription: 'Update the icon for this pin. The name is fixed automatically.',
     type: 'Type',
-    mediaType: 'Media Type',
+    category: 'Category',
     collection: 'Collection',
     scratch: 'Scratch',
     selectCollection: 'Select a collection...',
@@ -585,8 +585,8 @@ const en = {
   },
   info: {
     selectItem: 'Select an item to view details',
-    mediaCategory: 'Media Category',
-    selectMediaCategory: 'Select media category',
+    category: 'Category',
+    selectCategory: 'Select category',
     pageSettings: 'Page Settings',
     openingDirection: 'Opening Direction',
     useAutoSpreadDisplay: 'Use automatic spread display',
@@ -728,7 +728,7 @@ const en = {
   },
   overview: {
     title: 'Overview',
-    mediaCategories: 'Media Categories',
+    categories: 'Categories',
     popularTags: 'Popular Tags',
     recentlyLiked: 'Recently Liked',
     recentlyScratch: 'Recently Scratch',
@@ -945,7 +945,7 @@ const ja: Translations = {
     favorites: 'お気に入り',
     likes: 'Like',
     images: 'イメージ',
-    comics: 'コミック',
+    books: 'ブック',
     videos: '動画',
     releases: 'リリース',
     closeSidebar: 'サイドバーを閉じる',
@@ -1138,13 +1138,13 @@ const ja: Translations = {
     colors: '色',
     customColor: 'カスタムカラー',
     selectCustomColor: 'カスタムカラーを選択',
-    mediaCategory: 'メディアカテゴリ',
+    category: 'カテゴリ',
     mediaType: 'メディアタイプ',
     allCategories: 'すべてのカテゴリ',
     allMediaTypes: 'すべてのメディアタイプ',
     allTypes: 'すべて',
     images: '画像',
-    comics: '漫画',
+    books: 'ブック',
     videos: '動画',
     multipleImages: '複数画像',
     sortBy: '並び順',
@@ -1207,10 +1207,10 @@ const ja: Translations = {
     setAuthor: '作者を設定',
     searchAuthor: '作者を検索して選択',
     applyAuthorFilter: '作者で絞り込み',
-    changeMediaType: 'メディアタイプを変更',
-    selectNewMediaType: '新しいメディアタイプを選択',
+    changeCategory: 'カテゴリを変更',
+    selectNewCategory: '新しいカテゴリを選択',
     image: '画像',
-    comic: '漫画',
+    books: 'ブック',
     video: '動画',
     noChangesMade: '変更はありません',
     changesReady: '変更を適用できます',
@@ -1221,7 +1221,7 @@ const ja: Translations = {
     tagsFromSelectedItems: '選択中のアイテムに含まれるタグ:',
     authorWillBeSet: 'この作者が選択中のすべてのアイテムに設定されます',
     authorsFromSelectedItems: '選択中のアイテムに含まれる作者:',
-    mediaTypeWillChange: '選択中のすべてのアイテムがこのメディアタイプに変更されます',
+    categoryWillChange: '選択中のすべてのアイテムがこのカテゴリに変更されます',
   },
   pins: {
     management: 'ピンの管理',
@@ -1233,7 +1233,7 @@ const ja: Translations = {
     editPin: 'ピンを編集',
     editPinDescription: 'このピンのアイコンを変更します。名前は自動で固定されます',
     type: '種類',
-    mediaType: 'メディアタイプ',
+    category: 'カテゴリ',
     collection: 'コレクション',
     scratch: 'スクラッチ',
     selectCollection: 'コレクションを選択...',
@@ -1393,8 +1393,8 @@ const ja: Translations = {
   },
   info: {
     selectItem: '詳細を表示するアイテムを選んでください',
-    mediaCategory: 'メディアカテゴリ',
-    selectMediaCategory: 'メディアカテゴリを選択',
+    category: 'カテゴリ',
+    selectCategory: 'カテゴリを選択',
     pageSettings: 'ページ設定',
     openingDirection: '開き方向',
     useAutoSpreadDisplay: '自動見開き表示を使う',
@@ -1533,7 +1533,7 @@ const ja: Translations = {
   },
   overview: {
     title: '概要',
-    mediaCategories: 'メディアカテゴリ',
+    categories: 'カテゴリ',
     popularTags: '人気のタグ',
     recentlyLiked: '最近の Like',
     recentlyScratch: '最近のスクラッチ',
@@ -1686,16 +1686,16 @@ export function isScratchLike(value?: CollectionLike | PinLike | null): boolean 
   );
 }
 
-export function getMediaTypeLabel(t: Translations, mediaType?: string | null): string {
-  if (mediaType === 'image') return t.sidebar.images;
-  if (mediaType === 'comic') return t.sidebar.comics;
-  if (mediaType === 'video') return t.sidebar.videos;
-  return mediaType ?? '';
+export function getCategoryLabel(t: Translations, category?: string | null): string {
+  if (category === 'image') return t.sidebar.images;
+  if (category === 'books') return t.sidebar.books;
+  if (category === 'video') return t.sidebar.videos;
+  return category ?? '';
 }
 
 export function getDefaultPinDisplayName(t: Translations, pin: PinLike): string {
-  if (pin.type === 'MEDIA_TYPE' && pin.mediaType) {
-    return getMediaTypeLabel(t, pin.mediaType);
+  if (pin.type === 'CATEGORY' && pin.category) {
+    return getCategoryLabel(t, pin.category);
   }
   if (pin.type === 'OVERVIEW') return t.pins.overview;
   if (pin.type === 'FAVORITES') return t.pins.favorites;

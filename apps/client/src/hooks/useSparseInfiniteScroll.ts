@@ -6,7 +6,7 @@ import type { MediaGridItem, StackFilter } from '@/types';
 
 interface SparseInfiniteScrollOptions {
   datasetId: string;
-  mediaType?: string;
+  category?: string;
   filter: StackFilter;
   sort: any;
   pageSize?: number;
@@ -30,7 +30,7 @@ function copySparseItems<T>(items: readonly T[] | null | undefined, total: numbe
 
 export function useSparseInfiniteScroll({
   datasetId,
-  mediaType,
+  category,
   filter,
   sort,
   throttleMs = 300,
@@ -46,7 +46,7 @@ export function useSparseInfiniteScroll({
 
   // Keep track of previous query key to detect real changes
   const [previousQueryKey, setPreviousQueryKey] = useState<string>('');
-  const currentQueryKey = `${datasetId}-${mediaType}-${JSON.stringify(filter)}-${JSON.stringify(sort)}`;
+  const currentQueryKey = `${datasetId}-${category}-${JSON.stringify(filter)}-${JSON.stringify(sort)}`;
 
   // Reset sparse array when key parameters change
   useEffect(() => {
@@ -64,7 +64,7 @@ export function useSparseInfiniteScroll({
     isLoading: isCountLoading,
     isFetching: isCountFetching,
   } = useQuery({
-    queryKey: ['stacks', 'count', datasetId, mediaType, filter, sort],
+    queryKey: ['stacks', 'count', datasetId, category, filter, sort],
     queryFn: async ({ signal }) => {
       const result = await apiClient.getStacks(
         {
@@ -240,13 +240,13 @@ export function useSparseInfiniteScroll({
   const refreshAll = useCallback(async () => {
     // Invalidate count query
     await queryClient.invalidateQueries({
-      queryKey: ['stacks', 'count', datasetId, mediaType, filter, sort],
+      queryKey: ['stacks', 'count', datasetId, category, filter, sort],
     });
 
     // Clear sparse array and force reload
     setSparseItems([]);
     setLoadingRanges(new Set());
-  }, [queryClient, datasetId, mediaType, filter, sort]);
+  }, [queryClient, datasetId, category, filter, sort]);
 
   return {
     total,

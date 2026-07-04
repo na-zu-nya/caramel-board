@@ -10,7 +10,7 @@ interface CountRow {
 interface StackColorRow {
   id: number;
   dataset_id: number;
-  media_type: string;
+  category: string;
   dominant_colors_json: string | null;
 }
 
@@ -22,7 +22,7 @@ export interface StandaloneColorSearchOptions {
   color: { r: number; g: number; b: number };
   threshold?: number;
   dataSetId?: number;
-  mediaType?: 'image' | 'comic' | 'video';
+  category?: 'image' | 'books' | 'video';
   limit?: number;
   offset?: number;
 }
@@ -38,7 +38,7 @@ export interface StandaloneColorFilterOptions {
   saturationRange?: { min: number; max: number };
   lightnessRange?: { min: number; max: number };
   dataSetId?: number;
-  mediaType?: 'image' | 'comic' | 'video';
+  category?: 'image' | 'books' | 'video';
   limit?: number;
   offset?: number;
 }
@@ -192,7 +192,7 @@ export class StandaloneColorRepository {
     colors: Array<{ r: number; g: number; b: number }>;
     threshold?: number;
     dataSetId?: number;
-    mediaType?: 'image' | 'comic' | 'video';
+    category?: 'image' | 'books' | 'video';
     limit?: number;
     offset?: number;
   }) {
@@ -340,20 +340,20 @@ export class StandaloneColorRepository {
     };
   }
 
-  private getCandidateRows(options: { dataSetId?: number; mediaType?: string }) {
+  private getCandidateRows(options: { dataSetId?: number; category?: string }) {
     const where: string[] = ['s.dominant_colors_json IS NOT NULL', "s.dominant_colors_json <> ''"];
     const params: SqliteBindValue[] = [];
     if (options.dataSetId) {
       where.push('s.dataset_id = ?');
       params.push(options.dataSetId);
     }
-    if (options.mediaType) {
-      where.push('s.media_type = ?');
-      params.push(options.mediaType);
+    if (options.category) {
+      where.push('s.category = ?');
+      params.push(options.category);
     }
     return this.db
       .prepare(
-        `SELECT s.id, s.dataset_id, s.media_type, s.dominant_colors_json
+        `SELECT s.id, s.dataset_id, s.category, s.dominant_colors_json
          FROM stacks s
          WHERE ${where.join(' AND ')}`
       )

@@ -396,11 +396,11 @@ export function SetupPageContainer({ preview = false }: SetupPageContainerProps)
       // ミニグリッドに表示している順序のまま保存する。
       const ids = uploads.map((u) => Number(u.stackId));
       const currentIndex = ids.indexOf(Number(target.stackId));
-      const token = genListToken({ datasetId: createdDatasetId, mediaType: 'image' });
+      const token = genListToken({ datasetId: createdDatasetId, category: 'image' });
       saveViewContext({
         token,
         datasetId: createdDatasetId,
-        mediaType: 'image' as MediaCategory,
+        category: 'image' as MediaCategory,
         ids,
         currentIndex: currentIndex >= 0 ? currentIndex : 0,
         createdAt: 0,
@@ -802,7 +802,7 @@ export function SetupPageContainer({ preview = false }: SetupPageContainerProps)
         >
           <StackViewer
             datasetId={createdDatasetId}
-            mediaType="image"
+            category="image"
             stackId={viewerStackId}
             listToken={viewerListToken}
             embedded

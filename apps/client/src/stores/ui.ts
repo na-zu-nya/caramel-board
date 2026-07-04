@@ -2,7 +2,7 @@ import { atom } from 'jotai';
 import type { StackFilter } from '@/types';
 
 // Helper function for sessionStorage
-function loadFromSessionStorage(key: string, defaultValue: boolean): boolean {
+function loadFromSessionStorage<T>(key: string, defaultValue: T): T {
   if (typeof window === 'undefined') return defaultValue;
   try {
     const saved = sessionStorage.getItem(key);
@@ -12,10 +12,15 @@ function loadFromSessionStorage(key: string, defaultValue: boolean): boolean {
   }
 }
 
-function saveToSessionStorage(key: string, value: boolean): void {
+function saveToSessionStorage<T>(key: string, value: T): void {
   if (typeof window === 'undefined') return;
   try {
-    sessionStorage.setItem(key, JSON.stringify(value));
+    // null は「未設定」を表すため、キー自体を削除する
+    if (value === null) {
+      sessionStorage.removeItem(key);
+    } else {
+      sessionStorage.setItem(key, JSON.stringify(value));
+    }
   } catch {
     // Ignore storage errors
   }
@@ -31,8 +36,15 @@ export const sidebarOpenAtom = atom(
   }
 );
 
-// Current dataset
-export const currentDatasetAtom = atom<string | null>(null);
+// Current dataset with sessionStorage persistence
+const currentDatasetBaseAtom = atom(loadFromSessionStorage<string | null>('current-dataset', null));
+export const currentDatasetAtom = atom(
+  (get) => get(currentDatasetBaseAtom),
+  (_get, set, newValue: string | null) => {
+    set(currentDatasetBaseAtom, newValue);
+    saveToSessionStorage('current-dataset', newValue);
+  }
+);
 
 // Legacy: Pinned collections (max 5-6) - deprecated
 export const pinnedCollectionIdsAtom = atom<string[]>([]);
@@ -47,7 +59,7 @@ export const currentFilterAtom = atom<StackFilter>({});
 export const hasActiveFiltersAtom = atom((get) => {
   const filter = get(currentFilterAtom);
   return Object.keys(filter).some(
-    (key) => key !== 'datasetId' && key !== 'mediaCategory' && filter[key as keyof StackFilter]
+    (key) => key !== 'datasetId' && key !== 'category' && filter[key as keyof StackFilter]
   );
 });
 

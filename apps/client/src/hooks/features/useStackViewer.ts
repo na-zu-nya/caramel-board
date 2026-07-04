@@ -8,7 +8,7 @@ import type { Stack } from '@/types';
 
 interface UseStackViewerOptions {
   datasetId: string;
-  mediaType: string;
+  category: string;
   stackId: string;
 }
 

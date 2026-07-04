@@ -146,7 +146,7 @@ function StackGridItemComponent({
     ...(favoriteKind === 'asset' && typeof item.favoritePage === 'number'
       ? { page: item.favoritePage - 1 }
       : {}),
-    ...(item.mediaType ? { mediaType: item.mediaType } : {}),
+    ...(item.category ? { category: item.category } : {}),
     ...(returnTo ? { returnTo } : {}),
   };
   const getContextActionStackIds = useCallback((): Array<string | number> => {

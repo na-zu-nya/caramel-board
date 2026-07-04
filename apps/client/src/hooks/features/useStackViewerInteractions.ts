@@ -50,7 +50,7 @@ let pendingCrossStackAnimation: PendingCrossStackAnimation | null = null;
 
 export function useStackViewerInteractions(params: {
   datasetId: string;
-  mediaType: string;
+  category: string;
   stackId: string;
   listToken?: string;
   returnTo?: string;
@@ -75,7 +75,7 @@ export function useStackViewerInteractions(params: {
 }) {
   const {
     datasetId,
-    mediaType,
+    category,
     stackId,
     listToken,
     returnTo,
@@ -112,7 +112,7 @@ export function useStackViewerInteractions(params: {
   const animationFrameRef = useRef<number | null>(null);
   const currentDragOffsetRef = useRef(0);
   const currentVerticalOffsetRef = useRef(0);
-  const crossStackEnabled = mediaType !== 'comic';
+  const crossStackEnabled = category !== 'books';
 
   const numericStackId = Number.parseInt(String(stackId), 10);
   const index = ctx ? ctx.ids.indexOf(numericStackId) : -1;
@@ -480,7 +480,7 @@ export function useStackViewerInteractions(params: {
       navigate({
         to: '/library/$datasetId/stacks/$stackId',
         params: { datasetId, stackId: String(targetStackId) },
-        search: { page: 0, mediaType, listToken, returnTo },
+        search: { page: 0, category, listToken, returnTo },
         replace: true,
       });
     },
@@ -489,7 +489,7 @@ export function useStackViewerInteractions(params: {
       datasetId,
       getStackOffset,
       listToken,
-      mediaType,
+      category,
       moveIndex,
       navigate,
       notifyHorizontalOffsetChange,
@@ -524,7 +524,7 @@ export function useStackViewerInteractions(params: {
       navigate({
         to: '/library/$datasetId/stacks/$stackId',
         params: { datasetId, stackId: String(targetStackId) },
-        search: { page: 0, mediaType, listToken, returnTo },
+        search: { page: 0, category, listToken, returnTo },
         replace: true,
       });
     },
@@ -532,7 +532,7 @@ export function useStackViewerInteractions(params: {
       ctx,
       datasetId,
       listToken,
-      mediaType,
+      category,
       moveIndex,
       navigate,
       onNavigateStack,

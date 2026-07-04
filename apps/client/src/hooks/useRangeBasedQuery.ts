@@ -7,7 +7,7 @@ import type { MediaGridItem, StackFilter } from '@/types';
 
 interface RangeBasedQueryOptions {
   datasetId: string;
-  mediaType?: string;
+  category?: string;
   filter: StackFilter;
   sort: any;
   pageSize?: number;
@@ -26,7 +26,7 @@ function isAbortError(error: unknown) {
 
 export function useRangeBasedQuery({
   datasetId,
-  mediaType,
+  category,
   filter,
   sort,
   pageSize = 50,
@@ -40,7 +40,7 @@ export function useRangeBasedQuery({
   const [previousQueryKey, setPreviousQueryKey] = useState<string>('');
   const filterKey = getStackFilterKey(filter);
   const sortKey = JSON.stringify(sort ?? {});
-  const currentQueryKey = `${datasetId}-${mediaType}-${filterKey}-${sortKey}`;
+  const currentQueryKey = `${datasetId}-${category}-${filterKey}-${sortKey}`;
   currentQueryKeyRef.current = currentQueryKey;
 
   // Reset loaded pages when key parameters change, but avoid unnecessary resets
@@ -59,7 +59,7 @@ export function useRangeBasedQuery({
     isLoading: isCountLoading,
     isFetching: isCountFetching,
   } = useQuery({
-    queryKey: ['stacks', 'count', datasetId, mediaType, filterKey, sortKey],
+    queryKey: ['stacks', 'count', datasetId, category, filterKey, sortKey],
     queryFn: async ({ signal }) => {
       const result = await apiClient.getStacks(
         {
@@ -90,7 +90,7 @@ export function useRangeBasedQuery({
             'stacks',
             'page',
             datasetId,
-            mediaType,
+            category,
             filterKey,
             sortKey,
             pageIndex,
@@ -109,7 +109,7 @@ export function useRangeBasedQuery({
 
       const request = (async () => {
         const result = await queryClient.fetchQuery({
-          queryKey: ['stacks', 'page', datasetId, mediaType, filterKey, sortKey, pageIndex],
+          queryKey: ['stacks', 'page', datasetId, category, filterKey, sortKey, pageIndex],
           queryFn: async ({ signal }) => {
             return await apiClient.getStacks(
               {
@@ -150,7 +150,7 @@ export function useRangeBasedQuery({
     [
       queryClient,
       datasetId,
-      mediaType,
+      category,
       filter,
       sort,
       pageSize,
@@ -220,7 +220,7 @@ export function useRangeBasedQuery({
         'stacks',
         'page',
         datasetId,
-        mediaType,
+        category,
         filterKey,
         sortKey,
         pageIndex,
@@ -238,7 +238,7 @@ export function useRangeBasedQuery({
     }
 
     return items;
-  }, [queryClient, datasetId, mediaType, loadedPages, pageSize, total, filterKey, sortKey]);
+  }, [queryClient, datasetId, category, loadedPages, pageSize, total, filterKey, sortKey]);
 
   // Check if a specific range is loaded
   const isRangeLoaded = useCallback(
@@ -268,7 +268,7 @@ export function useRangeBasedQuery({
   const refreshAll = useCallback(async () => {
     // Invalidate count query
     await queryClient.invalidateQueries({
-      queryKey: ['stacks', 'count', datasetId, mediaType, filterKey, sortKey],
+      queryKey: ['stacks', 'count', datasetId, category, filterKey, sortKey],
     });
 
     // Invalidate all loaded pages
@@ -276,7 +276,7 @@ export function useRangeBasedQuery({
     for (const pageIndex of loadedPages) {
       pagePromises.push(
         queryClient.invalidateQueries({
-          queryKey: ['stacks', 'page', datasetId, mediaType, filterKey, sortKey, pageIndex],
+          queryKey: ['stacks', 'page', datasetId, category, filterKey, sortKey, pageIndex],
         })
       );
     }
@@ -285,7 +285,7 @@ export function useRangeBasedQuery({
 
     // Clear loaded pages to force reload
     setLoadedPages(new Set());
-  }, [queryClient, datasetId, mediaType, loadedPages, filterKey, sortKey]);
+  }, [queryClient, datasetId, category, loadedPages, filterKey, sortKey]);
 
   return {
     total,

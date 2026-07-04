@@ -25,11 +25,11 @@ describe('StandaloneStackRepository search', () => {
        VALUES (1, 'Library', ?, ?)`
     ).run(now, now);
     db.prepare(
-      `INSERT INTO stacks (id, dataset_id, name, thumbnail, media_type, created_at, updated_at)
+      `INSERT INTO stacks (id, dataset_id, name, thumbnail, category, created_at, updated_at)
        VALUES
          (1, 1, 'Landscape Reference', '', 'image', ?, ?),
          (2, 1, 'Portrait Reference', '', 'image', ?, ?),
-         (3, 1, 'Motion Reference', '', 'comic', ?, ?)`
+         (3, 1, 'Motion Reference', '', 'books', ?, ?)`
     ).run(now, now, now, now, now, now);
     db.prepare(
       `INSERT INTO assets
@@ -122,7 +122,7 @@ describe('StandaloneStackRepository search', () => {
     });
     const categoryVideo = repository.getPaginated({
       dataSetId: 1,
-      mediaCategory: 'comic',
+      category: 'books',
       mediaTypes: ['video'],
       limit: 50,
       offset: 0,
@@ -138,9 +138,7 @@ describe('StandaloneStackRepository search', () => {
       [2, 'multipleImages'],
       [1, 'image'],
     ]);
-    expect(categoryVideo.stacks.map((stack) => [stack.id, stack.mediaType])).toEqual([
-      [3, 'comic'],
-    ]);
+    expect(categoryVideo.stacks.map((stack) => [stack.id, stack.category])).toEqual([[3, 'books']]);
     expect(categoryVideo.stacks.map((stack) => [stack.id, stack.actualMediaType])).toEqual([
       [3, 'video'],
     ]);
@@ -149,7 +147,7 @@ describe('StandaloneStackRepository search', () => {
   it('treats gif assets as video actual media type', () => {
     const now = '2026-06-20T00:00:00.000Z';
     db.prepare(
-      `INSERT INTO stacks (id, dataset_id, name, thumbnail, media_type, created_at, updated_at)
+      `INSERT INTO stacks (id, dataset_id, name, thumbnail, category, created_at, updated_at)
        VALUES
          (10, 1, 'Animated GIF Reference', '', 'image', ?, ?),
          (11, 1, 'Animated GIF MIME Reference', '', 'image', ?, ?)`
@@ -172,9 +170,7 @@ describe('StandaloneStackRepository search', () => {
       offset: 0,
     });
 
-    expect(
-      result.stacks.map((stack) => [stack.id, stack.mediaType, stack.actualMediaType])
-    ).toEqual(
+    expect(result.stacks.map((stack) => [stack.id, stack.category, stack.actualMediaType])).toEqual(
       expect.arrayContaining([
         [10, 'image', 'video'],
         [11, 'image', 'video'],

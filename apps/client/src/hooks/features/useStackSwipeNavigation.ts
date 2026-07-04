@@ -4,7 +4,7 @@ import { useStackHistory } from './useStackHistory';
 
 interface UseStackSwipeNavigationOptions {
   datasetId: string;
-  mediaType?: string;
+  category?: string;
   currentStackId: string;
   currentPage: number;
   totalPages: number;
@@ -13,7 +13,7 @@ interface UseStackSwipeNavigationOptions {
 
 export function useStackSwipeNavigation({
   datasetId,
-  mediaType,
+  category,
   currentStackId,
   currentPage,
   totalPages,
@@ -26,7 +26,7 @@ export function useStackSwipeNavigation({
 
   const { previousStack, nextStack } = useAdjacentStacks({
     datasetId,
-    mediaType,
+    category,
     currentStackId,
   });
 

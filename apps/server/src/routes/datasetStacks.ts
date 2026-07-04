@@ -26,19 +26,19 @@ const metadataRepository = new StandaloneMetadataRepository();
 const colorRepository = new StandaloneColorRepository();
 const autoTagRepository = new StandaloneAutoTagRepository();
 
-type MediaCategory = 'image' | 'comic' | 'video';
+type Category = 'image' | 'books' | 'video';
 
-const isMediaType = (value: string): value is MediaCategory =>
-  value === 'image' || value === 'comic' || value === 'video';
+const isCategory = (value: string): value is Category =>
+  value === 'image' || value === 'books' || value === 'video';
 
-const toMediaType = (value: string, file: File): MediaCategory => {
-  if (isMediaType(value)) return value;
+const toCategory = (value: string, file: File): Category => {
+  if (isCategory(value)) return value;
   const extension = path.extname(file.name).toLowerCase();
   if (extension === '.ai' || extension === '.svg' || extension === '.svgz') return 'image';
-  if (extension === '.pdf') return 'comic';
+  if (extension === '.pdf') return 'books';
   const mimeType = (file.type || '').toLowerCase();
   if (mimeType.startsWith('video/')) return 'video';
-  if (mimeType === 'application/pdf') return 'comic';
+  if (mimeType === 'application/pdf') return 'books';
   return 'image';
 };
 
@@ -58,7 +58,7 @@ const scheduleStandaloneAutoTagPrediction = (asset: { id?: number } | null) => {
 
 const getStandaloneColorStackIds = (
   dataSetId: number,
-  mediaCategory: MediaCategory | undefined,
+  category: Category | undefined,
   colorFilter:
     | {
         hue?: number;
@@ -81,7 +81,7 @@ const getStandaloneColorStackIds = (
 
   return colorRepository.getMatchingStackIdsByFilter({
     dataSetId,
-    mediaType: mediaCategory,
+    category,
     hue: colorFilter.hue,
     hex: colorFilter.hex,
     saturationRange:
@@ -138,15 +138,13 @@ app.get(
 
       const filters = queryParams.filters || {};
       const sort = queryParams.sort || { by: 'recommended', order: 'desc' };
-      const mediaCategory =
-        filters.mediaCategory && filters.mediaCategory !== 'all'
-          ? filters.mediaCategory
-          : undefined;
-      const stackIds = getStandaloneColorStackIds(dataSetId, mediaCategory, filters.color);
+      const category =
+        filters.category && filters.category !== 'all' ? filters.category : undefined;
+      const stackIds = getStandaloneColorStackIds(dataSetId, category, filters.color);
       const result = stackRepository.getPaginated({
         dataSetId,
         collection: filters.collectionId,
-        mediaCategory,
+        category,
         mediaTypes: filters.mediaTypes,
         tag: filters.tags?.includeAny ?? filters.tags?.include,
         author: filters.author?.includeAny ?? filters.author?.include,
@@ -311,7 +309,7 @@ app.post('/:dataSetId/stacks', async (c) => {
     const dataSetId = c.get('dataSetId') as number;
     const formData = await c.req.formData();
     const file = formData.get('file');
-    const mediaTypeValue = formData.get('mediaType');
+    const categoryValue = formData.get('category');
     const nameValue = formData.get('name');
 
     if (!(file instanceof File)) {
@@ -344,12 +342,12 @@ app.post('/:dataSetId/stacks', async (c) => {
     const tempPath = path.join(tempDir, `upload-${Date.now()}-${file.name}`);
     fs.writeFileSync(tempPath, Buffer.from(buffer));
 
-    const mediaType = toMediaType(typeof mediaTypeValue === 'string' ? mediaTypeValue : '', file);
+    const category = toCategory(typeof categoryValue === 'string' ? categoryValue : '', file);
     const name = typeof nameValue === 'string' && nameValue.length > 0 ? nameValue : file.name;
     const stack = await stackRepository.createStackWithFile({
       dataSetId,
       name,
-      mediaType,
+      category,
       file: {
         path: tempPath,
         originalname: file.name,

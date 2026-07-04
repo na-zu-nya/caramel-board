@@ -24,7 +24,7 @@ interface StackTileGridItemBase {
   liked?: unknown;
   favorited?: unknown;
   isFavorite?: unknown;
-  mediaType?: string | null;
+  category?: string | null;
   originalName?: unknown;
   file?: unknown;
   url?: unknown;
