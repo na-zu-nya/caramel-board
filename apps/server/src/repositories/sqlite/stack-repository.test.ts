@@ -300,6 +300,144 @@ describe('StandaloneStackRepository search', () => {
     expect(remainingAssets).toEqual([{ original_name: 'portrait-3.jpg', order_in_stack: 0 }]);
   });
 
+  it('moves asset-level likes to the new stack when separating a single asset', () => {
+    repository.likeAsset(2);
+    repository.likeAsset(2);
+    repository.likeStack(2);
+
+    const created = repository.separateAsset(2);
+    expect(created).not.toBeNull();
+    const newStackId = created?.id as number;
+
+    const newStack = db.prepare('SELECT liked FROM stacks WHERE id = ?').get(newStackId) as {
+      liked: number;
+    };
+    const sourceStack = db.prepare('SELECT liked FROM stacks WHERE id = ?').get(2) as {
+      liked: number;
+    };
+    expect(newStack.liked).toBe(2);
+    expect(sourceStack.liked).toBe(1);
+
+    const newStackActivities = db
+      .prepare('SELECT stack_id, asset_id FROM like_activities WHERE asset_id = 2')
+      .all() as Array<{ stack_id: number; asset_id: number }>;
+    expect(newStackActivities).toHaveLength(2);
+    expect(newStackActivities.every((row) => row.stack_id === newStackId)).toBe(true);
+
+    const sourceActivities = db
+      .prepare('SELECT stack_id, asset_id FROM like_activities WHERE stack_id = 2')
+      .all() as Array<{ stack_id: number; asset_id: number | null }>;
+    expect(sourceActivities).toEqual([{ stack_id: 2, asset_id: null }]);
+  });
+
+  it('moves asset-level likes to their own stack when separating multiple assets', () => {
+    repository.likeAsset(3);
+    repository.likeStack(2);
+
+    const createdStacks = repository.separateAssets([3, 2]);
+    expect(createdStacks).toHaveLength(2);
+    const stackForAsset3 = createdStacks?.[0];
+    expect(stackForAsset3?.name).toBe('portrait-2');
+    const newStackId = stackForAsset3?.id as number;
+
+    const newStack = db.prepare('SELECT liked FROM stacks WHERE id = ?').get(newStackId) as {
+      liked: number;
+    };
+    const sourceStack = db.prepare('SELECT liked FROM stacks WHERE id = ?').get(2) as {
+      liked: number;
+    };
+    expect(newStack.liked).toBe(1);
+    expect(sourceStack.liked).toBe(1);
+
+    const newStackActivities = db
+      .prepare('SELECT stack_id FROM like_activities WHERE asset_id = 3')
+      .all() as Array<{ stack_id: number }>;
+    expect(newStackActivities).toEqual([{ stack_id: newStackId }]);
+  });
+
+  it('moves asset-level likes to the combined stack when creating a stack from assets', () => {
+    repository.likeAsset(2);
+    repository.likeAsset(3);
+    repository.likeStack(2);
+
+    const created = repository.createStackFromAssets([3, 2]);
+    expect(created).not.toBeNull();
+    const newStackId = created?.id as number;
+
+    const newStack = db.prepare('SELECT liked FROM stacks WHERE id = ?').get(newStackId) as {
+      liked: number;
+    };
+    const sourceStack = db.prepare('SELECT liked FROM stacks WHERE id = ?').get(2) as {
+      liked: number;
+    };
+    expect(newStack.liked).toBe(2);
+    expect(sourceStack.liked).toBe(1);
+
+    const newStackActivities = db
+      .prepare('SELECT asset_id FROM like_activities WHERE stack_id = ?')
+      .all(newStackId) as Array<{ asset_id: number }>;
+    expect(newStackActivities.map((row) => row.asset_id).sort()).toEqual([2, 3]);
+
+    const sourceActivities = db
+      .prepare('SELECT stack_id, asset_id FROM like_activities WHERE stack_id = 2')
+      .all() as Array<{ stack_id: number; asset_id: number | null }>;
+    expect(sourceActivities).toEqual([{ stack_id: 2, asset_id: null }]);
+  });
+
+  it('merges source stack liked counters and like activities into the target stack', () => {
+    repository.likeStack(2);
+    repository.likeAsset(3);
+    repository.likeStack(1);
+
+    const targetBefore = db.prepare('SELECT liked FROM stacks WHERE id = 1').get() as {
+      liked: number;
+    };
+    expect(targetBefore.liked).toBe(1);
+
+    const merged = repository.mergeStacks(1, [3, 2]);
+    expect(merged?.id).toBe(1);
+
+    const target = db.prepare('SELECT liked FROM stacks WHERE id = 1').get() as { liked: number };
+    expect(target.liked).toBe(3);
+
+    const targetActivities = db
+      .prepare('SELECT asset_id FROM like_activities WHERE stack_id = 1')
+      .all() as Array<{ asset_id: number | null }>;
+    expect(targetActivities).toHaveLength(3);
+    expect(targetActivities.filter((row) => row.asset_id === null)).toHaveLength(2);
+    expect(targetActivities.filter((row) => row.asset_id === 3)).toHaveLength(1);
+
+    const remainingSourceActivities = db
+      .prepare('SELECT COUNT(*) AS count FROM like_activities WHERE stack_id IN (2, 3)')
+      .get() as { count: number };
+    expect(remainingSourceActivities.count).toBe(0);
+  });
+
+  it('keeps like activity as a stack-level like with liked counter unchanged after asset deletion', () => {
+    repository.likeAsset(2);
+    repository.likeAsset(2);
+
+    const stackBefore = db.prepare('SELECT liked FROM stacks WHERE id = 2').get() as {
+      liked: number;
+    };
+    expect(stackBefore.liked).toBe(2);
+
+    expect(repository.deleteAsset(2)).toBe(true);
+
+    const stackAfter = db.prepare('SELECT liked FROM stacks WHERE id = 2').get() as {
+      liked: number;
+    };
+    expect(stackAfter.liked).toBe(2);
+
+    const activities = db
+      .prepare('SELECT stack_id, asset_id FROM like_activities WHERE stack_id = 2')
+      .all() as Array<{ stack_id: number; asset_id: number | null }>;
+    expect(activities).toEqual([
+      { stack_id: 2, asset_id: null },
+      { stack_id: 2, asset_id: null },
+    ]);
+  });
+
   it('refreshes actual media types for a dataset', () => {
     db.prepare('UPDATE stacks SET actual_media_type = NULL').run();
 

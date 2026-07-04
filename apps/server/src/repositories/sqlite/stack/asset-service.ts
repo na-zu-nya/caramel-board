@@ -1,7 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { extractPdfOriginalsFromMeta } from '../../../utils/pdfImport';
 import { nowIso, parseJsonObject } from '../sqlite';
-import { placeholders } from './helpers';
+import { placeholders, transferAssetLikeActivities } from './helpers';
 import { toAsset } from './mappers';
 import type { StackMediaTypeService } from './media-type-service';
 import type { StackThumbnailService } from './thumbnail-service';
@@ -253,6 +253,7 @@ export class StackAssetService {
       this.db
         .prepare('UPDATE assets SET stack_id = ?, order_in_stack = 0, updated_at = ? WHERE id = ?')
         .run(newStackId, now, assetId);
+      transferAssetLikeActivities(this.db, [assetId], newStackId);
 
       const remaining = this.db
         .prepare(
@@ -319,6 +320,7 @@ export class StackAssetService {
         const newStackId = Number(created.lastInsertRowid);
         createdStackIds.push(newStackId);
         moveAsset.run(newStackId, now, asset.id);
+        transferAssetLikeActivities(this.db, [asset.id], newStackId);
       }
 
       for (const stackId of sourceStackIds) {
@@ -377,6 +379,11 @@ export class StackAssetService {
       assets.forEach((asset, index) => {
         moveAsset.run(newStackId, index, now, asset.id);
       });
+      transferAssetLikeActivities(
+        this.db,
+        assets.map((asset) => asset.id),
+        newStackId
+      );
 
       this.normalizeAssetOrder(firstAsset.stack_id, now);
       this.db

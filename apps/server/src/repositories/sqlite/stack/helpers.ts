@@ -148,3 +148,46 @@ export const getStackDataset = (db: DatabaseSync, stackId: number) =>
   db.prepare('SELECT id, dataset_id FROM stacks WHERE id = ?').get(stackId) as
     | StackDatasetRow
     | undefined;
+
+/**
+ * Re-points like_activities rows for the given asset ids to the target stack,
+ * moving the corresponding `stacks.liked` counts from each source stack to the
+ * target stack (clamped at 0 on the source side). Call this AFTER the
+ * `assets.stack_id` UPDATE that actually moves the assets, inside the same
+ * transaction.
+ */
+export const transferAssetLikeActivities = (
+  db: DatabaseSync,
+  assetIds: number[],
+  targetStackId: number
+) => {
+  if (assetIds.length === 0) return;
+
+  const sourceCounts = db
+    .prepare(
+      `SELECT stack_id, COUNT(*) AS count
+       FROM like_activities
+       WHERE asset_id IN (${placeholders(assetIds)}) AND stack_id != ?
+       GROUP BY stack_id`
+    )
+    .all(...assetIds, targetStackId) as Array<{ stack_id: number; count: number }>;
+
+  if (sourceCounts.length === 0) return;
+
+  db.prepare(
+    `UPDATE like_activities
+     SET stack_id = ?
+     WHERE asset_id IN (${placeholders(assetIds)}) AND stack_id != ?`
+  ).run(targetStackId, ...assetIds, targetStackId);
+
+  const decrementSource = db.prepare(
+    'UPDATE stacks SET liked = CASE WHEN liked > ? THEN liked - ? ELSE 0 END WHERE id = ?'
+  );
+  let movedTotal = 0;
+  for (const { stack_id: sourceStackId, count } of sourceCounts) {
+    decrementSource.run(count, count, sourceStackId);
+    movedTotal += count;
+  }
+
+  db.prepare('UPDATE stacks SET liked = liked + ? WHERE id = ?').run(movedTotal, targetStackId);
+};

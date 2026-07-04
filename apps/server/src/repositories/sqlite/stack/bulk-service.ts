@@ -186,6 +186,21 @@ export class StackBulkService {
       }
 
       this.db
+        .prepare(
+          `UPDATE like_activities SET stack_id = ? WHERE stack_id IN (${placeholders(sourceIds)})`
+        )
+        .run(targetId, ...sourceIds);
+      this.db
+        .prepare(
+          `UPDATE stacks
+           SET liked = liked + (
+             SELECT COALESCE(SUM(liked), 0) FROM stacks WHERE id IN (${placeholders(sourceIds)})
+           )
+           WHERE id = ?`
+        )
+        .run(...sourceIds, targetId);
+
+      this.db
         .prepare(`DELETE FROM stacks WHERE id IN (${placeholders(sourceIds)})`)
         .run(...sourceIds);
       void this.thumbnailService
