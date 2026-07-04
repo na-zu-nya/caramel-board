@@ -513,21 +513,54 @@ export function useStackViewerInteractions(params: {
     [ctx, index, prefetchStack]
   );
 
+  const navigateToAdjacentStackImmediately = useCallback(
+    (listDelta: 1 | -1, targetStackId: number) => {
+      void prefetchStack(targetStackId);
+      if (ctx) moveIndex(listDelta);
+      if (onNavigateStack) {
+        onNavigateStack(String(targetStackId));
+        return;
+      }
+      navigate({
+        to: '/library/$datasetId/stacks/$stackId',
+        params: { datasetId, stackId: String(targetStackId) },
+        search: { page: 0, mediaType, listToken, returnTo },
+        replace: true,
+      });
+    },
+    [
+      ctx,
+      datasetId,
+      listToken,
+      mediaType,
+      moveIndex,
+      navigate,
+      onNavigateStack,
+      prefetchStack,
+      returnTo,
+    ]
+  );
+
   const goToAdjacentStack = useCallback(
     (listDelta: 1 | -1) => {
-      if (!crossStackEnabled) return false;
-
       const targetStackId = listDelta > 0 ? nextNeighborId : prevNeighborId;
       if (targetStackId === undefined) return false;
 
       const numericTargetStackId = Number(targetStackId);
-      prefetchAdjacentStackChain(listDelta, numericTargetStackId);
-      navigateCrossStackWithAnimation(listDelta, numericTargetStackId);
+
+      if (crossStackEnabled) {
+        prefetchAdjacentStackChain(listDelta, numericTargetStackId);
+        navigateCrossStackWithAnimation(listDelta, numericTargetStackId);
+        return true;
+      }
+
+      navigateToAdjacentStackImmediately(listDelta, numericTargetStackId);
       return true;
     },
     [
       crossStackEnabled,
       navigateCrossStackWithAnimation,
+      navigateToAdjacentStackImmediately,
       nextNeighborId,
       prefetchAdjacentStackChain,
       prevNeighborId,
@@ -725,6 +758,8 @@ export function useStackViewerInteractions(params: {
     prevStackNeighborSide,
     canGoLeft,
     canGoRight,
+    hasPrevStack: prevNeighborId !== undefined,
+    hasNextStack: nextNeighborId !== undefined,
     leftEdgeKind,
     rightEdgeKind,
     onDrag,

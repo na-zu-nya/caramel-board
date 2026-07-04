@@ -499,6 +499,8 @@ export default function StackViewer({
     prevUnit,
     nextStackNeighborSide,
     prevStackNeighborSide,
+    hasPrevStack,
+    hasNextStack,
     leftEdgeKind,
     rightEdgeKind,
     onDrag,
@@ -880,7 +882,7 @@ export default function StackViewer({
     setIsColorPickerAlt(true);
     return true;
   }, [canUseImageTools]);
-  const handleAltStackNavigation = useCallback(
+  const handleShiftStackNavigation = useCallback(
     (key: 'ArrowLeft' | 'ArrowRight') => {
       hidePageSeekBar();
       hideEdgeAffordance();
@@ -889,6 +891,16 @@ export default function StackViewer({
     },
     [hideEdgeAffordance, hidePageSeekBar, onNextStack, onPrevStack]
   );
+  const handleLeftZoneLongPress = useCallback(() => {
+    hidePageSeekBar();
+    hideEdgeAffordance();
+    onPrevStack();
+  }, [hideEdgeAffordance, hidePageSeekBar, onPrevStack]);
+  const handleRightZoneLongPress = useCallback(() => {
+    hidePageSeekBar();
+    hideEdgeAffordance();
+    onNextStack();
+  }, [hideEdgeAffordance, hidePageSeekBar, onNextStack]);
   const handleInfoSidebarToggle = useCallback(() => {
     if (!isInfoSidebarOpen) setSelectionMode(false);
     setIsInfoSidebarOpen(!isInfoSidebarOpen);
@@ -1444,7 +1456,7 @@ export default function StackViewer({
     };
   }, []);
 
-  // Keyboard: 左右=ページ移動、Alt+左右=一覧順の隣接スタック移動、ESC=戻る/Picker解除
+  // Keyboard: 左右=ページ移動、Shift+左右=一覧順の隣接スタック移動、ESC=戻る/Picker解除
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
@@ -1467,15 +1479,15 @@ export default function StackViewer({
       }
 
       if (
-        e.altKey &&
+        e.shiftKey &&
         !e.metaKey &&
         !e.ctrlKey &&
-        !e.shiftKey &&
+        !e.altKey &&
         (e.key === 'ArrowLeft' || e.key === 'ArrowRight')
       ) {
         e.preventDefault();
         e.stopPropagation();
-        handleAltStackNavigation(e.key);
+        handleShiftStackNavigation(e.key);
         return;
       }
 
@@ -1643,7 +1655,7 @@ export default function StackViewer({
     handleListModeToggle,
     handleLeftTap,
     handleRightTap,
-    handleAltStackNavigation,
+    handleShiftStackNavigation,
     handleShuffle,
     isColorPicker,
     canUseImageTools,
@@ -1908,6 +1920,8 @@ export default function StackViewer({
                 onDoubleTap={isZoomed ? resetZoom : undefined}
                 onAltDragStart={handleAltColorPickerDragStart}
                 onContextMenuCancelRequest={handleContextMenuCancelRequest}
+                onLeftZoneLongPress={hasPrevStack ? handleLeftZoneLongPress : undefined}
+                onRightZoneLongPress={hasNextStack ? handleRightZoneLongPress : undefined}
                 onCenterTap={() => {
                   hideEdgeAffordance();
                   // Move無しのクリック/タップ: 動画なら再生/停止をトグル

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 interface TapZoneOverlayProps {
   onLeftTap: () => void;
@@ -16,6 +16,8 @@ interface TapZoneOverlayProps {
   onDoubleTap?: () => void;
   onAltDragStart?: (point: PointerPosition) => boolean;
   onContextMenuCancelRequest?: () => void;
+  onLeftZoneLongPress?: () => void;
+  onRightZoneLongPress?: () => void;
   enabled?: boolean;
   contentArea?: {
     top: number;
@@ -47,6 +49,48 @@ const getPinchMetrics = (pointers: Map<number, PointerPosition>) => {
   };
 };
 
+const LONG_PRESS_ARM_OFFSET_PX = 14;
+const LONG_PRESS_ARM_OPACITY = 0.8;
+const LONG_PRESS_ARM_EASING = 'cubic-bezier(0.16, 1, 0.3, 1)';
+
+function LongPressArmIndicator({ side }: { side: 'left' | 'right' }) {
+  const barRef = useRef<HTMLDivElement>(null);
+  const isLeft = side === 'left';
+  const outwardOffset = isLeft ? -LONG_PRESS_ARM_OFFSET_PX : LONG_PRESS_ARM_OFFSET_PX;
+
+  useEffect(() => {
+    const el = barRef.current;
+    if (!el) return;
+    el.style.opacity = '0';
+    el.style.transform = `translate3d(${outwardOffset}px, 0, 0)`;
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        el.style.opacity = `${LONG_PRESS_ARM_OPACITY}`;
+        el.style.transform = 'translate3d(0, 0, 0)';
+      });
+    });
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+    };
+  }, [outwardOffset]);
+
+  return (
+    <div
+      ref={barRef}
+      className={`absolute top-0 bottom-0 w-[6px] will-change-[transform,opacity] ${isLeft ? 'left-0' : 'right-0'}`}
+      style={{
+        backgroundColor: 'var(--color-primary)',
+        opacity: 0,
+        transform: `translate3d(${outwardOffset}px, 0, 0)`,
+        transition: `opacity 300ms ${LONG_PRESS_ARM_EASING}, transform 300ms ${LONG_PRESS_ARM_EASING}`,
+        pointerEvents: 'none',
+      }}
+    />
+  );
+}
+
 export default function TapZoneOverlay({
   onLeftTap,
   onRightTap,
@@ -63,6 +107,8 @@ export default function TapZoneOverlay({
   onDoubleTap,
   onAltDragStart,
   onContextMenuCancelRequest,
+  onLeftZoneLongPress,
+  onRightZoneLongPress,
   enabled = true,
   contentArea = { top: 0, left: 0, right: 0, bottom: 0 },
   disableDrag = false,
@@ -82,16 +128,34 @@ export default function TapZoneOverlay({
   const DOUBLE_TAP_TIME_THRESHOLD = 320; // milliseconds
   const DOUBLE_TAP_DISTANCE_THRESHOLD = 32; // pixels
   const DIRECTION_LOCK_THRESHOLD = 6; // pixels - quicker direction lock on touch
+  const LONG_PRESS_ARM_DELAY = 250; // milliseconds - delay before arming the long-press (below the 700ms context menu long-press)
   const isDraggingRef = useRef(false);
   const lastDragXRef = useRef(0);
   const lastDragYRef = useRef(0);
   const activePointerRef = useRef<number | null>(null);
   const dragDirectionRef = useRef<'horizontal' | 'vertical' | null>(null);
+  const armTimerRef = useRef<number | null>(null);
+  const longPressRef = useRef<{
+    pointerId: number;
+    side: 'left' | 'right';
+    callback: () => void;
+    armed: boolean;
+  } | null>(null);
+  const [armedSide, setArmedSide] = useState<'left' | 'right' | null>(null);
 
   // Pointer handlers bound to interaction layer (excludes bottom safe area)
   useEffect(() => {
     const overlay = interactionRef.current;
     if (!enabled || !overlay) return;
+
+    const clearLongPress = () => {
+      if (armTimerRef.current !== null) {
+        window.clearTimeout(armTimerRef.current);
+        armTimerRef.current = null;
+      }
+      longPressRef.current = null;
+      setArmedSide(null);
+    };
 
     const resetPointerState = (pointerId: number) => {
       try {
@@ -102,6 +166,7 @@ export default function TapZoneOverlay({
       startPosRef.current = null;
       isDraggingRef.current = false;
       dragDirectionRef.current = null;
+      clearLongPress();
     };
 
     const handlePointerDown = (e: PointerEvent) => {
@@ -120,6 +185,7 @@ export default function TapZoneOverlay({
         e.preventDefault();
         multiTouchRef.current = true;
         onContextMenuCancelRequest?.();
+        clearLongPress();
         pinchStartDistanceRef.current = null;
         pinchLastDistanceRef.current = null;
         onPinchStart?.();
@@ -135,6 +201,34 @@ export default function TapZoneOverlay({
       lastDragXRef.current = e.clientX;
       lastDragYRef.current = e.clientY;
       dragDirectionRef.current = null;
+
+      clearLongPress();
+      if (!isZoomed && (onLeftZoneLongPress || onRightZoneLongPress)) {
+        const rect = overlay.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const leftEnd = rect.width * 0.2;
+        const rightStart = rect.width * 0.8;
+        const longPressCallback =
+          x < leftEnd ? onLeftZoneLongPress : x >= rightStart ? onRightZoneLongPress : undefined;
+        if (longPressCallback) {
+          const side: 'left' | 'right' = x < leftEnd ? 'left' : 'right';
+          const state = {
+            pointerId: e.pointerId,
+            side,
+            callback: longPressCallback,
+            armed: false,
+          };
+          longPressRef.current = state;
+          armTimerRef.current = window.setTimeout(() => {
+            armTimerRef.current = null;
+            if (longPressRef.current === state) {
+              state.armed = true;
+              setArmedSide(state.side);
+              onContextMenuCancelRequest?.();
+            }
+          }, LONG_PRESS_ARM_DELAY);
+        }
+      }
     };
 
     const handlePointerMove = (e: PointerEvent) => {
@@ -182,6 +276,13 @@ export default function TapZoneOverlay({
       const absDeltaY = Math.abs(deltaY);
 
       if (
+        longPressRef.current?.pointerId === e.pointerId &&
+        (absDeltaX > TAP_THRESHOLD || absDeltaY > TAP_THRESHOLD)
+      ) {
+        clearLongPress();
+      }
+
+      if (
         e.altKey &&
         onAltDragStart &&
         (absDeltaX > DIRECTION_LOCK_THRESHOLD || absDeltaY > DIRECTION_LOCK_THRESHOLD)
@@ -203,6 +304,7 @@ export default function TapZoneOverlay({
         ) {
           isDraggingRef.current = true;
           onContextMenuCancelRequest?.();
+          clearLongPress();
         }
 
         if (isDraggingRef.current && onZoomPan) {
@@ -224,6 +326,7 @@ export default function TapZoneOverlay({
       ) {
         isDraggingRef.current = true;
         onContextMenuCancelRequest?.();
+        clearLongPress();
         dragDirectionRef.current = absDeltaX > absDeltaY ? 'horizontal' : 'vertical';
       }
 
@@ -250,6 +353,16 @@ export default function TapZoneOverlay({
     };
 
     const handlePointerUp = (e: PointerEvent) => {
+      const longPress = longPressRef.current;
+      if (longPress && longPress.pointerId === e.pointerId) {
+        const { armed, callback } = longPress;
+        clearLongPress();
+        if (armed && e.type === 'pointerup') {
+          resetPointerState(e.pointerId);
+          callback();
+          return;
+        }
+      }
       const wasMultiTouch = multiTouchRef.current;
       activePointersRef.current.delete(e.pointerId);
 
@@ -365,6 +478,7 @@ export default function TapZoneOverlay({
       overlay.removeEventListener('pointerup', handlePointerUp);
       overlay.removeEventListener('pointercancel', handlePointerUp);
       overlay.removeEventListener('wheel', handleWheel);
+      clearLongPress();
     };
   }, [
     enabled,
@@ -383,6 +497,8 @@ export default function TapZoneOverlay({
     onPinchEnd,
     onZoomPan,
     onDoubleTap,
+    onLeftZoneLongPress,
+    onRightZoneLongPress,
     onAltDragStart,
     onContextMenuCancelRequest,
   ]);
@@ -390,36 +506,54 @@ export default function TapZoneOverlay({
   if (!enabled) return null;
 
   return (
-    <div
-      ref={overlayRef}
-      className="fixed group"
-      style={{
-        zIndex: 10,
-        left: `${contentArea.left}px`,
-        right: `${contentArea.right}px`,
-        top: `${contentArea.top}px`,
-        bottom: 0,
-        background: 'transparent',
-        pointerEvents: 'none',
-      }}
-    >
-      {/* Interaction layer: excludes bottom safe area and accepts pointer events */}
+    <>
       <div
-        ref={interactionRef}
-        className="absolute"
+        ref={overlayRef}
+        className="fixed group"
         style={{
-          left: 0,
-          right: 0,
-          top: 0,
-          bottom: `${contentArea.bottom}px`,
-          pointerEvents: 'auto',
-          touchAction: 'none',
-          overscrollBehavior: 'contain',
+          zIndex: 10,
+          left: `${contentArea.left}px`,
+          right: `${contentArea.right}px`,
+          top: `${contentArea.top}px`,
+          bottom: 0,
+          background: 'transparent',
+          pointerEvents: 'none',
         }}
       >
-        <div className="absolute left-0 top-0 bottom-0 w-[20%] cursor-pointer" />
-        <div className="absolute right-0 top-0 bottom-0 w-[20%] cursor-pointer" />
+        {/* Interaction layer: excludes bottom safe area and accepts pointer events */}
+        <div
+          ref={interactionRef}
+          className="absolute"
+          style={{
+            left: 0,
+            right: 0,
+            top: 0,
+            bottom: `${contentArea.bottom}px`,
+            pointerEvents: 'auto',
+            touchAction: 'none',
+            overscrollBehavior: 'contain',
+          }}
+        >
+          <div className="absolute left-0 top-0 bottom-0 w-[20%] cursor-pointer" />
+          <div className="absolute right-0 top-0 bottom-0 w-[20%] cursor-pointer" />
+        </div>
       </div>
-    </div>
+      {/* Full-height arm feedback: spans the whole screen height, independent of the bottom safe area */}
+      {armedSide && (
+        <div
+          className="fixed"
+          style={{
+            zIndex: 10,
+            left: `${contentArea.left}px`,
+            right: `${contentArea.right}px`,
+            top: 0,
+            bottom: 0,
+            pointerEvents: 'none',
+          }}
+        >
+          <LongPressArmIndicator side={armedSide} />
+        </div>
+      )}
+    </>
   );
 }
