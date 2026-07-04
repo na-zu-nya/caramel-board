@@ -2,6 +2,8 @@ import type { DatabaseSync } from 'node:sqlite';
 import type { DominantColor } from '../../../utils/colorExtractor';
 import type { AutoTagEntry, StackDatasetRow, StackMediaType } from './types';
 
+const GIF_MIME_TYPE = 'image/gif';
+
 export const DEFAULT_AUTO_STOP_TAGS = [
   '1girl',
   '1boy',
@@ -36,7 +38,6 @@ const IMAGE_EXTENSIONS = new Set([
   'jpg',
   'jpeg',
   'png',
-  'gif',
   'webp',
   'bmp',
   'cr2',
@@ -59,7 +60,7 @@ const IMAGE_EXTENSIONS = new Set([
   'tif',
   'tiff',
 ]);
-const VIDEO_EXTENSIONS = new Set(['mp4', 'mov', 'avi', 'mkv', 'webm']);
+const VIDEO_EXTENSIONS = new Set(['gif', 'mp4', 'mov', 'avi', 'mkv', 'webm']);
 
 export const toArray = (value: string | string[] | undefined) => {
   if (value === undefined) return [];
@@ -91,10 +92,12 @@ export const isImageExtension = (ext: string) => IMAGE_EXTENSIONS.has(canonicali
 export const isVideoExtension = (ext: string) => VIDEO_EXTENSIONS.has(canonicalizeExtension(ext));
 export const isImageFileType = (fileType: string) => {
   const normalized = fileType.trim().toLowerCase();
+  if (normalized === GIF_MIME_TYPE) return false;
   return normalized.startsWith('image/') || isImageExtension(normalized);
 };
 export const isVideoFileType = (fileType: string) => {
   const normalized = fileType.trim().toLowerCase();
+  if (normalized === GIF_MIME_TYPE) return true;
   return normalized.startsWith('video/') || isVideoExtension(normalized);
 };
 

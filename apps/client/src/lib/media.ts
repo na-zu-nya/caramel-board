@@ -1,6 +1,7 @@
 import type { Asset } from '@/types';
 
-const VIDEO_EXT_PATTERN = /\.(mp4|mov|webm|m4v|avi|mkv)(?:[?#].*)?$/i;
+const GIF_MIME_TYPE = 'image/gif';
+const VIDEO_EXT_PATTERN = /\.(gif|mp4|mov|webm|m4v|avi|mkv)(?:[?#].*)?$/i;
 const SVG_EXT_PATTERN = /\.svgz?(?:[?#].*)?$/i;
 const RAW_EXT_PATTERN = /\.(3fr|arw|cr2|cr3|dng|erf|nef|nrw|orf|pef|raf|rw2|sr2|srf)(?:[?#].*)?$/i;
 const CONTENT_ADDRESSED_ASSET_PATH_PATTERN =
@@ -22,6 +23,11 @@ const normalizeFileType = (fileType?: string) => fileType?.trim().replace(/^\./,
 
 const hasSvgExtension = (source?: string | null) => Boolean(source && SVG_EXT_PATTERN.test(source));
 const hasRawExtension = (source?: string | null) => Boolean(source && RAW_EXT_PATTERN.test(source));
+const hasVideoExtension = (source?: string | null) =>
+  Boolean(source && VIDEO_EXT_PATTERN.test(source));
+const isGifType = (value?: string | null) =>
+  normalizeMimeType(value ?? undefined) === GIF_MIME_TYPE ||
+  normalizeFileType(value ?? undefined) === 'gif';
 
 const getSourcePathname = (source: string): string => {
   try {
@@ -81,13 +87,29 @@ export const getImageDisplaySource = (asset?: Asset | null): string => {
  */
 export const isVideoAsset = (asset?: Asset | null): boolean => {
   if (!asset) return false;
-  if (asset.preview && VIDEO_EXT_PATTERN.test(asset.preview)) return true;
-  const { mimeType, file, url } = asset;
+  if (hasVideoExtension(asset.preview)) return true;
+  const { mimeType, file, fileType, url } = asset;
   if (mimeType) {
-    if (mimeType.startsWith('video/')) return true;
-    if (mimeType.startsWith('image/')) return false;
+    const normalizedMimeType = normalizeMimeType(mimeType);
+    if (normalizedMimeType === GIF_MIME_TYPE || normalizedMimeType?.startsWith('video/')) {
+      return true;
+    }
+    if (normalizedMimeType?.startsWith('image/')) return false;
   }
+
+  if (fileType) {
+    const normalizedFileType = normalizeFileType(fileType);
+    const normalizedFileMimeType = normalizeMimeType(fileType);
+    if (
+      isGifType(fileType) ||
+      normalizedFileMimeType?.startsWith('video/') ||
+      (normalizedFileType && VIDEO_EXT_PATTERN.test(`.${normalizedFileType}`))
+    ) {
+      return true;
+    }
+    if (normalizedFileMimeType?.startsWith('image/')) return false;
+  }
+
   const source = asset.preview || file || url;
-  if (!source) return false;
-  return VIDEO_EXT_PATTERN.test(source);
+  return hasVideoExtension(source);
 };

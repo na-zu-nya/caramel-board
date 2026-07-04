@@ -43,6 +43,14 @@ describe('media helpers', () => {
     ).toBe(false);
   });
 
+  it('treats gif assets as video media', () => {
+    expect(isVideoAsset(makeAsset({ file: '/files/animation.gif?token=1' }))).toBe(true);
+    expect(isVideoAsset(makeAsset({ fileType: 'gif', file: '/files/animation' }))).toBe(true);
+    expect(isVideoAsset(makeAsset({ mimeType: 'image/gif', file: '/files/animation.gif' }))).toBe(
+      true
+    );
+  });
+
   it('uses rasterized previews for svg display while keeping originals for normal images', () => {
     expect(
       getImageDisplaySource(

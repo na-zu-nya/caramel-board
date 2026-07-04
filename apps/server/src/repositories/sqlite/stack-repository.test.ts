@@ -146,6 +146,42 @@ describe('StandaloneStackRepository search', () => {
     ]);
   });
 
+  it('treats gif assets as video actual media type', () => {
+    const now = '2026-06-20T00:00:00.000Z';
+    db.prepare(
+      `INSERT INTO stacks (id, dataset_id, name, thumbnail, media_type, created_at, updated_at)
+       VALUES
+         (10, 1, 'Animated GIF Reference', '', 'image', ?, ?),
+         (11, 1, 'Animated GIF MIME Reference', '', 'image', ?, ?)`
+    ).run(now, now, now, now);
+    db.prepare(
+      `INSERT INTO assets
+         (id, stack_id, file, thumbnail, file_type, original_name, hash, order_in_stack, created_at, updated_at)
+       VALUES
+         (10, 10, '/tmp/animated.gif', '', 'gif', 'animated.gif', 'hash-10', 0, ?, ?),
+         (11, 11, '/tmp/animated-mime.gif', '', 'image/gif', 'animated-mime.gif', 'hash-11', 0, ?, ?)`
+    ).run(now, now, now, now);
+
+    expect(repository.refreshActualMediaType(10).actualMediaType).toBe('video');
+    expect(repository.refreshActualMediaType(11).actualMediaType).toBe('video');
+
+    const result = repository.getPaginated({
+      dataSetId: 1,
+      mediaTypes: ['video'],
+      limit: 50,
+      offset: 0,
+    });
+
+    expect(
+      result.stacks.map((stack) => [stack.id, stack.mediaType, stack.actualMediaType])
+    ).toEqual(
+      expect.arrayContaining([
+        [10, 'image', 'video'],
+        [11, 'image', 'video'],
+      ])
+    );
+  });
+
   it('returns page bookmark state and page like counts with stack assets', () => {
     repository.toggleAssetFavorite(2, true);
     repository.likeAsset(2);
