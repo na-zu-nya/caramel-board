@@ -1,9 +1,17 @@
 name: Release Discord Notification
 
 on:
-  release:
-    types:
-      - published
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v1.0.0)'
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -15,10 +23,9 @@ jobs:
     timeout-minutes: 5
     env:
       DISCORD_RELEASE_WEBHOOK_URL: ${{ secrets.DISCORD_RELEASE_WEBHOOK_URL }}
-      REPOSITORY_NAME: ${{ github.event.repository.name }}
-      TAG_NAME: ${{ github.event.release.tag_name }}
-      RELEASE_DESCRIPTION: ${{ github.event.release.body || '' }}
-      RELEASE_URL: ${{ github.event.release.html_url }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG_NAME: ${{ inputs.tag }}
 
     steps:
       - name: Post release notification
@@ -31,11 +38,16 @@ jobs:
             exit 1
           fi
 
+          release_json=$(gh release view "$TAG_NAME" --json body,url)
+          release_description=$(jq -r '.body // ""' <<<"$release_json")
+          release_url=$(jq -r '.url' <<<"$release_json")
+          repo_name="${GH_REPO##*/}"
+
           content=$(printf ">>> **%s [%s]** がリリースされました！\n%s\nURL: %s" \
-            "$REPOSITORY_NAME" \
+            "$repo_name" \
             "$TAG_NAME" \
-            "${RELEASE_DESCRIPTION:-}" \
-            "$RELEASE_URL")
+            "${release_description:-}" \
+            "$release_url")
           payload=$(jq -n \
             --arg content "$content" \
             '{content: $content, allowed_mentions: {parse: []}}')

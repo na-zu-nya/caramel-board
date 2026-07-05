@@ -99,3 +99,21 @@ jobs:
           else
             gh release create "$TAG_NAME" "${files[@]}" --title "$TAG_NAME" --generate-notes "${release_state_args[@]}"
           fi
+
+  notify-discord:
+    name: Notify Discord
+    needs:
+      - publish-release
+    uses: ./.github/workflows/release-discord-notification.yml
+    with:
+      tag: ${{ github.ref_name }}
+    secrets: inherit
+
+  website-sync:
+    name: Website release sync
+    needs:
+      - publish-release
+    uses: ./.github/workflows/website-release-sync.yml
+    with:
+      tag: ${{ github.ref_name }}
+    secrets: inherit

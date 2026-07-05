@@ -153,14 +153,6 @@ const updateCargoVersion = () => {
   );
 };
 
-const updateDocs = () => {
-  replaceRequired(
-    'docs/desktop-packaging.md',
-    /Caramel Board_[^_]+_aarch64\.dmg/g,
-    `Caramel Board_${version}_aarch64.dmg`
-  );
-};
-
 const updateChromeExtensionManifest = (chromeExtensionVersion) => {
   replaceRequired(
     'apps/chrome-extension/manifest.json',
@@ -185,7 +177,6 @@ updatePackageLock();
 updateTauriConfig(windowsInstallerVersion);
 updateWindowsTauriConfig(windowsInstallerVersion);
 updateCargoVersion();
-updateDocs();
 updateChromeExtensionManifest(deriveChromeExtensionVersion(version));
 
 console.log(`Synced Caramel Board version: ${version}`);

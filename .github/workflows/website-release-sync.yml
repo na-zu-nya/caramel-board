@@ -1,10 +1,20 @@
 name: Website Release Sync
 
 on:
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
   release:
     types:
-      - published
       - edited
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v1.0.0)'
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -17,7 +27,7 @@ jobs:
     env:
       DISPATCH_TOKEN: ${{ secrets.WEBSITE_DISPATCH_TOKEN }}
       DISPATCH_REPO: ${{ secrets.WEBSITE_DISPATCH_REPO }}
-      TAG_NAME: ${{ github.event.release.tag_name }}
+      TAG_NAME: ${{ inputs.tag || github.event.release.tag_name }}
 
     steps:
       - name: Send repository_dispatch to the website repository
