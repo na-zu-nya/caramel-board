@@ -21,6 +21,7 @@ import type {
   CreateStackWithFileInput,
   StandaloneFileInput,
   StandaloneStackListParams,
+  StandaloneStackMatchParams,
 } from './stack/types';
 import { StackWriterService } from './stack/writer-service';
 
@@ -78,6 +79,10 @@ export class StandaloneStackRepository {
 
   getPaginated(params: StandaloneStackListParams) {
     return this.queryService.getPaginated(params);
+  }
+
+  getMatchingStackIds(params: StandaloneStackMatchParams) {
+    return this.queryService.getMatchingIds(params);
   }
 
   getById(id: number, dataSetId?: number) {
@@ -247,8 +252,13 @@ export class StandaloneStackRepository {
     return this.collectionLinkService.getCollectionIdsByStackId(stackId);
   }
 
-  getFavoriteItems(dataSetId: number, limit: number, offset: number) {
-    return this.favoriteService.getFavoriteItems(dataSetId, limit, offset);
+  getFavoriteItems(
+    dataSetId: number,
+    limit: number,
+    offset: number,
+    allowedStackIds?: Set<number>
+  ) {
+    return this.favoriteService.getFavoriteItems(dataSetId, limit, offset, allowedStackIds);
   }
 
   async refreshStackThumbnail(

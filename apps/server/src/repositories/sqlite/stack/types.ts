@@ -20,6 +20,11 @@ export interface StandaloneStackListParams {
   offset: number;
 }
 
+export type StandaloneStackMatchParams = Omit<
+  StandaloneStackListParams,
+  'sort' | 'order' | 'limit' | 'offset'
+>;
+
 export interface StackRow {
   id: number;
   dataset_id: number;

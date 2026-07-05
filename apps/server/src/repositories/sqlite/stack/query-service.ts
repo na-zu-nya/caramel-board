@@ -10,7 +10,12 @@ import {
   toArray,
 } from './helpers';
 import type { StackMetadataService } from './metadata-service';
-import type { CountRow, StackRow, StandaloneStackListParams } from './types';
+import type {
+  CountRow,
+  StackRow,
+  StandaloneStackListParams,
+  StandaloneStackMatchParams,
+} from './types';
 
 export class StackQueryService {
   constructor(
@@ -44,6 +49,21 @@ export class StackQueryService {
     };
   }
 
+  getMatchingIds(params: StandaloneStackMatchParams): number[] {
+    const sqlParams: Array<string | number> = [];
+    const whereSql = this.buildStackWhere(params, sqlParams);
+    const rows = this.db
+      .prepare(`
+        SELECT DISTINCT s.id
+        FROM stacks s
+        LEFT JOIN authors a ON a.id = s.author_id
+        WHERE ${whereSql}
+      `)
+      .all(...sqlParams) as Array<{ id: number }>;
+
+    return rows.map((row) => row.id);
+  }
+
   getById(id: number, dataSetId?: number) {
     const params: number[] = [id];
     const where = ['s.id = ?'];
@@ -74,7 +94,7 @@ export class StackQueryService {
     );
   }
 
-  private buildStackWhere(params: StandaloneStackListParams, sqlParams: Array<string | number>) {
+  private buildStackWhere(params: StandaloneStackMatchParams, sqlParams: Array<string | number>) {
     const where = ['s.dataset_id = ?'];
     sqlParams.push(params.dataSetId);
 

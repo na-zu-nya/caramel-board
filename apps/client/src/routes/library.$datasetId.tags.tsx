@@ -242,16 +242,6 @@ function TagsPage() {
     (!selectionMode && infoSidebarOpen) || (selectionMode && isEditPanelOpen)
   );
 
-  // Stabilize body scrollbar gutter while this page is active
-  useEffect(() => {
-    if (typeof document !== 'undefined') {
-      document.body.classList.add('list-stable-body');
-      return () => {
-        document.body.classList.remove('list-stable-body');
-      };
-    }
-  }, []);
-
   // Fetch tags
   const {
     data: tagsData,
@@ -1175,7 +1165,7 @@ function TagsPage() {
                     <StackTileGrid
                       items={allStacks}
                       datasetId={datasetId}
-                      gridClassName="grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 list-stable"
+                      gridClassName="grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"
                       cornerRadius="rounded"
                       isSelectionMode={selectionMode}
                       selectedItems={selectedStackItems}

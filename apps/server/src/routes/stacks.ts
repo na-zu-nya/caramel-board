@@ -78,6 +78,23 @@ const PaginatedQuerySchema = z.object({
 
 const FavoriteListQuerySchema = z.object({
   dataSetId: z.coerce.number().int().positive(),
+  category: CategorySchema.optional(),
+  mediaTypes: ActualMediaTypesQuerySchema,
+  tag: z.union([z.array(z.string()), z.string()]).optional(),
+  author: z.union([z.array(z.string()), z.string()]).optional(),
+  liked: z.enum(['0', '1']).optional(),
+  hasNoTags: z.coerce.boolean().optional(),
+  hasNoAuthor: z.coerce.boolean().optional(),
+  search: z.string().optional(),
+  hueCategories: z.union([z.array(z.string()), z.string()]).optional(),
+  toneSaturation: z.coerce.number().int().min(0).max(100).optional(),
+  toneLightness: z.coerce.number().int().min(0).max(100).optional(),
+  toneTolerance: z.coerce.number().int().min(0).max(100).optional(),
+  similarityThreshold: z.coerce.number().int().min(0).max(100).optional(),
+  customColor: z
+    .string()
+    .regex(/^#[0-9A-Fa-f]{6}$/)
+    .optional(),
   limit: z.coerce.number().int().min(1).max(500).optional().default(200),
   offset: z.coerce.number().int().min(0).optional().default(0),
 });
@@ -102,6 +119,15 @@ const AutoTagSearchQuerySchema = z.object({
   liked: z.enum(['0', '1']).optional(),
   hasNoTags: z.coerce.boolean().optional(),
   hasNoAuthor: z.coerce.boolean().optional(),
+  hueCategories: z.union([z.array(z.string()), z.string()]).optional(),
+  toneSaturation: z.coerce.number().int().min(0).max(100).optional(),
+  toneLightness: z.coerce.number().int().min(0).max(100).optional(),
+  toneTolerance: z.coerce.number().int().min(0).max(100).optional(),
+  similarityThreshold: z.coerce.number().int().min(0).max(100).optional(),
+  customColor: z
+    .string()
+    .regex(/^#[0-9A-Fa-f]{6}$/)
+    .optional(),
 });
 
 const BulkTagsSchema = z.object({
@@ -588,11 +614,54 @@ stacksRoute.get('/favorites/list', async (c) => {
   const parse = FavoriteListQuerySchema.safeParse(getQueryObject(c));
   if (!parse.success) return c.json({ error: 'Invalid query', details: parse.error }, 400);
 
-  const { dataSetId, limit, offset } = parse.data;
+  const query = parse.data;
+  const { dataSetId, limit, offset } = query;
   const auth = await ensureDatasetAuthorizedForCurrentStore(c, dataSetId);
   if (auth) return auth;
 
-  return c.json(stackRepository.getFavoriteItems(dataSetId, limit, offset));
+  const hasFilter = Boolean(
+    query.category ||
+      query.mediaTypes?.length ||
+      query.tag ||
+      query.author ||
+      query.liked ||
+      query.search ||
+      query.hasNoTags ||
+      query.hasNoAuthor ||
+      query.hueCategories ||
+      query.toneSaturation !== undefined ||
+      query.toneLightness !== undefined ||
+      query.customColor
+  );
+
+  let allowedStackIds: Set<number> | undefined;
+  if (hasFilter) {
+    const colorStackIds = getStandaloneColorStackIds({
+      dataSetId,
+      category: query.category,
+      hueCategories: query.hueCategories,
+      toneSaturation: query.toneSaturation,
+      toneLightness: query.toneLightness,
+      toneTolerance: query.toneTolerance,
+      similarityThreshold: query.similarityThreshold,
+      customColor: query.customColor,
+    });
+    const matchingIds = stackRepository.getMatchingStackIds({
+      dataSetId,
+      category: query.category,
+      mediaTypes: query.mediaTypes,
+      tag: query.tag,
+      author: query.author,
+      liked: query.liked,
+      search: query.search,
+      hasNoTags: query.hasNoTags,
+      hasNoAuthor: query.hasNoAuthor,
+      stackIds: colorStackIds,
+    });
+    allowedStackIds = new Set(matchingIds);
+  }
+
+  return c.json(stackRepository.getFavoriteItems(dataSetId, limit, offset, allowedStackIds));
 });
 
 stacksRoute.get('/search/autotag', async (c) => {
@@ -615,11 +684,32 @@ stacksRoute.get('/search/autotag', async (c) => {
     liked,
     hasNoTags,
     hasNoAuthor,
+    hueCategories,
+    toneSaturation,
+    toneLightness,
+    toneTolerance,
+    similarityThreshold,
+    customColor,
   } = parsed.data;
   const auth = await ensureDatasetAuthorizedForCurrentStore(c, dataSetId);
   if (auth) return auth;
   const tags = Array.isArray(autoTag) ? autoTag : [autoTag];
-  const stackIds = autoTagRepository.getMatchingStackIds(dataSetId, tags);
+  const autoTagStackIds = autoTagRepository.getMatchingStackIds(dataSetId, tags);
+  const colorStackIds = getStandaloneColorStackIds({
+    dataSetId,
+    category,
+    hueCategories,
+    toneSaturation,
+    toneLightness,
+    toneTolerance,
+    similarityThreshold,
+    customColor,
+  });
+  let stackIds = autoTagStackIds;
+  if (colorStackIds) {
+    const colorSet = new Set(colorStackIds);
+    stackIds = autoTagStackIds.filter((id) => colorSet.has(id));
+  }
   return c.json(
     stackRepository.getPaginated({
       dataSetId,

@@ -26,7 +26,6 @@ import {
 } from '@/lib/folder-import';
 import { useT } from '@/lib/i18n';
 import { getSelectedMediaGridStackIds } from '@/lib/media-grid-selection';
-import { applyScrollbarCompensation, removeScrollbarCompensation } from '@/lib/scrollbar-utils';
 import { createStackSelectionActions } from '@/lib/stack-selection-actions';
 import { cn } from '@/lib/utils';
 import { selectionModeAtom } from '@/stores/ui';
@@ -124,14 +123,6 @@ export default function SparseStackGrid({
       collectionId,
     };
   }, [dataset?.id, datasetId, category, filter.tags, filter.authors]);
-
-  // While this grid is mounted, stabilize body scrollbar gutter for contextmenu reflows
-  useEffect(() => {
-    applyScrollbarCompensation();
-    return () => {
-      removeScrollbarCompensation();
-    };
-  }, []);
 
   // Initialize upload queue processing
 

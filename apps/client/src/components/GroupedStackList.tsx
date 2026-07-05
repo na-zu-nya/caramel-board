@@ -2,14 +2,12 @@ import { Link } from '@tanstack/react-router';
 import { format } from 'date-fns';
 import { enUS, ja } from 'date-fns/locale';
 import { Heart } from 'lucide-react';
-import { useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { MonthSectionHeader } from '@/components/ui/MonthSectionHeader';
 import { StackTile } from '@/components/ui/Stack';
 import { useStackCollectionMenu } from '@/hooks/useStackCollectionMenu';
 import { useStackTile } from '@/hooks/useStackTile';
 import { useLanguage, useT } from '@/lib/i18n';
-import { applyScrollbarCompensation, removeScrollbarCompensation } from '@/lib/scrollbar-utils';
 import { getSourceImageFilename, getSourceImageUrl } from '@/lib/stack-drag-data';
 import type { Stack } from '@/types';
 
@@ -43,13 +41,6 @@ export function GroupedStackList({
   const t = useT();
   const language = useLanguage();
   const dateLocale = language === 'ja' ? ja : enUS;
-  // While this list is mounted, stabilize body scrollbar gutter for contextmenu reflows
-  useEffect(() => {
-    applyScrollbarCompensation();
-    return () => {
-      removeScrollbarCompensation();
-    };
-  }, []);
   // Group items by month
   const groupedByMonth: Record<string, GroupedStack[]> = {};
 
@@ -110,7 +101,7 @@ export function GroupedStackList({
   } = useStackCollectionMenu(datasetId);
 
   return (
-    <div className="w-full p-4 space-y-8 list-stable">
+    <div className="w-full p-4 space-y-8">
       {sortedMonths.map((monthKey) => {
         const monthItems = groupedByMonth[monthKey];
         if (!monthItems || monthItems.length === 0) return null;

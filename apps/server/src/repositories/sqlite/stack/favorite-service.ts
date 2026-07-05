@@ -75,7 +75,12 @@ export class StackFavoriteService {
     return { ...liked, assetId: asset.id };
   }
 
-  getFavoriteItems(dataSetId: number, limit: number, offset: number) {
+  getFavoriteItems(
+    dataSetId: number,
+    limit: number,
+    offset: number,
+    allowedStackIds?: Set<number>
+  ) {
     const userId = this.ensureUserId();
     const stackRows = this.db
       .prepare(
@@ -160,7 +165,7 @@ export class StackFavoriteService {
       stack_favorited: number;
     }>;
 
-    const combined = [
+    const combinedAll = [
       ...stackRows.map((row) => {
         const likeCount = Number(row.liked ?? 0);
         return {
@@ -208,7 +213,13 @@ export class StackFavoriteService {
           updatedAt: row.updated_at,
         };
       }),
-    ].sort((left, right) => right.favoriteCreatedAt.localeCompare(left.favoriteCreatedAt));
+    ];
+
+    const combined = (
+      allowedStackIds
+        ? combinedAll.filter((item) => allowedStackIds.has(item.stackId))
+        : combinedAll
+    ).sort((left, right) => right.favoriteCreatedAt.localeCompare(left.favoriteCreatedAt));
 
     return {
       stacks: combined.slice(offset, offset + limit),

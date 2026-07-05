@@ -32,6 +32,39 @@ function normalizeColorFilter(colorFilter: ColorFilter | undefined) {
   };
 }
 
+export function appendColorFilterQueryParams(
+  query: URLSearchParams,
+  colorFilter: ColorFilter | undefined
+): void {
+  if (!colorFilter) return;
+
+  if (colorFilter.hueCategories && colorFilter.hueCategories.length > 0) {
+    for (const hue of colorFilter.hueCategories) {
+      query.append('hueCategories', hue);
+    }
+  }
+  if (colorFilter.tonePoint) {
+    query.append('toneSaturation', String(colorFilter.tonePoint.saturation));
+    query.append('toneLightness', String(colorFilter.tonePoint.lightness));
+  } else {
+    if (colorFilter.toneSaturation !== undefined) {
+      query.append('toneSaturation', String(colorFilter.toneSaturation));
+    }
+    if (colorFilter.toneLightness !== undefined) {
+      query.append('toneLightness', String(colorFilter.toneLightness));
+    }
+  }
+  if (colorFilter.toneTolerance !== undefined) {
+    query.append('toneTolerance', String(colorFilter.toneTolerance));
+  }
+  if (colorFilter.similarityThreshold !== undefined) {
+    query.append('similarityThreshold', String(colorFilter.similarityThreshold));
+  }
+  if (colorFilter.customColor !== undefined) {
+    query.append('customColor', String(colorFilter.customColor));
+  }
+}
+
 export function getStackFilterKey(filter: StackFilter | null | undefined): string {
   const current = filter ?? {};
   return JSON.stringify({

@@ -1,8 +1,7 @@
 import { Link, useNavigate } from '@tanstack/react-router';
-import { useCallback, useEffect } from 'react';
+import { useCallback } from 'react';
 import { StackTileGrid } from '@/components/StackTileGrid';
 import { downloadStackOriginals } from '@/lib/download-originals';
-import { applyScrollbarCompensation, removeScrollbarCompensation } from '@/lib/scrollbar-utils';
 import type { MediaGridItem } from '@/types';
 
 interface TagStackGridProps {
@@ -47,13 +46,6 @@ export default function TagStackGrid({
   onDownloadItem,
 }: TagStackGridProps) {
   const navigate = useNavigate();
-  // While this grid is mounted, stabilize body scrollbar gutter for contextmenu reflows
-  useEffect(() => {
-    applyScrollbarCompensation();
-    return () => {
-      removeScrollbarCompensation();
-    };
-  }, []);
 
   const getDatasetId = useCallback((item: MediaGridItem) => {
     const value = item.dataSetId ?? item.datasetId;

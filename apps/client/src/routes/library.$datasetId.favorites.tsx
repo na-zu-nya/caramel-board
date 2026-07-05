@@ -9,6 +9,7 @@ import { useDataset } from '@/hooks/useDatasets';
 import { useHeaderActions } from '@/hooks/useHeaderActions';
 import { apiClient } from '@/lib/api-client';
 import { useT } from '@/lib/i18n';
+import { getStackFilterKey } from '@/lib/stack-filter';
 import { navigationStateAtom } from '@/stores/navigation';
 import { currentFilterAtom } from '@/stores/ui';
 import { genListToken, saveViewContext } from '@/stores/view-context';
@@ -20,7 +21,7 @@ export const Route = createFileRoute('/library/$datasetId/favorites')({
 
 const FAVORITES_PAGE_SIZE = 500;
 
-async function fetchAllFavoriteItems(datasetId: string) {
+async function fetchAllFavoriteItems(datasetId: string, filter: StackFilter) {
   const stacks: MediaGridItem[] = [];
   let offset = 0;
   let total = 0;
@@ -28,6 +29,7 @@ async function fetchAllFavoriteItems(datasetId: string) {
   while (true) {
     const page = await apiClient.getFavoriteItems({
       datasetId,
+      filter,
       limit: FAVORITES_PAGE_SIZE,
       offset,
     });
@@ -80,31 +82,14 @@ function FavoritesPage() {
     isLoading,
     refetch,
   } = useQuery({
-    queryKey: ['favorite-items', datasetId],
-    queryFn: () => fetchAllFavoriteItems(datasetId),
+    queryKey: ['favorite-items', datasetId, getStackFilterKey(currentFilter)],
+    queryFn: () => fetchAllFavoriteItems(datasetId, currentFilter),
   });
 
   const stableLoadedItems = useMemo(() => {
-    const items = favoriteItems?.stacks ?? [];
-    const search = currentFilter.search?.trim().toLowerCase();
-    const filtered = items.filter((item) => {
-      if (currentFilter.category && item.category !== currentFilter.category) return false;
-      if (
-        currentFilter.mediaTypes?.length &&
-        (!item.actualMediaType || !currentFilter.mediaTypes.includes(item.actualMediaType))
-      )
-        return false;
-      if (
-        search &&
-        !String(item.name ?? '')
-          .toLowerCase()
-          .includes(search)
-      )
-        return false;
-      return true;
-    }) as MediaGridItem[];
+    const items = (favoriteItems?.stacks ?? []) as MediaGridItem[];
 
-    return filtered.sort((left, right) => {
+    return [...items].sort((left, right) => {
       const direction = currentSort.order === 'asc' ? 1 : -1;
       switch (currentSort.field) {
         case 'name':
@@ -129,13 +114,7 @@ function FavoritesPage() {
           );
       }
     });
-  }, [
-    currentFilter.category,
-    currentFilter.mediaTypes,
-    currentFilter.search,
-    currentSort,
-    favoriteItems?.stacks,
-  ]);
+  }, [currentSort, favoriteItems?.stacks]);
 
   const total = stableLoadedItems.length;
   const allItems = stableLoadedItems;

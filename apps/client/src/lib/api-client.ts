@@ -1,9 +1,11 @@
+import { appendColorFilterQueryParams } from '@/lib/stack-filter';
 import type {
   Asset,
   Author,
   AuthorLink,
   Collection,
   CollectionFolder,
+  ColorFilter,
   Dataset,
   ImportUrlResult,
   JoyTagHealthResponse,
@@ -326,31 +328,7 @@ class ApiClient {
             paramValue = value as any;
           } else if (key === 'colorFilter' && value) {
             // 色域フィルタをクエリパラメータに変換
-            const colorFilter = value as any;
-            if (colorFilter.hueCategories && colorFilter.hueCategories.length > 0) {
-              for (const hue of colorFilter.hueCategories) {
-                queryParams.append('hueCategories', hue);
-              }
-            }
-            if (colorFilter.tonePoint) {
-              queryParams.append('toneSaturation', String(colorFilter.tonePoint.saturation));
-              queryParams.append('toneLightness', String(colorFilter.tonePoint.lightness));
-            }
-            if (colorFilter.toneSaturation !== undefined && colorFilter.tonePoint === undefined) {
-              queryParams.append('toneSaturation', String(colorFilter.toneSaturation));
-            }
-            if (colorFilter.toneLightness !== undefined && colorFilter.tonePoint === undefined) {
-              queryParams.append('toneLightness', String(colorFilter.toneLightness));
-            }
-            if (colorFilter.toneTolerance !== undefined) {
-              queryParams.append('toneTolerance', String(colorFilter.toneTolerance));
-            }
-            if (colorFilter.similarityThreshold !== undefined) {
-              queryParams.append('similarityThreshold', String(colorFilter.similarityThreshold));
-            }
-            if (colorFilter.customColor !== undefined) {
-              queryParams.append('customColor', String(colorFilter.customColor));
-            }
+            appendColorFilterQueryParams(queryParams, value as ColorFilter);
             continue; // colorFilterは他の処理をスキップ
           }
 
@@ -408,6 +386,12 @@ class ApiClient {
       hasNoAuthor: params.hasNoAuthor,
       sort: params.sort ? normalizeSortField(String(params.sort)) : undefined,
       order: params.order ? normalizeSortOrder(String(params.order)) : undefined,
+      hueCategories: params.hueCategories,
+      toneSaturation: params.toneSaturation,
+      toneLightness: params.toneLightness,
+      toneTolerance: params.toneTolerance,
+      similarityThreshold: params.similarityThreshold,
+      customColor: params.customColor,
     };
 
     // Convert clean parameters to query string
@@ -528,11 +512,42 @@ class ApiClient {
 
   async getFavoriteItems(params: {
     datasetId: string | number;
+    filter?: StackFilter;
     limit?: number;
     offset?: number;
   }): Promise<{ stacks: MediaGridItem[]; total: number; limit: number; offset: number }> {
     const query = new URLSearchParams();
     query.append('dataSetId', String(params.datasetId));
+
+    if (params.filter) {
+      for (const [key, value] of Object.entries(params.filter)) {
+        if (value === undefined) continue;
+
+        if (key === 'datasetId' || key === 'isFavorite') {
+          continue;
+        }
+
+        if (key === 'isLiked') {
+          if (value === true) query.append('liked', '1');
+          else if (value === false) query.append('liked', '0');
+        } else if (key === 'tags') {
+          for (const tag of value as string[]) query.append('tag', tag);
+        } else if (key === 'authors') {
+          for (const author of value as string[]) query.append('author', author);
+        } else if (key === 'category') {
+          query.append('category', String(value));
+        } else if (key === 'mediaTypes') {
+          for (const mediaType of value as string[]) query.append('mediaTypes', mediaType);
+        } else if (key === 'search') {
+          query.append('search', String(value));
+        } else if (key === 'hasNoTags' || key === 'hasNoAuthor') {
+          query.append(key, String(value));
+        } else if (key === 'colorFilter' && value) {
+          appendColorFilterQueryParams(query, value as ColorFilter);
+        }
+      }
+    }
+
     if (params.limit !== undefined) query.append('limit', String(params.limit));
     if (params.offset !== undefined) query.append('offset', String(params.offset));
     return this.fetch<{ stacks: MediaGridItem[]; total: number; limit: number; offset: number }>(
@@ -1441,7 +1456,7 @@ class ApiClient {
         for (const t of f.tags) {
           query.append('tag', t);
         }
-      // Note: colorFilter not supported on this endpoint (server ignores it)
+      appendColorFilterQueryParams(query, f.colorFilter);
     }
     return this.fetch(`/api/v1/stacks/search/autotag?${query.toString()}`);
   }

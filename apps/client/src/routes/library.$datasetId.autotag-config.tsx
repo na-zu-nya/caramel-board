@@ -34,6 +34,7 @@ import { useKeyboardShortcuts } from '@/hooks/utils/useKeyboardShortcut';
 import { apiClient } from '@/lib/api-client';
 import { downloadStackOriginals } from '@/lib/download-originals';
 import { useT } from '@/lib/i18n';
+import { appendColorFilterQueryParams } from '@/lib/stack-filter';
 import { createStackSelectionActions } from '@/lib/stack-selection-actions';
 import { cn } from '@/lib/utils';
 import {
@@ -1301,16 +1302,19 @@ function appendFilterParams(target: URLSearchParams, filter: StackFilter) {
   }
   if (Array.isArray(filter.tags)) {
     for (const tag of filter.tags) {
-      target.append('tags', tag);
+      target.append('tag', tag);
     }
   }
   if (Array.isArray(filter.authors)) {
     for (const author of filter.authors) {
-      target.append('authors', author);
+      target.append('author', author);
     }
   }
   if (filter.isFavorite !== undefined) {
-    target.append('isFavorite', filter.isFavorite.toString());
+    target.append('fav', filter.isFavorite ? '1' : '0');
+  }
+  if (filter.isLiked !== undefined) {
+    target.append('liked', filter.isLiked ? '1' : '0');
   }
   if (filter.category) {
     target.append('category', filter.category);
@@ -1323,6 +1327,7 @@ function appendFilterParams(target: URLSearchParams, filter: StackFilter) {
   if (filter.search) {
     target.append('search', filter.search);
   }
+  appendColorFilterQueryParams(target, filter.colorFilter);
 }
 
 function searchParamsToObject(params: URLSearchParams): Record<string, string> {
