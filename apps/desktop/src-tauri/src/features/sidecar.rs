@@ -104,6 +104,9 @@ fn start_sidecar_for_settings(
                 "開発用サーバーが起動していません。リポジトリ直下の npm run dev を確認してください。",
             ));
         }
+        if let Err(error) = start_auto_tag_if_enabled(app, sidecar, &settings) {
+            eprintln!("AutoTag start skipped: {error}");
+        }
         return status_from(sidecar, &settings);
     }
 
@@ -182,6 +185,7 @@ fn stop_sidecar_for_settings(
     settings: &AppSettings,
 ) -> Result<SidecarStatus, String> {
     if external_dev_server_enabled() && sidecar.child.is_none() {
+        stop_auto_tag(sidecar, settings);
         return status_from(sidecar, settings);
     }
 

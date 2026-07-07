@@ -315,6 +315,22 @@ fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         apply_app_shell_settings_if_available(&handle);
     }
 
+    if external_dev_server_enabled() {
+        if let Some(settings) = settings.clone().filter(|settings| settings.setup_completed) {
+            let handle = handle.clone();
+            thread::spawn(move || {
+                let state = handle.state::<Mutex<ManagedSidecar>>();
+                let Ok(mut sidecar) = state.lock() else {
+                    eprintln!("AutoTag start skipped: sidecar state unavailable");
+                    return;
+                };
+                if let Err(error) = start_auto_tag_if_enabled(&handle, &mut sidecar, &settings) {
+                    eprintln!("AutoTag start skipped: {error}");
+                }
+            });
+        }
+    }
+
     let background_launch = has_cli_arg("--background");
     let auto_apply_standalone_migrations = has_cli_arg(APPLY_STANDALONE_MIGRATIONS_ARG);
     if background_launch {
