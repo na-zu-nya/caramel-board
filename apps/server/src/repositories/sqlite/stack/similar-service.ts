@@ -35,11 +35,16 @@ export class StackSimilarService {
       return { stacks: [], total: 0, limit: options.limit, offset: options.offset };
     }
 
-    const stopTags = new Set(DEFAULT_AUTO_STOP_TAGS.map(normalizeTag));
-    const reference = this.buildSimilarReference(dataSetId, verifiedSourceIds, stopTags);
-    const similarIds = this.runSimilarSearch(dataSetId, reference, verifiedSourceIds, stopTags, {
+    const reference = this.buildSimilarReference(
+      dataSetId,
+      verifiedSourceIds,
+      new Set(DEFAULT_AUTO_STOP_TAGS.map(normalizeTag))
+    );
+    const scoredSimilar = this.getScoredSimilarByReference(dataSetId, reference, {
       threshold: options.threshold,
+      excludedStackIds: verifiedSourceIds,
     });
+    const similarIds = scoredSimilar.map((entry) => entry.id);
     const pagedIds = similarIds.slice(options.offset, options.offset + options.limit);
 
     return {
@@ -50,6 +55,17 @@ export class StackSimilarService {
       limit: options.limit,
       offset: options.offset,
     };
+  }
+
+  getScoredSimilarByReference(
+    dataSetId: number,
+    reference: SimilarVectors,
+    options: { threshold?: number; excludedStackIds?: number[] } = {}
+  ): Array<{ id: number; score: number }> {
+    const stopTags = new Set(DEFAULT_AUTO_STOP_TAGS.map(normalizeTag));
+    return this.runSimilarSearch(dataSetId, reference, options.excludedStackIds ?? [], stopTags, {
+      threshold: options.threshold,
+    });
   }
 
   private getExistingStackIds(dataSetId: number, stackIds: number[]) {
@@ -268,7 +284,7 @@ export class StackSimilarService {
     excludedStackIds: number[],
     stopTags: Set<string>,
     options: { threshold?: number }
-  ) {
+  ): Array<{ id: number; score: number }> {
     if (reference.auto.size === 0 && reference.manual.size === 0) return [];
 
     const autoProbe = Array.from(reference.auto.keys()).slice(0, SIMILAR_CONFIG.autoProbeCount);
@@ -346,6 +362,6 @@ export class StackSimilarService {
       .filter(([, score]) => score >= threshold)
       .sort((left, right) => right[1] - left[1])
       .slice(0, SIMILAR_CONFIG.resultLimit)
-      .map(([id]) => id);
+      .map(([id, score]) => ({ id, score }));
   }
 }

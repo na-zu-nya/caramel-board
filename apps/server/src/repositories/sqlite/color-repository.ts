@@ -1,6 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { ColorExtractor, type DominantColor } from '../../utils/colorExtractor';
 import { getStandaloneSqlite, type SqliteBindValue } from './sqlite';
+import { placeholders } from './stack/helpers';
 import { StandaloneStackRepository } from './stack-repository';
 
 interface CountRow {
@@ -59,7 +60,7 @@ const isDominantColor = (value: unknown): value is DominantColor => {
   );
 };
 
-const parseDominantColors = (json: string | null | undefined): DominantColor[] => {
+export const parseDominantColors = (json: string | null | undefined): DominantColor[] => {
   if (!json) return [];
   try {
     const parsed = JSON.parse(json) as unknown;
@@ -74,7 +75,7 @@ const hueDistance = (a: number, b: number) => {
   return Math.min(diff, 360 - diff);
 };
 
-const hslDistance = (color: DominantColor, target: { h: number; s: number; l: number }) =>
+export const hslDistance = (color: DominantColor, target: { h: number; s: number; l: number }) =>
   Math.sqrt(
     (hueDistance(color.hue, target.h) / 1.8) ** 2 +
       (color.saturation - target.s) ** 2 +
@@ -291,6 +292,29 @@ export class StandaloneColorRepository {
       )
       .all(datasetId) as Array<{ id: number }>;
     return rows.map((row) => row.id);
+  }
+
+  getDominantColorsByStackIds(dataSetId: number, stackIds: number[]): Map<number, DominantColor[]> {
+    if (stackIds.length === 0) return new Map();
+    const rows = this.db
+      .prepare(
+        `SELECT id, dominant_colors_json
+         FROM stacks
+         WHERE dataset_id = ?
+           AND id IN (${placeholders(stackIds)})`
+      )
+      .all(dataSetId, ...stackIds) as Array<{ id: number; dominant_colors_json: string | null }>;
+
+    return new Map(rows.map((row) => [row.id, parseDominantColors(row.dominant_colors_json)]));
+  }
+
+  getCandidateStackIdsWithColors(
+    dataSetId: number
+  ): Array<{ id: number; dominantColors: DominantColor[] }> {
+    return this.getCandidateRows({ dataSetId }).map((row) => ({
+      id: row.id,
+      dominantColors: parseDominantColors(row.dominant_colors_json),
+    }));
   }
 
   getStats(dataSetId?: number) {

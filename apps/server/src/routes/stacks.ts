@@ -12,7 +12,12 @@ import {
   type StandaloneStackListParams,
   StandaloneStackRepository,
 } from '../repositories/sqlite/stack-repository';
+import { PaginatedFiltersParamSchema } from '../schemas/search-schema';
 import { useDataStorage } from '../shared/di';
+import {
+  ImageStackSearchService,
+  intersectScoredIdsWithEligible,
+} from '../shared/services/ImageStackSearchService';
 import { createZipArchive } from '../utils/zip';
 
 export const stacksRoute = new Hono();
@@ -45,6 +50,7 @@ const stackRepository = new StandaloneStackRepository();
 const libraryRepository = new StandaloneLibraryRepository();
 const autoTagRepository = new StandaloneAutoTagRepository();
 const colorRepository = new StandaloneColorRepository();
+const imageSearchService = new ImageStackSearchService({ stackRepository, colorRepository });
 
 const PaginatedQuerySchema = z.object({
   dataSetId: z.coerce.number().int().positive(),
@@ -67,6 +73,7 @@ const PaginatedQuerySchema = z.object({
     .string()
     .regex(/^#[0-9A-Fa-f]{6}$/)
     .optional(),
+  filters: PaginatedFiltersParamSchema,
   sort: z
     .enum(['recommended', 'dateAdded', 'name', 'likes', 'updated', 'id'])
     .optional()
@@ -603,6 +610,51 @@ stacksRoute.get('/paginated', async (c) => {
     similarityThreshold: query.similarityThreshold,
     customColor: query.customColor,
   });
+
+  if (query.filters?.imageSearch) {
+    // Note: strict:false の tsconfig では zod の z.infer が全フィールドを optional 化する
+    // (strictNullChecks が必要な TypeScript 側の既知の挙動)。値は safeParse 済みで実行時には
+    // 必ず存在するため、正確な静的型に戻すキャスト。
+    const imageSearch = query.filters.imageSearch as {
+      tags: Array<{ key: string; score: number }>;
+      colors: Array<{ r: number; g: number; b: number; hex: string; percentage: number }>;
+      tagWeight: number;
+      threshold: number;
+    };
+    const scored = imageSearchService.getScoredStackIds(stackListParams.dataSetId, {
+      tags: imageSearch.tags,
+      colors: imageSearch.colors,
+      tagWeight: imageSearch.tagWeight,
+      threshold: imageSearch.threshold,
+    });
+    const eligibleIds = new Set(
+      stackRepository.getMatchingStackIds({
+        dataSetId: stackListParams.dataSetId,
+        collection: stackListParams.collection,
+        category: stackListParams.category,
+        mediaTypes: stackListParams.mediaTypes,
+        tag: stackListParams.tag,
+        author: stackListParams.author,
+        fav: stackListParams.fav,
+        liked: stackListParams.liked,
+        hasNoTags: stackListParams.hasNoTags,
+        hasNoAuthor: stackListParams.hasNoAuthor,
+        search: stackListParams.search,
+        stackIds,
+      })
+    );
+    const { ids, total } = intersectScoredIdsWithEligible(
+      scored,
+      eligibleIds,
+      query.limit,
+      query.offset
+    );
+    const stacks = ids
+      .map((id) => stackRepository.getById(id, stackListParams.dataSetId))
+      .filter((stack): stack is NonNullable<typeof stack> => stack !== null);
+    return c.json({ stacks, total, limit: query.limit, offset: query.offset });
+  }
+
   const result = stackRepository.getPaginated({
     ...stackListParams,
     stackIds,

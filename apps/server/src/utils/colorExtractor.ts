@@ -63,6 +63,22 @@ export class ColorExtractor {
   }
 
   /**
+   * バッファから代表色を抽出
+   * extractDominantColors(path) と異なり、失敗時は握りつぶさずthrowする
+   * （呼び出し元がデコード不能を400として扱えるように）
+   * @param buffer 画像データ
+   * @param numColors 抽出する色の数（デフォルト: 3）
+   * @returns 代表色の配列
+   */
+  static async extractDominantColorsFromBuffer(
+    buffer: Buffer,
+    numColors = 3
+  ): Promise<DominantColor[]> {
+    const colors = await getColors(buffer, { numColors });
+    return colors.map(toDominantColor);
+  }
+
+  /**
    * RGB値を16進数カラーコードに変換
    */
   static rgbToHex(r: number, g: number, b: number): string {

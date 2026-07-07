@@ -51,6 +51,46 @@ export const ColorFilterSchema = z
   })
   .optional();
 
+// 画像ドロップ検索フィルタ
+export const ImageSearchFilterSchema = z
+  .object({
+    tags: z
+      .array(z.object({ key: z.string().min(1), score: z.number().min(0).max(1) }))
+      .max(50)
+      .default([]),
+    colors: z
+      .array(
+        z.object({
+          r: z.number().min(0).max(255),
+          g: z.number().min(0).max(255),
+          b: z.number().min(0).max(255),
+          hex: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
+          percentage: z.number().min(0).max(1),
+        })
+      )
+      .default([]),
+    tagWeight: z.number().min(0).max(1).default(0.65),
+    threshold: z.number().min(0).max(1).default(0),
+  })
+  .optional();
+
+// /stacks/paginated 用の filters クエリパラメータ(JSON文字列)。
+// 既存の SearchQuerySchema の filters transform と同じ流儀で、parse 失敗時は
+// 黙って undefined(フィルタ無視)にする。imageSearch 以外のキーは無視。
+export const PaginatedFiltersParamSchema = z
+  .string()
+  .optional()
+  .transform((val) => {
+    if (!val) return undefined;
+    try {
+      const parsed = JSON.parse(val) as Record<string, unknown>;
+      const imageSearch = ImageSearchFilterSchema.parse(parsed?.imageSearch);
+      return imageSearch ? { imageSearch } : undefined;
+    } catch {
+      return undefined;
+    }
+  });
+
 // 検索フィルタ
 export const SearchFiltersSchema = z.object({
   author: AuthorFilterSchema,
@@ -62,6 +102,7 @@ export const SearchFiltersSchema = z.object({
   mediaTypes: z.array(ActualMediaTypeSchema).optional(),
   collectionId: z.number().int().positive().optional(),
   includeAutoTags: z.boolean().optional(),
+  imageSearch: ImageSearchFilterSchema,
 });
 
 // ソートオプション

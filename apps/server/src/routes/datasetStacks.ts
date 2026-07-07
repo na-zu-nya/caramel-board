@@ -17,6 +17,11 @@ import {
   UpdateStackSchema,
 } from '../schemas/index.js';
 import { SearchQuerySchema } from '../schemas/search-schema.js';
+import {
+  ImageStackSearchService,
+  intersectScoredIdsWithEligible,
+  UnsupportedImageError,
+} from '../shared/services/ImageStackSearchService';
 
 const app = new Hono();
 const stackRepository = new StandaloneStackRepository();
@@ -25,6 +30,7 @@ const libraryRepository = new StandaloneLibraryRepository();
 const metadataRepository = new StandaloneMetadataRepository();
 const colorRepository = new StandaloneColorRepository();
 const autoTagRepository = new StandaloneAutoTagRepository();
+const imageSearchService = new ImageStackSearchService({ stackRepository, colorRepository });
 
 type Category = 'image' | 'books' | 'video';
 
@@ -141,6 +147,59 @@ app.get(
       const category =
         filters.category && filters.category !== 'all' ? filters.category : undefined;
       const stackIds = getStandaloneColorStackIds(dataSetId, category, filters.color);
+
+      if (filters.imageSearch) {
+        // Note: with this project's `strict: false` tsconfig, zod's z.infer marks every
+        // object field as optional (TypeScript's addQuestionMarks helper needs
+        // strictNullChecks to tell required from optional). The query already went
+        // through zValidator('query', SearchQuerySchema), so these fields are guaranteed
+        // present at runtime; this cast just restores the accurate static type.
+        const imageSearch = filters.imageSearch as {
+          tags: Array<{ key: string; score: number }>;
+          colors: Array<{ r: number; g: number; b: number; hex: string; percentage: number }>;
+          tagWeight: number;
+          threshold: number;
+        };
+        const scored = imageSearchService.getScoredStackIds(dataSetId, {
+          tags: imageSearch.tags,
+          colors: imageSearch.colors,
+          tagWeight: imageSearch.tagWeight,
+          threshold: imageSearch.threshold,
+        });
+        const eligibleIds = new Set(
+          stackRepository.getMatchingStackIds({
+            dataSetId,
+            collection: filters.collectionId,
+            category,
+            mediaTypes: filters.mediaTypes,
+            tag: filters.tags?.includeAny ?? filters.tags?.include,
+            author: filters.author?.includeAny ?? filters.author?.include,
+            fav:
+              filters.favorites === 'is-fav'
+                ? '1'
+                : filters.favorites === 'not-fav'
+                  ? '0'
+                  : undefined,
+            liked:
+              filters.likes === 'is-liked' ? '1' : filters.likes === 'not-liked' ? '0' : undefined,
+            hasNoTags: filters.tags?.includeNotSet === true,
+            hasNoAuthor: filters.author?.includeNotSet === true,
+            search: queryParams.query,
+            stackIds,
+          })
+        );
+        const { ids, total } = intersectScoredIdsWithEligible(
+          scored,
+          eligibleIds,
+          queryParams.limit,
+          queryParams.offset
+        );
+        const stacks = ids
+          .map((id) => stackRepository.getById(id, dataSetId))
+          .filter((stack): stack is NonNullable<typeof stack> => stack !== null);
+        return c.json({ stacks, total, limit: queryParams.limit, offset: queryParams.offset });
+      }
+
       const result = stackRepository.getPaginated({
         dataSetId,
         collection: filters.collectionId,
@@ -208,6 +267,39 @@ app.get(
     }
   }
 );
+
+const ALLOWED_QUERY_IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif']);
+const ALLOWED_QUERY_IMAGE_MIME_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+]);
+
+const isAllowedQueryImage = (file: File) => {
+  const ext = path.extname(file.name).replace(/^\./, '').toLowerCase();
+  if (ALLOWED_QUERY_IMAGE_EXTENSIONS.has(ext)) return true;
+  return ALLOWED_QUERY_IMAGE_MIME_TYPES.has((file.type || '').toLowerCase());
+};
+
+app.post('/:dataSetId/stacks/analyze-image', async (c) => {
+  const body = await c.req.parseBody();
+  const image = body.image;
+  if (!(image instanceof File) || !isAllowedQueryImage(image)) {
+    return c.json({ error: 'A valid image file (jpg/png/webp/gif) is required' }, 400);
+  }
+  const buffer = Buffer.from(await image.arrayBuffer());
+  try {
+    const result = await imageSearchService.analyzeImage({ buffer, filename: image.name });
+    return c.json(result);
+  } catch (error) {
+    if (error instanceof UnsupportedImageError) {
+      return c.json({ error: 'Unable to decode image' }, 400);
+    }
+    console.error('Error analyzing image:', error);
+    return c.json({ error: 'Failed to analyze image' }, 500);
+  }
+});
 
 app.get(
   '/:dataSetId/collections/:collectionId/similar',

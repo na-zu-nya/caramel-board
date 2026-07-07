@@ -19,6 +19,7 @@ import {
 import type {
   AddAssetWithFileOptions,
   CreateStackWithFileInput,
+  SimilarVectors,
   StandaloneFileInput,
   StandaloneStackListParams,
   StandaloneStackMatchParams,
@@ -117,6 +118,14 @@ export class StandaloneStackRepository {
     return this.similarService.getSimilarByStackIds(dataSetId, sourceStackIds, options, (id, ds) =>
       this.getById(id, ds)
     );
+  }
+
+  getScoredSimilarByReference(
+    dataSetId: number,
+    reference: SimilarVectors,
+    options: { threshold?: number; excludedStackIds?: number[] } = {}
+  ) {
+    return this.similarService.getScoredSimilarByReference(dataSetId, reference, options);
   }
 
   async regeneratePreviews(stackId: number, dataSetId: number, options: { force?: boolean } = {}) {
