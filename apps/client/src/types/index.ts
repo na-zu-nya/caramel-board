@@ -382,6 +382,13 @@ export interface StackFilter {
   colorFilter?: ColorFilter;
   hasNoTags?: boolean;
   hasNoAuthor?: boolean;
+  imageSearch?: {
+    tags: ImageSearchTag[];
+    colors: ImageSearchColor[];
+    tagWeight: number;
+    threshold?: number;
+    mode?: 'auto' | 'tags' | 'colors';
+  };
 }
 
 export type SortField =
@@ -417,4 +424,23 @@ export interface MediaGridItem {
   favoriteCreatedAt?: string;
   favoritePage?: number;
   [key: string]: unknown;
+}
+
+export interface ImageSearchTag {
+  key: string;
+  score: number;
+}
+
+export interface ImageSearchColor {
+  r: number;
+  g: number;
+  b: number;
+  hex: string;
+  percentage: number;
+}
+
+export interface AnalyzeImageResponse {
+  tags: ImageSearchTag[];
+  colors: ImageSearchColor[];
+  autoTagAvailable: boolean;
 }

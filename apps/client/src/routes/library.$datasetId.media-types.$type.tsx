@@ -32,6 +32,7 @@ function MediaTypesTypeList() {
     hasNoAuthor?: boolean;
     mediaTypes?: StackFilter['mediaTypes'];
     colorFilter?: string;
+    imageSearch?: string;
   };
   const { data: dataset } = useDataset(datasetId);
   const navigate = useNavigate();
@@ -86,6 +87,7 @@ function MediaTypesTypeList() {
       hasNoTags: search.hasNoTags ?? undefined,
       hasNoAuthor: search.hasNoAuthor ?? undefined,
       colorFilter: search.colorFilter ? JSON.parse(search.colorFilter) : undefined,
+      imageSearch: search.imageSearch ? JSON.parse(search.imageSearch) : undefined,
     };
     setCurrentFilter((previousFilter) =>
       areStackFiltersEqual(previousFilter, newFilter) ? previousFilter : newFilter
@@ -102,6 +104,7 @@ function MediaTypesTypeList() {
     search.hasNoAuthor,
     search.mediaTypes,
     search.colorFilter,
+    search.imageSearch,
     setCurrentFilter,
     navigationState,
   ]);
@@ -171,6 +174,7 @@ function MediaTypesTypeList() {
       if (search.hasNoTags !== undefined) searchParams.hasNoTags = search.hasNoTags;
       if (search.hasNoAuthor !== undefined) searchParams.hasNoAuthor = search.hasNoAuthor;
       if (search.colorFilter) searchParams.colorFilter = search.colorFilter;
+      if (search.imageSearch) searchParams.imageSearch = search.imageSearch;
 
       // Navigate
       void navigate({
@@ -306,6 +310,9 @@ function MediaTypesTypeList() {
       if (newFilter.colorFilter) {
         searchParams.colorFilter = JSON.stringify(newFilter.colorFilter);
       }
+      if (newFilter.imageSearch) {
+        searchParams.imageSearch = JSON.stringify(newFilter.imageSearch);
+      }
 
       void navigate({
         to: '/library/$datasetId/media-types/$type',
@@ -389,6 +396,7 @@ function MediaTypesTypeList() {
       if (search.hasNoTags !== undefined) searchParams.hasNoTags = search.hasNoTags;
       if (search.hasNoAuthor !== undefined) searchParams.hasNoAuthor = search.hasNoAuthor;
       if (search.colorFilter) searchParams.colorFilter = search.colorFilter;
+      if (search.imageSearch) searchParams.imageSearch = search.imageSearch;
 
       // Preserve current filter in search params (override search params if different)
       if (currentFilter.tags && currentFilter.tags.length > 0) {
@@ -414,6 +422,9 @@ function MediaTypesTypeList() {
       }
       if (currentFilter.colorFilter) {
         searchParams.colorFilter = JSON.stringify(currentFilter.colorFilter);
+      }
+      if (currentFilter.imageSearch) {
+        searchParams.imageSearch = JSON.stringify(currentFilter.imageSearch);
       }
 
       void navigate({

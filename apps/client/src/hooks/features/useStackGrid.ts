@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAtom } from 'jotai';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { apiClient } from '@/lib/api-client';
 import {
   clampStackGridColumns,
@@ -352,7 +352,7 @@ export function useStackGrid({
     useWindowScroll,
   ]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const container = containerRef.current;
 
     const resizeObserver = new ResizeObserver(() => {

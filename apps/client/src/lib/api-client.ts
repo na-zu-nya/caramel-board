@@ -1,5 +1,6 @@
 import { appendColorFilterQueryParams } from '@/lib/stack-filter';
 import type {
+  AnalyzeImageResponse,
   Asset,
   Author,
   AuthorLink,
@@ -330,6 +331,9 @@ class ApiClient {
             // 色域フィルタをクエリパラメータに変換
             appendColorFilterQueryParams(queryParams, value as ColorFilter);
             continue; // colorFilterは他の処理をスキップ
+          } else if (key === 'imageSearch' && value) {
+            queryParams.append('filters', JSON.stringify({ imageSearch: value }));
+            continue;
           }
 
           if (paramValue !== undefined) {
@@ -485,6 +489,19 @@ class ApiClient {
       }`
     );
     return this.normalizeStackResponse(response);
+  }
+
+  async analyzeImage(params: {
+    datasetId: string | number;
+    file: File;
+  }): Promise<AnalyzeImageResponse> {
+    const { datasetId, file } = params;
+    const formData = new FormData();
+    formData.append('image', file);
+    return this.uploadFile<AnalyzeImageResponse>(
+      `/api/v1/datasets/${datasetId}/stacks/analyze-image`,
+      formData
+    );
   }
 
   async toggleStackFavorite(

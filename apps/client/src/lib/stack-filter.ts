@@ -32,6 +32,23 @@ function normalizeColorFilter(colorFilter: ColorFilter | undefined) {
   };
 }
 
+function normalizeImageSearch(imageSearch: StackFilter['imageSearch']) {
+  if (!imageSearch) return undefined;
+  return {
+    tags: [...imageSearch.tags]
+      .slice()
+      .sort((a, b) => a.key.localeCompare(b.key))
+      .map((t) => ({ key: t.key, score: t.score })),
+    colors: [...imageSearch.colors]
+      .slice()
+      .sort((a, b) => a.hex.localeCompare(b.hex))
+      .map((c) => ({ r: c.r, g: c.g, b: c.b, hex: c.hex, percentage: c.percentage })),
+    tagWeight: imageSearch.tagWeight,
+    threshold: imageSearch.threshold ?? undefined,
+    mode: imageSearch.mode ?? undefined,
+  };
+}
+
 export function appendColorFilterQueryParams(
   query: URLSearchParams,
   colorFilter: ColorFilter | undefined
@@ -80,6 +97,7 @@ export function getStackFilterKey(filter: StackFilter | null | undefined): strin
     colorFilter: normalizeColorFilter(current.colorFilter),
     hasNoTags: current.hasNoTags ?? undefined,
     hasNoAuthor: current.hasNoAuthor ?? undefined,
+    imageSearch: normalizeImageSearch(current.imageSearch),
   });
 }
 

@@ -6,6 +6,7 @@ import {
   ArrowUpDown,
   Calendar,
   Heart,
+  Image as ImageIcon,
   Images,
   Monitor,
   Palette,
@@ -18,6 +19,7 @@ import {
 import { memo, startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { DropZone } from '@/components/ui/DropZone';
 import {
   Dialog,
   DialogContent,
@@ -57,6 +59,21 @@ const HUE_CATEGORIES: { id: HueCategory; name: string; color: string }[] = [
 
 const FILTER_CHOICE_BUTTON_CLASS =
   'px-1.5 py-3 rounded-md text-[11px] font-medium leading-none whitespace-nowrap transition-colors';
+
+const IMAGE_SEARCH_MODE_TAG_WEIGHT: Record<'auto' | 'tags' | 'colors', number> = {
+  auto: 0.65,
+  tags: 0.9,
+  colors: 0.2,
+};
+
+const IMAGE_SEARCH_MODE_OPTIONS: Array<{
+  value: 'auto' | 'tags' | 'colors';
+  labelKey: 'imageSearchModeAuto' | 'imageSearchModeTags' | 'imageSearchModeColors';
+}> = [
+  { value: 'auto', labelKey: 'imageSearchModeAuto' },
+  { value: 'tags', labelKey: 'imageSearchModeTags' },
+  { value: 'colors', labelKey: 'imageSearchModeColors' },
+];
 
 function isMediaCategory(value: unknown): value is MediaCategory {
   return value === 'image' || value === 'books' || value === 'video';
@@ -129,6 +146,19 @@ function FilterPanel({
     ? routeParams.category
     : undefined;
   const queryClient = useQueryClient();
+  const imageSearchInputRef = useRef<HTMLInputElement | null>(null);
+  const [queryImagePreviewUrl, setQueryImagePreviewUrl] = useState<string | null>(null);
+  const previewUrlRef = useRef<string | null>(null);
+  const [isAnalyzingImage, setIsAnalyzingImage] = useState(false);
+  const [imageSearchError, setImageSearchError] = useState<string | null>(null);
+
+  // Revoke on unmount only (component-local — lost on route change/reload, which is
+  // expected: tags/color chips persist via localFilter.imageSearch, the thumbnail does not).
+  useEffect(() => {
+    return () => {
+      if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    };
+  }, []);
 
   // Smart collection dialog state
   const [isSmartCollectionDialogOpen, setIsSmartCollectionDialogOpen] = useState(false);
@@ -172,6 +202,7 @@ function FilterPanel({
     if (filter.category) config.category = filter.category;
     if (filter.mediaTypes?.length) config.mediaTypes = filter.mediaTypes;
     if (filter.colorFilter) config.colorFilter = filter.colorFilter;
+    if (filter.imageSearch) config.imageSearch = filter.imageSearch;
 
     return config;
   }, []);
@@ -242,6 +273,78 @@ function FilterPanel({
       }
     },
     [localFilter, commitFilterChange]
+  );
+
+  const handleImageSearchFile = useCallback(
+    async (file: File) => {
+      if (!datasetId) return;
+      setIsAnalyzingImage(true);
+      setImageSearchError(null);
+      try {
+        const result = await apiClient.analyzeImage({ datasetId, file });
+        if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+        const nextUrl = URL.createObjectURL(file);
+        previewUrlRef.current = nextUrl;
+        setQueryImagePreviewUrl(nextUrl);
+        updateFilter(
+          {
+            imageSearch: {
+              tags: result.tags,
+              colors: result.colors,
+              tagWeight: IMAGE_SEARCH_MODE_TAG_WEIGHT.auto,
+              mode: 'auto',
+              threshold: 0.2,
+            },
+          },
+          true
+        );
+      } catch (error) {
+        console.error('Error analyzing image:', error);
+        setImageSearchError(t.filter.imageSearchFailed);
+      } finally {
+        setIsAnalyzingImage(false);
+      }
+    },
+    [datasetId, t.filter.imageSearchFailed, updateFilter]
+  );
+
+  const clearImageSearch = useCallback(() => {
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(previewUrlRef.current);
+      previewUrlRef.current = null;
+    }
+    setQueryImagePreviewUrl(null);
+    setImageSearchError(null);
+    updateFilter({ imageSearch: undefined }, true);
+  }, [updateFilter]);
+
+  const updateImageSearchThreshold = useCallback(
+    (value: number) => {
+      if (!localFilter.imageSearch) return;
+      const clamped = Math.max(0, Math.min(100, value));
+      updateFilter(
+        { imageSearch: { ...localFilter.imageSearch, threshold: clamped / 100 } },
+        false // debounced via existing updateFilter/commitFilterChange path (~300ms)
+      );
+    },
+    [localFilter.imageSearch, updateFilter]
+  );
+
+  const updateImageSearchMode = useCallback(
+    (mode: 'auto' | 'tags' | 'colors') => {
+      if (!localFilter.imageSearch) return;
+      updateFilter(
+        {
+          imageSearch: {
+            ...localFilter.imageSearch,
+            mode,
+            tagWeight: IMAGE_SEARCH_MODE_TAG_WEIGHT[mode],
+          },
+        },
+        true
+      );
+    },
+    [localFilter.imageSearch, updateFilter]
   );
 
   const updateColorSimilarityThreshold = useCallback(
@@ -332,6 +435,8 @@ function FilterPanel({
       restoredFilter.mediaTypes = readMediaTypes(originalFilterConfig.mediaTypes);
       if (originalFilterConfig.colorFilter)
         restoredFilter.colorFilter = originalFilterConfig.colorFilter;
+      if (originalFilterConfig.imageSearch)
+        restoredFilter.imageSearch = originalFilterConfig.imageSearch;
 
       setLocalFilter(restoredFilter);
       commitFilterChange(restoredFilter, 0);
@@ -394,7 +499,15 @@ function FilterPanel({
   }
 
   return (
-    <>
+    <DropZone
+      onFilesDrop={(files) => {
+        if (files[0]) handleImageSearchFile(files[0]);
+      }}
+      accept="image/*"
+      multiple={false}
+      disabled={!isOpen || isAnalyzingImage}
+      overlayClassName="top-16 right-4 bottom-[68px] w-96"
+    >
       {/* Filter Panel - Pure Floating Style with slide animation */}
       <div
         ref={setPanelRef}
@@ -432,8 +545,8 @@ function FilterPanel({
 
           {/* Filter Content */}
           <div className="flex-1 overflow-auto p-4 space-y-6 bg-gray-50">
-            {/* Search */}
-            <div className="space-y-2">
+            {/* Search (+ image search hint / active state, kept in the same block) */}
+            <div>
               <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
                 <Search size={16} />
                 {t.filter.search}
@@ -466,8 +579,111 @@ function FilterPanel({
                   }, 0);
                 }}
                 placeholder={t.filter.searchByName}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900 placeholder-gray-400 focus:border-primary focus:ring-1 focus:ring-primary"
+                className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900 placeholder-gray-400 focus:border-primary focus:ring-1 focus:ring-primary"
               />
+
+              {!localFilter.imageSearch ? (
+                <div className="mt-1 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => imageSearchInputRef.current?.click()}
+                    disabled={isAnalyzingImage}
+                    className="flex items-center gap-1.5 text-[11px] text-gray-400 transition-colors hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isAnalyzingImage ? (
+                      <>
+                        <span className="h-3 w-3 animate-spin rounded-full border-2 border-gray-400 border-t-transparent" />
+                        {t.filter.analyzingImage}
+                      </>
+                    ) : (
+                      t.filter.dropImageSearchHint
+                    )}
+                  </button>
+                </div>
+              ) : (
+                <div className="mt-1.5 space-y-2 rounded-md border border-gray-200 bg-white p-2">
+                  <div className={cn('flex items-center gap-3', isAnalyzingImage && 'opacity-60')}>
+                    <div className="relative shrink-0">
+                      {queryImagePreviewUrl ? (
+                        <img
+                          src={queryImagePreviewUrl}
+                          className="h-14 w-14 rounded object-cover"
+                          alt={t.filter.imageSearch}
+                        />
+                      ) : (
+                        <div className="flex h-14 w-14 items-center justify-center rounded bg-gray-100">
+                          <ImageIcon size={20} className="text-gray-400" />
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        onClick={clearImageSearch}
+                        aria-label={t.filter.clearImageSearch}
+                        className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-gray-800 text-white hover:bg-gray-900"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                    <div className="flex flex-1 items-center gap-2 text-xs text-gray-600">
+                      <span className="shrink-0">{t.filter.match}</span>
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        value={Math.round((localFilter.imageSearch.threshold ?? 0) * 100)}
+                        onChange={(event) =>
+                          updateImageSearchThreshold(Number(event.currentTarget.value))
+                        }
+                        className="flex-1 accent-primary"
+                      />
+                      <span className="tabular-nums w-9 text-right">
+                        {Math.round((localFilter.imageSearch.threshold ?? 0) * 100)}%
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {IMAGE_SEARCH_MODE_OPTIONS.map((option) => {
+                      const isTagsUnavailable =
+                        option.value === 'tags' &&
+                        (localFilter.imageSearch?.tags?.length ?? 0) === 0;
+                      return (
+                        <label
+                          key={option.value}
+                          className={cn(
+                            'flex items-center gap-1 text-xs text-gray-600',
+                            isTagsUnavailable && 'opacity-50 cursor-not-allowed'
+                          )}
+                          title={
+                            isTagsUnavailable ? t.filter.imageSearchTagsUnavailable : undefined
+                          }
+                        >
+                          <input
+                            type="radio"
+                            name="imageSearchMode"
+                            checked={(localFilter.imageSearch?.mode ?? 'auto') === option.value}
+                            onChange={() => updateImageSearchMode(option.value)}
+                            disabled={isTagsUnavailable}
+                            className="h-3.5 w-3.5 accent-primary"
+                          />
+                          {t.filter[option.labelKey]}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              <input
+                ref={imageSearchInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(event) => {
+                  const file = event.currentTarget.files?.[0];
+                  if (file) handleImageSearchFile(file);
+                  event.currentTarget.value = '';
+                }}
+              />
+              {imageSearchError && <p className="mt-1 text-xs text-red-600">{imageSearchError}</p>}
             </div>
 
             {/* Favorites */}
@@ -841,7 +1057,7 @@ function FilterPanel({
                       }
                       className="flex-1 accent-primary"
                     />
-                    <span className="tabular-nums w-8 text-right">{colorSimilarityThreshold}</span>
+                    <span className="tabular-nums w-9 text-right">{colorSimilarityThreshold}%</span>
                   </div>
                 )}
               </div>
@@ -1083,7 +1299,7 @@ function FilterPanel({
           </div>
         </div>
       </div>
-    </>
+    </DropZone>
   );
 }
 

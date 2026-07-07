@@ -1,4 +1,10 @@
-import { isCancelledError, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  isCancelledError,
+  keepPreviousData,
+  type QueryClient,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiClient } from '@/lib/api-client';
 import { addSetValue } from '@/lib/set-utils';
@@ -24,6 +30,27 @@ function isAbortError(error: unknown) {
   return error instanceof Error && error.name === 'AbortError';
 }
 
+// キャッシュ済みの page クエリから既にロード済みのページ番号を復元する
+function getLoadedPagesFromCache(
+  queryClient: QueryClient,
+  datasetId: string,
+  category: string | undefined,
+  filterKey: string,
+  sortKey: string
+): Set<number> {
+  const pages = queryClient.getQueriesData<PageData>({
+    queryKey: ['stacks', 'page', datasetId, category, filterKey, sortKey],
+  });
+  const loaded = new Set<number>();
+  for (const [key, data] of pages) {
+    const pageIndex = key[6] as number;
+    if (data && typeof pageIndex === 'number') {
+      loaded.add(pageIndex);
+    }
+  }
+  return loaded;
+}
+
 export function useRangeBasedQuery({
   datasetId,
   category,
@@ -32,14 +59,16 @@ export function useRangeBasedQuery({
   pageSize = 50,
 }: RangeBasedQueryOptions) {
   const queryClient = useQueryClient();
-  const [loadedPages, setLoadedPages] = useState<Set<number>>(new Set());
+  const filterKey = getStackFilterKey(filter);
+  const sortKey = JSON.stringify(sort ?? {});
+  const [loadedPages, setLoadedPages] = useState<Set<number>>(() =>
+    getLoadedPagesFromCache(queryClient, datasetId, category, filterKey, sortKey)
+  );
   const pageRequestsRef = useRef<Map<number, Promise<PageData | null>>>(new Map());
   const currentQueryKeyRef = useRef<string>('');
 
   // Keep track of previous query key to detect real changes
   const [previousQueryKey, setPreviousQueryKey] = useState<string>('');
-  const filterKey = getStackFilterKey(filter);
-  const sortKey = JSON.stringify(sort ?? {});
   const currentQueryKey = `${datasetId}-${category}-${filterKey}-${sortKey}`;
   currentQueryKeyRef.current = currentQueryKey;
 
@@ -47,11 +76,13 @@ export function useRangeBasedQuery({
   useEffect(() => {
     if (previousQueryKey && previousQueryKey !== currentQueryKey) {
       // Only reset if this is a real change, not initial load
-      setLoadedPages(new Set());
+      // 新しいフィルタ/ソートのキャッシュが既にあればそれを即座に反映する
+      setLoadedPages(getLoadedPagesFromCache(queryClient, datasetId, category, filterKey, sortKey));
       pageRequestsRef.current.clear();
+      window.scrollTo(0, 0);
     }
     setPreviousQueryKey(currentQueryKey);
-  }, [currentQueryKey, previousQueryKey]);
+  }, [currentQueryKey, previousQueryKey, queryClient, datasetId, category, filterKey, sortKey]);
 
   // Get total count first
   const {
@@ -77,6 +108,7 @@ export function useRangeBasedQuery({
     gcTime: 10 * 60 * 1000, // 10 minutes - keep in cache longer
     refetchOnWindowFocus: false, // Prevent unnecessary refetches
     refetchOnMount: false, // Use cached data if available
+    placeholderData: keepPreviousData, // フィルタ変更中も前回の total を保持し、高さの潰れを防ぐ
   });
 
   const total = totalData?.total || 0;
