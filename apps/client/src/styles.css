@@ -339,11 +339,14 @@ code {
       border: 1px solid rgb(229 231 235 / 0.95);
       border-radius: 0.875rem;
       box-shadow: 0 24px 80px rgb(15 23 42 / 0.28);
+      transition-property: transform, translate, box-shadow;
     }
 
     .app-side-menu.-translate-x-full {
       --tw-translate-x: calc(-100% - 1.5rem);
       translate: var(--tw-translate-x) var(--tw-translate-y, 0);
+      /* 閉状態では 80px ぼかしの影が画面左端にはみ出すため消す */
+      box-shadow: none;
     }
 
     .app-side-menu-content {
@@ -381,11 +384,13 @@ code {
       border: 1px solid rgb(229 231 235 / 0.95);
       border-radius: 0.875rem;
       box-shadow: 0 24px 80px rgb(15 23 42 / 0.28);
+      transition-property: transform, translate, box-shadow;
     }
 
     .app-right-panel.translate-x-full {
       --tw-translate-x: calc(100% + 1.5rem);
       translate: var(--tw-translate-x) var(--tw-translate-y, 0);
+      box-shadow: none;
     }
 
     .right-panel-floating-backdrop {
@@ -397,6 +402,11 @@ code {
       background: rgb(15 23 42 / 0.14);
       padding: 0;
     }
+  }
+
+  /* スクロールロック中、fixed のヘッダにも消えたスクロールバー幅ぶんの余白を与えて微ずれを防ぐ */
+  body[data-scroll-lock-comp] .app-header {
+    padding-right: var(--scroll-lock-compensation, 0px);
   }
 
   .bg-primary {
@@ -626,4 +636,16 @@ code {
 
 .setup-swipe-arrow {
   animation: setup-swipe-nudge 1s ease-in-out infinite;
+}
+
+/* ビューワの遅延スピナー: 読み込みが300msを超えた場合のみ現れる */
+.viewer-delayed-spinner {
+  opacity: 0;
+  animation: viewer-delayed-spinner-in 150ms ease-out 300ms forwards;
+}
+
+@keyframes viewer-delayed-spinner-in {
+  to {
+    opacity: 1;
+  }
 }

@@ -151,7 +151,7 @@ export default function Header() {
   return (
     <header
       className={cn(
-        'fixed top-0 right-0 z-50 backdrop-blur supports-[backdrop-filter]:backdrop-blur text-white transition-all duration-300 ease-in-out',
+        'app-header fixed top-0 right-0 z-50 backdrop-blur supports-[backdrop-filter]:backdrop-blur text-white transition-all duration-300 ease-in-out',
         sidebarPushesContent ? 'left-80' : 'left-0'
       )}
       style={{

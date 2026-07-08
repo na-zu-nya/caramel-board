@@ -1447,6 +1447,7 @@ export default function StackViewer({
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally mount-once; onRequestClose is only read to snapshot overlay mode at lock time
   useEffect(() => {
     const body = document.body as HTMLBodyElement;
+    const html = document.documentElement;
     // Overlay mode (viewer-on-list): the list stays mounted underneath, so we must
     // restore the scroll position ourselves on cleanup instead of leaving it to the list.
     const isOverlay = Boolean(onRequestClose);
@@ -1457,7 +1458,7 @@ export default function StackViewer({
     // 消えるスクロールバー幅ぶんを paddingRight で補う（Tailwind preflight の box-sizing: border-box により
     // width:100% + padding-right でも要素の内容幅は変わらない）
     const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
-    const prevStyle = {
+    const prevBodyStyle = {
       position: body.style.position,
       top: body.style.top,
       width: body.style.width,
@@ -1466,25 +1467,44 @@ export default function StackViewer({
       touchAction: (body.style as any).touchAction,
       overscrollBehaviorY: (body.style as any).overscrollBehaviorY,
     } as const;
-    body.style.position = 'fixed';
-    body.style.top = `-${lockedScrollYRef.current}px`;
-    body.style.width = '100%';
-    body.style.overflow = 'hidden';
+    const prevHtmlOverflow = html.style.overflow;
+
+    if (isOverlay) {
+      // 背後のリストを再レイアウト/再ラスタライズさせないため body の position:fixed 化は行わない。
+      // html 側の overflow:hidden はスクロール位置を保持したままユーザー操作によるスクロールだけを止める。
+      html.style.overflow = 'hidden';
+    } else {
+      body.style.position = 'fixed';
+      body.style.top = `-${lockedScrollYRef.current}px`;
+      body.style.width = '100%';
+      body.style.overflow = 'hidden';
+    }
     if (scrollbarWidth > 0) {
       body.style.paddingRight = `${scrollbarWidth}px`;
     }
     (body.style as any).overscrollBehaviorY = 'contain';
+    if (scrollbarWidth > 0) {
+      body.style.setProperty('--scroll-lock-compensation', `${scrollbarWidth}px`);
+      body.dataset.scrollLockComp = '1';
+    }
 
     return () => {
       // Restore styles; scroll復元は一覧側で安全に実行（DOM構築後）
-      body.style.position = prevStyle.position;
-      body.style.top = prevStyle.top;
-      body.style.width = prevStyle.width;
-      body.style.overflow = prevStyle.overflow;
-      body.style.paddingRight = prevStyle.paddingRight;
-      (body.style as any).touchAction = prevStyle.touchAction || '';
-      (body.style as any).overscrollBehaviorY = prevStyle.overscrollBehaviorY || '';
+      if (isOverlay) {
+        html.style.overflow = prevHtmlOverflow;
+      } else {
+        body.style.position = prevBodyStyle.position;
+        body.style.top = prevBodyStyle.top;
+        body.style.width = prevBodyStyle.width;
+        body.style.overflow = prevBodyStyle.overflow;
+      }
+      body.style.paddingRight = prevBodyStyle.paddingRight;
+      (body.style as any).touchAction = prevBodyStyle.touchAction || '';
+      (body.style as any).overscrollBehaviorY = prevBodyStyle.overscrollBehaviorY || '';
+      body.style.removeProperty('--scroll-lock-compensation');
+      delete body.dataset.scrollLockComp;
       // Overlay: list is still alive underneath, so restore scroll synchronously here.
+      // 保険: html overflow:hidden 中でも iOS のジェスチャ等で背後がスクロールした場合に備えて復元する。
       if (isOverlay) window.scrollTo(0, lockedScrollYRef.current);
     };
   }, []);
@@ -1790,7 +1810,18 @@ export default function StackViewer({
   );
 
   const gestureState = useMemo(() => ({ translateX: 0, translateY: 0, scale: 1, opacity: 1 }), []);
+
   if (isLoading) {
+    if (isOverlayViewer) {
+      // 背後のリストを見せたまま待つ。読み込みが長引いた場合のみスピナーを遅延表示
+      return (
+        <div className="fixed inset-0 z-10 flex items-center justify-center">
+          <div className="viewer-delayed-spinner rounded-full bg-black/50 p-3">
+            <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="fixed inset-0 bg-black flex items-center justify-center">
         <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin" />
