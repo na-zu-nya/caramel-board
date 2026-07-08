@@ -232,6 +232,7 @@ export default function StackViewer({
   embeddedThemeColor,
   onNavigateStack,
 }: StackViewerProps) {
+  const isOverlayViewer = Boolean(onRequestClose) && !embedded;
   const t = useT();
   const [isInfoSidebarOpen, setIsInfoSidebarOpen] = useAtom(infoSidebarOpenAtom);
   const [, setSelectedItemId] = useAtom(selectedItemIdAtom);
@@ -539,7 +540,7 @@ export default function StackViewer({
     onHorizontalInteractionSettled: showEdgeAffordance,
     onHorizontalPageTransitionCommit: handleHorizontalPageTransitionCommit,
     onBoundaryNavigationAttempt: handleBoundaryNavigationAttempt,
-    onNavigateStack: embedded ? onNavigateStack : undefined,
+    onNavigateStack,
   });
   const displayedCurrentPage = optimisticReadingPage?.pageIndex ?? currentPage;
   const displayedLeftEdgeKind = optimisticReadingPage
@@ -831,6 +832,7 @@ export default function StackViewer({
   const currentVerticalOffsetRef = useRef(0);
   const verticalAnimRef = useRef<number | null>(null);
   const lockedScrollYRef = useRef(0);
+  const headerStripRef = useRef<HTMLDivElement>(null);
   const {
     isOpen: isViewerContextMenuOpen,
     position: viewerContextMenuPosition,
@@ -1442,16 +1444,25 @@ export default function StackViewer({
   });
 
   // Body scroll lock while viewer is active to prevent iOS pull-to-refresh and page scroll
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally mount-once; onRequestClose is only read to snapshot overlay mode at lock time
   useEffect(() => {
     const body = document.body as HTMLBodyElement;
+    // Overlay mode (viewer-on-list): the list stays mounted underneath, so we must
+    // restore the scroll position ourselves on cleanup instead of leaving it to the list.
+    const isOverlay = Boolean(onRequestClose);
     // Preserve current scroll position
     lockedScrollYRef.current = window.scrollY || window.pageYOffset || 0;
     // Apply lock styles
+    // スクロールバー消失によるレイアウト幅変化（背後の一覧のガタつき）を防ぐため、
+    // 消えるスクロールバー幅ぶんを paddingRight で補う（Tailwind preflight の box-sizing: border-box により
+    // width:100% + padding-right でも要素の内容幅は変わらない）
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
     const prevStyle = {
       position: body.style.position,
       top: body.style.top,
       width: body.style.width,
       overflow: body.style.overflow,
+      paddingRight: body.style.paddingRight,
       touchAction: (body.style as any).touchAction,
       overscrollBehaviorY: (body.style as any).overscrollBehaviorY,
     } as const;
@@ -1459,6 +1470,9 @@ export default function StackViewer({
     body.style.top = `-${lockedScrollYRef.current}px`;
     body.style.width = '100%';
     body.style.overflow = 'hidden';
+    if (scrollbarWidth > 0) {
+      body.style.paddingRight = `${scrollbarWidth}px`;
+    }
     (body.style as any).overscrollBehaviorY = 'contain';
 
     return () => {
@@ -1467,8 +1481,11 @@ export default function StackViewer({
       body.style.top = prevStyle.top;
       body.style.width = prevStyle.width;
       body.style.overflow = prevStyle.overflow;
+      body.style.paddingRight = prevStyle.paddingRight;
       (body.style as any).touchAction = prevStyle.touchAction || '';
       (body.style as any).overscrollBehaviorY = prevStyle.overscrollBehaviorY || '';
+      // Overlay: list is still alive underneath, so restore scroll synchronously here.
+      if (isOverlay) window.scrollTo(0, lockedScrollYRef.current);
     };
   }, []);
 
@@ -1808,7 +1825,7 @@ export default function StackViewer({
       onUrlDrop={handleUrlDrop}
     >
       <div
-        className="fixed top-0 left-0 right-0 bottom-0 bg-black"
+        className={cn('fixed top-0 left-0 right-0 bottom-0', !isOverlayViewer && 'bg-black')}
         id="stack-viewer-container"
         style={{
           // Avoid overscroll chain while allowing pinch-zoom
@@ -1816,7 +1833,7 @@ export default function StackViewer({
           WebkitOverflowScrolling: 'auto',
         }}
       >
-        <div className="fixed top-0 left-0 right-0 h-14 bg-white" />
+        <div ref={headerStripRef} className="fixed top-0 left-0 right-0 h-14 bg-white" />
         {embedded ? (
           // 本物の Header と同じ見た目のヘッダー。#header-actions を持つので、
           // ビューワーが portal で出す i/ペン/スポイトのボタン群がそのまま収まる
@@ -1897,6 +1914,7 @@ export default function StackViewer({
                 onMoveMarkerRequest={handleMoveMarker}
                 onDeleteMarkerRequest={handleDeleteMarker}
                 onChangeMarkerColorRequest={handleChangeMarkerColor}
+                verticalDismissMode={isOverlayViewer ? 'reveal' : 'lighten'}
                 gestureTransform={gestureState}
                 nativeDragEnabled={isNativeInteractionMode}
                 zoomTransform={zoomTransform}
@@ -1975,6 +1993,9 @@ export default function StackViewer({
                     opacity,
                     bg
                   );
+                  if (isOverlayViewer && headerStripRef.current) {
+                    headerStripRef.current.style.opacity = String(Math.max(0, 1 - progress));
+                  }
                 }}
                 onVerticalDragEnd={(_, velocity, progress) => {
                   if (isZoomed) return;
@@ -1984,22 +2005,32 @@ export default function StackViewer({
                   const velocityThreshold = 600;
                   if (progress > dismissThreshold || velocity > velocityThreshold) {
                     const containerEl = document.getElementById('stack-viewer-container');
-                    if (containerEl) {
+                    if (containerEl && !isOverlayViewer) {
                       containerEl.style.backgroundColor = 'white';
                       containerEl.style.transition = 'none';
                     }
                     const isUpward = currentVerticalOffsetRef.current < 0;
                     const targetOffset = (isUpward ? -1 : 1) * window.innerHeight * 1.2;
+                    // 離した時点の進捗から連続的に 1 へ補間する（ドラッグ中の式と基準を揃え、巻き戻りを防ぐ）
+                    const startProgress = Math.max(0, Math.min(1, progress));
+                    const startOpacity = Math.max(0, 1 - startProgress * 0.7); // ドラッグ中の式と同じ
+                    let animP = startProgress;
                     const step = () => {
                       const cur = currentVerticalOffsetRef.current;
                       const nx = cur + (targetOffset - cur) * 0.15;
                       currentVerticalOffsetRef.current = nx;
-                      const animProgress = Math.abs(nx) / window.innerHeight;
-                      const scale = Math.max(0, 1 - animProgress * 0.5);
-                      const opacity = Math.max(0, 1 - animProgress);
-                      const bg = Math.min(1, animProgress);
+                      animP += (1 - animP) * 0.15;
+                      const t =
+                        startProgress >= 1 ? 1 : (animP - startProgress) / (1 - startProgress);
+                      const scale = Math.max(0, 1 - animP * 0.5);
+                      const opacity = Math.max(0, startOpacity * (1 - t));
+                      const bg = Math.min(1, animP);
                       imageCarouselRef.current!.updateVerticalTransform(nx, scale, opacity, bg);
-                      if (bg >= 1) {
+                      if (isOverlayViewer && headerStripRef.current) {
+                        headerStripRef.current.style.opacity = String(Math.max(0, 1 - animP));
+                      }
+                      if (animP >= 0.995) {
+                        imageCarouselRef.current!.updateVerticalTransform(nx, scale, 0, 1);
                         verticalAnimRef.current = null;
                         if (isUpward && !embedded) {
                           navigate({
@@ -2019,25 +2050,33 @@ export default function StackViewer({
                     verticalAnimRef.current = requestAnimationFrame(step);
                   } else {
                     // Return to center
+                    // 離した時点の進捗から連続的に 0 へ戻す（ドラッグ中の式と基準を揃える）
+                    let animP = Math.max(0, Math.min(1, progress));
                     const step = () => {
                       const cur = currentVerticalOffsetRef.current;
                       const nx = cur + (0 - cur) * 0.15;
-                      if (Math.abs(nx) < 0.5) {
+                      animP *= 0.85;
+                      if (Math.abs(nx) < 0.5 && animP < 0.01) {
                         currentVerticalOffsetRef.current = 0;
                         imageCarouselRef.current!.updateVerticalTransform(0, 1, 1, 0);
+                        if (isOverlayViewer && headerStripRef.current) {
+                          headerStripRef.current.style.opacity = '';
+                        }
                         verticalAnimRef.current = null;
                         return;
                       }
                       currentVerticalOffsetRef.current = nx;
-                      const prog = Math.abs(nx) / window.innerHeight;
-                      const scale = Math.max(0, 1 - prog * 0.5);
-                      const opacity = Math.max(0, 1 - prog * 0.7);
+                      const scale = Math.max(0, 1 - animP * 0.5);
+                      const opacity = Math.max(0, 1 - animP * 0.7); // ドラッグ中と同じ式で連続
                       imageCarouselRef.current!.updateVerticalTransform(
                         nx,
                         scale,
                         opacity,
-                        Math.max(0, Math.min(1, prog))
+                        Math.max(0, Math.min(1, animP))
                       );
+                      if (isOverlayViewer && headerStripRef.current) {
+                        headerStripRef.current.style.opacity = String(Math.max(0, 1 - animP));
+                      }
                       verticalAnimRef.current = requestAnimationFrame(step);
                     };
                     verticalAnimRef.current = requestAnimationFrame(step);

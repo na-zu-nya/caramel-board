@@ -4,6 +4,7 @@ import MersenneTwister from 'mersenne-twister';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import FilterPanel from '@/components/FilterPanel';
 import StackGrid from '@/components/StackGrid';
+import StackViewer from '@/components/stack-viewer/StackViewer';
 import { useDataset } from '@/hooks/useDatasets';
 import { useHeaderActions } from '@/hooks/useHeaderActions';
 import { useRangeBasedQuery } from '@/hooks/useRangeBasedQuery';
@@ -33,6 +34,9 @@ function MediaTypeList() {
     mediaTypes?: StackFilter['mediaTypes'];
     colorFilter?: string;
     imageSearch?: string;
+    viewer?: string;
+    listToken?: string;
+    page?: number;
   };
   const { data: dataset } = useDataset(datasetId);
   const navigate = useNavigate();
@@ -207,6 +211,7 @@ function MediaTypeList() {
     showFilter: true,
     showSelection: true,
     onShuffle: handleShuffle,
+    enabled: !search.viewer,
   });
 
   // Restore navigation state if coming back from stack viewer
@@ -361,15 +366,9 @@ function MediaTypeList() {
 
   const handleItemClick = useCallback(
     (item: MediaGridItem) => {
-      // Save current state before navigation
-      setNavigationState({
-        scrollPosition: window.scrollY,
-        total,
-        items: allItems,
-        lastPath: window.location.pathname,
-        filter: currentFilter,
-        sort: currentSort,
-      });
+      // Note: navigationState is intentionally NOT saved here. The list stays mounted
+      // (viewer is rendered as an overlay via the `viewer` search param), so there is
+      // nothing to restore, and saving it would incorrectly trigger the restore effect.
 
       // Build ViewContext ids window from currently loaded items in grid-list order.
       const loadedIds = (allItems || [])
@@ -397,71 +396,40 @@ function MediaTypeList() {
         createdAt: Date.now(),
       });
 
-      // Navigate to stack viewer - preserve all search params + listToken
-      const searchParams: Record<string, string | string[] | number | boolean> = {
-        page: 0,
-        category,
-        listToken: token,
-      };
-
-      // Copy over search params, handling booleans
-      if (search.tags) searchParams.tags = search.tags;
-      if (search.sparse !== undefined) searchParams.sparse = search.sparse;
-      if (search.search) searchParams.search = search.search;
-      if (search.isFavorite !== undefined) searchParams.isFavorite = search.isFavorite;
-      if (search.isLiked !== undefined) searchParams.isLiked = search.isLiked;
-      if (search.authors) searchParams.authors = search.authors;
-      if (search.hasNoTags !== undefined) searchParams.hasNoTags = search.hasNoTags;
-      if (search.hasNoAuthor !== undefined) searchParams.hasNoAuthor = search.hasNoAuthor;
-      if (search.colorFilter) searchParams.colorFilter = search.colorFilter;
-      if (search.imageSearch) searchParams.imageSearch = search.imageSearch;
-
-      // Preserve current filter in search params (override search params if different)
-      if (currentFilter.tags && currentFilter.tags.length > 0) {
-        searchParams.tags = currentFilter.tags;
-      }
-      if (currentFilter.search) {
-        searchParams.search = currentFilter.search;
-      }
-      if (currentFilter.isFavorite !== undefined) {
-        searchParams.isFavorite = currentFilter.isFavorite;
-      }
-      if (currentFilter.isLiked !== undefined) {
-        searchParams.isLiked = currentFilter.isLiked;
-      }
-      if (currentFilter.authors && currentFilter.authors.length > 0) {
-        searchParams.authors = currentFilter.authors;
-      }
-      if (currentFilter.hasNoTags !== undefined) {
-        searchParams.hasNoTags = currentFilter.hasNoTags;
-      }
-      if (currentFilter.hasNoAuthor !== undefined) {
-        searchParams.hasNoAuthor = currentFilter.hasNoAuthor;
-      }
-      if (currentFilter.colorFilter) {
-        searchParams.colorFilter = JSON.stringify(currentFilter.colorFilter);
-      }
-      if (currentFilter.imageSearch) {
-        searchParams.imageSearch = JSON.stringify(currentFilter.imageSearch);
-      }
-
+      // Open the viewer as an overlay on top of this same route, keeping the list mounted.
+      // resetScroll: false — 開閉でリストのスクロール位置を動かさない
       void navigate({
-        to: '/library/$datasetId/stacks/$stackId',
-        params: { datasetId, stackId: String(item.id) },
-        search: searchParams,
+        to: '/library/$datasetId/category/$category',
+        params: { datasetId, category },
+        search: { ...search, viewer: String(item.id), listToken: token },
+        resetScroll: false,
       });
     },
-    [
-      navigate,
-      datasetId,
-      category,
-      search,
-      setNavigationState,
-      total,
-      allItems,
-      currentFilter,
-      currentSort,
-    ]
+    [navigate, datasetId, category, search, allItems, currentFilter, currentSort]
+  );
+
+  const handleViewerClose = useCallback(() => {
+    const { viewer: _viewer, ...rest } = search;
+    void navigate({
+      to: '/library/$datasetId/category/$category',
+      params: { datasetId, category },
+      search: rest,
+      replace: true,
+      resetScroll: false,
+    });
+  }, [navigate, datasetId, category, search]);
+
+  const handleViewerNavigateStack = useCallback(
+    (stackId: string) => {
+      void navigate({
+        to: '/library/$datasetId/category/$category',
+        params: { datasetId, category },
+        search: { ...search, viewer: stackId },
+        replace: true,
+        resetScroll: false,
+      });
+    },
+    [navigate, datasetId, category, search]
   );
 
   return (
@@ -479,18 +447,34 @@ function MediaTypeList() {
         onItemClick={handleItemClick}
         containerRef={containerRef}
         useWindowScroll
+        hideChrome={Boolean(search.viewer)}
         emptyState={{
           icon: '🖼️',
           title: t.emptyState.noImages,
           description: t.emptyState.uploadImagesDescription,
         }}
       />
-      <FilterPanel
-        currentFilter={currentFilter}
-        currentSort={currentSort}
-        onFilterChange={handleFilterChange}
-        onSortChange={handleSortChange}
-      />
+      {!search.viewer && (
+        <FilterPanel
+          currentFilter={currentFilter}
+          currentSort={currentSort}
+          onFilterChange={handleFilterChange}
+          onSortChange={handleSortChange}
+        />
+      )}
+      {search.viewer && (
+        // z-30: タイル上のバッジ(z-10/z-20)より上、InfoSidebar(z-40)より下に重ねる
+        <div className="relative z-30">
+          <StackViewer
+            datasetId={datasetId}
+            category={category}
+            stackId={search.viewer}
+            listToken={search.listToken}
+            onRequestClose={handleViewerClose}
+            onNavigateStack={handleViewerNavigateStack}
+          />
+        </div>
+      )}
     </>
   );
 }

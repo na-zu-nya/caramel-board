@@ -68,6 +68,8 @@ interface ImageCarouselProps {
   onDeleteMarkerRequest?: (index: number) => void;
   /** マーカー色変更リクエスト */
   onChangeMarkerColorRequest?: (index: number, color: string) => void;
+  /** 下スワイプ中の背景演出モード。'reveal' は黒→透明（オーバーレイ表示時に背後を透かす） */
+  verticalDismissMode?: 'lighten' | 'reveal';
 }
 
 export interface ImageCarouselRef {
@@ -296,6 +298,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
       onMoveMarkerRequest,
       onDeleteMarkerRequest,
       onChangeMarkerColorRequest,
+      verticalDismissMode = 'lighten',
     },
     ref
   ) => {
@@ -743,10 +746,17 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
         ) => {
           currentVerticalTransformRef.current = { translateY, scale, opacity };
 
-          // Update background color based on progress (black to white)
+          // Update background based on progress and dismiss mode
           if (backgroundRef.current) {
-            const colorValue = Math.round(backgroundProgress * 255);
-            backgroundRef.current.style.backgroundColor = `rgb(${colorValue}, ${colorValue}, ${colorValue})`;
+            if (verticalDismissMode === 'reveal') {
+              // black to transparent, revealing the content behind the viewer
+              const alpha = Math.max(0, Math.min(1, 1 - backgroundProgress));
+              backgroundRef.current.style.backgroundColor = `rgba(0, 0, 0, ${alpha})`;
+            } else {
+              // black to white (default)
+              const colorValue = Math.round(backgroundProgress * 255);
+              backgroundRef.current.style.backgroundColor = `rgb(${colorValue}, ${colorValue}, ${colorValue})`;
+            }
           }
 
           updateDOMTransforms();
@@ -935,6 +945,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
         schedulePausedSeekFrameFlush,
         videoState.currentTime,
         videoState.isPlaying,
+        verticalDismissMode,
       ]
     );
 

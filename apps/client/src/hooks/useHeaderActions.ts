@@ -8,12 +8,15 @@ export interface HeaderActionsConfig {
   showSelection: boolean;
   showReorder?: boolean;
   onShuffle?: (() => void) | null;
+  enabled?: boolean;
 }
 
 export function useHeaderActions(config: HeaderActionsConfig) {
   const setHeaderActions = useSetAtom(headerActionsAtom);
+  const enabled = config.enabled ?? true;
 
   useEffect(() => {
+    if (!enabled) return;
     setHeaderActions({
       showShuffle: config.showShuffle,
       showFilter: config.showFilter,
@@ -28,6 +31,7 @@ export function useHeaderActions(config: HeaderActionsConfig) {
     config.showSelection,
     config.showReorder,
     config.onShuffle,
+    enabled,
   ]);
 
   // Clean up only when component actually unmounts

@@ -49,6 +49,8 @@ interface StackGridProps {
   onReorderStacks?: (sourceIndex: number, targetIndex: number) => void;
   containerRef?: React.RefObject<HTMLDivElement | null>;
   useWindowScroll?: boolean;
+  // When true, suppress chrome that would float above an overlay (e.g. viewer-on-list)
+  hideChrome?: boolean;
 
   // Common props
   dataset?: Dataset;
@@ -92,6 +94,7 @@ export default function StackGrid({
   onItemClick,
   className,
   useWindowScroll = true,
+  hideChrome = false,
   allowRemoveFromCollection = false,
   uploadMediaCategory,
   allowRemoveFromScratch = false,
@@ -1206,7 +1209,8 @@ export default function StackGrid({
         actions={selectionActions}
       />
 
-      {!isSelectionMode &&
+      {!hideChrome &&
+        !isSelectionMode &&
         !reorderMode &&
         (!sidebarOpen || sidebarPushesContent) &&
         (!rightPanelOpen || rightPanelPushesContent) && (
@@ -1224,14 +1228,15 @@ export default function StackGrid({
           />
         )}
 
-      {createPortal(
-        <GridColumnSlider
-          value={itemsPerRow}
-          className={cn(rightPanelPushesContent ? 'right-[21.25rem]' : 'right-5')}
-          onChange={setGridColumns}
-        />,
-        document.body
-      )}
+      {!hideChrome &&
+        createPortal(
+          <GridColumnSlider
+            value={itemsPerRow}
+            className={cn(rightPanelPushesContent ? 'right-[21.25rem]' : 'right-5')}
+            onChange={setGridColumns}
+          />,
+          document.body
+        )}
 
       {activeFolder && (
         <FolderDropDialog
@@ -1246,22 +1251,23 @@ export default function StackGrid({
       {createCollectionModal}
 
       {/* Portal for header actions - Info button */}
-      {createPortal(
-        <HeaderIconButton
-          onClick={() => {
-            // If opening info sidebar, turn off selection mode
-            if (!infoSidebarOpen) {
-              setSelectionMode(false);
-            }
-            setInfoSidebarOpen(!infoSidebarOpen);
-          }}
-          isActive={infoSidebarOpen}
-          aria-label={infoSidebarOpen ? t.viewer.closeInfo : t.viewer.openInfo}
-        >
-          <Info size={18} />
-        </HeaderIconButton>,
-        document.getElementById('header-actions') || document.body
-      )}
+      {!hideChrome &&
+        createPortal(
+          <HeaderIconButton
+            onClick={() => {
+              // If opening info sidebar, turn off selection mode
+              if (!infoSidebarOpen) {
+                setSelectionMode(false);
+              }
+              setInfoSidebarOpen(!infoSidebarOpen);
+            }}
+            isActive={infoSidebarOpen}
+            aria-label={infoSidebarOpen ? t.viewer.closeInfo : t.viewer.openInfo}
+          >
+            <Info size={18} />
+          </HeaderIconButton>,
+          document.getElementById('header-actions') || document.body
+        )}
     </DropZone>
   );
 }
