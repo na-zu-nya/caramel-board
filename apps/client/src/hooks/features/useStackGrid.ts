@@ -405,27 +405,52 @@ export function useStackGrid({
       const nextColumns = clampStackGridColumns(value);
       if (nextColumns === columnsPerRow) return;
 
-      preserveAnchorItem(containerRef, items);
+      // 左上基準のリサイズ: ビューポート最上段・左端のアイテムを基準に、
+      // 変更後もそのアイテムの縦位置が保たれるよう幾何学的にスクロールを補正する。
+      // （DOMアンカー方式は最上段が切れていると2段目を掴む・仮想化で要素が消えると
+      //   復元に失敗するため、規則配置を前提に計算で求める）
+      const container = containerRef.current;
+      let anchor: { index: number; viewportOffset: number } | null = null;
+      if (container && itemSize > 0) {
+        const rect = container.getBoundingClientRect();
+        const visibleTopPx = useWindowScroll
+          ? Math.max(0, -rect.top)
+          : Math.max(0, container.scrollTop);
+        const row = Math.floor(visibleTopPx / itemSize);
+        anchor = {
+          index: row * columnsPerRow,
+          // その行の上端とビューポート上端の差（0以下 = 行が少し上に切れている状態を保存）
+          viewportOffset: row * itemSize - visibleTopPx,
+        };
+      }
 
       setColumnsPerRowState(nextColumns);
       writeStackGridColumns(nextColumns);
 
+      // 新しい列数がレイアウトへ反映されてからスクロールを合わせる（既存と同じ double-rAF）
       window.requestAnimationFrame(() => {
         window.requestAnimationFrame(() => {
           const currentContainer = containerRef.current;
-          if (!currentContainer) return;
+          if (!currentContainer || !anchor) return;
 
-          restoreAnchorItem(containerRef, useWindowScroll);
+          const newItemSize = getContainerContentWidth(currentContainer) / Math.max(nextColumns, 1);
+          const newRow = Math.floor(anchor.index / nextColumns);
+          const newVisibleTop = Math.max(0, newRow * newItemSize - anchor.viewportOffset);
+
           if (useWindowScroll) {
+            const rect = currentContainer.getBoundingClientRect();
+            const containerTop = rect.top + window.scrollY;
+            window.scrollTo(0, Math.max(0, containerTop + newVisibleTop));
             window.dispatchEvent(new Event('scroll'));
             return;
           }
 
+          currentContainer.scrollTop = newVisibleTop;
           currentContainer.dispatchEvent(new Event('scroll'));
         });
       });
     },
-    [columnsPerRow, containerRef, items, preserveAnchorItem, restoreAnchorItem, useWindowScroll]
+    [columnsPerRow, containerRef, itemSize, useWindowScroll]
   );
 
   // Handlers
