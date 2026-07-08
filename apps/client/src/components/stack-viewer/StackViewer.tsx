@@ -833,6 +833,8 @@ export default function StackViewer({
   const verticalAnimRef = useRef<number | null>(null);
   const lockedScrollYRef = useRef(0);
   const headerStripRef = useRef<HTMLDivElement>(null);
+  const [isVerticalGesturing, setIsVerticalGesturing] = useState(false);
+  const verticalGesturingRef = useRef(false);
   const {
     isOpen: isViewerContextMenuOpen,
     position: viewerContextMenuPosition,
@@ -1813,9 +1815,10 @@ export default function StackViewer({
 
   if (isLoading) {
     if (isOverlayViewer) {
-      // 背後のリストを見せたまま待つ。読み込みが長引いた場合のみスピナーを遅延表示
+      // 背後のリストを薄く暗転させて「タップに反応した」ことを即座に示しつつ待つ
+      //（暗転は無アニメーションの即時表示。スピナーは読み込みが長引いた場合のみ遅延表示）
       return (
-        <div className="fixed inset-0 z-10 flex items-center justify-center">
+        <div className="fixed inset-0 z-10 flex items-center justify-center bg-black/25">
           <div className="viewer-delayed-spinner rounded-full bg-black/50 p-3">
             <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
           </div>
@@ -1844,8 +1847,6 @@ export default function StackViewer({
       </div>
     );
   }
-
-  const isGesturing = false;
 
   return (
     <ViewerShell
@@ -2012,6 +2013,10 @@ export default function StackViewer({
                   if (isZoomed) return;
                   hidePageSeekBar();
                   if (!imageCarouselRef.current) return;
+                  if (!verticalGesturingRef.current && progress > 0.02) {
+                    verticalGesturingRef.current = true;
+                    setIsVerticalGesturing(true);
+                  }
                   // Default vertical dismiss behavior
                   verticalAnimRef.current && cancelAnimationFrame(verticalAnimRef.current);
                   currentVerticalOffsetRef.current += deltaY;
@@ -2094,6 +2099,8 @@ export default function StackViewer({
                           headerStripRef.current.style.opacity = '';
                         }
                         verticalAnimRef.current = null;
+                        verticalGesturingRef.current = false;
+                        setIsVerticalGesturing(false);
                         return;
                       }
                       currentVerticalOffsetRef.current = nx;
@@ -2255,7 +2262,7 @@ export default function StackViewer({
           <StackToolbar
             stack={stack}
             isListMode={isListMode}
-            isGesturing={isGesturing}
+            isGesturing={isVerticalGesturing}
             isCurrentAssetFavorited={Boolean(currentAsset?.favorited ?? currentAsset?.isFavorite)}
             onStackFavoriteToggle={handleFavoriteToggle}
             onAssetFavoriteToggle={handleCurrentAssetFavoriteToggle}

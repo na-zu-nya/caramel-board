@@ -1209,34 +1209,40 @@ export default function StackGrid({
         actions={selectionActions}
       />
 
-      {!hideChrome &&
-        !isSelectionMode &&
+      {!isSelectionMode &&
         !reorderMode &&
         (!sidebarOpen || sidebarPushesContent) &&
         (!rightPanelOpen || rightPanelPushesContent) && (
           <FloatingUploadAction
             className={cn(
               'coarse-pointer-only list-upload-action fixed z-[70]',
+              'transition-opacity duration-300',
               sidebarPushesContent
                 ? 'list-upload-action--sidebar-open'
                 : 'list-upload-action--default',
               rightPanelPushesContent && 'list-upload-action--right-panel-open',
-              sidebarOpen && rightPanelPushesContent && 'list-upload-action--sidebar-and-panel-open'
+              sidebarOpen &&
+                rightPanelPushesContent &&
+                'list-upload-action--sidebar-and-panel-open',
+              hideChrome && 'pointer-events-none opacity-0 duration-0'
             )}
             onFiles={handleFileDrop}
             onUrls={handleUrlDrop}
           />
         )}
 
-      {!hideChrome &&
-        createPortal(
-          <GridColumnSlider
-            value={itemsPerRow}
-            className={cn(rightPanelPushesContent ? 'right-[21.25rem]' : 'right-5')}
-            onChange={setGridColumns}
-          />,
-          document.body
-        )}
+      {createPortal(
+        <GridColumnSlider
+          value={itemsPerRow}
+          className={cn(
+            rightPanelPushesContent ? 'right-[21.25rem]' : 'right-5',
+            // ビューワ表示中は即座に消し、閉じたときはフェードインで戻す
+            hideChrome && 'pointer-events-none opacity-0 duration-0'
+          )}
+          onChange={setGridColumns}
+        />,
+        document.body
+      )}
 
       {activeFolder && (
         <FolderDropDialog

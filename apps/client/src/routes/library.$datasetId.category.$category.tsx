@@ -364,14 +364,28 @@ function MediaTypeList() {
     [total, loadRange]
   );
 
+  // ハンドラの同一性を保つための最新値ミラー。search 依存の useCallback にすると
+  // viewer パラメータの付け外しのたびに全タイルの memo が無効化され、
+  // 開閉コミットが重くなる（タップ応答の遅延・サムネ再描画の原因）
+  const searchRef = useRef(search);
+  searchRef.current = search;
+  const allItemsRef = useRef(allItems);
+  allItemsRef.current = allItems;
+  const currentFilterRef = useRef(currentFilter);
+  currentFilterRef.current = currentFilter;
+  const currentSortRef = useRef(currentSort);
+  currentSortRef.current = currentSort;
+
   const handleItemClick = useCallback(
     (item: MediaGridItem) => {
       // Note: navigationState is intentionally NOT saved here. The list stays mounted
       // (viewer is rendered as an overlay via the `viewer` search param), so there is
       // nothing to restore, and saving it would incorrectly trigger the restore effect.
+      const latestFilter = currentFilterRef.current;
+      const latestSort = currentSortRef.current;
 
       // Build ViewContext ids window from currently loaded items in grid-list order.
-      const loadedIds = (allItems || [])
+      const loadedIds = (allItemsRef.current || [])
         .filter((it): it is MediaGridItem => !!it)
         .map((it) => (typeof it.id === 'string' ? Number.parseInt(it.id, 10) : (it.id as number)));
       const clickedId =
@@ -382,15 +396,15 @@ function MediaTypeList() {
       const token = genListToken({
         datasetId,
         category,
-        filters: currentFilter,
-        sort: currentSort,
+        filters: latestFilter,
+        sort: latestSort,
       });
       saveViewContext({
         token,
         datasetId,
         category: category as MediaCategory,
-        filters: currentFilter,
-        sort: currentSort,
+        filters: latestFilter,
+        sort: latestSort,
         ids: loadedIds,
         currentIndex,
         createdAt: Date.now(),
@@ -401,15 +415,15 @@ function MediaTypeList() {
       void navigate({
         to: '/library/$datasetId/category/$category',
         params: { datasetId, category },
-        search: { ...search, viewer: String(item.id), listToken: token },
+        search: { ...searchRef.current, viewer: String(item.id), listToken: token },
         resetScroll: false,
       });
     },
-    [navigate, datasetId, category, search, allItems, currentFilter, currentSort]
+    [navigate, datasetId, category]
   );
 
   const handleViewerClose = useCallback(() => {
-    const { viewer: _viewer, ...rest } = search;
+    const { viewer: _viewer, ...rest } = searchRef.current;
     void navigate({
       to: '/library/$datasetId/category/$category',
       params: { datasetId, category },
@@ -417,19 +431,19 @@ function MediaTypeList() {
       replace: true,
       resetScroll: false,
     });
-  }, [navigate, datasetId, category, search]);
+  }, [navigate, datasetId, category]);
 
   const handleViewerNavigateStack = useCallback(
     (stackId: string) => {
       void navigate({
         to: '/library/$datasetId/category/$category',
         params: { datasetId, category },
-        search: { ...search, viewer: stackId },
+        search: { ...searchRef.current, viewer: stackId },
         replace: true,
         resetScroll: false,
       });
     },
-    [navigate, datasetId, category, search]
+    [navigate, datasetId, category]
   );
 
   return (
