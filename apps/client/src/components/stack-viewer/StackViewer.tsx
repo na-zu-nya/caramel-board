@@ -113,6 +113,22 @@ interface AssetSelectionState {
 
 const EMPTY_ASSET_SELECTION = new Set<Asset['id']>();
 
+const DISMISS_VEIL_ID = 'stack-viewer-dismiss-veil';
+
+// スワイプ閉じ→一覧復帰のルート遷移中に見える一瞬の黒フレームを白いベールで覆い隠す
+function showDismissVeil() {
+  document.getElementById(DISMISS_VEIL_ID)?.remove();
+  const veil = document.createElement('div');
+  veil.id = DISMISS_VEIL_ID;
+  veil.style.cssText =
+    'position:fixed;inset:0;z-index:9999;background:#fff;pointer-events:none;opacity:1;transition:opacity 150ms ease-out;';
+  document.body.appendChild(veil);
+  window.setTimeout(() => {
+    veil.style.opacity = '0';
+    window.setTimeout(() => veil.remove(), 200);
+  }, 250);
+}
+
 const getStackBoundarySide = (edgeKinds: {
   leftEdgeKind: ViewerEdgeKind;
   rightEdgeKind: ViewerEdgeKind;
@@ -1991,6 +2007,9 @@ export default function StackViewer({
                             params: { datasetId, stackId },
                           });
                         } else {
+                          if (!onRequestClose) {
+                            showDismissVeil();
+                          }
                           navigateBack();
                         }
                         return;
