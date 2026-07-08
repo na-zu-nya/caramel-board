@@ -9,6 +9,7 @@ import {
   StackContextMenuContent,
 } from '@/components/ui/Stack/StackContextMenuContent';
 import { useDrag } from '@/contexts/DragContext';
+import { prefetchStackForViewer } from '@/hooks/useStacks';
 import { apiClient } from '@/lib/api-client';
 import { downloadStackOriginals } from '@/lib/download-originals';
 import { useT } from '@/lib/i18n';
@@ -383,6 +384,10 @@ function StackGridItemComponent({
               e.preventDefault();
               onItemClick(item);
             }
+          }}
+          onPointerDown={() => {
+            // タッチダウンの時点でビューワ用の先読みを開始（クリック確定より数百ms早い）
+            void prefetchStackForViewer(queryClient, datasetId, String(getStackId()));
           }}
           onPointerEnter={enableNativeImageDrag}
           onPointerLeave={disableNativeImageDrag}
