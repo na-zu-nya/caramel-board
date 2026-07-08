@@ -65,7 +65,12 @@ export const ImageSearchFilterSchema = z
           g: z.number().min(0).max(255),
           b: z.number().min(0).max(255),
           hex: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
-          percentage: z.number().min(0).max(1),
+          percentage: z
+            .number()
+            .min(0)
+            // colorlip 由来の値は 1 をわずかに超えることがある。reject するとフィルタ全体が
+            // 黙って無視されてしまうため、上限は clamp で受け入れる
+            .transform((value) => Math.min(1, value)),
         })
       )
       .default([]),
@@ -86,7 +91,14 @@ export const PaginatedFiltersParamSchema = z
       const parsed = JSON.parse(val) as Record<string, unknown>;
       const imageSearch = ImageSearchFilterSchema.parse(parsed?.imageSearch);
       return imageSearch ? { imageSearch } : undefined;
-    } catch {
+    } catch (error) {
+      const reason =
+        error instanceof z.ZodError
+          ? error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; ')
+          : error instanceof Error
+            ? error.message
+            : String(error);
+      console.warn('[stacks] ignoring invalid filters param:', reason);
       return undefined;
     }
   });

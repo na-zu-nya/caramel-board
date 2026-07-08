@@ -44,4 +44,15 @@ describe('PaginatedFiltersParamSchema', () => {
   it('returns undefined when no value is provided', () => {
     expect(PaginatedFiltersParamSchema.parse(undefined)).toBeUndefined();
   });
+
+  it('clamps a colorlip percentage above 1 instead of rejecting the whole filter', () => {
+    const result = PaginatedFiltersParamSchema.parse(
+      JSON.stringify({
+        imageSearch: {
+          colors: [{ r: 255, g: 0, b: 0, hex: '#FF0000', percentage: 1.2 }],
+        },
+      })
+    );
+    expect(result?.imageSearch.colors[0].percentage).toEqual(1);
+  });
 });

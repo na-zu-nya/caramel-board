@@ -123,7 +123,8 @@ export class ImageStackSearchService {
         g: color.g,
         b: color.b,
         hex: color.hex,
-        percentage: color.percentage,
+        // colorlip の percentage は稀に 1 を超えることがあるため clamp する
+        percentage: Math.max(0, Math.min(1, color.percentage)),
       })),
       autoTagAvailable,
     };
