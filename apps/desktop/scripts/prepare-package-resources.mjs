@@ -248,6 +248,106 @@ const installUvRuntime = async () => {
   console.log(`Installed uv runtime ${version ?? 'latest'} for ${target}`);
 };
 
+const resolveMacSigningIdentity = () => {
+  if (process.env.APPLE_SIGNING_IDENTITY) return process.env.APPLE_SIGNING_IDENTITY;
+  const tauriConfigPath = path.join(desktopRoot, 'src-tauri', 'tauri.conf.json');
+  if (!fs.existsSync(tauriConfigPath)) return null;
+  const tauriConfig = JSON.parse(fs.readFileSync(tauriConfigPath, 'utf8'));
+  return tauriConfig.bundle?.macOS?.signingIdentity ?? null;
+};
+
+const readCodesignInfo = (targetPath) => {
+  try {
+    return execFileSync('sh', ['-c', 'codesign -dvv "$1" 2>&1', '--', targetPath], {
+      encoding: 'utf8',
+    });
+  } catch (error) {
+    return typeof error.stdout === 'string' ? error.stdout : '';
+  }
+};
+
+const readCodesignEntitlements = (targetPath) => {
+  try {
+    const output = execFileSync('codesign', ['-d', '--entitlements', '-', '--xml', targetPath], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      encoding: 'utf8',
+    });
+    return output.trim() ? output : null;
+  } catch {
+    return null;
+  }
+};
+
+const signMacBinaryIfNeeded = (targetPath) => {
+  if (process.platform !== 'darwin') return;
+
+  const identity = resolveMacSigningIdentity();
+  if (!identity || identity === '-') {
+    console.log(`Skipped code signing (no Developer ID identity configured): ${targetPath}`);
+    return;
+  }
+
+  const existingSignature = readCodesignInfo(targetPath);
+  if (existingSignature.includes('Authority=Developer ID Application')) {
+    console.log(`Skipped code signing (already signed with Developer ID): ${targetPath}`);
+    return;
+  }
+
+  const entitlements = readCodesignEntitlements(targetPath);
+  let entitlementsPath = null;
+  try {
+    const args = ['--force', '--options', 'runtime', '--timestamp', '-s', identity];
+    if (entitlements) {
+      entitlementsPath = path.join(os.tmpdir(), `caramel-entitlements-${Date.now()}.plist`);
+      fs.writeFileSync(entitlementsPath, entitlements);
+      args.push('--entitlements', entitlementsPath);
+    }
+    args.push(targetPath);
+    execFileSync('codesign', args, { stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8' });
+    console.log(`Re-signed with Developer ID identity: ${targetPath}`);
+  } finally {
+    if (entitlementsPath) {
+      fs.rmSync(entitlementsPath, { force: true });
+    }
+  }
+};
+
+const MACHO_MAGIC_NUMBERS = new Set([
+  0xfeedface, 0xfeedfacf, 0xcefaedfe, 0xcffaedfe, 0xcafebabe, 0xbebafeca,
+]);
+
+const isMachOBinary = (filePath) => {
+  const fd = fs.openSync(filePath, 'r');
+  try {
+    const buffer = Buffer.alloc(4);
+    const bytesRead = fs.readSync(fd, buffer, 0, 4, 0);
+    if (bytesRead < 4) return false;
+    return MACHO_MAGIC_NUMBERS.has(buffer.readUInt32BE(0));
+  } finally {
+    fs.closeSync(fd);
+  }
+};
+
+const signMacBinariesRecursively = (root) => {
+  if (process.platform !== 'darwin') return;
+
+  let signedCount = 0;
+  const walk = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const entryPath = path.join(dir, entry.name);
+      if (entry.isSymbolicLink()) continue;
+      if (entry.isDirectory()) {
+        walk(entryPath);
+      } else if (entry.isFile() && isMachOBinary(entryPath)) {
+        signMacBinaryIfNeeded(entryPath);
+        signedCount += 1;
+      }
+    }
+  };
+  walk(root);
+  console.log(`Signed ${signedCount} Mach-O binaries under ${root}`);
+};
+
 const writeRuntimeServerPackageJson = () => {
   const raw = JSON.parse(fs.readFileSync(path.join(serverRoot, 'package.json'), 'utf8'));
   const dependencies = Object.fromEntries(
@@ -438,9 +538,12 @@ const main = async () => {
   copyLegalNotices();
   await installNodeRuntime();
   await installUvRuntime();
+
   prepareServerRuntime();
   prepareClientRuntime();
   prepareAutoTagBridge();
+
+  signMacBinariesRecursively(resourcesRoot);
 };
 
 main().catch((error) => {

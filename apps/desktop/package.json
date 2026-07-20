@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "tauri dev",
     "build": "npm run build:ui",
-    "build:app": "node ../../scripts/sync-version.mjs && npm run prepare:package && tauri build",
+    "build:app": "node ../../scripts/sync-version.mjs && npm run prepare:package && tauri build && node scripts/notarize-dmg.mjs",
     "dev:ui": "vite --host 127.0.0.1 --port 1420",
     "prebuild:ui": "node ../../scripts/generate-third-party-notices.mjs",
     "build:ui": "vite build",
