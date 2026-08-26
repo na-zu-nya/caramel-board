@@ -7,7 +7,7 @@ import {
 } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiClient } from '@/lib/api-client';
-import { addSetValue } from '@/lib/set-utils';
+import { addSetValue, removeSetValue } from '@/lib/set-utils';
 import { getStackFilterKey } from '@/lib/stack-filter';
 import type { MediaGridItem, StackFilter } from '@/types';
 
@@ -84,6 +84,49 @@ export function useRangeBasedQuery({
     setPreviousQueryKey(currentQueryKey);
   }, [currentQueryKey, previousQueryKey, queryClient, datasetId, category, filterKey, sortKey]);
 
+  // ページクエリが GC で削除されたら loadedPages からも除外し、空タイル固定化を防ぐ
+  useEffect(() => {
+    const unsubscribe = queryClient.getQueryCache().subscribe((event) => {
+      if (event.type !== 'removed') return;
+      const key = event.query.queryKey;
+      if (
+        key[0] === 'stacks' &&
+        key[1] === 'page' &&
+        key[2] === datasetId &&
+        key[3] === category &&
+        key[4] === filterKey &&
+        key[5] === sortKey &&
+        typeof key[6] === 'number'
+      ) {
+        const pageIndex = key[6];
+        setLoadedPages((prev) => (prev.has(pageIndex) ? removeSetValue(prev, pageIndex) : prev));
+      }
+    });
+    return unsubscribe;
+  }, [datasetId, category, filterKey, sortKey, queryClient]);
+
+  // setQueryData / バックグラウンド refetch など、自 list のページキャッシュが in-place で書き換わったことを検知する版数
+  // (loadedPages は変えないのでタイルのフラッシュは起きない)
+  const [cacheVersion, setCacheVersion] = useState(0);
+  useEffect(() => {
+    const unsubscribe = queryClient.getQueryCache().subscribe((event) => {
+      if (event.type !== 'updated' || event.action.type !== 'success') return;
+      const key = event.query.queryKey;
+      if (
+        key[0] === 'stacks' &&
+        key[1] === 'page' &&
+        key[2] === datasetId &&
+        key[3] === category &&
+        key[4] === filterKey &&
+        key[5] === sortKey &&
+        typeof key[6] === 'number'
+      ) {
+        setCacheVersion((prev) => prev + 1);
+      }
+    });
+    return unsubscribe;
+  }, [datasetId, category, filterKey, sortKey, queryClient]);
+
   // Get total count first
   const {
     data: totalData,
@@ -107,7 +150,9 @@ export function useRangeBasedQuery({
     staleTime: 5 * 60 * 1000, // 5 minutes - keep data fresh longer
     gcTime: 10 * 60 * 1000, // 10 minutes - keep in cache longer
     refetchOnWindowFocus: false, // Prevent unnecessary refetches
-    refetchOnMount: false, // Use cached data if available
+    // 明示的に invalidate された場合のみ復帰時に再取得する(通常はキャッシュを使用)。
+    // placeholderData: keepPreviousData があるためフラッシュは起きない。
+    refetchOnMount: (query) => query.state.isInvalidated,
     placeholderData: keepPreviousData, // フィルタ変更中も前回の total を保持し、高さの潰れを防ぐ
   });
 
@@ -117,17 +162,49 @@ export function useRangeBasedQuery({
   const loadPage = useCallback(
     async (pageIndex: number): Promise<PageData | null> => {
       if (loadedPages.has(pageIndex)) {
-        return (
-          queryClient.getQueryData([
-            'stacks',
-            'page',
-            datasetId,
-            category,
-            filterKey,
-            sortKey,
-            pageIndex,
-          ]) || null
-        );
+        const pageQueryKey = ['stacks', 'page', datasetId, category, filterKey, sortKey, pageIndex];
+        const cached = queryClient.getQueryData(pageQueryKey);
+        if (cached) {
+          // 明示的に invalidate 済み(stale-while-revalidate)ならキャッシュを即返しつつ裏で再検証する。
+          // 結果反映は queryCache の updated イベント経由(cacheVersion)で自動的に行われる。
+          if (
+            queryClient.getQueryState(pageQueryKey)?.isInvalidated &&
+            !pageRequestsRef.current.has(pageIndex)
+          ) {
+            const revalidate = queryClient
+              .fetchQuery({
+                queryKey: pageQueryKey,
+                queryFn: async ({ signal }) => {
+                  return await apiClient.getStacks(
+                    {
+                      datasetId,
+                      filter,
+                      sort,
+                      limit: pageSize,
+                      offset: pageIndex * pageSize,
+                    },
+                    { signal }
+                  );
+                },
+                staleTime: 5 * 60 * 1000,
+                gcTime: 10 * 60 * 1000,
+              })
+              .catch((error) => {
+                if (isCancelledError(error) || isAbortError(error)) return;
+                console.error('Failed to revalidate page:', pageIndex, error);
+              })
+              .finally(() => {
+                pageRequestsRef.current.delete(pageIndex);
+              });
+            pageRequestsRef.current.set(
+              pageIndex,
+              revalidate.then(() => null)
+            );
+          }
+          return cached as PageData;
+        }
+        // GC で消えていた場合は loadedPages から外し、下のフェッチ処理へフォールスルーする
+        setLoadedPages((prev) => (prev.has(pageIndex) ? removeSetValue(prev, pageIndex) : prev));
       }
 
       const offset = pageIndex * pageSize;
@@ -200,10 +277,20 @@ export function useRangeBasedQuery({
       const startPage = Math.floor(startIndex / pageSize);
       const endPage = Math.floor(endIndex / pageSize);
 
+      // loadedPages に加えてキャッシュの実在も確認し、GC 済みページを未ロード扱いにする。
+      // invalidate 済みページも未ロード扱いにして loadPage へ流し、
+      // SWR 分岐(キャッシュ即返し+裏で再検証)に乗せる(フラッシュは起きない)
+      const isPageActuallyLoaded = (pageIndex: number) => {
+        if (!loadedPages.has(pageIndex)) return false;
+        const pageQueryKey = ['stacks', 'page', datasetId, category, filterKey, sortKey, pageIndex];
+        if (queryClient.getQueryData(pageQueryKey) === undefined) return false;
+        return !queryClient.getQueryState(pageQueryKey)?.isInvalidated;
+      };
+
       // Check if all pages in range are already loaded
       const allPagesLoaded = (() => {
         for (let pageIndex = startPage; pageIndex <= endPage; pageIndex++) {
-          if (!loadedPages.has(pageIndex)) return false;
+          if (!isPageActuallyLoaded(pageIndex)) return false;
         }
         return true;
       })();
@@ -215,7 +302,7 @@ export function useRangeBasedQuery({
       // Load only unloaded pages - sequentially with throttling
       const pagesToLoad: number[] = [];
       for (let pageIndex = startPage; pageIndex <= endPage; pageIndex++) {
-        if (!loadedPages.has(pageIndex)) {
+        if (!isPageActuallyLoaded(pageIndex)) {
           pagesToLoad.push(pageIndex);
         }
       }
@@ -225,7 +312,7 @@ export function useRangeBasedQuery({
       if (pagesToLoad.length < MAX_PAGES_PER_BATCH) {
         const nextPage = endPage + 1;
         const nextOffset = nextPage * pageSize;
-        if (nextOffset < total && !loadedPages.has(nextPage)) {
+        if (nextOffset < total && !isPageActuallyLoaded(nextPage)) {
           pagesToLoad.push(nextPage);
         }
       }
@@ -240,11 +327,13 @@ export function useRangeBasedQuery({
         }
       }
     },
-    [loadPage, pageSize, loadedPages, total]
+    [loadPage, pageSize, loadedPages, total, queryClient, datasetId, category, filterKey, sortKey]
   );
 
   // Get all loaded items as a sparse array
   const allItems = useMemo(() => {
+    // cacheVersion は setQueryData / バックグラウンド再検証によるページキャッシュの in-place 更新を拾うためだけの依存
+    void cacheVersion;
     const items: (MediaGridItem | undefined)[] = new Array(total).fill(undefined);
 
     for (const pageIndex of loadedPages) {
@@ -270,7 +359,17 @@ export function useRangeBasedQuery({
     }
 
     return items;
-  }, [queryClient, datasetId, category, loadedPages, pageSize, total, filterKey, sortKey]);
+  }, [
+    queryClient,
+    datasetId,
+    category,
+    loadedPages,
+    pageSize,
+    total,
+    filterKey,
+    sortKey,
+    cacheVersion,
+  ]);
 
   // Check if a specific range is loaded
   const isRangeLoaded = useCallback(

@@ -11,6 +11,7 @@ import { GridColumnSlider } from '@/components/ui/GridColumnSlider';
 import { HeaderIconButton } from '@/components/ui/Header/HeaderIconButton';
 import { SelectionActionBar } from '@/components/ui/selection-action-bar';
 import { useStackGrid } from '@/hooks/features/useStackGrid';
+import { useGlobalPasteUpload } from '@/hooks/useGlobalPasteUpload';
 import { useScratch } from '@/hooks/useScratch';
 import { useRightPanelPushesContent, useSidebarPushesContent } from '@/hooks/useSidebarLayoutMode';
 import { useStackCollectionMenu } from '@/hooks/useStackCollectionMenu';
@@ -210,6 +211,7 @@ export default function StackGrid({
     onItemClick,
     containerRef: externalContainerRef,
     useWindowScroll,
+    keyboardShortcutsDisabled: hideChrome,
   });
 
   // Use external containerRef if provided, otherwise use internal
@@ -935,6 +937,10 @@ export default function StackGrid({
     },
     [addFilesToQueue, addNotification, computeUploadDefaults, t]
   );
+
+  // テキスト入力欄にフォーカスがない状態での Cmd+V ペーストをアップロードに繋げる。
+  // ビューワオーバーレイ表示中(hideChrome)はビューワ側の登録に処理を譲る
+  useGlobalPasteUpload({ onFiles: handleFileDrop, enabled: !hideChrome });
 
   const handleUrlDrop = useCallback(
     async (urls: string[]) => {

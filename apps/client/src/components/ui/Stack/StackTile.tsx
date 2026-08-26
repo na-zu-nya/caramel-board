@@ -23,6 +23,9 @@ export interface StackTileProps extends React.HTMLAttributes<HTMLDivElement> {
   isSelected?: boolean;
   isInfoSelected?: boolean;
   selectedActionCount?: number;
+  // 「画像を別タブで開く」の判定用（動画スタックでは非表示）
+  stackId?: string | number;
+  category?: string;
   // Actions
   onOpen?: () => void;
   onInfo?: () => void;
@@ -63,6 +66,8 @@ export function StackTile({
   isSelected = false,
   isInfoSelected = false,
   selectedActionCount = 0,
+  stackId,
+  category,
   onOpen,
   onInfo,
   onFindSimilar,
@@ -93,6 +98,10 @@ export function StackTile({
   const hasRemoveStackAction = Boolean(
     onRemoveStack || (isSelectionContext && onRemoveSelectedStacks)
   );
+  const openImageHref =
+    !isSelectionContext && stackId !== undefined && category !== 'video'
+      ? `/api/v1/stacks/${stackId}/top-asset/file`
+      : undefined;
   const resolvedThumbnailUrl = thumbnailUrl
     ? thumbnailUrl.startsWith('http')
       ? thumbnailUrl
@@ -272,6 +281,7 @@ export function StackTile({
         isSelectionContext={isSelectionContext}
         selectedActionCount={selectedActionCount}
         onOpen={onOpen}
+        openImageHref={openImageHref}
         onBulkEditSelected={onBulkEditSelected}
         onDownload={onDownload ? handleDownload : undefined}
         onRefresh={onRefresh}

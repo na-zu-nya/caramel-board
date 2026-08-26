@@ -91,6 +91,7 @@ function findElementByItemId(container: HTMLDivElement, itemId: string) {
 export function useScrollPreservation() {
   const preservedAnchorItemRef = useRef<AnchorItem | null>(null);
   const isAnimatingRef = useRef<number>(0);
+  const pendingTimeoutsRef = useRef<number[]>([]);
 
   const preserveAnchorItem = useCallback(
     (
@@ -122,6 +123,12 @@ export function useScrollPreservation() {
       const container = containerRef.current;
       const anchorItem = preservedAnchorItemRef.current;
       if (!container || !anchorItem) {
+        return false;
+      }
+
+      // トップ付近では復元しない（先頭挿入時に下へずれる誤補正を防ぐ）
+      const scrollTop = useWindowScroll ? window.scrollY : container.scrollTop;
+      if (scrollTop <= 2) {
         return false;
       }
 
@@ -163,6 +170,12 @@ export function useScrollPreservation() {
         isAnimatingRef.current = 0;
       }
 
+      // 前回分の遅延補正タイマーを破棄（積み重なりによる誤復元を防ぐ）
+      for (const timeoutId of pendingTimeoutsRef.current) {
+        window.clearTimeout(timeoutId);
+      }
+      pendingTimeoutsRef.current = [];
+
       const updateScrollPosition = () => {
         restoreAnchorItem(containerRef, useWindowScroll);
 
@@ -177,8 +190,16 @@ export function useScrollPreservation() {
       }
 
       updateScrollPosition();
-      for (const delay of [50, 100, 350]) {
-        setTimeout(updateScrollPosition, delay);
+      const delays = [50, 100, 350];
+      for (const delay of delays) {
+        const timeoutId = window.setTimeout(() => {
+          updateScrollPosition();
+          if (delay === delays[delays.length - 1]) {
+            // アニメーション完了後はアンカーを破棄し、以後の誤復元を防ぐ
+            preservedAnchorItemRef.current = null;
+          }
+        }, delay);
+        pendingTimeoutsRef.current.push(timeoutId);
       }
     },
     [restoreAnchorItem]

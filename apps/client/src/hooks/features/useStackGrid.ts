@@ -8,6 +8,7 @@ import {
   writeStackGridColumns,
 } from '@/lib/grid-layout-settings';
 import { getSelectedMediaGridStackIds } from '@/lib/media-grid-selection';
+import { patchAssetInPageCaches, patchStackInPageCaches } from '@/lib/stack-cache-patch';
 import {
   infoSidebarOpenAtom,
   selectedItemIdAtom,
@@ -32,15 +33,16 @@ interface UseStackGridProps {
   onItemClick?: (item: MediaGridItem, event?: React.MouseEvent) => void;
   containerRef?: React.RefObject<HTMLDivElement | null>;
   useWindowScroll?: boolean;
+  keyboardShortcutsDisabled?: boolean;
 }
 
 // 表示領域バッファ（上下に追加で描画する行数）
-const BUFFER_ROWS = 2;
+const BUFFER_ROWS = 4;
 // 画面に常に下方向へ確保する余白（実描画レンジ）
 const EXTRA_ROWS_BELOW = 1; // 下に1行は常に可視レンジへ含める
 // 先読み用の追加行数（描画範囲の外まで読み込む）
-const PREFETCH_ROWS_ABOVE = 0;
-const PREFETCH_ROWS_BELOW = 1; // 下方向に1段先読み
+const PREFETCH_ROWS_ABOVE = 1; // 上方向にも1段先読み
+const PREFETCH_ROWS_BELOW = 2; // 下方向に2段先読み
 const SCROLL_THROTTLE_MS = 150;
 
 function getContainerContentWidth(container: HTMLDivElement | null) {
@@ -65,6 +67,7 @@ export function useStackGrid({
   onRefreshAll,
   containerRef: externalContainerRef,
   useWindowScroll = true,
+  keyboardShortcutsDisabled,
 }: UseStackGridProps) {
   const [isSelectionMode] = useAtom(selectionModeAtom);
   const [sidebarOpen] = useAtom(sidebarOpenAtom);
@@ -75,6 +78,9 @@ export function useStackGrid({
   const queryClient = useQueryClient();
   const internalContainerRef = useRef<HTMLDivElement>(null);
   const containerRef = externalContainerRef || internalContainerRef;
+  // アニメーション終了検知エフェクトから最新の items を参照するための ref（依存配列に items を含めないため）
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
   const [rangeStart, setRangeStart] = useState<number>(0);
   const [rangeEnd, setRangeEnd] = useState<number>(50); // Start with some items visible
   const [columnsPerRow, setColumnsPerRowState] = useState(() => readStackGridColumns());
@@ -169,6 +175,7 @@ export function useStackGrid({
     isEditPanelOpen,
     onToggleEditPanel: () => setIsEditPanelOpen(!isEditPanelOpen),
     hasSelectedItems: selectedItems.size > 0,
+    enabled: !keyboardShortcutsDisabled,
   });
 
   // Create throttled version of onLoadRange
@@ -337,14 +344,13 @@ export function useStackGrid({
   // Handle animation state changes
   useEffect(() => {
     if (!disableVirtualization && isCurrentlyAnimating) {
-      preserveAnchorItem(containerRef, items);
+      preserveAnchorItem(containerRef, itemsRef.current);
     }
     if (!disableVirtualization) {
       maintainScrollDuringAnimation(containerRef, isCurrentlyAnimating, useWindowScroll);
     }
   }, [
     isCurrentlyAnimating,
-    items,
     maintainScrollDuringAnimation,
     preserveAnchorItem,
     containerRef,
@@ -471,20 +477,11 @@ export function useStackGrid({
       setFavoritePending((prev) => new Set(prev).add(id));
 
       // Also optimistically patch any loaded paged caches to keep views consistent
-      const pages = queryClient.getQueriesData<any>({ queryKey: ['stacks', 'page'] });
-      for (const [key, data] of pages) {
-        if (!data || !Array.isArray(data.stacks)) continue;
-        const idx = data.stacks.findIndex((s: any) => s?.id === id);
-        if (idx >= 0) {
-          const updated = { ...data.stacks[idx] };
-          updated.favorited = nextFavorited;
-          updated.isFavorite = nextFavorited;
-          const newData = {
-            ...data,
-            stacks: [...data.stacks.slice(0, idx), updated, ...data.stacks.slice(idx + 1)],
-          };
-          queryClient.setQueryData(key, newData);
-        }
+      const favoritePatch = { favorited: nextFavorited, isFavorite: nextFavorited };
+      if (favoriteKind === 'asset') {
+        patchAssetInPageCaches(queryClient, targetId, favoritePatch);
+      } else {
+        patchStackInPageCaches(queryClient, id, favoritePatch);
       }
 
       try {

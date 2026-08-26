@@ -348,6 +348,11 @@ function StackGridItemComponent({
     toNumber,
   ]);
 
+  const openImageHref =
+    !isSelectionContext && item.category !== 'video'
+      ? `/api/v1/stacks/${getStackId()}/top-asset/file`
+      : undefined;
+
   const canRemoveSelectedStacks =
     isSelectionContext && typeof onRemoveSelectedStacks === 'function';
   const handleContextRemove = canRemoveSelectedStacks
@@ -366,7 +371,7 @@ function StackGridItemComponent({
           search={stackLinkSearch}
           data-item-id={item.id}
           className={cn(
-            'group relative aspect-square overflow-hidden cursor-pointer transition-transform duration-150 box-border block',
+            '@container group relative aspect-square overflow-hidden cursor-pointer transition-transform duration-150 box-border block',
             isInfoSelected && 'ring-2 ring-primary ring-inset',
             isDragging ? 'border-8 border-gray-300 scale-95 opacity-50 rounded-lg' : '',
             isDragOver && 'border-8 border-accent'
@@ -586,16 +591,17 @@ function StackGridItemComponent({
                 e.stopPropagation();
                 onToggleSelection(item.id);
               }}
-              className={`absolute top-2 right-2 p-1 rounded-full z-10 ${
+              className={cn(
+                'absolute top-2 right-2 p-1 rounded-full z-10 @max-[10rem]:top-1.5 @max-[10rem]:right-1.5 @max-[10rem]:p-0.5',
                 isSelected
                   ? 'bg-primary text-primary-foreground'
                   : 'bg-white/80 text-gray-700 hover:bg-white transition-colors duration-200'
-              }`}
+              )}
             >
               {isSelected ? (
-                <Check size={16} />
+                <Check size={16} className="@max-[10rem]:h-3 @max-[10rem]:w-3" />
               ) : (
-                <div className="w-4 h-4 border border-current rounded-full" />
+                <div className="w-4 h-4 border border-current rounded-full @max-[10rem]:h-3 @max-[10rem]:w-3" />
               )}
             </button>
           )}
@@ -609,30 +615,67 @@ function StackGridItemComponent({
                 e.stopPropagation();
                 onToggleFavorite(item, e);
               }}
-              className={`absolute bottom-2 left-2 p-1 rounded-full transition-all duration-200 z-10 ${
+              className={cn(
+                'absolute bottom-2 left-2 p-1 rounded-full transition-colors duration-200 z-10 @max-[10rem]:bottom-1.5 @max-[10rem]:left-1.5 @max-[10rem]:p-0.5 @max-[7rem]:bottom-1 @max-[7rem]:left-1 @max-[5rem]:hidden',
                 currentFavorited
                   ? favoriteKind === 'asset'
                     ? 'bg-sky-500 text-white'
                     : 'bg-yellow-500 text-white'
                   : 'bg-white/80 text-gray-700 hover:bg-white'
-              }`}
+              )}
               disabled={isFavoritePending}
             >
               {favoriteKind === 'asset' ? (
-                <Bookmark size={14} className={currentFavorited ? 'fill-current' : ''} />
+                <Bookmark
+                  size={14}
+                  className={cn(
+                    '@max-[10rem]:h-3 @max-[10rem]:w-3 @max-[7rem]:h-2.5 @max-[7rem]:w-2.5',
+                    currentFavorited ? 'fill-current' : ''
+                  )}
+                />
               ) : (
-                <Star size={16} className={currentFavorited ? 'fill-current' : ''} />
+                <Star
+                  size={16}
+                  className={cn(
+                    '@max-[10rem]:h-3 @max-[10rem]:w-3 @max-[7rem]:h-2.5 @max-[7rem]:w-2.5',
+                    currentFavorited ? 'fill-current' : ''
+                  )}
+                />
               )}
             </button>
+          )}
+
+          {/* Favorite indicator (tiny tiles only, replaces the button) */}
+          {!isSelectionMode && currentFavorited && (
+            <div
+              className={cn(
+                'absolute bottom-1 left-1 z-10 hidden rounded-full p-0.5 text-white pointer-events-none @max-[5rem]:block',
+                favoriteKind === 'asset' ? 'bg-sky-500' : 'bg-yellow-500'
+              )}
+            >
+              {favoriteKind === 'asset' ? (
+                <Bookmark size={10} className="fill-current" />
+              ) : (
+                <Star size={10} className="fill-current" />
+              )}
+            </div>
           )}
 
           {/* Pages (asset count) badge — unify with Tags/Fav design */}
           {pageCount > 1 && (
             <div
-              className={cn('absolute z-20', isSelectionMode ? 'top-2 left-2' : 'top-2 right-2')}
+              className={cn(
+                'absolute z-20',
+                isSelectionMode
+                  ? 'top-2 left-2 @max-[10rem]:top-1.5 @max-[10rem]:left-1.5'
+                  : 'top-2 right-2 @max-[10rem]:top-1.5 @max-[10rem]:right-1.5'
+              )}
             >
-              <div className="flex items-center gap-1 bg-black/60 text-white px-2 py-1 rounded-full text-xs font-medium shadow-md">
-                <Book size={12} />
+              <div className="flex items-center gap-1 bg-black/60 text-white px-2 py-1 rounded-full text-xs font-medium shadow-md @max-[10rem]:gap-0.5 @max-[10rem]:px-1.5 @max-[10rem]:py-0.5 @max-[10rem]:text-[10px]">
+                <Book
+                  size={12}
+                  className="@max-[10rem]:h-2.5 @max-[10rem]:w-2.5 @max-[7rem]:hidden"
+                />
                 <span>{pageCount}</span>
               </div>
             </div>
@@ -640,8 +683,11 @@ function StackGridItemComponent({
 
           {/* Like count (hidden in selection mode) */}
           {!isSelectionMode && likeCount > 0 && (
-            <div className="absolute bottom-2 right-2 flex items-center gap-1 bg-like text-white px-2 py-1 rounded-full text-xs font-medium z-10">
-              <Heart size={12} className="fill-current" />
+            <div className="absolute bottom-2 right-2 flex items-center gap-1 bg-like text-white px-2 py-1 rounded-full text-xs font-medium z-10 @max-[10rem]:bottom-1.5 @max-[10rem]:right-1.5 @max-[10rem]:gap-0.5 @max-[10rem]:px-1.5 @max-[10rem]:py-0.5 @max-[10rem]:text-[10px]">
+              <Heart
+                size={12}
+                className="fill-current @max-[10rem]:h-2.5 @max-[10rem]:w-2.5 @max-[7rem]:hidden"
+              />
               <span>{likeCount}</span>
             </div>
           )}
@@ -652,6 +698,7 @@ function StackGridItemComponent({
           isSelectionContext={isSelectionContext}
           selectedActionCount={contextActionCount}
           onOpen={isSelectionContext ? undefined : handleContextOpen}
+          openImageHref={openImageHref}
           onBulkEditSelected={isSelectionContext ? handleBulkEditSelected : undefined}
           onDownload={handleDownloadOriginals}
           onRefresh={onRefreshStacks ? handleRefreshStacks : undefined}

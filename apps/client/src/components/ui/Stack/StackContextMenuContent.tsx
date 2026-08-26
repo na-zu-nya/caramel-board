@@ -13,6 +13,7 @@ import {
   Pencil,
   Plus,
   RefreshCw,
+  SquareArrowOutUpRight,
   Trash2,
 } from 'lucide-react';
 import {
@@ -50,6 +51,7 @@ interface StackContextMenuContentProps {
   isSelectionContext?: boolean;
   selectedActionCount?: number;
   onOpen?: () => void | Promise<void>;
+  openImageHref?: string;
   onBulkEditSelected?: () => void | Promise<void>;
   onDownload?: () => void | Promise<void>;
   onRefresh?: () => void | Promise<void>;
@@ -159,6 +161,7 @@ export function StackContextMenuContent({
   isSelectionContext = false,
   selectedActionCount = 0,
   onOpen,
+  openImageHref,
   onBulkEditSelected,
   onDownload,
   onRefresh,
@@ -179,7 +182,9 @@ export function StackContextMenuContent({
   const deleteLabel = isSelectionContext
     ? t.contextMenu.deleteSelected(selectedActionCount)
     : t.info.removeStack;
-  const hasPrimaryActions = Boolean(onOpen || onBulkEditSelected || onDownload || onRefresh);
+  const hasPrimaryActions = Boolean(
+    onOpen || openImageHref || onBulkEditSelected || onDownload || onRefresh
+  );
   const hasSecondaryActions = Boolean(
     onInfo || onFindSimilar || onAddToScratch || collectionMenu || onMergeSelected
   );
@@ -193,6 +198,14 @@ export function StackContextMenuContent({
         <ContextMenuItem onClick={() => void onOpen()}>
           <ExternalLink className="w-4 h-4 mr-2" />
           {t.contextMenu.open}
+        </ContextMenuItem>
+      ) : null}
+      {openImageHref ? (
+        <ContextMenuItem asChild>
+          <a href={openImageHref} target="_blank" rel="noopener noreferrer">
+            <SquareArrowOutUpRight className="w-4 h-4 mr-2" />
+            {t.contextMenu.openImageInNewTab}
+          </a>
         </ContextMenuItem>
       ) : null}
       {isSelectionContext && onBulkEditSelected ? (
