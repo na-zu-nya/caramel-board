@@ -701,27 +701,10 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
     },
   });
 
-  // Refresh (thumbnail + preview + colors + auto-tags) in sequence (embeddings removed)
+  // スタックの全メタ情報をサーバー側の共通リフレッシュ処理で再構築する
   const refreshAllMutation = useMutation({
     mutationFn: async ({ stackId }: { stackId: number }) => {
-      const thumbnailResult = await apiClient.refreshThumbnail(stackId);
-      const previewResult = await apiClient.regenerateStackPreview({
-        stackId,
-        datasetId,
-        force: true,
-      });
-      const colorResult = await apiClient.updateStackColors(stackId);
-      const autoTagResult = await apiClient.refreshStackAutoTags(stackId, {
-        threshold: 0.4,
-        forceRegenerate: true,
-      });
-
-      return {
-        thumbnailResult,
-        previewResult,
-        colorResult,
-        autoTagResult,
-      };
+      return apiClient.refreshStackMetadata(stackId, { force: true });
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['stack', datasetId, selectedItemId] });
@@ -729,25 +712,38 @@ export default function InfoSidebar({ hideThumbnails = true }: InfoSidebarProps)
 
       addNotification({ type: 'success', message: 'スタックのリフレッシュ処理が完了しました。' });
 
-      if (!result.colorResult?.success) {
+      if (result.colors.failed.length > 0) {
         addNotification({
           type: 'info',
-          message:
-            result.colorResult?.message || '色情報が未生成のため、カラー更新はスキップされました。',
+          message: `代表色を生成できないアセットがあります: ${result.colors.failed.length} 件`,
         });
       }
 
-      if (result.previewResult?.failed?.length) {
+      if (result.previews?.failed.length) {
         addNotification({
           type: 'info',
-          message: `プレビュー生成に失敗したアセットがあります: ${result.previewResult.failed.length} 件`,
+          message: `プレビュー生成に失敗したアセットがあります: ${result.previews.failed.length} 件`,
         });
       }
 
-      if (result.thumbnailResult?.failed?.length) {
+      if (result.thumbnails?.failed.length) {
         addNotification({
           type: 'info',
-          message: `サムネイル生成に失敗したアセットがあります: ${result.thumbnailResult.failed.length} 件`,
+          message: `サムネイル生成に失敗したアセットがあります: ${result.thumbnails.failed.length} 件`,
+        });
+      }
+
+      if (result.formats.failed.length > 0) {
+        addNotification({
+          type: 'info',
+          message: `ファイル形式を判定できないアセットがあります: ${result.formats.failed.length} 件`,
+        });
+      }
+
+      if (result.autoTags.failedAssets > 0) {
+        addNotification({
+          type: 'info',
+          message: `自動タグ生成に失敗したアセットがあります: ${result.autoTags.failedAssets} 件`,
         });
       }
     },

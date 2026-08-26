@@ -1182,6 +1182,39 @@ class ApiClient {
     });
   }
 
+  async refreshStackMetadata(stackId: string | number, options?: { force?: boolean }) {
+    return this.fetch<{
+      stackId: number;
+      datasetId: number;
+      formats: { repaired: number; failed: number[] };
+      thumbnails: {
+        success: boolean;
+        totalAssets: number;
+        eligible: number;
+        regenerated: number;
+        skipped: number;
+        failed: number[];
+      } | null;
+      previews: {
+        success: boolean;
+        totalAssets: number;
+        eligible: number;
+        regenerated: number;
+        failed: number[];
+      } | null;
+      colors: { eligible: number; regenerated: number; skipped: number; failed: number[] };
+      autoTags: {
+        candidateAssets: number;
+        predictedAssets: number;
+        skippedAssets: number;
+        failedAssets: number;
+      };
+    }>(`/api/v1/stacks/${stackId}/refresh`, {
+      method: 'POST',
+      body: JSON.stringify({ force: options?.force ?? true }),
+    });
+  }
+
   async getDatasetStats(
     datasetId: string | number
   ): Promise<{ stackCount: number; assetCount: number }> {
@@ -1689,6 +1722,8 @@ class ApiClient {
       colors: number;
       actualMediaTypes?: number;
       autotags: number;
+      autotagPredictions?: number;
+      formatRepairs?: number;
       embeddings: number;
     };
     totals: {
@@ -1696,7 +1731,12 @@ class ApiClient {
       thumbnailFailures?: number;
       previewCandidates?: number;
       previewFailures?: number;
+      colorCandidates?: number;
+      colorFailures?: number;
+      formatFailures?: number;
       actualMediaTypeCandidates?: number;
+      autotagCandidates?: number;
+      autotagFailures?: number;
       embeddings: number;
     };
   }> {

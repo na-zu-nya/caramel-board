@@ -1,5 +1,10 @@
 import type { DatabaseSync } from 'node:sqlite';
 import type { DominantColor } from '../../../utils/colorExtractor';
+import {
+  canonicalizeMediaExtension,
+  isImageMediaExtension,
+  isVideoMediaExtension,
+} from '../../../utils/mediaFormat';
 import type { AutoTagEntry, StackDatasetRow, StackMediaType } from './types';
 
 const GIF_MIME_TYPE = 'image/gif';
@@ -31,36 +36,6 @@ export const SIMILAR_CONFIG = {
   minIdf: 0.05,
 };
 
-const IMAGE_EXTENSIONS = new Set([
-  '3fr',
-  'arw',
-  'jpg',
-  'jpeg',
-  'png',
-  'webp',
-  'bmp',
-  'cr2',
-  'cr3',
-  'dng',
-  'erf',
-  'avif',
-  'heic',
-  'heif',
-  'nef',
-  'nrw',
-  'orf',
-  'pef',
-  'raf',
-  'rw2',
-  'sr2',
-  'srf',
-  'svg',
-  'svgz',
-  'tif',
-  'tiff',
-]);
-const VIDEO_EXTENSIONS = new Set(['gif', 'mp4', 'mov', 'avi', 'mkv', 'webm']);
-
 export const toArray = (value: string | string[] | undefined) => {
   if (value === undefined) return [];
   return Array.isArray(value) ? value : [value];
@@ -80,15 +55,9 @@ export const placeholders = (values: unknown[]) => values.map(() => '?').join(',
 export const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
 export const normalizeTag = (tag: string) => tag.trim().toLowerCase();
 
-const normalizeExtension = (ext: string) => ext.replace(/^\./, '').toLowerCase();
-
-export const canonicalizeExtension = (ext: string) => {
-  const normalized = normalizeExtension(ext);
-  return normalized === 'jpeg' ? 'jpg' : normalized;
-};
-
-export const isImageExtension = (ext: string) => IMAGE_EXTENSIONS.has(canonicalizeExtension(ext));
-export const isVideoExtension = (ext: string) => VIDEO_EXTENSIONS.has(canonicalizeExtension(ext));
+export const canonicalizeExtension = canonicalizeMediaExtension;
+export const isImageExtension = isImageMediaExtension;
+export const isVideoExtension = isVideoMediaExtension;
 export const isImageFileType = (fileType: string) => {
   const normalized = fileType.trim().toLowerCase();
   if (normalized === GIF_MIME_TYPE) return false;

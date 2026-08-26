@@ -18,6 +18,7 @@ import {
   ImageStackSearchService,
   intersectScoredIdsWithEligible,
 } from '../shared/services/ImageStackSearchService';
+import { ensureMediaExtension, resolveMediaExtension } from '../utils/mediaFormat';
 import { createZipArchive } from '../utils/zip';
 
 export const stacksRoute = new Hono();
@@ -153,6 +154,7 @@ const BulkFavoriteSchema = z.object({
   stackIds: z.array(z.number().int().positive()),
   favorited: z.boolean(),
 });
+const RefreshStackMetadataSchema = z.object({ force: z.boolean().optional().default(true) });
 const BulkRefreshThumbsSchema = z.object({ stackIds: z.array(z.number().int().positive()) });
 const BulkRemoveSchema = z.object({ stackIds: z.array(z.number().int().positive()) });
 const SetThumbnailSourceSchema = z.object({
@@ -530,16 +532,24 @@ const copyLocalAssetFromFileUrl = (url: string, tmpDir: string): ImportedFile =>
 
 const importAssetFromUrl = async (url: string, tmpDir: string) => {
   const targetUrl = new URL(url);
+  let imported: ImportedFile;
 
   if (targetUrl.protocol === 'file:') {
-    return copyLocalAssetFromFileUrl(url, tmpDir);
-  }
-
-  if (targetUrl.protocol !== 'http:' && targetUrl.protocol !== 'https:') {
+    imported = copyLocalAssetFromFileUrl(url, tmpDir);
+  } else if (targetUrl.protocol === 'http:' || targetUrl.protocol === 'https:') {
+    imported = await downloadRemoteAsset(url, tmpDir);
+  } else {
     throw new Error('未対応のURLスキームです');
   }
 
-  return downloadRemoteAsset(url, tmpDir);
+  const extension = await resolveMediaExtension({
+    sourcePath: imported.path,
+    originalName: imported.originalname,
+    mimeType: imported.mimetype,
+  });
+  return extension
+    ? { ...imported, originalname: ensureMediaExtension(imported.originalname, extension) }
+    : imported;
 };
 
 const scheduleStandaloneAutoTagPrediction = (asset: { id?: number } | null) => {
@@ -907,6 +917,21 @@ stacksRoute.post('/:id{[0-9]+}/refresh-autotags', async (c) => {
   }
 });
 
+stacksRoute.post('/:id{[0-9]+}/refresh', async (c) => {
+  const id = Number.parseInt(c.req.param('id'), 10);
+  const parse = RefreshStackMetadataSchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!parse.success) return c.json({ error: 'Invalid body', details: parse.error }, 400);
+
+  try {
+    const result = await stackRepository.refreshStackMetadata(id, { force: parse.data.force });
+    if (!result) return c.json({ error: 'Stack not found' }, 404);
+    return c.json(result);
+  } catch (error) {
+    console.error(`Failed to refresh stack ${id}`, error);
+    return c.json({ error: 'Failed to refresh stack' }, 500);
+  }
+});
+
 stacksRoute.post('/:id{[0-9]+}/tags', async (c) => {
   const id = Number.parseInt(c.req.param('id'), 10);
   const body = await c.req.json().catch(() => ({}));
@@ -1008,37 +1033,66 @@ stacksRoute.put('/bulk/favorite', async (c) => {
 stacksRoute.post('/bulk/refresh-thumbnails', async (c) => {
   const parse = BulkRefreshThumbsSchema.safeParse(await c.req.json().catch(() => ({})));
   if (!parse.success) return c.json({ error: 'Invalid body', details: parse.error }, 400);
-  const updated = await stackRepository.bulkRefreshThumbnails(parse.data.stackIds);
+  let updatedCount = 0;
+  let thumbnailEligible = 0;
+  let thumbnailRegenerated = 0;
+  let thumbnailSkipped = 0;
+  let thumbnailFailures = 0;
   let previewEligible = 0;
   let previewRegenerated = 0;
   let previewFailures = 0;
+  let colorRegenerated = 0;
+  let colorFailures = 0;
+  let autoTagPredicted = 0;
+  let autoTagFailures = 0;
+  const errors: string[] = [];
 
   for (const stackId of parse.data.stackIds) {
     try {
-      const stack = stackRepository.getById(stackId);
-      const dataSetId = Number(stack?.dataSetId ?? stack?.datasetId);
-      if (!stack || !Number.isFinite(dataSetId)) {
-        previewFailures++;
+      const result = await stackRepository.refreshStackMetadata(stackId, { force: true });
+      if (!result) {
+        errors.push(`Stack ${stackId} not found`);
         continue;
       }
-      const result = await stackRepository.regeneratePreviews(stackId, dataSetId, { force: true });
-      previewEligible += result?.eligible ?? 0;
-      previewRegenerated += result?.regenerated ?? 0;
-      previewFailures += result?.failed?.length ?? 0;
+      updatedCount++;
+      thumbnailEligible += result.thumbnails?.eligible ?? 0;
+      thumbnailRegenerated += result.thumbnails?.regenerated ?? 0;
+      thumbnailSkipped += result.thumbnails?.skipped ?? 0;
+      thumbnailFailures += result.thumbnails?.failed.length ?? 0;
+      previewEligible += result.previews?.eligible ?? 0;
+      previewRegenerated += result.previews?.regenerated ?? 0;
+      previewFailures += result.previews?.failed.length ?? 0;
+      colorRegenerated += result.colors.regenerated;
+      colorFailures += result.colors.failed.length;
+      autoTagPredicted += result.autoTags.predictedAssets;
+      autoTagFailures += result.autoTags.failedAssets;
     } catch (error) {
-      previewFailures++;
-      console.error(`Failed to regenerate previews for stack ${stackId}:`, error);
+      errors.push(`Stack ${stackId}: refresh failed`);
+      console.error(`Failed to refresh stack ${stackId}`, error);
     }
   }
 
+  const success = errors.length === 0 && thumbnailFailures === 0 && previewFailures === 0;
   return c.json({
-    success: updated.success && previewFailures === 0,
-    updated,
+    success,
+    updated: {
+      success,
+      updated: updatedCount,
+      errors,
+      thumbnails: {
+        eligible: thumbnailEligible,
+        regenerated: thumbnailRegenerated,
+        skipped: thumbnailSkipped,
+        failures: thumbnailFailures,
+      },
+    },
     previews: {
       eligible: previewEligible,
       regenerated: previewRegenerated,
       failures: previewFailures,
     },
+    colors: { regenerated: colorRegenerated, failures: colorFailures },
+    autoTags: { predicted: autoTagPredicted, failures: autoTagFailures },
   });
 });
 
@@ -1047,7 +1101,8 @@ stacksRoute.post('/merge', async (c) => {
   if (!parse.success) return c.json({ error: 'Invalid body', details: parse.error }, 400);
   const stack = stackRepository.mergeStacks(parse.data.targetId, parse.data.sourceIds);
   if (!stack) return c.json({ error: 'Stack not found' }, 404);
-  return c.json(stack);
+  await stackRepository.refreshStackMetadata(parse.data.targetId, { force: false });
+  return c.json(stackRepository.getById(parse.data.targetId) ?? stack);
 });
 
 stacksRoute.delete('/bulk/remove', async (c) => {

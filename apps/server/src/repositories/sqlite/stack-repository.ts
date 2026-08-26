@@ -11,6 +11,7 @@ import { StackMediaTypeService } from './stack/media-type-service';
 import { StackMetadataService } from './stack/metadata-service';
 import { StackPreviewService } from './stack/preview-service';
 import { StackQueryService } from './stack/query-service';
+import { type RefreshStackMetadataOptions, StackRefreshService } from './stack/refresh-service';
 import { StackSimilarService } from './stack/similar-service';
 import {
   type SetStackThumbnailSourceInput,
@@ -40,6 +41,7 @@ export class StandaloneStackRepository {
   private metadataService: StackMetadataService;
   private previewService: StackPreviewService;
   private queryService: StackQueryService;
+  private refreshService: StackRefreshService;
   private similarService: StackSimilarService;
   private thumbnailService: StackThumbnailService;
   private writerService: StackWriterService;
@@ -61,6 +63,13 @@ export class StandaloneStackRepository {
       this.thumbnailService
     );
     this.previewService = new StackPreviewService(db);
+    this.refreshService = new StackRefreshService(
+      db,
+      this.colorService,
+      this.mediaTypeService,
+      this.previewService,
+      this.thumbnailService
+    );
     this.queryService = new StackQueryService(
       db,
       this.assetService,
@@ -134,6 +143,10 @@ export class StandaloneStackRepository {
 
   async regeneratePreviews(stackId: number, dataSetId: number, options: { force?: boolean } = {}) {
     return this.previewService.regeneratePreviews(stackId, dataSetId, options);
+  }
+
+  async refreshStackMetadata(stackId: number, options: RefreshStackMetadataOptions = {}) {
+    return this.refreshService.refreshStackMetadata(stackId, options);
   }
 
   async createStackWithFile(input: CreateStackWithFileInput) {

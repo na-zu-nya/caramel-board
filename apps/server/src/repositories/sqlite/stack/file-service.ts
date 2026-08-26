@@ -5,20 +5,14 @@ import { DuplicateAssetError } from '../../../errors/DuplicateAssetError';
 import { DataStorage } from '../../../lib/DataStorage';
 import { readAssetDimensions } from '../../../utils/assetDimensions';
 import { buildAssetKey } from '../../../utils/assetPath';
-import { getExtension, getFileType, getHash } from '../../../utils/functions';
+import { getHash } from '../../../utils/functions';
 import { generateMediaPreview } from '../../../utils/generateMediaPreview';
 import { generateThumbnail } from '../../../utils/generateThumbnail';
+import { ensureMediaExtension, resolveMediaExtension } from '../../../utils/mediaFormat';
 import { appendPdfOriginalMeta, isPdfFileInput, preparePdfImport } from '../../../utils/pdfImport';
 import { nowIso, parseJsonObject } from '../sqlite';
 import type { StackColorService } from './color-service';
-import {
-  canonicalizeExtension,
-  getStackDataset,
-  isImageExtension,
-  isVideoExtension,
-  placeholders,
-  toColorJson,
-} from './helpers';
+import { getStackDataset, placeholders, toColorJson } from './helpers';
 import { toAsset } from './mappers';
 import type { StackMediaTypeService } from './media-type-service';
 import type { StackMetadataService } from './metadata-service';
@@ -91,7 +85,15 @@ export class StackFileService {
     }
 
     const hash = await getHash(file.path);
-    const ext = this.resolveAssetExtension(file.path, file.originalname);
+    const ext = await resolveMediaExtension({
+      sourcePath: file.path,
+      originalName: file.originalname,
+      mimeType: file.mimetype,
+    });
+    if (!ext) {
+      throw new Error('ファイル形式を判定できませんでした');
+    }
+    const originalName = ensureMediaExtension(file.originalname, ext);
     if (!options.allowDuplicate) {
       const existing = this.db
         .prepare(
@@ -150,7 +152,7 @@ export class StackFileService {
         thumbnailKey,
         previewKey,
         ext,
-        file.originalname,
+        originalName,
         hash,
         dimensions.width,
         dimensions.height,
@@ -290,19 +292,5 @@ export class StackFileService {
       stackId: existing.stack_id,
       scope: 'dataset',
     });
-  }
-
-  private resolveAssetExtension(sourcePath: string, originalName: string) {
-    const candidates = [
-      canonicalizeExtension(getFileType(originalName)),
-      canonicalizeExtension(getExtension(originalName)),
-      canonicalizeExtension(path.extname(originalName)),
-      canonicalizeExtension(path.extname(sourcePath)),
-    ].filter((value) => value.length > 0);
-    const supported = candidates.find(
-      (candidate) => isImageExtension(candidate) || isVideoExtension(candidate)
-    );
-    if (supported) return supported;
-    return candidates[0] || 'jpg';
   }
 }

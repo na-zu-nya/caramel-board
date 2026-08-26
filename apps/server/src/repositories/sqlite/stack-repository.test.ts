@@ -3,7 +3,8 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import os from 'node:os';
 import path, { resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import sharp from 'sharp';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DataStorage } from '../../lib/DataStorage';
 import { StandaloneStackRepository } from './stack-repository';
 
@@ -556,6 +557,141 @@ describe('StandaloneStackRepository search', () => {
         true
       );
     } finally {
+      if (previousStorage === undefined) {
+        delete process.env.FILES_STORAGE;
+      } else {
+        process.env.FILES_STORAGE = previousStorage;
+      }
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('stores an extensionless image using its detected media format', async () => {
+    const previousStorage = process.env.FILES_STORAGE;
+    const tempDir = mkdtempSync(path.join(os.tmpdir(), 'caramel-extensionless-upload-'));
+    process.env.FILES_STORAGE = tempDir;
+    const inputPath = path.join(tempDir, 'file');
+    await sharp({
+      create: {
+        width: 16,
+        height: 12,
+        channels: 3,
+        background: '#b46f52',
+      },
+    })
+      .png()
+      .toFile(inputPath);
+
+    try {
+      const asset = await repository.addAssetWithFile(1, {
+        path: inputPath,
+        originalname: 'file',
+        mimetype: 'application/octet-stream',
+        size: readFileSync(inputPath).byteLength,
+      });
+
+      expect(asset?.fileType).toBe('png');
+      expect(asset?.originalName).toBe('file.png');
+      expect(asset?.file).toMatch(/\.png$/);
+      expect(asset?.dominantColors?.length).toBeGreaterThan(0);
+      expect(
+        asset?.file ? existsSync(DataStorage.getPath(asset.file.replace(/^\/files\//, ''))) : false
+      ).toBe(true);
+    } finally {
+      if (previousStorage === undefined) {
+        delete process.env.FILES_STORAGE;
+      } else {
+        process.env.FILES_STORAGE = previousStorage;
+      }
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('repairs malformed image metadata through the canonical stack refresh', async () => {
+    const previousStorage = process.env.FILES_STORAGE;
+    const tempDir = mkdtempSync(path.join(os.tmpdir(), 'caramel-format-repair-'));
+    process.env.FILES_STORAGE = tempDir;
+    const sourcePath = path.join(tempDir, 'source');
+    await sharp({
+      create: {
+        width: 18,
+        height: 14,
+        channels: 3,
+        background: '#6a8bb8',
+      },
+    })
+      .png()
+      .toFile(sourcePath);
+    const image = readFileSync(sourcePath);
+    const hash = createHash('sha256').update(image).digest('hex');
+    const malformedKey = `library/1/assets/${hash.slice(0, 2)}/${hash}.file`;
+    const malformedPath = DataStorage.getPath(malformedKey);
+    mkdirSync(path.dirname(malformedPath), { recursive: true });
+    writeFileSync(malformedPath, image);
+    db.prepare(
+      `UPDATE assets
+       SET file = ?, thumbnail = '', file_type = 'file', original_name = 'file', hash = ?,
+           width = NULL, height = NULL, dominant_colors_json = NULL
+       WHERE id = 1`
+    ).run(malformedKey, hash);
+
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          predicted_tags: ['synthetic_tag'],
+          tag_count: 1,
+          threshold: 0.4,
+          scores: { synthetic_tag: 0.91 },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      )
+    );
+
+    try {
+      const result = await repository.refreshStackMetadata(1, { force: true });
+      const asset = db
+        .prepare(
+          `SELECT file, thumbnail, file_type, original_name, width, height, dominant_colors_json
+           FROM assets
+           WHERE id = 1`
+        )
+        .get() as {
+        file: string;
+        thumbnail: string;
+        file_type: string;
+        original_name: string;
+        width: number | null;
+        height: number | null;
+        dominant_colors_json: string | null;
+      };
+      const prediction = db
+        .prepare(
+          `SELECT scores.tag_key, scores.score
+           FROM auto_tag_prediction_scores scores
+           WHERE scores.asset_id = 1`
+        )
+        .get() as { tag_key: string; score: number } | undefined;
+
+      expect(result?.formats).toEqual({ repaired: 1, failed: [] });
+      expect(result?.colors.regenerated).toBe(1);
+      expect(result?.autoTags).toMatchObject({
+        candidateAssets: 1,
+        predictedAssets: 1,
+        failedAssets: 0,
+      });
+      expect(asset.file_type).toBe('png');
+      expect(asset.original_name).toBe('file.png');
+      expect(asset.file).toBe(`library/1/assets/${hash.slice(0, 2)}/${hash}.png`);
+      expect(existsSync(DataStorage.getPath(asset.file))).toBe(true);
+      expect(existsSync(malformedPath)).toBe(false);
+      expect(existsSync(DataStorage.getPath(asset.thumbnail))).toBe(true);
+      expect(asset.width).toBe(18);
+      expect(asset.height).toBe(14);
+      expect(JSON.parse(asset.dominant_colors_json ?? '[]').length).toBeGreaterThan(0);
+      expect(prediction).toEqual({ tag_key: 'synthetic_tag', score: 0.91 });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally {
+      fetchMock.mockRestore();
       if (previousStorage === undefined) {
         delete process.env.FILES_STORAGE;
       } else {

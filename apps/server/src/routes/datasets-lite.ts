@@ -3,8 +3,6 @@ import {
   ensureDatasetAuthorizedForCurrentStore,
   isDatasetAuthorizedForCurrentStore,
 } from '../repositories/sqlite/auth';
-import { StandaloneAutoTagRepository } from '../repositories/sqlite/auto-tag-repository';
-import { StandaloneColorRepository } from '../repositories/sqlite/color-repository';
 import { StandaloneDatasetRepository } from '../repositories/sqlite/dataset-repository';
 import { StandaloneStackRepository } from '../repositories/sqlite/stack-repository';
 import { useDataStorage } from '../shared/di';
@@ -218,7 +216,7 @@ app.delete('/:id', async (c) => {
   return c.json({ success: true });
 });
 
-// Full dataset refresh: thumbnails + previews + colors + autotags (embeddings removed)
+// データセット内のスタックを、共通のメタ情報リフレッシュ処理で再構築する
 app.post('/:id/refresh-all', async (c) => {
   const id = Number.parseInt(c.req.param('id'), 10);
   const forceRegenerate = c.req.query('forceRegenerate') === 'true';
@@ -229,54 +227,46 @@ app.post('/:id/refresh-all', async (c) => {
     if (auth) return auth;
 
     const stackRepository = new StandaloneStackRepository();
-    const colorRepository = new StandaloneColorRepository();
-    const autoTagRepository = new StandaloneAutoTagRepository();
     const stackIds = stackRepository.getStackIdsByDataset(id);
-    const colorStackIds = colorRepository.getDatasetUpdateCandidateStackIds(id);
-    const actualMediaTypeResult = stackRepository.refreshActualMediaTypesForDataset(id);
     let thumbnailEligible = 0;
     let thumbnailRegenerated = 0;
     let thumbnailFailures = 0;
     let previewEligible = 0;
     let previewRegenerated = 0;
     let previewFailures = 0;
+    let colorEligible = 0;
+    let colorRegenerated = 0;
+    let colorFailures = 0;
+    let formatRepairs = 0;
+    let formatFailures = 0;
+    let autotagCandidates = 0;
+    let autotagPredictions = 0;
+    let autotagFailures = 0;
+    let refreshedStacks = 0;
 
     for (const stackId of stackIds) {
-      const thumbnailResult = await stackRepository.refreshStackThumbnail(stackId, {
-        refreshActualMediaType: false,
-        force: forceRegenerate,
-      });
-      thumbnailEligible += thumbnailResult?.eligible ?? 0;
-      thumbnailRegenerated += thumbnailResult?.regenerated ?? 0;
-      thumbnailFailures += thumbnailResult?.failed?.length ?? 0;
       try {
-        const previewResult = await stackRepository.regeneratePreviews(stackId, id, {
+        const result = await stackRepository.refreshStackMetadata(stackId, {
           force: forceRegenerate,
         });
-        previewEligible += previewResult?.eligible ?? 0;
-        previewRegenerated += previewResult?.regenerated ?? 0;
-        previewFailures += previewResult?.failed?.length ?? 0;
+        if (!result) continue;
+        refreshedStacks++;
+        thumbnailEligible += result.thumbnails?.eligible ?? 0;
+        thumbnailRegenerated += result.thumbnails?.regenerated ?? 0;
+        thumbnailFailures += result.thumbnails?.failed.length ?? 0;
+        previewEligible += result.previews?.eligible ?? 0;
+        previewRegenerated += result.previews?.regenerated ?? 0;
+        previewFailures += result.previews?.failed.length ?? 0;
+        colorEligible += result.colors.eligible;
+        colorRegenerated += result.colors.regenerated;
+        colorFailures += result.colors.failed.length;
+        formatRepairs += result.formats.repaired;
+        formatFailures += result.formats.failed.length;
+        autotagCandidates += result.autoTags.candidateAssets;
+        autotagPredictions += result.autoTags.predictedAssets;
+        autotagFailures += result.autoTags.failedAssets;
       } catch (error) {
-        previewFailures++;
-        console.error(`Failed to regenerate previews for stack ${stackId}:`, error);
-      }
-    }
-    for (const stackId of colorStackIds) {
-      colorRepository.updateStackColors(stackId);
-    }
-
-    const autotagPredictionResult = await autoTagRepository.predictDatasetAssetTags(id, {
-      threshold: 0.4,
-      forceRegenerate,
-    });
-
-    let autotagUpdated = 0;
-    for (const stackId of stackIds) {
-      try {
-        autoTagRepository.aggregateStackTags(stackId, 0.4);
-        autotagUpdated++;
-      } catch (error) {
-        console.error(`Failed to aggregate AutoTags for stack ${stackId}:`, error);
+        console.error(`Failed to refresh stack ${stackId}:`, error);
       }
     }
 
@@ -289,10 +279,11 @@ app.post('/:id/refresh-all', async (c) => {
       scheduled: {
         thumbnails: thumbnailRegenerated,
         previews: previewRegenerated,
-        colors: colorStackIds.length,
-        actualMediaTypes: actualMediaTypeResult.total,
-        autotags: autotagUpdated,
-        autotagPredictions: autotagPredictionResult.predictedAssets,
+        colors: colorRegenerated,
+        actualMediaTypes: refreshedStacks,
+        autotags: refreshedStacks,
+        autotagPredictions,
+        formatRepairs,
         embeddings: 0,
       },
       totals: {
@@ -300,9 +291,12 @@ app.post('/:id/refresh-all', async (c) => {
         thumbnailFailures,
         previewCandidates: previewEligible,
         previewFailures,
-        actualMediaTypeCandidates: actualMediaTypeResult.total,
-        autotagCandidates: autotagPredictionResult.candidateAssets,
-        autotagFailures: autotagPredictionResult.failedAssets,
+        colorCandidates: colorEligible,
+        colorFailures,
+        formatFailures,
+        actualMediaTypeCandidates: refreshedStacks,
+        autotagCandidates,
+        autotagFailures,
         embeddings: 0,
       },
     });
