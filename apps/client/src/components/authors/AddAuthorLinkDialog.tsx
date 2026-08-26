@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useIMEAwareKeyboard } from '@/hooks/useIMEAwareKeyboard';
 import { getAuthorLinkPreview, getAuthorLinkTone } from '@/lib/author-links';
 import { cn } from '@/lib/utils';
 
@@ -61,6 +62,10 @@ export function AddAuthorLinkDialog({
     setUrl('');
   }, [onSubmit, url]);
 
+  const { handleCompositionStart, handleCompositionEnd, createKeyDownHandler } =
+    useIMEAwareKeyboard();
+  const handleKeyDown = createKeyDownHandler(() => handleSubmit());
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-md">
@@ -81,6 +86,9 @@ export function AddAuthorLinkDialog({
               onChange={(event) => setUrl(event.currentTarget.value)}
               placeholder={urlPlaceholder}
               disabled={submitting}
+              onKeyDown={handleKeyDown}
+              onCompositionStart={handleCompositionStart}
+              onCompositionEnd={handleCompositionEnd}
             />
           </div>
           {preview ? (

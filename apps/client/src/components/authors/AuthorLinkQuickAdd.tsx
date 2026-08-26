@@ -4,6 +4,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { useIMEAwareKeyboard } from '@/hooks/useIMEAwareKeyboard';
 import { getAuthorLinkPreview } from '@/lib/author-links';
 import { cn } from '@/lib/utils';
 
@@ -65,6 +66,10 @@ export function AuthorLinkQuickAdd({
     onOpenChange(false);
   }, [onOpenChange, onSubmit, url]);
 
+  const { handleCompositionStart, handleCompositionEnd, createKeyDownHandler } =
+    useIMEAwareKeyboard();
+  const handleKeyDown = createKeyDownHandler(() => handleSubmit());
+
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
@@ -95,6 +100,9 @@ export function AuthorLinkQuickAdd({
             disabled={submitting}
             className="h-8 px-2 py-1 text-xs"
             autoFocus
+            onKeyDown={handleKeyDown}
+            onCompositionStart={handleCompositionStart}
+            onCompositionEnd={handleCompositionEnd}
           />
           <div className="flex min-h-7 items-center justify-between gap-2">
             {preview ? (

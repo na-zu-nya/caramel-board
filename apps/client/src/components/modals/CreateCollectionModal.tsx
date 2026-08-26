@@ -181,6 +181,11 @@ export function CreateCollectionModal({
               placeholder={t.collection.collectionName}
               required
               autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && (e.nativeEvent.isComposing || e.keyCode === 229)) {
+                  e.preventDefault();
+                }
+              }}
             />
           </div>
 
