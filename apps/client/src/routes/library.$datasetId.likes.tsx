@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useAtom } from 'jotai';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { GroupedLikesList } from '@/components/GroupedLikesList';
@@ -11,15 +11,27 @@ import { useT } from '@/lib/i18n';
 import { navigationStateAtom } from '@/stores/navigation';
 import { currentFilterAtom } from '@/stores/ui';
 
+interface LikesSearch {
+  year?: number;
+}
+
 export const Route = createFileRoute('/library/$datasetId/likes')({
+  validateSearch: (search: Record<string, unknown>): LikesSearch => {
+    const year = Number(search.year);
+    return {
+      year: Number.isInteger(year) && year >= 1970 && year <= 2100 ? year : undefined,
+    };
+  },
   component: LikesPage,
 });
 
 function LikesPage() {
   const t = useT();
   const { datasetId } = Route.useParams();
+  const search = Route.useSearch();
+  const navigate = useNavigate();
   const [, setCurrentFilter] = useAtom(currentFilterAtom);
-  const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
+  const currentYear = search.year ?? new Date().getFullYear();
   const [accumulatedData, setAccumulatedData] = useState<Record<string, any[]>>({});
 
   // Enable header actions (library routes)
@@ -69,9 +81,10 @@ function LikesPage() {
   });
 
   // Reset accumulated data when year changes
+  // biome-ignore lint/correctness/useExhaustiveDependencies: currentYear is intentionally the reset trigger, not used in the body
   useEffect(() => {
     setAccumulatedData({});
-  }, []);
+  }, [currentYear]);
 
   // Merge new data with accumulated data
   useEffect(() => {
@@ -98,9 +111,16 @@ function LikesPage() {
   }, [data]);
 
   // Handle year change
-  const handleYearChange = useCallback((year: number) => {
-    setCurrentYear(year);
-  }, []);
+  const handleYearChange = useCallback(
+    (year: number) => {
+      navigate({
+        to: '/library/$datasetId/likes',
+        params: { datasetId },
+        search: { year },
+      });
+    },
+    [datasetId, navigate]
+  );
 
   // Handle incremental loading
   const handleLoadMore = useCallback(() => {
