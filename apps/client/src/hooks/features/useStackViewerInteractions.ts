@@ -325,6 +325,13 @@ export function useStackViewerInteractions(params: {
     animationFrameRef.current = requestAnimationFrame(step);
   }, [lerp, notifyHorizontalOffsetChange, onHorizontalInteractionSettled]);
 
+  const stopHorizontalAnimation = useCallback(() => {
+    if (animationFrameRef.current !== null) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+  }, []);
+
   const animateToOffset = useCallback(
     (targetOffset: number, onComplete?: () => void) => {
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
@@ -764,6 +771,7 @@ export function useStackViewerInteractions(params: {
     rightEdgeKind,
     onDrag,
     onDragEnd,
+    stopHorizontalAnimation,
     onLeftTap,
     onRightTap,
     onNextStack,

@@ -9,6 +9,7 @@ import {
   NotebookText,
   PenTool,
   Pipette,
+  SquareArrowOutUpRight,
   Trash2,
   X,
 } from 'lucide-react';
@@ -28,6 +29,7 @@ import {
 } from '@/hooks/features/useStackViewerInteractions';
 import { useStackViewerZoom } from '@/hooks/features/useStackViewerZoom';
 import { useViewerContextMenu } from '@/hooks/features/useViewerContextMenu';
+import { useGlobalPasteUpload } from '@/hooks/useGlobalPasteUpload';
 import { useHeaderActions } from '@/hooks/useHeaderActions';
 import { useScratch } from '@/hooks/useScratch';
 import { useRightPanelPushesContent, useSidebarPushesContent } from '@/hooks/useSidebarLayoutMode';
@@ -44,6 +46,11 @@ import {
 import { downloadAssetOriginals, downloadStackOriginals } from '@/lib/download-originals';
 import { useT } from '@/lib/i18n';
 import { isVideoAsset } from '@/lib/media';
+import {
+  patchAssetInPageCaches,
+  patchStackInPageCaches,
+  removeStackFromPageCaches,
+} from '@/lib/stack-cache-patch';
 import { cn } from '@/lib/utils';
 import { normalizeVideoMarkers } from '@/lib/video-markers';
 import { getViewerComicDisplayMode, setViewerComicDisplayMode } from '@/lib/viewerSettings';
@@ -74,6 +81,7 @@ import ImageCarousel from './ImageCarousel';
 import PenOverlay from './PenOverlay';
 import StackToolbar, { type AssetSortPreset } from './StackToolbar';
 import TapZoneOverlay from './TapZoneOverlay';
+import ViewerInteractionLockButton from './ViewerInteractionLockButton';
 
 interface StackViewerProps {
   datasetId: string;
@@ -96,6 +104,7 @@ interface ViewerShellProps {
   isReorderMode: boolean;
   isPenMode: boolean;
   isNativeInteractionMode: boolean;
+  isInteractionLocked: boolean;
   onDrop: (files: File[]) => void;
   onUrlDrop: (urls: string[]) => void;
 }
@@ -202,6 +211,7 @@ function ViewerShell({
   isReorderMode,
   isPenMode,
   isNativeInteractionMode,
+  isInteractionLocked,
   onDrop,
   onUrlDrop,
 }: ViewerShellProps) {
@@ -214,7 +224,7 @@ function ViewerShell({
       onUrlDrop={onUrlDrop}
       accept="image/*,video/*,application/pdf,.pdf,.ai,.svg,.svgz"
       multiple
-      disabled={isPenMode || isNativeInteractionMode}
+      disabled={isPenMode || isNativeInteractionMode || isInteractionLocked}
     >
       {children}
     </FullPageDropZone>
@@ -250,6 +260,10 @@ export default function StackViewer({
   const addNotification = useSetAtom(addUploadNotificationAtom);
   const { ensureScratch } = useScratch(datasetId);
   const queryClient = useQueryClient();
+  const [isInteractionLocked, setIsInteractionLocked] = useState(false);
+  const releaseInteractionLock = useCallback(() => {
+    setIsInteractionLocked(false);
+  }, []);
 
   // アセット順の変更は即時反映し、サーバ保存中だけローカル順を保持する
   const [optimisticOrder, setOptimisticOrder] = useState<Asset[] | null>(null);
@@ -402,6 +416,7 @@ export default function StackViewer({
   }, [assetSelection.ids.size, clearAssetSelection, isAssetSelectionMode]);
 
   const handleListModeToggle = useCallback(() => {
+    releaseInteractionLock();
     setIsListMode((prev) => {
       const next = !prev;
       if (!next) {
@@ -410,7 +425,7 @@ export default function StackViewer({
       }
       return next;
     });
-  }, [clearAssetSelection, setIsListMode, setSelectionMode]);
+  }, [clearAssetSelection, releaseInteractionLock, setIsListMode, setSelectionMode]);
 
   const autoSpreadDetectionContext = useMemo(
     () => createAutoSpreadDetectionContext(stack?.assets ?? []),
@@ -522,6 +537,7 @@ export default function StackViewer({
     rightEdgeKind,
     onDrag,
     onDragEnd,
+    stopHorizontalAnimation,
     onLeftTap,
     onRightTap,
     onNextStack,
@@ -640,16 +656,18 @@ export default function StackViewer({
 
   const handlePageSeek = useCallback(
     (index: number) => {
+      if (isInteractionLocked) return;
       cancelPageSeekBarHoverClose();
       setEdgeBoundaryArmedSide(null);
       setCurrentPage(index);
       setIsPageSeekBarVisible(true);
     },
-    [cancelPageSeekBarHoverClose, setCurrentPage]
+    [cancelPageSeekBarHoverClose, isInteractionLocked, setCurrentPage]
   );
 
   const handleDisplayModeToggle = useCallback(() => {
     if (!stack) return;
+    releaseInteractionLock();
 
     const nextMode: ComicDisplayMode = effectiveComicDisplayMode === 'single' ? 'spread' : 'single';
     const nextReadingModel = buildComicReadingModel({
@@ -677,25 +695,42 @@ export default function StackViewer({
     hidePageSeekBar,
     readingSettings,
     readingUnits,
+    releaseInteractionLock,
     setCurrentPage,
     stack,
   ]);
 
   const handleLeftTap = useCallback(() => {
+    if (isInteractionLocked) return;
     hidePageSeekBar();
     if (!(leftEdgeKind === 'stack-boundary' && isEdgeAffordanceReady)) {
       hideEdgeAffordance();
     }
     onLeftTap();
-  }, [hideEdgeAffordance, hidePageSeekBar, isEdgeAffordanceReady, leftEdgeKind, onLeftTap]);
+  }, [
+    hideEdgeAffordance,
+    hidePageSeekBar,
+    isEdgeAffordanceReady,
+    isInteractionLocked,
+    leftEdgeKind,
+    onLeftTap,
+  ]);
 
   const handleRightTap = useCallback(() => {
+    if (isInteractionLocked) return;
     hidePageSeekBar();
     if (!(rightEdgeKind === 'stack-boundary' && isEdgeAffordanceReady)) {
       hideEdgeAffordance();
     }
     onRightTap();
-  }, [hideEdgeAffordance, hidePageSeekBar, isEdgeAffordanceReady, onRightTap, rightEdgeKind]);
+  }, [
+    hideEdgeAffordance,
+    hidePageSeekBar,
+    isEdgeAffordanceReady,
+    isInteractionLocked,
+    onRightTap,
+    rightEdgeKind,
+  ]);
 
   useEffect(() => {
     setSelectedInfoAssetId(currentAsset?.id ?? null);
@@ -707,7 +742,9 @@ export default function StackViewer({
       const currentFavorited = Boolean(asset?.favorited ?? asset?.isFavorite);
 
       try {
-        await apiClient.toggleAssetFavorite(assetId, !currentFavorited);
+        const next = !currentFavorited;
+        await apiClient.toggleAssetFavorite(assetId, next);
+        patchAssetInPageCaches(queryClient, assetId, { favorited: next, isFavorite: next });
         await refetch();
         await queryClient.invalidateQueries({ queryKey: ['favorite-items', datasetId] });
       } catch (error) {
@@ -726,13 +763,19 @@ export default function StackViewer({
     async (assetId: Asset['id']) => {
       try {
         await apiClient.likeAsset(assetId);
+        const asset = stack?.assets.find((item) => String(item.id) === String(assetId));
+        // list 側にフィールドが無くても害はないので、常にパッチしておく
+        patchAssetInPageCaches(queryClient, assetId, {
+          liked: (typeof asset?.liked === 'number' ? asset.liked : 0) + 1,
+          likeCount: (typeof asset?.likeCount === 'number' ? asset.likeCount : 0) + 1,
+        });
         await refetch();
         await queryClient.invalidateQueries({ queryKey: ['likes', 'yearly'] });
       } catch (error) {
         console.error('Failed to like asset:', error);
       }
     },
-    [queryClient, refetch]
+    [queryClient, refetch, stack?.assets]
   );
 
   const handleCurrentLikeToggle = useCallback(async () => {
@@ -743,6 +786,10 @@ export default function StackViewer({
         return;
       }
       await apiClient.likeStack(stack.id);
+      patchStackInPageCaches(queryClient, stack.id, {
+        liked: (typeof stack.liked === 'number' ? stack.liked : 0) + 1,
+        likeCount: (typeof stack.likeCount === 'number' ? stack.likeCount : 0) + 1,
+      });
       await refetch();
       await queryClient.invalidateQueries({ queryKey: ['likes', 'yearly'] });
     } catch (error) {
@@ -833,8 +880,54 @@ export default function StackViewer({
   const verticalAnimRef = useRef<number | null>(null);
   const lockedScrollYRef = useRef(0);
   const headerStripRef = useRef<HTMLDivElement>(null);
+  const headerActionsChromeRef = useRef<HTMLDivElement>(null);
+  const pageSeekBarChromeRef = useRef<HTMLDivElement>(null);
+  const edgeAffordanceChromeRef = useRef<HTMLDivElement>(null);
   const [isVerticalGesturing, setIsVerticalGesturing] = useState(false);
   const verticalGesturingRef = useRef(false);
+  // タッチデバイスでは下部ツールバーを自動非表示にし、中央タップで出し入れする
+  const isCoarsePointer = useMemo(
+    () => window.matchMedia?.('(pointer: coarse)').matches ?? false,
+    []
+  );
+  const [isTouchChromeVisible, setIsTouchChromeVisible] = useState(true);
+  const touchChromeHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelTouchChromeHideTimer = useCallback(() => {
+    if (touchChromeHideTimerRef.current) {
+      clearTimeout(touchChromeHideTimerRef.current);
+      touchChromeHideTimerRef.current = null;
+    }
+  }, []);
+  // 開いた直後とスタック切替時は一時的にツールバーを見せてから自動で隠す
+  useEffect(() => {
+    if (!isCoarsePointer) return;
+    void currentStackKey;
+    setIsTouchChromeVisible(true);
+    cancelTouchChromeHideTimer();
+    touchChromeHideTimerRef.current = setTimeout(() => {
+      setIsTouchChromeVisible(false);
+      touchChromeHideTimerRef.current = null;
+    }, 2500);
+    return cancelTouchChromeHideTimer;
+  }, [cancelTouchChromeHideTimer, currentStackKey, isCoarsePointer]);
+  // 縦スワイプの進捗に連動してビューワ関連UI(ヘッダーボタン/ページバー/端ハンドル)をフェードさせる。
+  // progress=null でリセット(インラインstyleを外す)
+  const applyViewerChromeFade = useCallback(
+    (progress: number | null) => {
+      const value = progress === null ? '' : String(Math.max(0, Math.min(1, 1 - progress)));
+      for (const el of [
+        headerActionsChromeRef.current,
+        pageSeekBarChromeRef.current,
+        edgeAffordanceChromeRef.current,
+      ]) {
+        if (el) el.style.opacity = value;
+      }
+      if (isOverlayViewer && headerStripRef.current) {
+        headerStripRef.current.style.opacity = value;
+      }
+    },
+    [isOverlayViewer]
+  );
   const {
     isOpen: isViewerContextMenuOpen,
     position: viewerContextMenuPosition,
@@ -842,7 +935,7 @@ export default function StackViewer({
     close: closeViewerContextMenu,
     cancelPendingOpen: cancelPendingViewerContextMenu,
     triggerProps: viewerContextMenuTriggerProps,
-  } = useViewerContextMenu();
+  } = useViewerContextMenu({ enabled: !isInteractionLocked });
   // ピッカー状態: 手動トグルとAltホールドのOR
   const [isColorPickerManual, setIsColorPickerManual] = useState(false);
   const [isColorPickerAlt, setIsColorPickerAlt] = useState(false);
@@ -852,11 +945,12 @@ export default function StackViewer({
   const [isMetaNativeMode, setIsMetaNativeMode] = useState(false);
   const canUseImageTools =
     !!currentAsset && !isCurrentVideoAsset && !isListMode && isSingleFullImageUnit;
-  const canUseNativeInteraction = canUseImageTools && !isColorPicker && !isPenMode;
+  const canUseNativeInteraction =
+    canUseImageTools && !isColorPicker && !isPenMode && !isInteractionLocked;
   const isNativeInteractionMode = canUseNativeInteraction && isMetaNativeMode;
   const markerDialogPlaybackRef = useRef<{ time: number; wasPlaying: boolean } | null>(null);
   const canUseZoom = !!currentAsset && !isListMode && isSingleFullImageUnit;
-  const canUseZoomInteraction = canUseZoom && !isColorPicker && !isPenMode;
+  const canUseZoomInteraction = canUseZoom && !isColorPicker && !isPenMode && !isInteractionLocked;
   const getZoomMediaElement = useCallback(
     () => imageCarouselRef.current?.getCurrentZoomMediaElement() || null,
     [imageCarouselRef]
@@ -881,8 +975,40 @@ export default function StackViewer({
     getSurfaceElement: getZoomSurfaceElement,
     maxScale: 10,
   });
+  const canLockViewerInteraction = !!currentAsset && !isListMode && !isColorPicker && !isPenMode;
+  const handleInteractionLockToggle = useCallback(() => {
+    if (isInteractionLocked) {
+      releaseInteractionLock();
+      return;
+    }
+    if (!canLockViewerInteraction) return;
+
+    stopHorizontalAnimation();
+    if (verticalAnimRef.current !== null) {
+      cancelAnimationFrame(verticalAnimRef.current);
+      verticalAnimRef.current = null;
+    }
+    verticalGesturingRef.current = false;
+    setIsVerticalGesturing(false);
+    hidePageSeekBar();
+    closeViewerContextMenu();
+    cancelPendingViewerContextMenu();
+    setIsMetaNativeMode(false);
+    setIsInteractionLocked(true);
+  }, [
+    canLockViewerInteraction,
+    cancelPendingViewerContextMenu,
+    closeViewerContextMenu,
+    hidePageSeekBar,
+    isInteractionLocked,
+    releaseInteractionLock,
+    stopHorizontalAnimation,
+  ]);
+  // ズーム中は常に隠す。タッチデバイスでは自動非表示に従う(リスト表示中は唯一の出口なので常に表示)
+  const isToolbarHidden = !isListMode && (isZoomed || (isCoarsePointer && !isTouchChromeVisible));
   const handlePenModeToggle = useCallback(() => {
     if (!canUseImageTools) return;
+    releaseInteractionLock();
     setIsPenMode((prev) => {
       const next = !prev;
       if (next) {
@@ -891,40 +1017,45 @@ export default function StackViewer({
       }
       return next;
     });
-  }, [canUseImageTools]);
+  }, [canUseImageTools, releaseInteractionLock]);
   const handleColorPickerToggle = useCallback(() => {
     if (!canUseImageTools) return;
+    releaseInteractionLock();
     setIsPenMode(false);
     setIsColorPickerManual((prev) => !prev);
-  }, [canUseImageTools]);
+  }, [canUseImageTools, releaseInteractionLock]);
   const handleAltColorPickerDragStart = useCallback(() => {
-    if (!canUseImageTools) return false;
+    if (!canUseImageTools || isInteractionLocked) return false;
     setIsColorPickerAlt(true);
     return true;
-  }, [canUseImageTools]);
+  }, [canUseImageTools, isInteractionLocked]);
   const handleShiftStackNavigation = useCallback(
     (key: 'ArrowLeft' | 'ArrowRight') => {
+      if (isInteractionLocked) return;
       hidePageSeekBar();
       hideEdgeAffordance();
       setIsColorPickerAlt(false);
       return key === 'ArrowRight' ? onNextStack() : onPrevStack();
     },
-    [hideEdgeAffordance, hidePageSeekBar, onNextStack, onPrevStack]
+    [hideEdgeAffordance, hidePageSeekBar, isInteractionLocked, onNextStack, onPrevStack]
   );
   const handleLeftZoneLongPress = useCallback(() => {
+    if (isInteractionLocked) return;
     hidePageSeekBar();
     hideEdgeAffordance();
     onPrevStack();
-  }, [hideEdgeAffordance, hidePageSeekBar, onPrevStack]);
+  }, [hideEdgeAffordance, hidePageSeekBar, isInteractionLocked, onPrevStack]);
   const handleRightZoneLongPress = useCallback(() => {
+    if (isInteractionLocked) return;
     hidePageSeekBar();
     hideEdgeAffordance();
     onNextStack();
-  }, [hideEdgeAffordance, hidePageSeekBar, onNextStack]);
+  }, [hideEdgeAffordance, hidePageSeekBar, isInteractionLocked, onNextStack]);
   const handleInfoSidebarToggle = useCallback(() => {
+    releaseInteractionLock();
     if (!isInfoSidebarOpen) setSelectionMode(false);
     setIsInfoSidebarOpen(!isInfoSidebarOpen);
-  }, [isInfoSidebarOpen, setIsInfoSidebarOpen, setSelectionMode]);
+  }, [isInfoSidebarOpen, releaseInteractionLock, setIsInfoSidebarOpen, setSelectionMode]);
   const handleContextMenuCancelRequest = useCallback(() => {
     cancelPendingViewerContextMenu();
     closeViewerContextMenu();
@@ -968,6 +1099,7 @@ export default function StackViewer({
 
   const handleShuffle = useCallback(async () => {
     if (shuffleInFlightRef.current) return;
+    releaseInteractionLock();
     shuffleInFlightRef.current = true;
 
     try {
@@ -1064,7 +1196,7 @@ export default function StackViewer({
     } finally {
       shuffleInFlightRef.current = false;
     }
-  }, []);
+  }, [releaseInteractionLock]);
 
   const refreshAfterAssetMutation = useCallback(async () => {
     clearAssetSelection();
@@ -1174,6 +1306,8 @@ export default function StackViewer({
       await apiClient.removeStack(stackIdValue);
       setIsInfoSidebarOpen(false);
       setSelectedItemId(null);
+      // invalidate は再検証の安全網として残しつつ、リストから即座に消す楽観的パッチを先に適用する
+      removeStackFromPageCaches(queryClient, stackIdValue);
       await queryClient.invalidateQueries({ queryKey: ['stacks'] });
       await queryClient.invalidateQueries({ queryKey: ['library-counts', datasetId] });
 
@@ -1204,10 +1338,17 @@ export default function StackViewer({
   ]);
   const handleContextMenuInfo = useCallback(() => {
     if (!stack) return;
+    releaseInteractionLock();
     closeViewerContextMenu();
     setSelectedItemId(stack.id);
     setIsInfoSidebarOpen(true);
-  }, [closeViewerContextMenu, setIsInfoSidebarOpen, setSelectedItemId, stack]);
+  }, [
+    closeViewerContextMenu,
+    releaseInteractionLock,
+    setIsInfoSidebarOpen,
+    setSelectedItemId,
+    stack,
+  ]);
   const handleContextMenuDownloadCurrent = useCallback(() => {
     if (!currentAsset) return;
     closeViewerContextMenu();
@@ -1287,13 +1428,14 @@ export default function StackViewer({
   ]);
   const handleContextMenuFindSimilar = useCallback(async () => {
     if (!stack) return;
+    releaseInteractionLock();
     closeViewerContextMenu();
     const id = typeof stack.id === 'string' ? Number.parseInt(stack.id, 10) : (stack.id as number);
     await navigate({
       to: '/library/$datasetId/stacks/$stackId/similar',
       params: { datasetId, stackId: String(id) },
     });
-  }, [closeViewerContextMenu, datasetId, navigate, stack]);
+  }, [closeViewerContextMenu, datasetId, navigate, releaseInteractionLock, stack]);
   const handleContextMenuAddToScratch = useCallback(async () => {
     if (!stack) return;
     closeViewerContextMenu();
@@ -1511,7 +1653,7 @@ export default function StackViewer({
     };
   }, []);
 
-  // Keyboard: 左右=ページ移動、Shift+左右=一覧順の隣接スタック移動、ESC=戻る/Picker解除
+  // Keyboard: 左右=ページ移動、Shift+左右=一覧順の隣接スタック移動、Alt=ピッカー起動、ESC=戻る/Picker解除
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
@@ -1529,8 +1671,15 @@ export default function StackViewer({
       const hasModifier = e.metaKey || e.ctrlKey || e.altKey || e.shiftKey;
       const carousel = imageCarouselRef.current;
       const isCurrentVideo = carousel?.isCurrentVideo() ?? false;
-      if (e.key === 'Meta') {
+      if (e.key === 'Meta' && !isInteractionLocked) {
         setIsMetaNativeMode(true);
+      }
+
+      if (e.key === 'Alt' && canUseImageTools) {
+        e.preventDefault();
+        releaseInteractionLock();
+        setIsColorPickerAlt(true);
+        return;
       }
 
       if (
@@ -1651,13 +1800,14 @@ export default function StackViewer({
           handleListModeToggle();
           break;
         case 'e':
-          setIsInfoSidebarOpen(!isInfoSidebarOpen);
+          handleInfoSidebarToggle();
           break;
         case 's':
           handleShuffle();
           break;
         case 'n':
           if (hasModifier || !canUseImageTools) break;
+          releaseInteractionLock();
           setIsPenMode((v) => {
             const next = !v;
             if (next) {
@@ -1705,14 +1855,14 @@ export default function StackViewer({
     };
   }, [
     navigateBack,
-    isInfoSidebarOpen,
-    setIsInfoSidebarOpen,
     handleListModeToggle,
     handleLeftTap,
     handleRightTap,
     handleShiftStackNavigation,
     handleShuffle,
+    handleInfoSidebarToggle,
     isColorPicker,
+    isInteractionLocked,
     canUseImageTools,
     imageCarouselRef,
     currentAsset,
@@ -1721,6 +1871,7 @@ export default function StackViewer({
     refetch,
     getMarkersFor,
     openMarkerEditor,
+    releaseInteractionLock,
     handleDownloadCurrentVideoFrame,
   ]);
 
@@ -1742,6 +1893,15 @@ export default function StackViewer({
     },
     [addFilesToQueue, stack]
   );
+
+  // テキスト入力欄にフォーカスがない状態での Cmd+V ペーストをアップロードに繋げる。
+  // ビューワはグリッドより後にマウントされるためレジストリ末尾となり、
+  // オーバーレイ表示中はビューワ側の処理が優先される
+  useGlobalPasteUpload({
+    onFiles: handleFileDrop,
+    accept: 'image/*,video/*,application/pdf,.pdf,.ai,.svg,.svgz',
+    enabled: !isInteractionLocked,
+  });
 
   const handleUrlDrop = useCallback(
     async (urls: string[]) => {
@@ -1853,6 +2013,7 @@ export default function StackViewer({
       isReorderMode={false}
       isPenMode={isPenMode}
       isNativeInteractionMode={isNativeInteractionMode}
+      isInteractionLocked={isInteractionLocked}
       onDrop={handleFileDrop}
       onUrlDrop={handleUrlDrop}
     >
@@ -1907,7 +2068,7 @@ export default function StackViewer({
               }}
               {...(isNativeInteractionMode ? {} : viewerContextMenuTriggerProps)}
             >
-              {hasMultipleReadingUnits && (
+              {hasMultipleReadingUnits && !isInteractionLocked && (
                 <>
                   <div
                     className="absolute inset-x-0 top-0 z-30 h-16"
@@ -1918,16 +2079,18 @@ export default function StackViewer({
                       if (event.pointerType === 'mouse') scheduleHidePageSeekBar();
                     }}
                   />
-                  <ComicPageSeekBar
-                    currentIndex={displayedCurrentPage}
-                    total={readingUnits.length}
-                    openingDirection={readingSettings.openingDirection}
-                    bookmarkIndexes={bookmarkUnitIndexes}
-                    visible={isPageSeekBarVisible}
-                    onHoverStart={showPageSeekBar}
-                    onHoverEnd={scheduleHidePageSeekBar}
-                    onSeek={handlePageSeek}
-                  />
+                  <div ref={pageSeekBarChromeRef}>
+                    <ComicPageSeekBar
+                      currentIndex={displayedCurrentPage}
+                      total={readingUnits.length}
+                      openingDirection={readingSettings.openingDirection}
+                      bookmarkIndexes={bookmarkUnitIndexes}
+                      visible={isPageSeekBarVisible}
+                      onHoverStart={showPageSeekBar}
+                      onHoverEnd={scheduleHidePageSeekBar}
+                      onSeek={handlePageSeek}
+                    />
+                  </div>
                 </>
               )}
               <ImageCarousel
@@ -1966,8 +2129,15 @@ export default function StackViewer({
                   right: infoSidebarRightInset,
                   bottom: 96,
                 }}
-                disableDrag={isZoomed || isColorPicker || isPenMode || isNativeInteractionMode}
+                disableDrag={
+                  isZoomed ||
+                  isColorPicker ||
+                  isPenMode ||
+                  isNativeInteractionMode ||
+                  isInteractionLocked
+                }
                 isZoomed={isZoomed}
+                interactionLocked={isInteractionLocked}
                 onLeftTap={handleLeftTap}
                 onRightTap={handleRightTap}
                 onWheelZoom={
@@ -1993,10 +2163,28 @@ export default function StackViewer({
                   // Move無しのクリック/タップ: 動画なら再生/停止をトグル
                   const carousel = imageCarouselRef.current;
                   if (carousel?.isCurrentVideo()) {
+                    const wasPlaying = carousel.getIsPlaying();
                     carousel.toggleVideo();
-                  } else {
-                    showPageSeekBar();
+                    // タッチでは再生開始でUIを隠し、停止でUIを出す(動画プレーヤーの慣例に合わせる)
+                    if (isCoarsePointer) {
+                      cancelTouchChromeHideTimer();
+                      setIsTouchChromeVisible(wasPlaying);
+                    }
+                    return;
                   }
+                  if (isCoarsePointer) {
+                    // 中央タップでビューワUIの表示/非表示をトグル
+                    cancelTouchChromeHideTimer();
+                    const next = !isTouchChromeVisible;
+                    setIsTouchChromeVisible(next);
+                    if (next) {
+                      showPageSeekBar();
+                    } else {
+                      hidePageSeekBar();
+                    }
+                    return;
+                  }
+                  showPageSeekBar();
                 }}
                 onDrag={(dx) => {
                   if (isZoomed) return;
@@ -2029,9 +2217,7 @@ export default function StackViewer({
                     opacity,
                     bg
                   );
-                  if (isOverlayViewer && headerStripRef.current) {
-                    headerStripRef.current.style.opacity = String(Math.max(0, 1 - progress));
-                  }
+                  applyViewerChromeFade(progress);
                 }}
                 onVerticalDragEnd={(_, velocity, progress) => {
                   if (isZoomed) return;
@@ -2062,9 +2248,7 @@ export default function StackViewer({
                       const opacity = Math.max(0, startOpacity * (1 - t));
                       const bg = Math.min(1, animP);
                       imageCarouselRef.current!.updateVerticalTransform(nx, scale, opacity, bg);
-                      if (isOverlayViewer && headerStripRef.current) {
-                        headerStripRef.current.style.opacity = String(Math.max(0, 1 - animP));
-                      }
+                      applyViewerChromeFade(animP);
                       if (animP >= 0.995) {
                         imageCarouselRef.current!.updateVerticalTransform(nx, scale, 0, 1);
                         verticalAnimRef.current = null;
@@ -2095,9 +2279,7 @@ export default function StackViewer({
                       if (Math.abs(nx) < 0.5 && animP < 0.01) {
                         currentVerticalOffsetRef.current = 0;
                         imageCarouselRef.current!.updateVerticalTransform(0, 1, 1, 0);
-                        if (isOverlayViewer && headerStripRef.current) {
-                          headerStripRef.current.style.opacity = '';
-                        }
+                        applyViewerChromeFade(null);
                         verticalAnimRef.current = null;
                         verticalGesturingRef.current = false;
                         setIsVerticalGesturing(false);
@@ -2112,9 +2294,7 @@ export default function StackViewer({
                         opacity,
                         Math.max(0, Math.min(1, animP))
                       );
-                      if (isOverlayViewer && headerStripRef.current) {
-                        headerStripRef.current.style.opacity = String(Math.max(0, 1 - animP));
-                      }
+                      applyViewerChromeFade(animP);
                       verticalAnimRef.current = requestAnimationFrame(step);
                     };
                     verticalAnimRef.current = requestAnimationFrame(step);
@@ -2122,16 +2302,18 @@ export default function StackViewer({
                 }}
               />
               {hasMultipleReadingUnits && (
-                <EdgeNavigationAffordance
-                  leftKind={displayedLeftEdgeKind}
-                  rightKind={displayedRightEdgeKind}
-                  active={!isEdgeAffordanceSuppressed}
-                  resetKey={edgeAffordanceResetKey}
-                  attentionSide={edgeAttention?.side ?? null}
-                  attentionToken={edgeAttention?.token ?? 0}
-                  hidden={isZoomed || isColorPicker || isPenMode}
-                  onEntered={handleEdgeAffordanceEntered}
-                />
+                <div ref={edgeAffordanceChromeRef}>
+                  <EdgeNavigationAffordance
+                    leftKind={displayedLeftEdgeKind}
+                    rightKind={displayedRightEdgeKind}
+                    active={!isEdgeAffordanceSuppressed}
+                    resetKey={edgeAffordanceResetKey}
+                    attentionSide={edgeAttention?.side ?? null}
+                    attentionToken={edgeAttention?.token ?? 0}
+                    hidden={isZoomed || isColorPicker || isPenMode || isInteractionLocked}
+                    onEntered={handleEdgeAffordanceEntered}
+                  />
+                </div>
               )}
             </div>
           ) : (
@@ -2197,6 +2379,19 @@ export default function StackViewer({
                 <Download className="w-4 h-4 mr-2" />
                 {t.viewer.downloadPage}
               </button>
+              {!isCurrentVideoAsset && (currentAsset?.file || currentAsset?.url) && (
+                <a
+                  href={currentAsset.file || currentAsset.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-left text-[13px] outline-none transition-colors hover:bg-gray-100 hover:text-gray-700"
+                  onClick={closeViewerContextMenu}
+                  role="menuitem"
+                >
+                  <SquareArrowOutUpRight className="w-4 h-4 mr-2" />
+                  {t.contextMenu.openImageInNewTab}
+                </a>
+              )}
               {isCurrentVideoAsset && (
                 <button
                   type="button"
@@ -2263,6 +2458,7 @@ export default function StackViewer({
             stack={stack}
             isListMode={isListMode}
             isGesturing={isVerticalGesturing}
+            hidden={isToolbarHidden}
             isCurrentAssetFavorited={Boolean(currentAsset?.favorited ?? currentAsset?.isFavorite)}
             onStackFavoriteToggle={handleFavoriteToggle}
             onAssetFavoriteToggle={handleCurrentAssetFavoriteToggle}
@@ -2275,7 +2471,7 @@ export default function StackViewer({
                 variant="toolbar"
                 onFiles={handleFileDrop}
                 onUrls={handleUrlDrop}
-                disabled={isPenMode || isNativeInteractionMode}
+                disabled={isPenMode || isNativeInteractionMode || isInteractionLocked}
                 closeOnOutsidePointerDown
               />
             }
@@ -2298,37 +2494,38 @@ export default function StackViewer({
       {/* Info Sidebar is rendered globally in root for smooth transitions */}
 
       {createPortal(
-        <HeaderIconButton
-          onClick={handlePenModeToggle}
-          isActive={isPenMode}
-          disabled={!canUseImageTools}
-          aria-label={t.viewer.penMode}
-        >
-          <PenTool size={18} />
-        </HeaderIconButton>,
-        document.getElementById('header-actions') || document.body
-      )}
-
-      {createPortal(
-        <HeaderIconButton
-          onClick={handleColorPickerToggle}
-          isActive={isColorPicker}
-          disabled={!canUseImageTools}
-          aria-label={t.viewer.colorPicker}
-        >
-          <Pipette size={18} />
-        </HeaderIconButton>,
-        document.getElementById('header-actions') || document.body
-      )}
-
-      {createPortal(
-        <HeaderIconButton
-          onClick={handleInfoSidebarToggle}
-          isActive={isInfoSidebarOpen}
-          aria-label={isInfoSidebarOpen ? t.viewer.closeInfo : t.viewer.openInfo}
-        >
-          <Info size={18} />
-        </HeaderIconButton>,
+        <div ref={headerActionsChromeRef} className="flex items-center gap-2">
+          <ViewerInteractionLockButton
+            locked={isInteractionLocked}
+            disabled={!canLockViewerInteraction && !isInteractionLocked}
+            lockLabel={t.viewer.lockInteractions}
+            unlockLabel={t.viewer.unlockInteractions}
+            onToggle={handleInteractionLockToggle}
+          />
+          <HeaderIconButton
+            onClick={handlePenModeToggle}
+            isActive={isPenMode}
+            disabled={!canUseImageTools}
+            aria-label={t.viewer.penMode}
+          >
+            <PenTool size={18} />
+          </HeaderIconButton>
+          <HeaderIconButton
+            onClick={handleColorPickerToggle}
+            isActive={isColorPicker}
+            disabled={!canUseImageTools}
+            aria-label={t.viewer.colorPicker}
+          >
+            <Pipette size={18} />
+          </HeaderIconButton>
+          <HeaderIconButton
+            onClick={handleInfoSidebarToggle}
+            isActive={isInfoSidebarOpen}
+            aria-label={isInfoSidebarOpen ? t.viewer.closeInfo : t.viewer.openInfo}
+          >
+            <Info size={18} />
+          </HeaderIconButton>
+        </div>,
         document.getElementById('header-actions') || document.body
       )}
 

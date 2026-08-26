@@ -344,6 +344,8 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
     const pendingRestoreRef = useRef<{ time: number; wasPlaying: boolean } | null>(null);
     const currentTranslateXRef = useRef(0);
     const currentVerticalTransformRef = useRef({ translateY: 0, scale: 1, opacity: 1 });
+    const videoSeekBarChromeRef = useRef<HTMLDivElement>(null);
+    const videoTransportChromeRef = useRef<HTMLDivElement>(null);
     // const [activePointers, setActivePointers] = useState<Set<number>>(new Set());
 
     const resolvedCurrentUnit = useMemo(
@@ -757,6 +759,13 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
               const colorValue = Math.round(backgroundProgress * 255);
               backgroundRef.current.style.backgroundColor = `rgb(${colorValue}, ${colorValue}, ${colorValue})`;
             }
+          }
+
+          // 縦スワイプの進捗に連動して動画プレーヤーUI(シークバー/トランスポート)もフェードさせる
+          const chromeOpacity =
+            backgroundProgress <= 0 ? '' : String(Math.max(0, Math.min(1, 1 - backgroundProgress)));
+          for (const el of [videoSeekBarChromeRef.current, videoTransportChromeRef.current]) {
+            if (el) el.style.opacity = chromeOpacity;
           }
 
           updateDOMTransforms();
@@ -2046,6 +2055,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
           uiInsets &&
           createPortal(
             <div
+              ref={videoSeekBarChromeRef}
               className="fixed z-[100] pointer-events-auto"
               style={{
                 top: uiInsets.top,
@@ -2085,6 +2095,7 @@ const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(
 
         {isCurrentVideo && (
           <div
+            ref={videoTransportChromeRef}
             className="pointer-events-auto absolute left-1/2 z-30 -translate-x-1/2"
             style={{ bottom: 'max(4rem, calc(env(safe-area-inset-bottom) + 3rem))' }}
             onPointerEnter={(e) => {

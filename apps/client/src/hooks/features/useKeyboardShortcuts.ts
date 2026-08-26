@@ -6,6 +6,7 @@ interface UseStackGridKeyboardShortcutsProps {
   isEditPanelOpen?: boolean;
   onToggleEditPanel?: () => void;
   hasSelectedItems?: boolean;
+  enabled?: boolean;
 }
 
 /**
@@ -15,6 +16,7 @@ interface UseStackGridKeyboardShortcutsProps {
 export function useKeyboardShortcuts({
   onToggleEditPanel,
   hasSelectedItems = false,
+  enabled = true,
 }: UseStackGridKeyboardShortcutsProps = {}) {
   const [filterOpen, setFilterOpen] = useAtom(filterOpenAtom);
   const [selectionMode, setSelectionMode] = useAtom(selectionModeAtom);
@@ -67,5 +69,5 @@ export function useKeyboardShortcuts({
     },
   };
 
-  useGenericKeyboardShortcuts(shortcuts, {});
+  useGenericKeyboardShortcuts(shortcuts, { enabled });
 }

@@ -172,16 +172,10 @@ export function useStackViewerZoom({
     [applyScaleAtPoint, enabled]
   );
 
-  const startPinch = useCallback((clientX?: number, clientY?: number) => {
-    pinchBaseRef.current = pinchBaseRef.current ?? zoomTransformRef.current;
-    if (
-      typeof clientX === 'number' &&
-      typeof clientY === 'number' &&
-      Number.isFinite(clientX) &&
-      Number.isFinite(clientY)
-    ) {
-      pinchStartCenterRef.current = { clientX, clientY };
-    }
+  const startPinch = useCallback((clientX: number, clientY: number) => {
+    // ポインターの構成が変わった場合も、現在表示を新しいジェスチャーの基準にする。
+    pinchBaseRef.current = zoomTransformRef.current;
+    pinchStartCenterRef.current = { clientX, clientY };
   }, []);
 
   const updatePinch = useCallback(
@@ -190,17 +184,15 @@ export function useStackViewerZoom({
 
       const baseTransform = pinchBaseRef.current ?? zoomTransformRef.current;
       const startCenter = pinchStartCenterRef.current;
-      if (!startCenter) {
-        pinchStartCenterRef.current = { clientX, clientY };
-        return;
-      }
+      if (!startCenter) return;
 
       const geometry = getZoomGeometry();
       if (!geometry) return;
 
       const scale = clamp(baseTransform.scale * scaleMultiplier, minScale, maxScale);
       if (scale <= minScale + SCALE_EPSILON) {
-        resetZoom();
+        // ピンチ中の基準は維持し、同じ2本の指で方向を反転できるようにする。
+        commitTransform(DEFAULT_ZOOM_TRANSFORM);
         return;
       }
 
@@ -228,7 +220,7 @@ export function useStackViewerZoom({
         })
       );
     },
-    [clampTransform, commitTransform, enabled, getZoomGeometry, maxScale, minScale, resetZoom]
+    [clampTransform, commitTransform, enabled, getZoomGeometry, maxScale, minScale]
   );
 
   const endPinch = useCallback(() => {

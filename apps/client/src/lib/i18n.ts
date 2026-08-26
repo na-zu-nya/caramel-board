@@ -303,6 +303,8 @@ const en = {
     info: 'Information',
     openInfo: 'Open info panel',
     closeInfo: 'Close info panel',
+    lockInteractions: 'Lock viewer interactions',
+    unlockInteractions: 'Unlock viewer interactions',
     penMode: 'Pen mode',
     colorPicker: 'Color picker',
     stackNotFound: 'Stack not found',
@@ -550,6 +552,7 @@ const en = {
   },
   contextMenu: {
     open: 'Open',
+    openImageInNewTab: 'Open Image in New Tab',
     findSimilar: 'Find similar',
     rename: 'Rename',
     pin: 'Pin',
@@ -1120,6 +1123,8 @@ const ja: Translations = {
     info: '情報',
     openInfo: '情報パネルを開く',
     closeInfo: '情報パネルを閉じる',
+    lockInteractions: '画像操作をロック',
+    unlockInteractions: '画像操作のロックを解除',
     penMode: 'ペンモード',
     colorPicker: 'スポイト',
     stackNotFound: 'スタックが見つかりません',
@@ -1367,6 +1372,7 @@ const ja: Translations = {
   },
   contextMenu: {
     open: '開く',
+    openImageInNewTab: '画像を別タブで開く',
     findSimilar: '類似を探す',
     rename: '名前を変更',
     pin: 'ピン留め',

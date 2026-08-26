@@ -7,6 +7,12 @@ const meta: Meta<typeof TapZoneOverlay> = {
   parameters: {
     layout: 'fullscreen',
     backgrounds: { default: 'dark' },
+    docs: {
+      description: {
+        component:
+          '2本目のタッチポインター接触時点を基準に、同じ2本の指間距離を1:1の倍率として通知します。3本目の接触は進行中のピンチへ影響しません。',
+      },
+    },
   },
   decorators: [
     (Story) => (
@@ -48,6 +54,13 @@ export const Default: Story = {};
 export const Zoomed: Story = {
   args: {
     isZoomed: true,
+    disableDrag: true,
+  },
+};
+
+export const InteractionLocked: Story = {
+  args: {
+    interactionLocked: true,
     disableDrag: true,
   },
 };

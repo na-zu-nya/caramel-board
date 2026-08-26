@@ -3,6 +3,7 @@ import { useLocation, useSearch } from '@tanstack/react-router';
 import { useSetAtom } from 'jotai';
 import { startTransition, useCallback, useEffect, useRef, useState } from 'react';
 import { apiClient } from '@/lib/api-client';
+import { patchAssetInPageCaches, patchStackInPageCaches } from '@/lib/stack-cache-patch';
 import { infoSidebarOpenAtom, selectedInfoAssetIdAtom, selectedItemIdAtom } from '@/stores/ui';
 import type { Stack } from '@/types';
 
@@ -129,7 +130,9 @@ export function useStackViewer({
   const handleFavoriteToggle = useCallback(async () => {
     if (!stack) return;
     try {
-      await apiClient.toggleStackFavorite(stack.id, !stack.favorited);
+      const next = !stack.favorited;
+      await apiClient.toggleStackFavorite(stack.id, next);
+      patchStackInPageCaches(queryClient, stack.id, { favorited: next, isFavorite: next });
       await refetch();
       await queryClient.invalidateQueries({ queryKey: ['favorite-items', datasetId] });
     } catch (error) {
@@ -144,7 +147,9 @@ export function useStackViewer({
     if (!asset) return;
     try {
       const currentFavorited = Boolean(asset.favorited ?? asset.isFavorite);
-      await apiClient.toggleAssetFavorite(asset.id, !currentFavorited);
+      const next = !currentFavorited;
+      await apiClient.toggleAssetFavorite(asset.id, next);
+      patchAssetInPageCaches(queryClient, asset.id, { favorited: next, isFavorite: next });
       await refetch();
       await queryClient.invalidateQueries({ queryKey: ['favorite-items', datasetId] });
     } catch (error) {
@@ -162,6 +167,11 @@ export function useStackViewer({
       } else {
         await apiClient.likeStack(stack.id);
       }
+      // list 側にも liked/likeCount フィールドが無ければ無害なので、常にスタック側をパッチしておく
+      patchStackInPageCaches(queryClient, stack.id, {
+        liked: (typeof stack.liked === 'number' ? stack.liked : 0) + 1,
+        likeCount: (typeof stack.likeCount === 'number' ? stack.likeCount : 0) + 1,
+      });
       await refetch();
       await queryClient.invalidateQueries({ queryKey: ['likes', 'yearly'] });
     } catch (error) {

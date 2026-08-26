@@ -1,4 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
+import {
+  type ActivePinchGesture,
+  beginPinchGesture,
+  includesPinchPointer,
+  type PinchPointerPosition,
+  updatePinchGesture,
+} from './pinch-gesture';
 
 interface TapZoneOverlayProps {
   onLeftTap: () => void;
@@ -9,7 +16,7 @@ interface TapZoneOverlayProps {
   onVerticalDrag?: (deltaY: number, progress: number) => void;
   onVerticalDragEnd?: (deltaY: number, velocity: number, progress: number) => void;
   onWheelZoom?: (clientX: number, clientY: number, deltaY: number) => void;
-  onPinchStart?: (clientX?: number, clientY?: number) => void;
+  onPinchStart?: (clientX: number, clientY: number) => void;
   onPinchZoom?: (clientX: number, clientY: number, scaleMultiplier: number) => void;
   onPinchEnd?: () => void;
   onZoomPan?: (deltaX: number, deltaY: number) => void;
@@ -27,27 +34,13 @@ interface TapZoneOverlayProps {
   };
   disableDrag?: boolean;
   isZoomed?: boolean;
+  interactionLocked?: boolean;
 }
 
 interface PointerPosition {
   x: number;
   y: number;
 }
-
-const getPinchMetrics = (pointers: Map<number, PointerPosition>) => {
-  const points = Array.from(pointers.values());
-  if (points.length < 2) return null;
-
-  const [first, second] = points;
-  const deltaX = second.x - first.x;
-  const deltaY = second.y - first.y;
-
-  return {
-    distance: Math.hypot(deltaX, deltaY),
-    centerX: (first.x + second.x) / 2,
-    centerY: (first.y + second.y) / 2,
-  };
-};
 
 const LONG_PRESS_ARM_OFFSET_PX = 14;
 const LONG_PRESS_ARM_OPACITY = 0.8;
@@ -113,14 +106,14 @@ export default function TapZoneOverlay({
   contentArea = { top: 0, left: 0, right: 0, bottom: 0 },
   disableDrag = false,
   isZoomed = false,
+  interactionLocked = false,
 }: TapZoneOverlayProps) {
   const startPosRef = useRef<{ x: number; y: number; time: number } | null>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const interactionRef = useRef<HTMLDivElement>(null);
-  const activePointersRef = useRef<Map<number, PointerPosition>>(new Map());
+  const activePointersRef = useRef<Map<number, PinchPointerPosition>>(new Map());
   const multiTouchRef = useRef(false);
-  const pinchStartDistanceRef = useRef<number | null>(null);
-  const pinchLastDistanceRef = useRef<number | null>(null);
+  const pinchGestureRef = useRef<ActivePinchGesture | null>(null);
   const lastZoomTapRef = useRef<{ x: number; y: number; time: number } | null>(null);
 
   const TAP_THRESHOLD = 10; // pixels
@@ -148,6 +141,16 @@ export default function TapZoneOverlay({
     const overlay = interactionRef.current;
     if (!enabled || !overlay) return;
 
+    if (interactionLocked) {
+      activePointersRef.current.clear();
+      multiTouchRef.current = false;
+      pinchGestureRef.current = null;
+      activePointerRef.current = null;
+      startPosRef.current = null;
+      isDraggingRef.current = false;
+      dragDirectionRef.current = null;
+    }
+
     const clearLongPress = () => {
       if (armTimerRef.current !== null) {
         window.clearTimeout(armTimerRef.current);
@@ -155,6 +158,17 @@ export default function TapZoneOverlay({
       }
       longPressRef.current = null;
       setArmedSide(null);
+    };
+
+    const beginPinch = () => {
+      if (pinchGestureRef.current) return true;
+
+      const pinch = beginPinchGesture(activePointersRef.current);
+      if (!pinch) return false;
+
+      pinchGestureRef.current = pinch.gesture;
+      onPinchStart?.(pinch.metrics.centerX, pinch.metrics.centerY);
+      return true;
     };
 
     const resetPointerState = (pointerId: number) => {
@@ -170,13 +184,19 @@ export default function TapZoneOverlay({
     };
 
     const handlePointerDown = (e: PointerEvent) => {
+      if (interactionLocked) {
+        e.preventDefault();
+        return;
+      }
       // Ignore non-primary mouse buttons and context-click (e.g., Ctrl+Click on macOS)
       if (e.pointerType === 'mouse') {
         // button: 0=primary, 1=middle, 2=right
         if (e.button !== 0 || e.ctrlKey) return;
       }
       // Only track within overlay (UI above intercepts automatically)
-      activePointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (e.pointerType === 'touch') {
+        activePointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      }
       try {
         overlay.setPointerCapture(e.pointerId);
       } catch {}
@@ -186,9 +206,7 @@ export default function TapZoneOverlay({
         multiTouchRef.current = true;
         onContextMenuCancelRequest?.();
         clearLongPress();
-        pinchStartDistanceRef.current = null;
-        pinchLastDistanceRef.current = null;
-        onPinchStart?.();
+        beginPinch();
         activePointerRef.current = null;
         isDraggingRef.current = false;
         dragDirectionRef.current = null;
@@ -232,40 +250,21 @@ export default function TapZoneOverlay({
     };
 
     const handlePointerMove = (e: PointerEvent) => {
+      if (interactionLocked) {
+        e.preventDefault();
+        return;
+      }
       if (activePointersRef.current.has(e.pointerId)) {
         activePointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
       }
 
       if (multiTouchRef.current || activePointersRef.current.size >= 2) {
-        const pinchMetrics = getPinchMetrics(activePointersRef.current);
-        if (!pinchMetrics || !onPinchZoom) return;
-        if (!Number.isFinite(pinchMetrics.distance) || pinchMetrics.distance <= 0) return;
-
-        const startDistance = pinchStartDistanceRef.current;
-        if (!startDistance || startDistance <= 0) {
-          pinchStartDistanceRef.current = pinchMetrics.distance;
-          pinchLastDistanceRef.current = pinchMetrics.distance;
-          onPinchStart?.(pinchMetrics.centerX, pinchMetrics.centerY);
-          return;
-        }
-
-        const lastDistance = pinchLastDistanceRef.current;
-        if (lastDistance && lastDistance > 0) {
-          const frameRatio = pinchMetrics.distance / lastDistance;
-          if (!Number.isFinite(frameRatio) || frameRatio > 2.5 || frameRatio < 0.4) {
-            pinchStartDistanceRef.current = pinchMetrics.distance;
-            pinchLastDistanceRef.current = pinchMetrics.distance;
-            onPinchStart?.(pinchMetrics.centerX, pinchMetrics.centerY);
-            return;
-          }
-        }
-
-        pinchLastDistanceRef.current = pinchMetrics.distance;
-        const scaleMultiplier = pinchMetrics.distance / startDistance;
-        if (!Number.isFinite(scaleMultiplier) || scaleMultiplier <= 0) return;
+        if (!beginPinch() || !pinchGestureRef.current || !onPinchZoom) return;
+        const pinchMetrics = updatePinchGesture(pinchGestureRef.current, activePointersRef.current);
+        if (!pinchMetrics) return;
 
         e.preventDefault();
-        onPinchZoom(pinchMetrics.centerX, pinchMetrics.centerY, scaleMultiplier);
+        onPinchZoom(pinchMetrics.centerX, pinchMetrics.centerY, pinchMetrics.scaleMultiplier);
         return;
       }
 
@@ -353,6 +352,7 @@ export default function TapZoneOverlay({
     };
 
     const handlePointerUp = (e: PointerEvent) => {
+      if (interactionLocked) return;
       const longPress = longPressRef.current;
       if (longPress && longPress.pointerId === e.pointerId) {
         const { armed, callback } = longPress;
@@ -364,18 +364,23 @@ export default function TapZoneOverlay({
         }
       }
       const wasMultiTouch = multiTouchRef.current;
+      const endedPinch = pinchGestureRef.current;
+      const endedTrackedPointer = endedPinch
+        ? includesPinchPointer(endedPinch, e.pointerId)
+        : false;
       activePointersRef.current.delete(e.pointerId);
 
       if (wasMultiTouch) {
         try {
           overlay.releasePointerCapture(e.pointerId);
         } catch {}
+        if (endedTrackedPointer) {
+          pinchGestureRef.current = null;
+          onPinchEnd?.();
+          beginPinch();
+        }
         if (activePointersRef.current.size < 2) {
-          if (pinchStartDistanceRef.current !== null) {
-            onPinchEnd?.();
-          }
-          pinchStartDistanceRef.current = null;
-          pinchLastDistanceRef.current = null;
+          pinchGestureRef.current = null;
           activePointerRef.current = null;
           startPosRef.current = null;
           isDraggingRef.current = false;
@@ -460,7 +465,16 @@ export default function TapZoneOverlay({
       dragDirectionRef.current = null;
     };
 
+    const handleLostPointerCapture = (e: PointerEvent) => {
+      if (!activePointersRef.current.has(e.pointerId)) return;
+      handlePointerUp(e);
+    };
+
     const handleWheel = (e: WheelEvent) => {
+      if (interactionLocked) {
+        e.preventDefault();
+        return;
+      }
       if (!onWheelZoom) return;
       e.preventDefault();
       onWheelZoom(e.clientX, e.clientY, e.deltaY);
@@ -470,6 +484,7 @@ export default function TapZoneOverlay({
     overlay.addEventListener('pointermove', handlePointerMove, { passive: false });
     overlay.addEventListener('pointerup', handlePointerUp, { passive: true });
     overlay.addEventListener('pointercancel', handlePointerUp, { passive: true });
+    overlay.addEventListener('lostpointercapture', handleLostPointerCapture, { passive: true });
     overlay.addEventListener('wheel', handleWheel, { passive: false });
 
     return () => {
@@ -477,6 +492,7 @@ export default function TapZoneOverlay({
       overlay.removeEventListener('pointermove', handlePointerMove);
       overlay.removeEventListener('pointerup', handlePointerUp);
       overlay.removeEventListener('pointercancel', handlePointerUp);
+      overlay.removeEventListener('lostpointercapture', handleLostPointerCapture);
       overlay.removeEventListener('wheel', handleWheel);
       clearLongPress();
     };
@@ -484,6 +500,7 @@ export default function TapZoneOverlay({
     enabled,
     disableDrag,
     isZoomed,
+    interactionLocked,
     onLeftTap,
     onRightTap,
     onCenterTap,

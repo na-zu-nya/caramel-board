@@ -7,6 +7,7 @@ interface ViewerContextMenuPosition {
 }
 
 interface UseViewerContextMenuOptions {
+  enabled?: boolean;
   longPressDelay?: number;
   moveThreshold?: number;
   menuWidth?: number;
@@ -36,6 +37,7 @@ const clampPosition = (
 };
 
 export function useViewerContextMenu({
+  enabled = true,
   longPressDelay = 700,
   moveThreshold = 10,
   menuWidth = 192,
@@ -76,13 +78,15 @@ export function useViewerContextMenu({
   const handleContextMenu = useCallback(
     (event: ReactMouseEvent<HTMLElement>) => {
       event.preventDefault();
+      if (!enabled) return;
       openAt(event.clientX, event.clientY);
     },
-    [openAt]
+    [enabled, openAt]
   );
 
   const handlePointerDownCapture = useCallback(
     (event: ReactPointerEvent<HTMLElement>) => {
+      if (!enabled) return;
       if (event.pointerType === 'mouse') return;
       if (event.button !== 0) return;
 
@@ -99,7 +103,7 @@ export function useViewerContextMenu({
         openAt(pendingPointer.x, pendingPointer.y);
       }, longPressDelay);
     },
-    [clearLongPress, longPressDelay, openAt]
+    [clearLongPress, enabled, longPressDelay, openAt]
   );
 
   const handlePointerMoveCapture = useCallback(

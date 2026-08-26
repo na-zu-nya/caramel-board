@@ -10,6 +10,7 @@ interface StackToolbarProps {
   stack: Stack;
   isListMode: boolean;
   isGesturing: boolean;
+  hidden?: boolean;
   isCurrentAssetFavorited?: boolean;
   onStackFavoriteToggle: () => void;
   onAssetFavoriteToggle: () => void;
@@ -24,6 +25,7 @@ export default function StackToolbar({
   stack,
   isListMode,
   isGesturing,
+  hidden = false,
   isCurrentAssetFavorited = false,
   onStackFavoriteToggle,
   onAssetFavoriteToggle,
@@ -42,12 +44,23 @@ export default function StackToolbar({
     <div
       className={cn(
         'pointer-events-none absolute bottom-[calc(env(safe-area-inset-bottom)+1rem)] left-4 right-4 z-50 flex items-end justify-between gap-4 transition-opacity',
-        isGesturing ? 'opacity-0' : 'opacity-100'
+        isGesturing || hidden ? 'opacity-0' : 'opacity-100'
       )}
     >
-      {leadingAction && <div className="pointer-events-auto flex shrink-0">{leadingAction}</div>}
+      {leadingAction && (
+        <div
+          className={cn('flex shrink-0', hidden ? 'pointer-events-none' : 'pointer-events-auto')}
+        >
+          {leadingAction}
+        </div>
+      )}
 
-      <div className="pointer-events-auto ml-auto flex items-center justify-end gap-2">
+      <div
+        className={cn(
+          'ml-auto flex items-center justify-end gap-2',
+          hidden ? 'pointer-events-none' : 'pointer-events-auto'
+        )}
+      >
         <button
           onClick={onStackFavoriteToggle}
           className={cn(

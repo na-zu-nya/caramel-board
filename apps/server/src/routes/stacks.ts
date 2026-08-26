@@ -928,6 +928,15 @@ stacksRoute.get('/:id{[0-9]+}/collections', async (c) => {
   return c.json({ collectionIds: stackRepository.getCollectionIdsByStackId(id) });
 });
 
+stacksRoute.get('/:id{[0-9]+}/top-asset/file', async (c) => {
+  const id = Number.parseInt(c.req.param('id'), 10);
+  const stack = stackRepository.getById(id);
+  if (!stack) return c.json({ error: 'Stack not found' }, 404);
+  const topAsset = stack.assets?.[0];
+  if (!topAsset?.file) return c.json({ error: 'Asset not found' }, 404);
+  return c.redirect(topAsset.file, 302);
+});
+
 stacksRoute.post('/bulk/tags', async (c) => {
   const parse = BulkTagsSchema.safeParse(await c.req.json().catch(() => ({})));
   if (!parse.success) return c.json({ error: 'Invalid body', details: parse.error }, 400);
