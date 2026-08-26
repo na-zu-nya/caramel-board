@@ -10,6 +10,7 @@ import { DropZone } from '@/components/ui/DropZone';
 import { SectionBlock, SectionHeader } from '@/components/ui/Section/Section';
 import { useDatasetOverview } from '@/hooks/useDatasetOverview';
 import { useDataset } from '@/hooks/useDatasets';
+import { useGlobalPasteUpload } from '@/hooks/useGlobalPasteUpload';
 import { useHeaderActions } from '@/hooks/useHeaderActions';
 import { isScratchCollection } from '@/hooks/useScratch';
 import { useStackTile } from '@/hooks/useStackTile';
@@ -185,6 +186,9 @@ function DatasetHome() {
     },
     [addFilesToQueue, addNotification, dataset?.id, datasetId, t]
   );
+
+  // テキスト入力欄にフォーカスがない状態での Cmd+V ペーストをアップロードに繋げる
+  useGlobalPasteUpload({ onFiles: handleOverviewFileDrop });
 
   const handleOverviewUrlDrop = useCallback(
     async (urls: string[]) => {

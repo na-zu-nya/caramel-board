@@ -6,7 +6,7 @@ interface DraggedStackInfo {
   collectionIds: number[];
 }
 
-type DragKind = 'stack' | 'native-image' | null;
+type DragKind = 'stack' | 'native-image' | 'asset-reorder' | null;
 
 interface DragContextType {
   draggedStack: DraggedStackInfo | null;

@@ -16,6 +16,7 @@ import Header from '@/containers/header-container';
 import Sidebar from '@/containers/sidebar-container';
 import { DragProvider } from '@/contexts/DragContext';
 import { useDatasets } from '@/hooks/useDatasets';
+import { useGlobalDropNavigationGuard } from '@/hooks/useGlobalDropNavigationGuard';
 import { useSidebarPushesContent } from '@/hooks/useSidebarLayoutMode';
 import { useThemeColor } from '@/hooks/useThemeColor';
 import { useUploadQueue } from '@/hooks/useUploadQueue';
@@ -43,6 +44,8 @@ function RootLayout() {
   const t = useT();
   // Run upload queue globally (single runner)
   useUploadQueue();
+  // DropZone の外側に落とされた URL/ファイルドロップで Safari が既定のナビゲーションを行わないようにする
+  useGlobalDropNavigationGuard();
   const [sidebarOpen, setSidebarOpen] = useAtom(sidebarOpenAtom);
   const sidebarPushesContent = useSidebarPushesContent(sidebarOpen);
   const [currentDataset, setCurrentDataset] = useAtom(currentDatasetAtom);

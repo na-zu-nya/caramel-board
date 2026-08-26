@@ -107,6 +107,11 @@ export const addUploadNotificationAtom = atom(
   }
 );
 
+// Remove notification (クリック・スワイプによる手動削除)
+export const removeUploadNotificationAtom = atom(null, (_get, set, id: string) => {
+  set(uploadNotificationsAtom, (prev) => prev.filter((n) => n.id !== id));
+});
+
 function normalizeUploadMetadata(metadata?: UploadMetadata): UploadMetadata | undefined {
   if (!metadata) {
     return undefined;

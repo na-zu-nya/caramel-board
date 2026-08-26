@@ -416,6 +416,41 @@ const lookupMimeFromExtension = (originalName: string): string | null => {
   return mapping[ext] ?? null;
 };
 
+// Node の fetch は失敗理由を「fetch failed」に包んでしまうため、cause を辿って利用者に伝わる文言へ変換する
+const describeFetchFailure = (error: unknown): string => {
+  const codes = new Set<string>();
+  let current: unknown = error;
+  for (let depth = 0; depth < 5 && current instanceof Error; depth++) {
+    const code = (current as NodeJS.ErrnoException).code;
+    if (typeof code === 'string') codes.add(code);
+    current = current.cause;
+  }
+
+  if (codes.has('CERT_HAS_EXPIRED')) {
+    return '取得先のSSL証明書が期限切れのため取得できませんでした';
+  }
+  if (
+    codes.has('DEPTH_ZERO_SELF_SIGNED_CERT') ||
+    codes.has('SELF_SIGNED_CERT_IN_CHAIN') ||
+    codes.has('UNABLE_TO_VERIFY_LEAF_SIGNATURE') ||
+    codes.has('ERR_TLS_CERT_ALTNAME_INVALID')
+  ) {
+    return '取得先のSSL証明書を検証できないため取得できませんでした';
+  }
+  if (codes.has('ENOTFOUND') || codes.has('EAI_AGAIN')) {
+    return '取得先のホストが見つかりませんでした';
+  }
+  if (codes.has('ECONNREFUSED')) {
+    return '取得先に接続できませんでした(接続拒否)';
+  }
+  if (codes.has('ETIMEDOUT') || codes.has('UND_ERR_CONNECT_TIMEOUT')) {
+    return '取得先への接続がタイムアウトしました';
+  }
+
+  const detail = Array.from(codes).join(', ');
+  return detail ? `URLの取得に失敗しました (${detail})` : 'URLの取得に失敗しました';
+};
+
 const downloadRemoteAsset = async (url: string, tmpDir: string): Promise<ImportedFile> => {
   const targetUrl = new URL(url);
   const headers: Record<string, string> = {
@@ -427,7 +462,12 @@ const downloadRemoteAsset = async (url: string, tmpDir: string): Promise<Importe
     headers.Referer = 'https://www.pixiv.net/';
   }
 
-  const response = await fetch(url, { headers });
+  let response: Response;
+  try {
+    response = await fetch(url, { headers });
+  } catch (error) {
+    throw new Error(describeFetchFailure(error));
+  }
   if (!response.ok) {
     throw new Error(`HTTP ${response.status}で取得に失敗しました`);
   }

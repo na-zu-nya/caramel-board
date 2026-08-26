@@ -248,7 +248,14 @@ function splitConcatenatedUrls(value: string): string[] {
     return [];
   }
 
-  return matches.map((part) => part.trim()).filter((part) => part.length > 0);
+  return (
+    matches
+      .map((part) => part.trim())
+      // Safari は改行連結した複数URLを1本としてパーセントエンコードすることがあり、
+      // 分割後の各片の末尾に %0A / %0D (連続する場合あり) が残ってしまう。trim() では取れないため明示的に除去する
+      .map((part) => part.replace(/(?:%0[ad])+$/gi, ''))
+      .filter((part) => part.length > 0)
+  );
 }
 
 function extractRawUrlStrings(value: string): string[] {
@@ -638,10 +645,20 @@ export function DropZone({
     }
 
     const isFileLikeDrag = (event: DragEvent) => {
-      if (dragKind === 'native-image') return false;
+      // アプリ内発のドラッグ(スタック移動・ネイティブ画像ドラッグ)は対象外
+      if (dragKind !== null) return false;
       const types = Array.from(event.dataTransfer?.types ?? []);
       if (types.includes(STACK_IDS_MIME)) return false;
-      return types.includes('Files') || types.includes('text/uri-list');
+      // Safari(WebKit)はファイルを含む外部ドラッグの dragenter/dragover で types を隠して
+      // 空配列になる。アプリ内ドラッグは必ず setData している(空にならない)ため、
+      // 空 types は外部ドラッグとして受け入れる。drop 時には types が開示されるので
+      // handleDrop 側の再判定で正しく振り分けられる
+      if (types.length === 0) return true;
+      // Safari => Safari の外部ドラッグは text/plain のみで URL を運んでくることがある。
+      // 拾えなければ drop 時に extractUrlsFromDataTransfer が空配列を返すだけなので安全に受け入れる
+      return (
+        types.includes('Files') || types.includes('text/uri-list') || types.includes('text/plain')
+      );
     };
 
     const handleDragEnter = (e: DragEvent) => {

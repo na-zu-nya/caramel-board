@@ -10,6 +10,7 @@ import { GridColumnSlider } from '@/components/ui/GridColumnSlider';
 import { HeaderIconButton } from '@/components/ui/Header/HeaderIconButton';
 import { SelectionActionBar } from '@/components/ui/selection-action-bar';
 import { useStackGrid } from '@/hooks/features/useStackGrid';
+import { useGlobalPasteUpload } from '@/hooks/useGlobalPasteUpload';
 import { useScratch } from '@/hooks/useScratch';
 import { useRightPanelPushesContent } from '@/hooks/useSidebarLayoutMode';
 import { useSparseInfiniteScroll } from '@/hooks/useSparseInfiniteScroll';
@@ -653,6 +654,9 @@ export default function SparseStackGrid({
     },
     [addFilesToQueue, addNotification, computeUploadDefaults, t]
   );
+
+  // テキスト入力欄にフォーカスがない状態での Cmd+V ペーストをアップロードに繋げる
+  useGlobalPasteUpload({ onFiles: handleFilesDrop });
 
   const handleUrlDrop = useCallback(
     async (urls: string[]) => {

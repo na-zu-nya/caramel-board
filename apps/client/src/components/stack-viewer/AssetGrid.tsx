@@ -25,6 +25,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { type SelectionAction, SelectionActionBar } from '@/components/ui/selection-action-bar';
+import { useDrag } from '@/contexts/DragContext';
 import { useT } from '@/lib/i18n';
 import { isVideoAsset } from '@/lib/media';
 import { cn } from '@/lib/utils';
@@ -103,6 +104,7 @@ export default function AssetGrid({
   canSortAssets = false,
 }: AssetGridProps) {
   const t = useT();
+  const { setIsDragging: setGlobalDragging, setDragKind } = useDrag();
   const [draggedAssetId, setDraggedAssetId] = useState<Asset['id'] | null>(null);
   const [dropTarget, setDropTarget] = useState<AssetGridDropTarget | null>(null);
   const [isDropSettling, setIsDropSettling] = useState(false);
@@ -123,13 +125,15 @@ export default function AssetGrid({
       if (!canReorderAssets) return;
       setDraggedAssetId(assetId);
       setDropTarget(null);
+      setGlobalDragging(true);
+      setDragKind('asset-reorder');
       e.dataTransfer.effectAllowed = 'move';
       try {
         // Safari は dataTransfer に値がないとドラッグが開始されない
         e.dataTransfer.setData('text/plain', String(assetId));
       } catch {}
     },
-    [canReorderAssets]
+    [canReorderAssets, setDragKind, setGlobalDragging]
   );
 
   const commitDropTarget = useCallback(
@@ -176,14 +180,16 @@ export default function AssetGrid({
       commitDropTarget(dropTarget);
       setDraggedAssetId(null);
       setDropTarget(null);
+      setGlobalDragging(false);
     },
-    [beginDropSettling, canReorderAssets, commitDropTarget, dropTarget]
+    [beginDropSettling, canReorderAssets, commitDropTarget, dropTarget, setGlobalDragging]
   );
 
   const handleDragEnd = useCallback(() => {
     setDraggedAssetId(null);
     setDropTarget(null);
-  }, []);
+    setGlobalDragging(false);
+  }, [setGlobalDragging]);
 
   const handleGridDragLeave = useCallback((e: React.DragEvent<HTMLDivElement>) => {
     const nextTarget = e.relatedTarget;
@@ -356,8 +362,15 @@ export default function AssetGrid({
       commitDropTarget(updateDropTargetFromPoint(e));
       setDraggedAssetId(null);
       setDropTarget(null);
+      setGlobalDragging(false);
     },
-    [beginDropSettling, commitDropTarget, draggedAssetId, updateDropTargetFromPoint]
+    [
+      beginDropSettling,
+      commitDropTarget,
+      draggedAssetId,
+      setGlobalDragging,
+      updateDropTargetFromPoint,
+    ]
   );
 
   const getAssetActionIds = useCallback(
