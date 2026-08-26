@@ -120,6 +120,10 @@ export class StandaloneStackRepository {
     );
   }
 
+  getStackIdsByAssetHashes(dataSetId: number, hashes: string[]) {
+    return this.similarService.getStackIdsByAssetHashes(dataSetId, hashes);
+  }
+
   getScoredSimilarByReference(
     dataSetId: number,
     reference: SimilarVectors,

@@ -75,10 +75,30 @@ const allMediaTypeFilter: StackFilter = {
   category: 'books',
 };
 
+const imageSearchFilter: StackFilter = {
+  datasetId: '1',
+  category: 'image',
+  imageSearch: {
+    contentHash: '3d4ef5799bbf5d55c3519f8c6cb6bf2a2abd5948db48793854b11fa2b1cd22a2',
+    tags: [
+      { key: 'animal_ears', score: 0.79 },
+      { key: 'yellow_flower', score: 0.57 },
+    ],
+    colors: [{ r: 242, g: 217, b: 205, hex: '#F2D9CD', percentage: 0.94 }],
+    tagWeight: 0.65,
+    threshold: 0.2,
+    mode: 'auto',
+  },
+};
+
 export const Default: Story = {
   render: () => <FilterPanelStory initialFilter={selectedMediaTypeFilter} />,
 };
 
 export const AllMediaTypes: Story = {
   render: () => <FilterPanelStory initialFilter={allMediaTypeFilter} />,
+};
+
+export const ActiveImageSearch: Story = {
+  render: () => <FilterPanelStory initialFilter={imageSearchFilter} />,
 };

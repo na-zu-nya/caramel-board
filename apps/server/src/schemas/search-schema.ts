@@ -54,6 +54,11 @@ export const ColorFilterSchema = z
 // 画像ドロップ検索フィルタ
 export const ImageSearchFilterSchema = z
   .object({
+    contentHash: z
+      .string()
+      .regex(/^[0-9a-f]{64}$/i)
+      .transform((value) => value.toLowerCase())
+      .optional(),
     tags: z
       .array(z.object({ key: z.string().min(1), score: z.number().min(0).max(1) }))
       .max(50)

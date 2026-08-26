@@ -616,12 +616,14 @@ stacksRoute.get('/paginated', async (c) => {
     // (strictNullChecks が必要な TypeScript 側の既知の挙動)。値は safeParse 済みで実行時には
     // 必ず存在するため、正確な静的型に戻すキャスト。
     const imageSearch = query.filters.imageSearch as {
+      contentHash?: string;
       tags: Array<{ key: string; score: number }>;
       colors: Array<{ r: number; g: number; b: number; hex: string; percentage: number }>;
       tagWeight: number;
       threshold: number;
     };
     const scored = imageSearchService.getScoredStackIds(stackListParams.dataSetId, {
+      contentHash: imageSearch.contentHash,
       tags: imageSearch.tags,
       colors: imageSearch.colors,
       tagWeight: imageSearch.tagWeight,

@@ -155,12 +155,14 @@ app.get(
         // through zValidator('query', SearchQuerySchema), so these fields are guaranteed
         // present at runtime; this cast just restores the accurate static type.
         const imageSearch = filters.imageSearch as {
+          contentHash?: string;
           tags: Array<{ key: string; score: number }>;
           colors: Array<{ r: number; g: number; b: number; hex: string; percentage: number }>;
           tagWeight: number;
           threshold: number;
         };
         const scored = imageSearchService.getScoredStackIds(dataSetId, {
+          contentHash: imageSearch.contentHash,
           tags: imageSearch.tags,
           colors: imageSearch.colors,
           tagWeight: imageSearch.tagWeight,

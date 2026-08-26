@@ -383,6 +383,7 @@ export interface StackFilter {
   hasNoTags?: boolean;
   hasNoAuthor?: boolean;
   imageSearch?: {
+    contentHash?: string;
     tags: ImageSearchTag[];
     colors: ImageSearchColor[];
     tagWeight: number;
@@ -440,6 +441,7 @@ export interface ImageSearchColor {
 }
 
 export interface AnalyzeImageResponse {
+  contentHash: string;
   tags: ImageSearchTag[];
   colors: ImageSearchColor[];
   autoTagAvailable: boolean;

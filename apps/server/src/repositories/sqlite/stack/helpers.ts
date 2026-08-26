@@ -21,7 +21,6 @@ export const DEFAULT_AUTO_STOP_TAGS = [
 
 export const SIMILAR_CONFIG = {
   autoTopN: 30,
-  autoProbeCount: 8,
   autoMinScore: 0.55,
   manualTopN: 60,
   candidateLimit: 1500,

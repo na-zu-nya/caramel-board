@@ -289,6 +289,7 @@ function FilterPanel({
         updateFilter(
           {
             imageSearch: {
+              contentHash: result.contentHash,
               tags: result.tags,
               colors: result.colors,
               tagWeight: IMAGE_SEARCH_MODE_TAG_WEIGHT.auto,

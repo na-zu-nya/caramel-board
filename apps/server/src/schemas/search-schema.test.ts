@@ -6,6 +6,7 @@ describe('PaginatedFiltersParamSchema', () => {
     const full = PaginatedFiltersParamSchema.parse(
       JSON.stringify({
         imageSearch: {
+          contentHash: 'A'.repeat(64),
           tags: [{ key: 'tag_a', score: 0.9 }],
           colors: [{ r: 255, g: 0, b: 0, hex: '#FF0000', percentage: 1 }],
           tagWeight: 0.5,
@@ -14,6 +15,7 @@ describe('PaginatedFiltersParamSchema', () => {
     );
     expect(full).toEqual({
       imageSearch: {
+        contentHash: 'a'.repeat(64),
         tags: [{ key: 'tag_a', score: 0.9 }],
         colors: [{ r: 255, g: 0, b: 0, hex: '#FF0000', percentage: 1 }],
         tagWeight: 0.5,
@@ -38,6 +40,11 @@ describe('PaginatedFiltersParamSchema', () => {
   it('returns undefined when imageSearch violates the schema', () => {
     expect(
       PaginatedFiltersParamSchema.parse(JSON.stringify({ imageSearch: { tagWeight: 2 } }))
+    ).toBeUndefined();
+    expect(
+      PaginatedFiltersParamSchema.parse(
+        JSON.stringify({ imageSearch: { contentHash: 'not-a-sha256' } })
+      )
     ).toBeUndefined();
   });
 

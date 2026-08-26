@@ -89,6 +89,14 @@ describe('ImageStackSearchService', () => {
     });
   };
 
+  const insertAsset = (stackId: number, hash: string) => {
+    db.prepare(
+      `INSERT INTO assets
+         (id, stack_id, file, thumbnail, file_type, original_name, hash, created_at, updated_at)
+       VALUES (?, ?, ?, '', 'jpg', ?, ?, ?, ?)`
+    ).run(stackId, stackId, `library/1/assets/${stackId}.jpg`, `${stackId}.jpg`, hash, now, now);
+  };
+
   const insertFavorite = (stackId: number) => {
     db.prepare(
       `INSERT INTO stack_favorites (id, user_id, stack_id, created_at) VALUES (?, 1, ?, ?)`
@@ -243,6 +251,21 @@ describe('ImageStackSearchService', () => {
 
       expect(withZeroThreshold).toEqual(withoutThreshold);
     });
+
+    it('places an exact content-hash match first even when it has no searchable tags', () => {
+      const contentHash = 'a'.repeat(64);
+      insertAsset(14, contentHash);
+      const service = new ImageStackSearchService({ stackRepository, colorRepository });
+
+      const result = service.getScoredStackIds(1, {
+        contentHash,
+        tags,
+        colors: [redQueryColorInput],
+        tagWeight: 0.65,
+      });
+
+      expect(result[0]).toEqual({ id: 14, score: 1 });
+    });
   });
 
   describe('analyzeImage', () => {
@@ -267,6 +290,9 @@ describe('ImageStackSearchService', () => {
 
       const result = await service.analyzeImage({ buffer: Buffer.from(''), filename: 'query.png' });
 
+      expect(result.contentHash).toBe(
+        'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'
+      );
       expect(result.autoTagAvailable).toBe(true);
       expect(result.tags).toEqual([{ key: 'valid_tag', score: 0.7 }]);
       expect(result.colors).toEqual([{ r: 255, g: 0, b: 0, hex: '#FF0000', percentage: 1 }]);
@@ -286,6 +312,9 @@ describe('ImageStackSearchService', () => {
 
       const result = await service.analyzeImage({ buffer: Buffer.from(''), filename: 'query.png' });
 
+      expect(result.contentHash).toBe(
+        'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'
+      );
       expect(result.autoTagAvailable).toBe(false);
       expect(result.tags).toEqual([]);
       expect(result.colors).toEqual([{ r: 255, g: 0, b: 0, hex: '#FF0000', percentage: 1 }]);

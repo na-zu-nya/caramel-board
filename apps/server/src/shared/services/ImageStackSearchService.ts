@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { AutoTagClient } from '../../lib/AutoTagClient';
 import { getAutoTagClient } from '../../lib/AutoTagClient';
 import type { StandaloneColorRepository } from '../../repositories/sqlite/color-repository';
@@ -14,6 +15,7 @@ import { ColorExtractor, type DominantColor } from '../../utils/colorExtractor';
 export class UnsupportedImageError extends Error {}
 
 export interface ImageSearchQuery {
+  contentHash: string;
   tags: Array<{ key: string; score: number }>;
   colors: Array<{ r: number; g: number; b: number; hex: string; percentage: number }>;
   autoTagAvailable: boolean;
@@ -75,6 +77,7 @@ export class ImageStackSearchService {
    * scoring happens here.
    */
   async analyzeImage(input: { buffer: Buffer; filename: string }): Promise<ImageSearchQuery> {
+    const contentHash = createHash('sha256').update(input.buffer).digest('hex');
     const extractQueryColors =
       this.deps.extractQueryColors ?? ColorExtractor.extractDominantColorsFromBuffer;
     let colors: DominantColor[];
@@ -117,6 +120,7 @@ export class ImageStackSearchService {
     }
 
     return {
+      contentHash,
       tags,
       colors: colors.map((color) => ({
         r: color.r,
@@ -145,6 +149,7 @@ export class ImageStackSearchService {
       colors: Array<{ r: number; g: number; b: number; hex: string; percentage: number }>;
       tagWeight: number;
       threshold?: number;
+      contentHash?: string;
     }
   ): Array<{ id: number; score: number }> {
     const queryHsl: HslPoint[] = input.colors.map((color) => {
@@ -181,9 +186,22 @@ export class ImageStackSearchService {
       }));
     }
 
+    const exactStackIds = input.contentHash
+      ? this.deps.stackRepository.getStackIdsByAssetHashes(dataSetId, [input.contentHash])
+      : [];
+    const exactStackIdSet = new Set(exactStackIds);
+    const scoresById = new Map(scored.map((entry) => [entry.id, entry.score]));
+    for (const id of exactStackIds) scoresById.set(id, 1);
+
     const threshold = input.threshold ?? 0;
-    return scored
+    return Array.from(scoresById, ([id, score]) => ({ id, score }))
       .filter((entry) => entry.score >= threshold)
-      .sort((left, right) => right.score - left.score);
+      .sort((left, right) => {
+        const exactOrder =
+          Number(exactStackIdSet.has(right.id)) - Number(exactStackIdSet.has(left.id));
+        if (exactOrder !== 0) return exactOrder;
+        const scoreOrder = right.score - left.score;
+        return scoreOrder !== 0 ? scoreOrder : left.id - right.id;
+      });
   }
 }

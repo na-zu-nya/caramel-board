@@ -138,6 +138,51 @@ describe('StackSimilarService.getScoredSimilarByReference', () => {
     });
     expect(withExclusion.map((entry) => entry.id)).not.toContain(400);
   });
+
+  it('keeps manual-tag-only candidates in the ranked candidate search', () => {
+    insertStack(500);
+    db.prepare('INSERT INTO tags (id, dataset_id, title) VALUES (1, 1, ?)').run('rare_manual');
+    db.prepare('INSERT INTO stack_tags (stack_id, tag_id) VALUES (500, 1)').run();
+
+    const reference: SimilarVectors = {
+      auto: new Map(),
+      manual: new Set(['rare_manual']),
+    };
+
+    expect(service.getScoredSimilarByReference(1, reference, {})).toEqual([{ id: 500, score: 1 }]);
+  });
+
+  it('ranks candidates by all shared tags before applying the candidate limit', () => {
+    db.exec('BEGIN');
+    try {
+      for (let index = 0; index < SIMILAR_CONFIG.candidateLimit; index += 1) {
+        const stackId = 1_000 + index;
+        insertStack(stackId);
+        insertAutoTagScores(stackId, [{ tagKey: 'common_tag', score: 0.9 }]);
+      }
+      insertStack(9_999);
+      insertAutoTagScores(9_999, [
+        { tagKey: 'common_tag', score: 0.9 },
+        { tagKey: 'rare_tag', score: 0.6 },
+      ]);
+      db.exec('COMMIT');
+    } catch (error) {
+      db.exec('ROLLBACK');
+      throw error;
+    }
+
+    const reference: SimilarVectors = {
+      auto: new Map([
+        ['common_tag', 0.9],
+        ['rare_tag', 0.6],
+      ]),
+      manual: new Set(),
+    };
+
+    const result = service.getScoredSimilarByReference(1, reference, {});
+
+    expect(result[0]?.id).toBe(9_999);
+  });
 });
 
 describe('StandaloneStackRepository.getSimilarByStackIds regression', () => {

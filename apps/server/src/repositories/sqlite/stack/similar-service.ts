@@ -19,6 +19,25 @@ type StackResolver<TStack> = (id: number, dataSetId: number) => TStack | null;
 export class StackSimilarService {
   constructor(private db: DatabaseSync) {}
 
+  getStackIdsByAssetHashes(dataSetId: number, hashes: string[]) {
+    const normalizedHashes = Array.from(
+      new Set(hashes.map((hash) => hash.trim().toLowerCase()).filter((hash) => hash.length > 0))
+    );
+    if (normalizedHashes.length === 0) return [];
+
+    const rows = this.db
+      .prepare(
+        `SELECT DISTINCT assets.stack_id AS id
+         FROM assets
+         JOIN stacks ON stacks.id = assets.stack_id
+         WHERE stacks.dataset_id = ?
+           AND assets.hash IN (${placeholders(normalizedHashes)})
+         ORDER BY assets.stack_id ASC`
+      )
+      .all(dataSetId, ...normalizedHashes) as Array<{ id: number }>;
+    return rows.map((row) => row.id);
+  }
+
   getSimilarByStackIds<TStack>(
     dataSetId: number,
     sourceStackIds: number[],
@@ -179,48 +198,6 @@ export class StackSimilarService {
     return { auto, manual };
   }
 
-  private getAutoCandidateIds(dataSetId: number, autoTags: string[], excludedStackIds: number[]) {
-    if (autoTags.length === 0) return [];
-    const rows = this.db
-      .prepare(
-        `SELECT DISTINCT scores.stack_id AS id
-         FROM stack_auto_tag_scores scores
-         JOIN stacks s ON s.id = scores.stack_id
-         WHERE s.dataset_id = ?
-           AND scores.score >= ?
-           AND lower(scores.tag_key) IN (${placeholders(autoTags)})
-           AND scores.stack_id NOT IN (${placeholders(excludedStackIds)})
-         LIMIT ?`
-      )
-      .all(
-        dataSetId,
-        SIMILAR_CONFIG.autoMinScore,
-        ...autoTags,
-        ...excludedStackIds,
-        SIMILAR_CONFIG.candidateLimit
-      ) as Array<{ id: number }>;
-    return rows.map((row) => row.id);
-  }
-
-  private getManualCandidateIds(dataSetId: number, tags: string[], excludedStackIds: number[]) {
-    if (tags.length === 0) return [];
-    const rows = this.db
-      .prepare(
-        `SELECT DISTINCT st.stack_id AS id
-         FROM stack_tags st
-         JOIN tags t ON t.id = st.tag_id
-         JOIN stacks s ON s.id = st.stack_id
-         WHERE s.dataset_id = ?
-           AND lower(t.title) IN (${placeholders(tags)})
-           AND st.stack_id NOT IN (${placeholders(excludedStackIds)})
-         LIMIT ?`
-      )
-      .all(dataSetId, ...tags, ...excludedStackIds, SIMILAR_CONFIG.candidateLimit) as Array<{
-      id: number;
-    }>;
-    return rows.map((row) => row.id);
-  }
-
   private getDatasetStackCount(dataSetId: number) {
     return (
       (
@@ -240,8 +217,8 @@ export class StackSimilarService {
          JOIN stacks s ON s.id = scores.stack_id
          WHERE s.dataset_id = ?
            AND scores.score >= ?
-           AND lower(scores.tag_key) IN (${placeholders(tags)})
-         GROUP BY lower(scores.tag_key)`
+           AND scores.tag_key IN (${placeholders(tags)})
+         GROUP BY scores.tag_key COLLATE NOCASE`
       )
       .all(dataSetId, SIMILAR_CONFIG.autoMinScore, ...tags) as DocumentFrequencyRow[];
     return new Map(rows.map((row) => [row.tag_key, row.count]));
@@ -256,8 +233,8 @@ export class StackSimilarService {
          JOIN tags t ON t.id = st.tag_id
          JOIN stacks s ON s.id = st.stack_id
          WHERE s.dataset_id = ?
-           AND lower(t.title) IN (${placeholders(tags)})
-         GROUP BY lower(t.title)`
+           AND t.title IN (${placeholders(tags)})
+         GROUP BY t.title COLLATE NOCASE`
       )
       .all(dataSetId, ...tags) as DocumentFrequencyRow[];
     return new Map(rows.map((row) => [row.tag_key, row.count]));
@@ -278,6 +255,107 @@ export class StackSimilarService {
     return hasManual ? weight * SIMILAR_CONFIG.manualWeightMultiplierOnIdf : weight;
   }
 
+  private getRankedCandidateIds(
+    dataSetId: number,
+    reference: SimilarVectors,
+    excludedStackIds: number[],
+    stopTags: Set<string>
+  ) {
+    const queryTags = Array.from(new Set([...reference.auto.keys(), ...reference.manual]))
+      .map(normalizeTag)
+      .filter((tag) => tag.length > 0 && !stopTags.has(tag));
+    if (queryTags.length === 0) return [];
+
+    const datasetSize = this.getDatasetStackCount(dataSetId);
+    const autoDf = this.getAutoDocumentFrequency(dataSetId, queryTags);
+    const manualDf = this.getManualDocumentFrequency(dataSetId, queryTags);
+    const queryEntries = queryTags.map((tag) => ({
+      tag,
+      refAuto: reference.auto.get(tag) ?? 0,
+      refManual: reference.manual.has(tag) ? 1 : 0,
+      idf: this.getSimilarIdfWeight(tag, reference.manual.has(tag), autoDf, manualDf, datasetSize),
+    }));
+    const queryTagValues = queryEntries.map(() => '(?, ?, ?, ?)').join(', ');
+    const queryTagParams = queryEntries.flatMap((entry) => [
+      entry.tag,
+      entry.refAuto,
+      entry.refManual,
+      entry.idf,
+    ]);
+    const excludedClause =
+      excludedStackIds.length > 0
+        ? `AND candidate_stack_id NOT IN (${placeholders(excludedStackIds)})`
+        : '';
+
+    const rows = this.db
+      .prepare(
+        `WITH query_tags(tag_key, ref_auto, ref_manual, idf) AS (
+           VALUES ${queryTagValues}
+         ),
+         candidate_features AS (
+           SELECT scores.stack_id AS candidate_stack_id,
+                  query.tag_key AS tag_key,
+                  scores.score AS auto_score,
+                  0.0 AS manual_score
+           FROM stack_auto_tag_scores scores
+           JOIN stacks s ON s.id = scores.stack_id
+           JOIN query_tags query ON scores.tag_key = query.tag_key COLLATE NOCASE
+           WHERE s.dataset_id = ?
+             AND scores.score >= ?
+             AND query.ref_auto > 0
+           UNION ALL
+           SELECT st.stack_id AS candidate_stack_id,
+                  query.tag_key AS tag_key,
+                  0.0 AS auto_score,
+                  1.0 AS manual_score
+           FROM stack_tags st
+           JOIN tags t ON t.id = st.tag_id
+           JOIN stacks s ON s.id = st.stack_id
+           JOIN query_tags query ON t.title = query.tag_key COLLATE NOCASE
+           WHERE s.dataset_id = ?
+             AND query.ref_manual > 0
+         ),
+         candidate_tags AS (
+           SELECT candidate_stack_id,
+                  tag_key,
+                  MAX(auto_score) AS auto_score,
+                  MAX(manual_score) AS manual_score
+           FROM candidate_features
+           WHERE 1 = 1
+             ${excludedClause}
+           GROUP BY candidate_stack_id, tag_key
+         ),
+         candidate_scores AS (
+           SELECT candidate.candidate_stack_id AS id,
+                  SUM(
+                    query.idf * MIN(
+                      ${SIMILAR_CONFIG.autoWeight} * query.ref_auto +
+                        ${SIMILAR_CONFIG.manualWeight} * query.ref_manual,
+                      ${SIMILAR_CONFIG.autoWeight} * candidate.auto_score +
+                        ${SIMILAR_CONFIG.manualWeight} * candidate.manual_score
+                    )
+                  ) AS score
+           FROM candidate_tags candidate
+           JOIN query_tags query ON query.tag_key = candidate.tag_key
+           GROUP BY candidate.candidate_stack_id
+         )
+         SELECT id
+         FROM candidate_scores
+         WHERE score > 0
+         ORDER BY score DESC, id ASC
+         LIMIT ?`
+      )
+      .all(
+        ...queryTagParams,
+        dataSetId,
+        SIMILAR_CONFIG.autoMinScore,
+        dataSetId,
+        ...excludedStackIds,
+        SIMILAR_CONFIG.candidateLimit
+      ) as Array<{ id: number }>;
+    return rows.map((row) => row.id);
+  }
+
   private runSimilarSearch(
     dataSetId: number,
     reference: SimilarVectors,
@@ -287,13 +365,11 @@ export class StackSimilarService {
   ): Array<{ id: number; score: number }> {
     if (reference.auto.size === 0 && reference.manual.size === 0) return [];
 
-    const autoProbe = Array.from(reference.auto.keys()).slice(0, SIMILAR_CONFIG.autoProbeCount);
-    const manualProbe = Array.from(reference.manual);
-    const candidateIds = Array.from(
-      new Set([
-        ...this.getAutoCandidateIds(dataSetId, autoProbe, excludedStackIds),
-        ...this.getManualCandidateIds(dataSetId, manualProbe, excludedStackIds),
-      ])
+    const candidateIds = this.getRankedCandidateIds(
+      dataSetId,
+      reference,
+      excludedStackIds,
+      stopTags
     );
     if (candidateIds.length === 0) return [];
 

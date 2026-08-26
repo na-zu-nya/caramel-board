@@ -35,6 +35,7 @@ function normalizeColorFilter(colorFilter: ColorFilter | undefined) {
 function normalizeImageSearch(imageSearch: StackFilter['imageSearch']) {
   if (!imageSearch) return undefined;
   return {
+    contentHash: imageSearch.contentHash,
     tags: [...imageSearch.tags]
       .slice()
       .sort((a, b) => a.key.localeCompare(b.key))

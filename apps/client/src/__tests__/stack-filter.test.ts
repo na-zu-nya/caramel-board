@@ -22,4 +22,16 @@ describe('stack filter key', () => {
     expect(() => getStackFilterKey(runtimeFilter)).not.toThrow();
     expect(getStackFilterKey(runtimeFilter)).toBe(getStackFilterKey({ tags: ['reference'] }));
   });
+
+  it('keeps the exact-match content hash in the image-search cache key', () => {
+    const imageSearch = {
+      tags: [],
+      colors: [],
+      tagWeight: 0.65,
+    };
+
+    expect(
+      getStackFilterKey({ imageSearch: { ...imageSearch, contentHash: 'a'.repeat(64) } })
+    ).not.toBe(getStackFilterKey({ imageSearch: { ...imageSearch, contentHash: 'b'.repeat(64) } }));
+  });
 });
