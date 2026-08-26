@@ -53,6 +53,7 @@ import {
 } from '@/lib/stack-cache-patch';
 import { cn } from '@/lib/utils';
 import { normalizeVideoMarkers } from '@/lib/video-markers';
+import { commitShuffleNavigation, type ViewerStackNavigator } from '@/lib/viewer-stack-navigation';
 import { getViewerComicDisplayMode, setViewerComicDisplayMode } from '@/lib/viewerSettings';
 import {
   infoSidebarOpenAtom,
@@ -96,7 +97,7 @@ interface StackViewerProps {
   /** 埋め込み時のヘッダーテーマカラー(本物のヘッダーと同じ配色にする) */
   embeddedThemeColor?: string;
   /** 埋め込み時に隣接スタックへスワイプ移動したときの通知(ルート遷移の代わり) */
-  onNavigateStack?: (stackId: string) => void;
+  onNavigateStack?: ViewerStackNavigator;
 }
 
 interface ViewerShellProps {
@@ -875,6 +876,7 @@ export default function StackViewer({
   const { ctx, update } = useViewContext();
   const navigate = useNavigate();
   const shuffleInFlightRef = useRef(false);
+  const [isShuffleInFlight, setIsShuffleInFlight] = useState(false);
   // vertical drag state (local to component)
   const currentVerticalOffsetRef = useRef(0);
   const verticalAnimRef = useRef<number | null>(null);
@@ -1085,6 +1087,7 @@ export default function StackViewer({
     update: typeof update;
     navigate: typeof navigate;
     setIsListMode: typeof setIsListMode;
+    onNavigateStack?: ViewerStackNavigator;
   } | null>(null);
   shuffleStateRef.current = {
     ctx,
@@ -1095,12 +1098,14 @@ export default function StackViewer({
     update,
     navigate,
     setIsListMode,
+    onNavigateStack,
   };
 
   const handleShuffle = useCallback(async () => {
     if (shuffleInFlightRef.current) return;
     releaseInteractionLock();
     shuffleInFlightRef.current = true;
+    setIsShuffleInFlight(true);
 
     try {
       const state = shuffleStateRef.current;
@@ -1178,16 +1183,21 @@ export default function StackViewer({
         });
       }
 
-      void state.navigate({
-        to: '/library/$datasetId/stacks/$stackId',
-        params: { datasetId: String(baseDatasetId), stackId: String(item.id) },
-        search: {
-          page: 0,
-          category: String(baseCategory),
-          listToken: token || undefined,
-          returnTo: state.returnTo,
-        },
-        replace: true,
+      await commitShuffleNavigation({
+        stackId: String(item.id),
+        onNavigateStack: state.onNavigateStack,
+        navigateRoute: () =>
+          state.navigate({
+            to: '/library/$datasetId/stacks/$stackId',
+            params: { datasetId: String(baseDatasetId), stackId: String(item.id) },
+            search: {
+              page: 0,
+              category: String(baseCategory),
+              listToken: token || undefined,
+              returnTo: state.returnTo,
+            },
+            replace: false,
+          }),
       });
       // Ensure single-image mode for gestures
       state.setIsListMode(false);
@@ -1195,6 +1205,7 @@ export default function StackViewer({
       console.error('Shuffle in viewer failed:', e);
     } finally {
       shuffleInFlightRef.current = false;
+      setIsShuffleInFlight(false);
     }
   }, [releaseInteractionLock]);
 
@@ -1585,6 +1596,7 @@ export default function StackViewer({
     showFilter: false,
     showSelection: isListMode,
     onShuffle: handleShuffle,
+    shuffleDisabled: isShuffleInFlight,
   });
 
   // Body scroll lock while viewer is active to prevent iOS pull-to-refresh and page scroll

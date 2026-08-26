@@ -5,6 +5,7 @@ import { flushSync } from 'react-dom';
 import { useViewContext } from '@/hooks/useViewContext';
 import { apiClient, isApiNotFoundError } from '@/lib/api-client';
 import { getRepresentativeAsset, type ReadingUnit } from '@/lib/comic-reading';
+import type { ViewerStackNavigator } from '@/lib/viewer-stack-navigation';
 import type { Asset, Stack } from '@/types';
 
 export interface ImageCarouselBridge {
@@ -71,7 +72,7 @@ export function useStackViewerInteractions(params: {
     kind: Exclude<ViewerEdgeKind, null>;
   }) => boolean;
   // 埋め込み時はルート遷移の代わりに、隣接スタックへの切り替えをコールバックで通知する
-  onNavigateStack?: (stackId: string) => void;
+  onNavigateStack?: ViewerStackNavigator;
 }) {
   const {
     datasetId,

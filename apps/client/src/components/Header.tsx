@@ -175,6 +175,7 @@ export default function Header() {
             <HeaderIconButton
               aria-label={t.header.shuffle}
               onClick={headerActions.onShuffle ?? undefined}
+              disabled={headerActions.shuffleDisabled}
             >
               <Shuffle size={18} />
             </HeaderIconButton>

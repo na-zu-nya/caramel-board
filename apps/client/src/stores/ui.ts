@@ -70,19 +70,26 @@ export const selectionModeAtom = atom(false);
 export const reorderModeAtom = atom(false);
 
 // Header actions visibility
-export const headerActionsAtom = atom<{
+export interface HeaderActionsState {
   showShuffle: boolean;
   showFilter: boolean;
   showSelection: boolean;
   showReorder?: boolean;
   onShuffle?: (() => void) | null;
-}>({
+  shuffleDisabled?: boolean;
+  ownerId?: symbol;
+}
+
+export const EMPTY_HEADER_ACTIONS: HeaderActionsState = {
   showShuffle: false,
   showFilter: false,
   showSelection: false,
   showReorder: false,
   onShuffle: null,
-});
+  shuffleDisabled: false,
+};
+
+export const headerActionsAtom = atom<HeaderActionsState>(EMPTY_HEADER_ACTIONS);
 
 // Info sidebar state
 // Info sidebar state with sessionStorage persistence

@@ -10,6 +10,10 @@ import { useHeaderActions } from '@/hooks/useHeaderActions';
 import { useRangeBasedQuery } from '@/hooks/useRangeBasedQuery';
 import { useT } from '@/lib/i18n';
 import { areStackFiltersEqual } from '@/lib/stack-filter';
+import {
+  shouldReplaceViewerHistory,
+  type ViewerStackNavigationOptions,
+} from '@/lib/viewer-stack-navigation';
 import { navigationStateAtom } from '@/stores/navigation';
 import { currentFilterAtom } from '@/stores/ui';
 import { genListToken, saveViewContext } from '@/stores/view-context';
@@ -434,12 +438,12 @@ function MediaTypeList() {
   }, [navigate, datasetId, category]);
 
   const handleViewerNavigateStack = useCallback(
-    (stackId: string) => {
-      void navigate({
+    (stackId: string, options?: ViewerStackNavigationOptions) => {
+      return navigate({
         to: '/library/$datasetId/category/$category',
         params: { datasetId, category },
         search: { ...searchRef.current, viewer: stackId },
-        replace: true,
+        replace: shouldReplaceViewerHistory(options),
         resetScroll: false,
       });
     },

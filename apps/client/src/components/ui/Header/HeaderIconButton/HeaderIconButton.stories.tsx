@@ -28,6 +28,9 @@ export const WithBadge: Story = {
 export const Active: Story = {
   args: { isActive: true, children: <Filter size={18} />, 'aria-label': 'Filter' },
 };
+export const Disabled: Story = {
+  args: { disabled: true, children: <Filter size={18} />, 'aria-label': 'Filter' },
+};
 export const ActiveThemed: Story = {
   render: (args) => (
     <div className="bg-slate-700 p-4" style={themedPrimaryStyle}>
