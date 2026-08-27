@@ -8,6 +8,7 @@ import { createPortal } from 'react-dom';
 import BulkEditPanel, { type EditUpdates } from '@/components/BulkEditPanel';
 import InfoSidebar from '@/components/InfoSidebar';
 import { StackTileGrid } from '@/components/StackTileGrid';
+import { SimilarResultsHeader } from '@/components/similar/SimilarResultsHeader';
 import { HeaderIconButton } from '@/components/ui/Header/HeaderIconButton';
 import { SelectionActionBar } from '@/components/ui/selection-action-bar';
 import { useSelectionMode } from '@/hooks/features/useSelectionMode';
@@ -89,7 +90,7 @@ function CollectionSimilarRoute() {
     queryFn: () => apiClient.getCollection(collectionId),
   });
 
-  const { data, isLoading, isError, refetch } = useQuery({
+  const { data, isLoading, isFetching, isError, refetch } = useQuery({
     queryKey: ['collection-similar-stacks', datasetId, collectionId, limit],
     queryFn: () =>
       apiClient.getCollectionSimilarStacks({
@@ -105,6 +106,10 @@ function CollectionSimilarRoute() {
     () => (data?.stacks ?? []).map((stack) => ({ ...stack, stackId: stack.stackId ?? stack.id })),
     [data]
   );
+
+  const handleRefreshList = useCallback(() => {
+    void refetch();
+  }, [refetch]);
 
   useEffect(() => {
     const filter: StackFilter = {
@@ -494,10 +499,12 @@ function CollectionSimilarRoute() {
 
   return (
     <div className="p-4">
-      <div className="mb-3 text-sm text-gray-600">
-        {t.similar.similarToCollection}
-        {collection?.name ? `: ${collection.name}` : ''}
-      </div>
+      <SimilarResultsHeader
+        label={`${t.similar.similarToCollection}${collection?.name ? `: ${collection.name}` : ''}`}
+        refreshLabel={t.similar.refreshList}
+        isRefreshing={isFetching}
+        onRefresh={handleRefreshList}
+      />
       {isLoading && <div className="text-gray-500">{t.similar.loading}</div>}
       {isError && <div className="text-red-600">{t.similar.failed}</div>}
       {!isLoading && items.length === 0 && (

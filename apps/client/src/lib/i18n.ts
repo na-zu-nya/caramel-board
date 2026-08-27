@@ -749,6 +749,7 @@ const en = {
   similar: {
     similarTo: (id: string | number) => `Similar to #${id}`,
     similarToCollection: 'Similar to collection',
+    refreshList: 'Refresh list',
     loading: 'Loading similar items...',
     failed: 'Failed to load similar items',
     emptyAutoTags: 'No similar items yet (try updating AutoTags)',
@@ -1567,6 +1568,7 @@ const ja: Translations = {
   similar: {
     similarTo: (id: string | number) => `#${id} に類似`,
     similarToCollection: 'コレクションに類似',
+    refreshList: 'リストを更新',
     loading: '類似アイテムを読み込み中...',
     failed: '類似アイテムの読み込みに失敗しました',
     emptyAutoTags: '類似アイテムはまだありません(自動タグを更新してください)',
