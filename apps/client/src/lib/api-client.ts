@@ -17,6 +17,11 @@ import type {
   StackFilter,
   StackPaginatedResponse,
 } from '@/types';
+import {
+  type DatasetProtectionStatus,
+  getProtectedDatasetId,
+  notifyDatasetAuthorizationRequired,
+} from './dataset-authorization';
 
 const API_BASE_URL = '';
 const READ_REQUEST_TIMEOUT_MS = 45 * 1000;
@@ -253,9 +258,7 @@ class ApiClient {
     });
   }
 
-  async getDatasetProtectionStatus(
-    id: string | number
-  ): Promise<{ isProtected: boolean; authorized: boolean }> {
+  async getDatasetProtectionStatus(id: string | number): Promise<DatasetProtectionStatus> {
     return this.fetch(`/api/v1/datasets/${id}/protection-status`);
   }
 
@@ -1878,8 +1881,17 @@ class ApiClient {
     if (!response.ok) {
       let errorMessage = `API Error: ${response.status} ${response.statusText}`;
       try {
-        const errorData = await response.json();
-        if (errorData.error) {
+        const errorData: unknown = await response.json();
+        const protectedDatasetId = getProtectedDatasetId(errorData);
+        if (response.status === 401 && protectedDatasetId !== null) {
+          notifyDatasetAuthorizationRequired(protectedDatasetId);
+        }
+        if (
+          typeof errorData === 'object' &&
+          errorData !== null &&
+          'error' in errorData &&
+          typeof errorData.error === 'string'
+        ) {
           errorMessage = errorData.error;
         }
       } catch {

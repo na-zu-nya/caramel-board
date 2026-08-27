@@ -104,6 +104,7 @@ const en = {
   auth: {
     unlockLibrary: 'Unlock Library',
     passwordPrompt: 'Enter the password to view this library.',
+    statusCheckFailed: 'Could not verify access to this library.',
     password: 'Password',
     invalidPassword: 'Invalid password',
     unlock: 'Unlock',
@@ -924,6 +925,7 @@ const ja: Translations = {
   auth: {
     unlockLibrary: 'ライブラリのロック解除',
     passwordPrompt: 'このライブラリを表示するにはパスワードを入力してください。',
+    statusCheckFailed: 'ライブラリのアクセス権限を確認できませんでした。',
     password: 'パスワード',
     invalidPassword: 'パスワードが正しくありません',
     unlock: 'ロック解除',

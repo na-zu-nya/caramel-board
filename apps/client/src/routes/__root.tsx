@@ -15,6 +15,7 @@ import { UploadProgress } from '@/components/ui/upload-progress';
 import Header from '@/containers/header-container';
 import Sidebar from '@/containers/sidebar-container';
 import { DragProvider } from '@/contexts/DragContext';
+import { useDatasetAuthorizationSync } from '@/hooks/useDatasetAuthorizationSync';
 import { useDatasets } from '@/hooks/useDatasets';
 import { useGlobalDropNavigationGuard } from '@/hooks/useGlobalDropNavigationGuard';
 import { useSidebarPushesContent } from '@/hooks/useSidebarLayoutMode';
@@ -22,6 +23,7 @@ import { useThemeColor } from '@/hooks/useThemeColor';
 import { useUploadQueue } from '@/hooks/useUploadQueue';
 import { useKeyboardShortcuts as useGenericKeyboardShortcuts } from '@/hooks/utils/useKeyboardShortcut';
 import { apiClient } from '@/lib/api-client';
+import { isDatasetAccessGranted } from '@/lib/dataset-authorization';
 import { useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { currentDatasetAtom, selectionModeAtom, sidebarOpenAtom } from '@/stores/ui';
@@ -46,6 +48,7 @@ function RootLayout() {
   useUploadQueue();
   // DropZone の外側に落とされた URL/ファイルドロップで Safari が既定のナビゲーションを行わないようにする
   useGlobalDropNavigationGuard();
+  useDatasetAuthorizationSync();
   const [sidebarOpen, setSidebarOpen] = useAtom(sidebarOpenAtom);
   const sidebarPushesContent = useSidebarPushesContent(sidebarOpen);
   const [currentDataset, setCurrentDataset] = useAtom(currentDatasetAtom);
@@ -94,13 +97,23 @@ function RootLayout() {
   );
 
   // Only check protection when a dataset is explicitly in the route
-  const { data: protectionStatus, isLoading: protectionLoading } = useQuery({
+  const {
+    data: protectionStatus,
+    isError: protectionError,
+    isFetching: protectionFetching,
+    isLoading: protectionLoading,
+    refetch: refetchProtection,
+  } = useQuery({
     queryKey: ['dataset-protection', routeDatasetId],
     queryFn: () => apiClient.getDatasetProtectionStatus(routeDatasetId as string),
     enabled: !!routeDatasetId,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: 'always',
   });
   const isProtected = protectionStatus?.isProtected;
   const isAuthorized = protectionStatus?.authorized;
+  const protectionPending = Boolean(routeDatasetId && protectionStatus === undefined);
+  const canRenderDatasetRoute = isDatasetAccessGranted(routeDatasetId, protectionStatus);
   const [passwordInput, setPasswordInput] = useState('');
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -148,19 +161,29 @@ function RootLayout() {
             isSetupRoute ? 'pt-0 ml-0' : ['pt-14', sidebarPushesContent ? 'ml-80' : 'ml-0']
           )}
         >
-          {protectionLoading ? (
+          {protectionError && protectionStatus === undefined ? (
+            <div className="min-h-[60vh] flex flex-col items-center justify-center gap-3">
+              <p className="text-sm text-gray-600">{t.auth.statusCheckFailed}</p>
+              <Button
+                variant="outline"
+                disabled={protectionFetching}
+                onClick={() => void refetchProtection()}
+              >
+                {protectionFetching ? t.common.loading : t.common.retry}
+              </Button>
+            </div>
+          ) : protectionLoading || protectionPending ? (
             <div className="min-h-[60vh] flex items-center justify-center">
               <div className="w-10 h-10 border-4 border-gray-300 border-t-transparent rounded-full animate-spin" />
             </div>
-          ) : (
+          ) : canRenderDatasetRoute ? (
             <Outlet />
-          )}
+          ) : null}
         </main>
       </div>
       {!isSetupRoute && <UploadProgress />}
-      {/* Keep InfoSidebar mounted globally; open/close via classes for smooth transitions.
-          setup ルートでもチュートリアル内の埋め込みビューワーから利用する */}
-      <InfoSidebar />
+      {/* setup ルートでもチュートリアル内の埋め込みビューワーから利用する */}
+      {canRenderDatasetRoute ? <InfoSidebar /> : null}
       {RouterDevtools ? (
         <Suspense fallback={null}>
           <RouterDevtools />

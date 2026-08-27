@@ -11,7 +11,7 @@ export const isDatasetAuthorizedForCurrentStore = async (c: Context, id: number)
 export const ensureDatasetAuthorizedForCurrentStore = async (c: Context, id: number) => {
   const ok = await isDatasetAuthorizedForCurrentStore(c, id);
   if (!ok) {
-    return c.json({ error: 'Protected dataset', protected: true }, 401);
+    return c.json({ error: 'Protected dataset', protected: true, datasetId: id }, 401);
   }
   return null;
 };
