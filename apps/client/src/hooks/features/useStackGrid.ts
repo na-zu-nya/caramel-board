@@ -87,6 +87,8 @@ export function useStackGrid({
   const [containerWidth, setContainerWidth] = useState(() =>
     typeof window === 'undefined' ? 1 : window.innerWidth
   );
+  const containerWidthRef = useRef(containerWidth);
+  containerWidthRef.current = containerWidth;
 
   // Scroll preservation
   const { preserveAnchorItem, restoreAnchorItem, maintainScrollDuringAnimation } =
@@ -121,10 +123,11 @@ export function useStackGrid({
   const updateContainerWidth = useCallback(() => {
     const container = containerRef.current;
     const nextWidth = getContainerContentWidth(container);
-    if (Math.abs(containerWidth - nextWidth) < 0.5) return;
+    if (Math.abs(containerWidthRef.current - nextWidth) < 0.5) return;
 
-    preserveAnchorItem(containerRef, items);
+    preserveAnchorItem(containerRef, itemsRef.current);
 
+    containerWidthRef.current = nextWidth;
     setContainerWidth(nextWidth);
 
     window.requestAnimationFrame(() => {
@@ -141,7 +144,7 @@ export function useStackGrid({
         currentContainer.dispatchEvent(new Event('scroll'));
       });
     });
-  }, [containerRef, containerWidth, items, preserveAnchorItem, restoreAnchorItem, useWindowScroll]);
+  }, [containerRef, preserveAnchorItem, restoreAnchorItem, useWindowScroll]);
 
   // Create visible items array from the full sparse items array
   const finalVisibleItems: (MediaGridItem | undefined)[] = [];
@@ -263,8 +266,11 @@ export function useStackGrid({
 
   const updateBounds = useCallback(() => {
     if (!onLoadRange || disableVirtualization) {
-      setRangeStart(0);
-      setRangeEnd(Math.max(total, items.length));
+      setRangeStart((current) => (current === 0 ? current : 0));
+      setRangeEnd((current) => {
+        const next = Math.max(total, items.length);
+        return current === next ? current : next;
+      });
       return;
     }
 
@@ -275,8 +281,8 @@ export function useStackGrid({
     // When there are zero results, avoid repeatedly issuing loadRange requests.
     // Callers should explicitly trigger initial fetch; here we suppress further requests.
     if (total === 0) {
-      setRangeStart(0);
-      setRangeEnd(0);
+      setRangeStart((current) => (current === 0 ? current : 0));
+      setRangeEnd((current) => (current === 0 ? current : 0));
       return;
     }
 
@@ -318,8 +324,8 @@ export function useStackGrid({
     // rangeEnd は exclusive。inclusive 行→exclusive index へ変換
     const newEndExclusive = (endRowInclusive + 1) * columnsPerRow;
 
-    setRangeStart(newStartIndex);
-    setRangeEnd(newEndExclusive);
+    setRangeStart((current) => (current === newStartIndex ? current : newStartIndex));
+    setRangeEnd((current) => (current === newEndExclusive ? current : newEndExclusive));
 
     // 読み込みリクエストは可視レンジより少し広めに出す（下1段先読み）
     const requestStartIndex = Math.max(0, newStartIndex - PREFETCH_ROWS_ABOVE * columnsPerRow);
@@ -335,11 +341,16 @@ export function useStackGrid({
     isCurrentlyAnimating,
     throttledLoadRange,
     useWindowScroll,
-    containerRef.current,
     disableVirtualization,
     items.length,
     columnsPerRow,
+    containerRef.current,
   ]);
+
+  const updateContainerWidthRef = useRef(updateContainerWidth);
+  updateContainerWidthRef.current = updateContainerWidth;
+  const updateBoundsRef = useRef(updateBounds);
+  updateBoundsRef.current = updateBounds;
 
   // Handle animation state changes
   useEffect(() => {
@@ -360,13 +371,24 @@ export function useStackGrid({
 
   useLayoutEffect(() => {
     const container = containerRef.current;
+    let scheduledFrame: number | null = null;
 
-    const resizeObserver = new ResizeObserver(() => {
-      updateContainerWidth();
+    const updateLayout = () => {
+      updateContainerWidthRef.current();
       if (!disableVirtualization) {
-        updateBounds();
+        updateBoundsRef.current();
       }
-    });
+    };
+
+    const scheduleLayoutUpdate = () => {
+      if (scheduledFrame !== null) return;
+      scheduledFrame = window.requestAnimationFrame(() => {
+        scheduledFrame = null;
+        updateLayout();
+      });
+    };
+
+    const resizeObserver = new ResizeObserver(scheduleLayoutUpdate);
 
     if (container) {
       resizeObserver.observe(container);
@@ -375,36 +397,31 @@ export function useStackGrid({
     // スクロールリスナーは body/window へ（useWindowScroll時）
     if (!disableVirtualization) {
       if (useWindowScroll) {
-        window.addEventListener('scroll', updateBounds, { passive: true });
+        window.addEventListener('scroll', scheduleLayoutUpdate, { passive: true });
       } else if (container) {
-        container.addEventListener('scroll', updateBounds, { passive: true });
+        container.addEventListener('scroll', scheduleLayoutUpdate, { passive: true });
       }
     }
 
     // 初期計算
-    updateContainerWidth();
-    if (!disableVirtualization) {
-      updateBounds();
-    }
-
-    const handleWindowResize = () => {
-      updateContainerWidth();
-      updateBounds();
-    };
-    window.addEventListener('resize', handleWindowResize);
+    updateLayout();
+    window.addEventListener('resize', scheduleLayoutUpdate);
 
     return () => {
       resizeObserver.disconnect();
+      if (scheduledFrame !== null) {
+        window.cancelAnimationFrame(scheduledFrame);
+      }
       if (!disableVirtualization) {
         if (useWindowScroll) {
-          window.removeEventListener('scroll', updateBounds);
+          window.removeEventListener('scroll', scheduleLayoutUpdate);
         } else if (container) {
-          container.removeEventListener('scroll', updateBounds);
+          container.removeEventListener('scroll', scheduleLayoutUpdate);
         }
       }
-      window.removeEventListener('resize', handleWindowResize);
+      window.removeEventListener('resize', scheduleLayoutUpdate);
     };
-  }, [updateBounds, updateContainerWidth, containerRef, useWindowScroll, disableVirtualization]);
+  }, [containerRef, useWindowScroll, disableVirtualization]);
 
   const setGridColumns = useCallback(
     (value: number) => {

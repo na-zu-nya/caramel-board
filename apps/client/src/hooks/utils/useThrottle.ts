@@ -6,21 +6,23 @@ import { useCallback, useEffect, useRef } from 'react';
  * @param delay - The delay in milliseconds
  * @returns A throttled version of the function
  */
-export function useThrottle<T extends (...args: any[]) => any>(
-  fn: T,
+export function useThrottle<Args extends unknown[]>(
+  fn: (...args: Args) => void,
   delay: number
-): (...args: Parameters<T>) => void {
+): (...args: Args) => void {
   const lastRunRef = useRef<number>(0);
   const timeoutRef = useRef<number | null>(null);
+  const fnRef = useRef(fn);
+  fnRef.current = fn;
 
   const throttledFn = useCallback(
-    (...args: Parameters<T>) => {
+    (...args: Args) => {
       const now = Date.now();
       const timeSinceLastRun = now - lastRunRef.current;
 
       if (timeSinceLastRun >= delay) {
         // Execute immediately if enough time has passed
-        fn(...args);
+        fnRef.current(...args);
         lastRunRef.current = now;
       } else {
         // Schedule execution for later
@@ -30,12 +32,13 @@ export function useThrottle<T extends (...args: any[]) => any>(
 
         const remainingTime = delay - timeSinceLastRun;
         timeoutRef.current = window.setTimeout(() => {
-          fn(...args);
+          fnRef.current(...args);
           lastRunRef.current = Date.now();
+          timeoutRef.current = null;
         }, remainingTime);
       }
     },
-    [fn, delay]
+    [delay]
   );
 
   // Cleanup on unmount
@@ -57,21 +60,23 @@ export function useThrottle<T extends (...args: any[]) => any>(
  * @param options - Options for throttling behavior
  * @returns A throttled version of the function
  */
-export function useThrottleWithOptions<T extends (...args: any[]) => any>(
-  fn: T,
+export function useThrottleWithOptions<Args extends unknown[]>(
+  fn: (...args: Args) => void,
   delay: number,
   options: {
     leading?: boolean;
     trailing?: boolean;
   } = {}
-): (...args: Parameters<T>) => void {
+): (...args: Args) => void {
   const { leading = true, trailing = true } = options;
   const lastRunRef = useRef<number>(0);
   const timeoutRef = useRef<number | null>(null);
-  const lastArgsRef = useRef<Parameters<T> | null>(null);
+  const lastArgsRef = useRef<Args | null>(null);
+  const fnRef = useRef(fn);
+  fnRef.current = fn;
 
   const throttledFn = useCallback(
-    (...args: Parameters<T>) => {
+    (...args: Args) => {
       const now = Date.now();
       const timeSinceLastRun = now - lastRunRef.current;
 
@@ -86,7 +91,7 @@ export function useThrottleWithOptions<T extends (...args: any[]) => any>(
       if (timeSinceLastRun >= delay) {
         // Execute immediately if enough time has passed
         if (leading) {
-          fn(...args);
+          fnRef.current(...args);
           lastRunRef.current = now;
         }
       }
@@ -96,14 +101,15 @@ export function useThrottleWithOptions<T extends (...args: any[]) => any>(
         const remainingTime = delay - timeSinceLastRun;
         timeoutRef.current = window.setTimeout(() => {
           if (lastArgsRef.current) {
-            fn(...lastArgsRef.current);
+            fnRef.current(...lastArgsRef.current);
             lastRunRef.current = Date.now();
             lastArgsRef.current = null;
           }
+          timeoutRef.current = null;
         }, remainingTime);
       }
     },
-    [fn, delay, leading, trailing]
+    [delay, leading, trailing]
   );
 
   // Cleanup on unmount
