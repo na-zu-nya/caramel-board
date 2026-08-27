@@ -1,6 +1,7 @@
 import { Book, Check, Heart, Star } from 'lucide-react';
 import { cloneElement, isValidElement, type ReactElement, useCallback, useState } from 'react';
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
+import { InfoSelectionFrame } from '@/components/ui/InfoSelectionFrame';
 import { useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { getThumbnailPath } from '@/utils/thumbnailPath';
@@ -145,7 +146,6 @@ export function StackTile({
       className={cn(
         'group relative aspect-square overflow-hidden bg-gray-100 cursor-pointer',
         cornerRadius === 'rounded' ? 'rounded-lg border border-gray-200' : 'rounded-none',
-        isInfoSelected && 'ring-2 ring-primary ring-inset',
         isNativePointerActive && 'scale-95 opacity-50',
         className
       )}
@@ -175,6 +175,7 @@ export function StackTile({
           {t.viewerControls.noImage}
         </div>
       )}
+      <InfoSelectionFrame visible={isInfoSelected} />
       <div className="pointer-events-none absolute inset-0 z-[1] bg-white opacity-0 transition-opacity duration-150 group-hover:opacity-10" />
       {isNativeDragReady && resolvedNativeImageDragUrl ? (
         <img

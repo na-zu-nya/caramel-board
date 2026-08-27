@@ -1,5 +1,10 @@
 import type { Meta, StoryObj } from '@storybook/react';
+import type { CSSProperties } from 'react';
 import { StackTile } from './StackTile';
+
+const themedPrimaryStyle = {
+  '--primary': 'oklch(0.646 0.222 41.116)',
+} as CSSProperties;
 
 const meta: Meta<typeof StackTile> = {
   title: 'Stack/StackTile',
@@ -138,4 +143,22 @@ export const HoverStable: Story = {
     favorited: false,
     likeCount: 1,
   },
+};
+
+export const InformationSelected: Story = {
+  args: {
+    thumbnailUrl: 'https://picsum.photos/id/1062/320/320',
+    title: 'Information Selected Stack',
+    pageCount: 5,
+    favorited: false,
+    likeCount: 2,
+    isInfoSelected: true,
+  },
+  decorators: [
+    (Story) => (
+      <div className="w-64" style={themedPrimaryStyle}>
+        <Story />
+      </div>
+    ),
+  ],
 };

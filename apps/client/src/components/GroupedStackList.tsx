@@ -1,6 +1,7 @@
 import { Link } from '@tanstack/react-router';
 import { format } from 'date-fns';
 import { enUS, ja } from 'date-fns/locale';
+import { useAtomValue } from 'jotai';
 import { Heart } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { MonthSectionHeader } from '@/components/ui/MonthSectionHeader';
@@ -9,6 +10,7 @@ import { useStackCollectionMenu } from '@/hooks/useStackCollectionMenu';
 import { useStackTile } from '@/hooks/useStackTile';
 import { useLanguage, useT } from '@/lib/i18n';
 import { getSourceImageFilename, getSourceImageUrl } from '@/lib/stack-drag-data';
+import { infoSidebarOpenAtom, selectedItemIdAtom } from '@/stores/ui';
 import type { Stack } from '@/types';
 
 export interface GroupedStack {
@@ -41,6 +43,8 @@ export function GroupedStackList({
   const t = useT();
   const language = useLanguage();
   const dateLocale = language === 'ja' ? ja : enUS;
+  const infoSidebarOpen = useAtomValue(infoSidebarOpenAtom);
+  const selectedItemId = useAtomValue(selectedItemIdAtom);
   // Group items by month
   const groupedByMonth: Record<string, GroupedStack[]> = {};
 
@@ -177,6 +181,11 @@ export function GroupedStackList({
                               pageCount={pageCount}
                               favorited={isFav}
                               likeCount={likeCount}
+                              isInfoSelected={
+                                infoSidebarOpen &&
+                                selectedItemId !== null &&
+                                String(selectedItemId) === String(stack.id)
+                              }
                               onOpen={() => onOpen(stack.id, stackOpenOptions)}
                               onInfo={() => onInfo(stack.id)}
                               onFindSimilar={() => onFindSimilar(stack.id)}

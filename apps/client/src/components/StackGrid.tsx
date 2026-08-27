@@ -1111,7 +1111,10 @@ export default function StackGrid({
               }
 
               const isSelected = selectedItems.has(item.id);
-              const isInfoSelected = infoSidebarOpen && selectedItemId === item.id;
+              const isInfoSelected =
+                infoSidebarOpen &&
+                selectedItemId !== null &&
+                String(selectedItemId) === String(item.id);
 
               return (
                 <StackGridItem

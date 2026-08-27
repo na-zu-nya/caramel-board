@@ -522,7 +522,7 @@ function CollectionSimilarRoute() {
           isSelectionMode={selectionMode}
           selectedItems={selectedItems}
           selectedStackIdsInOrder={selectedStackIdsInOrder}
-          selectedInfoItemId={selectedItemId}
+          selectedInfoItemId={infoSidebarOpen ? selectedItemId : null}
           selectedActionCount={selectedItems.size}
           getLinkElement={getStackLinkElement}
           onClickItem={handleItemClick}

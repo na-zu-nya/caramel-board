@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createMemoryHistory, createRouter, RouterContextProvider } from '@tanstack/react-router';
-import { type ComponentProps, useMemo } from 'react';
+import { type ComponentProps, type CSSProperties, useMemo } from 'react';
 import { routeTree } from '@/routeTree.gen';
 import type { MediaGridItem } from '@/types';
 import { StackGridItem } from './StackGridItem';
@@ -15,6 +15,10 @@ const sampleItem: MediaGridItem = {
   assetCount: 12,
   likeCount: 18,
   favorited: true,
+};
+
+const themedPrimaryStyle: CSSProperties & Record<'--primary', string> = {
+  '--primary': 'oklch(0.646 0.222 41.116)',
 };
 
 const meta: Meta<typeof StackGridItem> = {
@@ -117,6 +121,20 @@ export const Blurred: Story = {
         </div>
       );
     },
+  ],
+  render: (args) => <StackGridItemStory {...args} />,
+};
+
+export const InformationSelected: Story = {
+  args: {
+    isInfoSelected: true,
+  },
+  decorators: [
+    (Story) => (
+      <div style={themedPrimaryStyle}>
+        <Story />
+      </div>
+    ),
   ],
   render: (args) => <StackGridItemStory {...args} />,
 };

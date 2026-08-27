@@ -1,5 +1,6 @@
 import { Check, Heart, Star } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { InfoSelectionFrame } from '@/components/ui/InfoSelectionFrame';
 import { cn } from '@/lib/utils';
 import type { MediaGridItem } from '@/types';
 
@@ -100,7 +101,6 @@ export function GridItem({
       data-item-id={item.id}
       className={cn(
         'group relative aspect-square overflow-hidden cursor-pointer transition-opacity duration-150',
-        isInfoSelected && 'ring-2 ring-blue-500 ring-inset',
         isAnchorItem && 'ring-4 ring-red-600',
         isVisible ? 'opacity-100' : 'opacity-0'
       )}
@@ -129,6 +129,7 @@ export function GridItem({
         className="w-full h-full object-cover transition-transform duration-200"
         loading="lazy"
       />
+      <InfoSelectionFrame visible={isInfoSelected} />
 
       {/* White overlay on hover */}
       {!isSelectionMode && (

@@ -4,6 +4,7 @@ import { useAtomValue, useSetAtom } from 'jotai';
 import { Book, Bookmark, Check, Heart, Star } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
+import { InfoSelectionFrame } from '@/components/ui/InfoSelectionFrame';
 import {
   type StackContextMenuCollection,
   StackContextMenuContent,
@@ -372,7 +373,6 @@ function StackGridItemComponent({
           data-item-id={item.id}
           className={cn(
             '@container group relative aspect-square overflow-hidden cursor-pointer transition-transform duration-150 box-border block',
-            isInfoSelected && 'ring-2 ring-primary ring-inset',
             isDragging ? 'border-8 border-gray-300 scale-95 opacity-50 rounded-lg' : '',
             isDragOver && 'border-8 border-accent'
           )}
@@ -565,6 +565,7 @@ function StackGridItemComponent({
             decoding="async"
             data-stack-drag-preview="true"
           />
+          <InfoSelectionFrame visible={isInfoSelected} />
           {isNativeDragReady && sourceImageUrl && !isSelectionMode ? (
             <img
               src={sourceImageUrl}

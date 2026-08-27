@@ -72,7 +72,11 @@ export function VirtualScrollContent({
         {/* Grid items */}
         {visibleItems.map((item) => {
           const isSelected = selectedItems.has(item.id);
-          const isInfoSelected = infoSidebarOpen && selectedItemId === item.id;
+          const isInfoSelected =
+            infoSidebarOpen &&
+            selectedItemId !== null &&
+            selectedItemId !== undefined &&
+            String(selectedItemId) === String(item.id);
           const isAnchorItem = anchorItemId === item.id;
 
           return (

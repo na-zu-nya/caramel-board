@@ -1170,7 +1170,7 @@ function TagsPage() {
                       isSelectionMode={selectionMode}
                       selectedItems={selectedStackItems}
                       selectedStackIdsInOrder={selectedStackIds}
-                      selectedInfoItemId={selectedItemId}
+                      selectedInfoItemId={infoSidebarOpen ? selectedItemId : null}
                       selectedActionCount={selectedStackItems.size}
                       getLinkElement={infoSidebarOpen ? undefined : getStackLinkElement}
                       onClickItem={openStackFromTile}

@@ -815,7 +815,11 @@ export default function SparseStackGrid({
                   <StackGridItem
                     item={item}
                     isSelected={selectedItems.has(item.id)}
-                    isInfoSelected={selectedItemId === item.id}
+                    isInfoSelected={
+                      infoSidebarOpen &&
+                      selectedItemId !== null &&
+                      String(selectedItemId) === String(item.id)
+                    }
                     isSelectionMode={isSelectionMode}
                     isFavoritePending={favoriteStates.has(item.id)}
                     overrideFavorited={favoriteOverrides.get(item.id)}

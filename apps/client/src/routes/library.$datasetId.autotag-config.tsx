@@ -1,6 +1,6 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, Link, useLocation, useNavigate } from '@tanstack/react-router';
-import { useAtom } from 'jotai';
+import { useAtom, useAtomValue } from 'jotai';
 import {
   ArrowRight,
   Check,
@@ -41,6 +41,7 @@ import {
   currentFilterAtom,
   filterOpenAtom,
   infoSidebarOpenAtom,
+  selectedItemIdAtom,
   selectionModeAtom,
 } from '@/stores/ui';
 import type { JoyTagHealthResponse, Stack, StackFilter } from '@/types';
@@ -126,6 +127,7 @@ function AutoTagConfigPage() {
     'count-desc'
   );
   const [infoSidebarOpen, setInfoSidebarOpen] = useAtom(infoSidebarOpenAtom);
+  const selectedItemId = useAtomValue(selectedItemIdAtom);
   const [selectionMode, setSelectionMode] = useAtom(selectionModeAtom);
   const [selectedItems, setSelectedItems] = useState<Set<string | number>>(new Set());
   const [isEditPanelOpen, setIsEditPanelOpen] = useState(false);
@@ -1114,6 +1116,7 @@ function AutoTagConfigPage() {
                     isSelectionMode={selectionMode}
                     selectedItems={selectedItems}
                     selectedStackIdsInOrder={selectedStackIds}
+                    selectedInfoItemId={infoSidebarOpen ? selectedItemId : null}
                     selectedActionCount={selectedItems.size}
                     getLinkElement={infoSidebarOpen ? undefined : getStackLinkElement}
                     onClickItem={handleTileDefaultClick}
